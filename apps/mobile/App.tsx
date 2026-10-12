@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -31,6 +32,8 @@ import { type FilePathLink } from './file-link';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
+import { bindPhoneViewer, viewerFromPhoneReply, type PhoneViewerModel } from './phone-viewer';
+import { PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { createRelayLink, type RelayLink } from './relay-link';
 import { AgentKindIcon } from './agent-icons';
 import { FilterGlyph, ProjectGlyph, SearchGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
@@ -107,7 +110,24 @@ type PhoneControl =
   | ({ op: 'sources'; repoPath: string; query?: string } & PhoneSources)
   | { op: 'models'; agent: AgentId; models: Array<{ id: string; label: string }> }
   | { op: 'dictated'; id: string; text: string }
-  | ({ op: 'options'; chatId: string } & ComposerOptions);
+  | ({ op: 'options'; chatId: string } & ComposerOptions)
+  | ({
+      op: 'header';
+      chatId: string;
+      visible?: boolean;
+      branch?: string;
+      additions?: number;
+      deletions?: number;
+      unpushed?: number;
+      dirty?: boolean;
+      ready?: boolean;
+      title?: string;
+      prUrl?: string;
+      prNumber?: string;
+      prStatus?: string;
+      action?: string;
+      actionLabel?: string;
+    });
 
 const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
 /** Must match PHONE_CONTROL_PREFIX in packages/core. Rides inside prompt text. */
@@ -195,6 +215,8 @@ export default function App() {
   const [modelsByAgent, setModelsByAgent] = useState<Partial<Record<AgentId, Array<{ id: string; label: string }>>>>({});
   const [listening, setListening] = useState(false);
   const [issuePickerFor, setIssuePickerFor] = useState<string | null>(null);
+  const [viewer, setViewer] = useState<PhoneViewerModel | null>(null);
+  const [rightHeader, setRightHeader] = useState<PhoneRightHeader | null | false>(null);
 
   const tagChoices = useMemo(() => phoneTagChoices(projects, tagFilters), [projects, tagFilters]);
   const visibleOrchestration = useMemo(
@@ -225,6 +247,10 @@ export default function App() {
   const activeIdRef = useRef(activeId);
   const activeChatIdRef = useRef(activeChatId);
   const lastPhoneOpRef = useRef<string | null>(null);
+  const headerOkRef = useRef(true);
+  const headerPendingRef = useRef(false);
+  const viewerRef = useRef<PhoneViewerModel | null>(null);
+  const viewerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingImageRef = useRef<string | null>(null);
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
@@ -282,6 +308,31 @@ export default function App() {
     });
   }
   const link = linkRef.current;
+  const panes = usePhonePanes((payload) => link.send(phoneCommand(payload)), () => activeChatIdRef.current);
+
+  useEffect(() => {
+    headerOkRef.current = true;
+  }, [activeId]);
+
+  useEffect(() => {
+    setRightHeader(null);
+    if (screen !== 'chat' || !activeChatId) return;
+    let stopped = false;
+    const tick = () => {
+      if (stopped || !headerOkRef.current || !attachedRef.current) return;
+      const busy = lastPhoneOpRef.current === 'open-file' || lastPhoneOpRef.current === 'media';
+      if (busy) return;
+      lastPhoneOpRef.current = 'header';
+      headerPendingRef.current = true;
+      link.send(phoneCommand({ op: 'header', chatId: activeChatId }));
+    };
+    tick();
+    const timer = setInterval(tick, 15_000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [screen, activeChatId, link]);
 
   function patchDesktop(sessionToken: string, patch: Partial<Desktop>) {
     setDesktops((prev) => {
@@ -351,6 +402,12 @@ export default function App() {
     }
     setOrchestration((prev) => [chat, ...prev.filter((row) => row.id !== chat.id)]);
   }
+
+  const { settle: settleViewer, showOpening } = bindPhoneViewer({
+    viewerRef,
+    timerRef: viewerTimerRef,
+    setViewer,
+  });
 
   function applyControl(control: PhoneControl) {
     if (control.op === 'sidebar') {
@@ -432,6 +489,7 @@ export default function App() {
       }
       rememberOpened(chat, control.place);
       setActiveChatId(chat.id);
+      panes.setPane('chat');
       screenRef.current = 'chat';
       setScreen('chat');
       setTranscripts((prev) => ({
@@ -538,16 +596,53 @@ export default function App() {
       if (pendingImageRef.current === key) pendingImageRef.current = null;
       return;
     }
+    const decision = viewerFromPhoneReply(
+      control,
+      viewerRef.current,
+      lastPhoneOpRef.current === 'open-file',
+      activeChatIdRef.current,
+    );
+    if (decision.handled) {
+      lastPhoneOpRef.current = null;
+      if (decision.viewer) settleViewer(decision.viewer);
+      return;
+    }
+    if (control.op === 'header') {
+      headerPendingRef.current = false;
+      if (control.chatId && control.chatId !== activeChatIdRef.current) return;
+      if (!control.visible || !control.branch) {
+        setRightHeader(false);
+        return;
+      }
+      setRightHeader({
+        branch: control.branch,
+        additions: control.additions ?? 0,
+        deletions: control.deletions ?? 0,
+        unpushed: control.unpushed ?? 0,
+        dirty: Boolean(control.dirty),
+        ready: Boolean(control.ready),
+        ...(control.title ? { title: control.title } : {}),
+        ...(control.prUrl ? { prUrl: control.prUrl } : {}),
+        ...(control.prNumber ? { prNumber: control.prNumber } : {}),
+        ...(control.prStatus ? { prStatus: control.prStatus } : {}),
+        ...(control.action ? { action: control.action } : {}),
+        ...(control.actionLabel ? { actionLabel: control.actionLabel } : {}),
+      });
+      return;
+    }
+    if (panes.takeControl(control)) return;
     if (control.op === 'error') {
-      const askedMac = lastPhoneOpRef.current === 'media' || lastPhoneOpRef.current === 'open-file';
+      const askedMac = lastPhoneOpRef.current === 'media';
+      if (control.message === 'invalid phone command' && lastPhoneOpRef.current === 'header') {
+        headerPendingRef.current = false;
+        headerOkRef.current = false;
+        lastPhoneOpRef.current = null;
+        return;
+      }
       if (control.message === 'invalid phone command' && askedMac) {
-        const openedFile = lastPhoneOpRef.current === 'open-file';
         if (pendingImageRef.current) publishImage(pendingImageRef.current, null);
         pendingImageRef.current = null;
         lastPhoneOpRef.current = null;
-        if (openedFile) {
-          setError('This Mac’s Sideboard app can’t open that from the phone yet.');
-        }
         return;
       }
       historyLoadingRef.current = false;
@@ -612,6 +707,11 @@ export default function App() {
       if (pending) link.send(pending);
       if (screenRef.current === 'chat' && activeChatIdRef.current) {
         link.send(phoneCommand({ op: 'open', chatId: activeChatIdRef.current }));
+        if (headerOkRef.current) {
+          lastPhoneOpRef.current = 'header';
+          headerPendingRef.current = true;
+          link.send(phoneCommand({ op: 'header', chatId: activeChatIdRef.current }));
+        }
       } else {
         screenRef.current = 'agents';
         setScreen('agents');
@@ -719,6 +819,8 @@ export default function App() {
 
   function showAgents() {
     if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
+    settleViewer(null);
+    panes.setPane('chat');
     setError(null);
     screenRef.current = 'agents';
     setScreen('agents');
@@ -751,6 +853,8 @@ export default function App() {
     const id = activeChatIdRef.current;
     if (!id) return;
     lastPhoneOpRef.current = 'open-file';
+    showOpening(artifact.title);
+    panes.setPane('doc');
     link.send(phoneCommand({
       op: 'open-artifact',
       chatId: id,
@@ -763,6 +867,8 @@ export default function App() {
     const id = activeChatIdRef.current;
     if (!id) return;
     lastPhoneOpRef.current = 'open-file';
+    showOpening(file.path);
+    panes.setPane('doc');
     link.send(
       phoneCommand({
         op: 'open-file',
@@ -810,6 +916,8 @@ export default function App() {
   }
 
   function openChat(chatId: string) {
+    settleViewer(null);
+    panes.setPane('chat');
     setError(null);
     pinTranscriptRef.current = true;
     clearChatTools();
@@ -940,6 +1048,29 @@ export default function App() {
     link.send(phoneCommand({ op: 'archive', chatId }));
   }
 
+  function archiveOpenChat() {
+    const id = activeChatIdRef.current;
+    if (!id) return;
+    archiveChat(id);
+    showAgents();
+  }
+
+  function runHeaderAction() {
+    if (!rightHeader || rightHeader === false || !rightHeader.action) return;
+    const id = activeChatIdRef.current;
+    if (!id) return;
+    if (rightHeader.action === 'open-checks') {
+      panes.selectPane('checks');
+      return;
+    }
+    if (rightHeader.action === 'open-pr') {
+      if (rightHeader.prUrl) void Linking.openURL(rightHeader.prUrl);
+      return;
+    }
+    panes.setPane('chat');
+    link.send(phoneCommand({ op: 'git', chatId: id, action: rightHeader.action }));
+  }
+
   function showHistory() {
     if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
     setError(null);
@@ -1059,9 +1190,36 @@ export default function App() {
     orchestration.find((row) => row.id === activeChatId) ??
     projects.flatMap((project) => project.worktrees.flatMap((worktree) => worktree.chats)).find((row) => row.id === activeChatId) ??
     null;
-  const activeIsProject = projects.some((project) =>
-    project.worktrees.some((worktree) => worktree.chats.some((chat) => chat.id === activeChatId)),
-  );
+  const activeWorktree = projects
+    .flatMap((project) => project.worktrees)
+    .find((worktree) => worktree.chats.some((chat) => chat.id === activeChatId));
+  const activeIsProject = Boolean(activeWorktree);
+  const listedPr = activeChat?.prNumber
+    ? {
+        ...(activeChat.prUrl ? { prUrl: activeChat.prUrl } : {}),
+        prNumber: activeChat.prNumber,
+        ...(activeChat.prStatus ? { prStatus: activeChat.prStatus } : {}),
+      }
+    : null;
+  const chatHeader: PhoneRightHeader | null =
+    !activeIsProject || rightHeader === false
+      ? null
+      : rightHeader
+        ? rightHeader.prNumber
+          ? rightHeader
+          : { ...rightHeader, ...(listedPr ?? {}) }
+        : activeWorktree
+          ? {
+              branch: activeWorktree.label,
+              additions: 0,
+              deletions: 0,
+              unpushed: 0,
+              dirty: false,
+              ready: false,
+              title: activeWorktree.label,
+              ...(listedPr ?? {}),
+            }
+          : null;
   const activeRepoPath =
     projects.find((project) =>
       project.worktrees.some((worktree) => worktree.chats.some((chat) => chat.id === activeChatId)),
@@ -1413,7 +1571,7 @@ export default function App() {
         <StatusBar style="light" />
         <View style={styles.chrome}>
           <Pressable onPress={showAgents} hitSlop={8}>
-            <Text style={styles.link}>Chats</Text>
+            <Text style={styles.link}>Back</Text>
           </Pressable>
           <Text style={styles.chromeTitle} numberOfLines={1}>
             History
@@ -1481,7 +1639,7 @@ export default function App() {
         <StatusBar style="light" />
         <View style={styles.chrome}>
           <Pressable onPress={showAgents} hitSlop={8}>
-            <Text style={styles.link}>Chats</Text>
+            <Text style={styles.link}>Back</Text>
           </Pressable>
           <View style={[styles.titleRow, styles.titleFlex]}>
             <AgentKindIcon agent={activeChat?.agent || chatOptions[activeChatId ?? '']?.agent || ''} />
@@ -1505,6 +1663,22 @@ export default function App() {
             ) : null}
           </View>
         </View>
+        <PhoneWorkspace
+          pane={panes.pane}
+          viewer={viewer}
+          side={panes.side}
+          header={chatHeader}
+          onSelect={panes.selectPane}
+          onReview={panes.askReview}
+          onOpenPath={openDesktopFile}
+          onCloseDoc={() => {
+            settleViewer(null);
+            panes.setPane('chat');
+          }}
+          onHeaderStatus={() => panes.selectPane('changes', chatHeader?.dirty ? 'uncommitted' : 'commits')}
+          onHeaderAction={runHeaderAction}
+          onHeaderArchive={archiveOpenChat}
+        >
         {findOpen ? (
           <ChatFindBar
             query={findQuery}
@@ -1523,8 +1697,6 @@ export default function App() {
           ref={transcriptScrollRef}
           style={styles.transcript}
           scrollEventThrottle={16}
-          // A selected message is a text field. Leaving canCancelContentTouches
-          // on (the default) lets a drag scroll the transcript instead of sticking.
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
             pinTranscriptRef.current =
@@ -1673,6 +1845,7 @@ export default function App() {
             }}
           />
         ) : null}
+        </PhoneWorkspace>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );

@@ -49,6 +49,19 @@ describe('phone orchestration chats', () => {
       op: 'restore',
       chatId: 'chat-1',
     });
+    expect(takePhoneControl(encodePhoneControl({ op: 'header', chatId: 'chat-1' }))).toEqual({
+      op: 'header',
+      chatId: 'chat-1',
+    });
+    expect(takePhoneControl(encodePhoneControl({ op: 'git', chatId: 'chat-1', action: 'commit-push' }))).toEqual({
+      op: 'git',
+      chatId: 'chat-1',
+      action: 'commit-push',
+    });
+    expect(takePhoneControl('\u0000sb.phone\n{"op":"git","chatId":"chat-1","action":"rebase"}')).toBe('invalid');
+    expect(
+      takePhoneControl(encodePhoneControl({ op: 'pane', chatId: 'chat-1', pane: 'changes', scope: 'uncommitted' })),
+    ).toEqual({ op: 'pane', chatId: 'chat-1', pane: 'changes', scope: 'uncommitted' });
     expect(
       takePhoneControl(encodePhoneControl({ op: 'open-file', chatId: 'chat-1', path: 'apps/mobile/App.tsx', startLine: 12 })),
     ).toEqual({ op: 'open-file', chatId: 'chat-1', path: 'apps/mobile/App.tsx', startLine: 12 });
@@ -246,6 +259,12 @@ describe('phone orchestration chats', () => {
       title: "Someone else's PR",
     });
     expect(badge(draft.id)).toBeUndefined();
+    const mineChat = labeled?.worktrees.flatMap((worktree) => worktree.chats).find((chat) => chat.id === mine.id);
+    expect(mineChat).toMatchObject({
+      prUrl: 'https://github.com/acme/app/pull/4',
+      prNumber: '4',
+      prStatus: 'Needs approval',
+    });
     expect(
       listPhoneSidebar()
         .projects.find((row) => row.path === '/tmp/sideboard')

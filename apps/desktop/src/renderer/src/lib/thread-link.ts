@@ -1,10 +1,12 @@
+import { parseArtifactLink, parseSideboardFileLink } from './chat-open-link';
+
 /** Deep link to a Sideboard chat (legacy thread:// still parsed). */
 
 export const THREAD_LINK_PREFIX = 'sideboard://chat/';
 
 const LINK_RE = /^sideboard:\/\/(?:chat|thread)\/([A-Za-z0-9_-]+)\/?$/i;
 const BARE_LINK_RE =
-  /(?<!\]\()(?<!href=["'])sideboard:\/\/(?:chat|thread)\/[A-Za-z0-9_-]+\/?/gi;
+  /(?<!\]\()(?<!href=["'])sideboard:\/\/(?:(?:chat|thread)\/[A-Za-z0-9_-]+\/?|artifact\/[^\s)]+|file\/[^\s)]+)/gi;
 
 /** Build a markdown-safe deep link for a chat id (full or short prefix). */
 export function threadLinkUrl(threadId: string): string {
@@ -18,11 +20,31 @@ export function parseThreadLink(href: string): string | null {
 }
 
 /**
- * Allow sideboard://chat/… and legacy thread URLs through react-markdown's
+ * Allow sideboard://chat|artifact|file URLs through react-markdown's
  * URL sanitizer (default only keeps http/https/mailto/irc/xmpp).
  */
+function sideboardOpenLink(value: string): boolean {
+  return Boolean(
+    parseThreadLink(value) || parseArtifactLink(value) || parseSideboardFileLink(value),
+  );
+}
+
+function linkifyLabel(url: string): string {
+  const threadId = parseThreadLink(url);
+  if (threadId) return threadId.length > 8 ? threadId.slice(0, 8) : threadId;
+  const artifact = parseArtifactLink(url);
+  if (artifact) return artifact.length > 28 ? `${artifact.slice(0, 28)}…` : artifact;
+  const file = parseSideboardFileLink(url);
+  if (file) {
+    const base = file.path.split('/').pop() || file.path;
+    if (file.startLine == null) return base;
+    return file.endLine != null ? `${base}:${file.startLine}-${file.endLine}` : `${base}:${file.startLine}`;
+  }
+  return url;
+}
+
 export function markdownUrlTransform(value: string): string {
-  if (parseThreadLink(value)) return value;
+  if (sideboardOpenLink(value)) return value;
   const colon = value.indexOf(':');
   const questionMark = value.indexOf('?');
   const numberSign = value.indexOf('#');
@@ -39,12 +61,12 @@ export function markdownUrlTransform(value: string): string {
   return '';
 }
 
-/** Turn bare sideboard://chat|thread/<id> text into markdown links. */
+/** Turn bare sideboard://chat|artifact|file URLs into markdown links. */
 export function linkifyThreadUrls(text: string): string {
   return text.replace(BARE_LINK_RE, (url) => {
-    const id = parseThreadLink(url);
-    if (!id) return url;
-    const label = id.length > 8 ? id.slice(0, 8) : id;
-    return `[${label}](${threadLinkUrl(id)})`;
+    if (!sideboardOpenLink(url)) return url;
+    const threadId = parseThreadLink(url);
+    const href = threadId ? threadLinkUrl(threadId) : url;
+    return `[${linkifyLabel(url)}](${href})`;
   });
 }

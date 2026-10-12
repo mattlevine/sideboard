@@ -35,6 +35,7 @@ export function bindPhoneOpenFile(fn: PhoneOpenFile): void {
   onOpenWorktreeFile = fn;
 }
 
+/** Unused by phone taps. The phone draws the file; focusing here would pull the desktop forward. */
 export function showPhoneFile(win: BrowserWindow | null, request: Parameters<PhoneOpenFile>[0]): void {
   if (!focusPhoneWindow(win)) return;
   win.webContents.send('phone:open-file', request);
@@ -44,6 +45,7 @@ export function bindPhoneOpenArtifact(fn: PhoneOpenArtifact): void {
   onOpenArtifact = fn;
 }
 
+/** Unused by phone taps. The phone draws the artifact; focusing here would pull the desktop forward. */
 export function showPhoneArtifact(win: BrowserWindow | null, request: Parameters<PhoneOpenArtifact>[0]): void {
   if (!focusPhoneWindow(win)) return;
   win.webContents.send('phone:open-artifact', request);

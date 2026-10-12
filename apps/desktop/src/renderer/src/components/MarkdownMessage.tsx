@@ -8,6 +8,7 @@ import {
   parseFilePathLink,
   type FilePathLink,
 } from '../lib/file-path-link';
+import { parseArtifactLink, parseSideboardFileLink } from '../lib/chat-open-link';
 import {
   linkifyThreadUrls,
   markdownUrlTransform,
@@ -28,6 +29,8 @@ interface Props {
   onFileReferenceClick?: (link: FilePathLink) => void;
   /** Open a Sideboard thread from a sideboard://chat/<id> markdown link. */
   onThreadLinkClick?: (threadRef: string) => void;
+  /** Open a side-column pane from sideboard://artifact/<id or title>. */
+  onArtifactLinkClick?: (ref: string) => void;
   /**
    * Optional in-app handler for http(s) URLs (e.g. PR review preview tab).
    * Chat markdown omits this so links open in the system browser.
@@ -37,6 +40,14 @@ interface Props {
   isStreaming?: boolean;
   /** Linked badge images (PR descriptions) should stay clickable links, not expand overlays. */
   expandImages?: boolean;
+}
+
+function decodeHref(url: string): string {
+  try {
+    return decodeURIComponent(url);
+  } catch {
+    return url;
+  }
 }
 
 function isSafeExternalUrl(href: string): boolean {
@@ -71,6 +82,7 @@ export function MarkdownMessage({
   worktreePath,
   onFileReferenceClick,
   onThreadLinkClick,
+  onArtifactLinkClick,
   onUrlClick,
   isStreaming = false,
   expandImages = true,
@@ -113,6 +125,48 @@ export function MarkdownMessage({
               e.preventDefault();
               e.stopPropagation();
               onThreadLinkClick?.(threadRef);
+            }}
+          >
+            {children}
+          </a>
+        );
+      }
+      const artifactRef = parseArtifactLink(url);
+      if (artifactRef) {
+        return (
+          <a
+            {...props}
+            href={url}
+            className="md-artifact-link"
+            title="Open in the side column"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onArtifactLinkClick?.(artifactRef);
+            }}
+          >
+            {children}
+          </a>
+        );
+      }
+      const sideboardFile = parseSideboardFileLink(url);
+      const fileLink =
+        sideboardFile ??
+        (!/^[a-z][a-z0-9+.-]*:/i.test(url)
+          ? parseFilePathLink(decodeHref(url), knownFilePaths, worktreePath)
+          : null);
+      if (fileLink && onFileReferenceClick) {
+        const dirHint = isKnownDirectoryPath(fileLink.path, knownFilePaths);
+        return (
+          <a
+            {...props}
+            href={url}
+            className="md-file-link"
+            title={dirHint ? `Show ${fileLink.path} in files` : `Open ${fileLink.path}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onFileReferenceClick(fileLink);
             }}
           >
             {children}

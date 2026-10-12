@@ -7739,6 +7739,54 @@ button.chat-earlier-toggle:hover {
   gap: 5px;
 }
 
+.right-top .right-actions > button.right-git-status {
+  flex: 0 1 auto;
+  max-width: min(240px, 46%);
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 8px;
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  font-weight: 450;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.right-git-status .pill-name-scroll {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.right-git-counts,
+.right-git-unpushed,
+.right-git-clean,
+.right-git-dirty {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.right-git-counts {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.right-git-counts .add {
+  color: var(--ok);
+}
+
+.right-git-counts .del {
+  color: var(--err);
+}
+
+.right-git-unpushed,
+.right-git-clean,
+.right-git-dirty {
+  color: var(--muted);
+}
+
 .right-top .btn-icon {
   display: none;
   font-size: 12px;
@@ -7799,6 +7847,15 @@ button.chat-earlier-toggle:hover {
     min-width: 30px;
     padding-left: 8px;
     padding-right: 8px;
+  }
+
+  .right-git-status .pill-name-scroll,
+  .right-git-clean {
+    display: none;
+  }
+
+  .right-git-status:not(.is-dirty):not(.has-unpushed) {
+    display: none;
   }
 
   .right-top .pr-link {

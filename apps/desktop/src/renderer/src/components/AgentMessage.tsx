@@ -51,6 +51,8 @@ interface Props {
   onRevealDirectory?: (path: string) => void;
   /** Navigate to another Sideboard thread from a markdown deep link. */
   onOpenThread?: (threadRef: string) => void;
+  /** Open a side-column pane from a sideboard://artifact/… link. */
+  onArtifactLinkClick?: (ref: string) => void;
   /** Open a document or schema pane in the side column. */
   onOpenArtifact?: (content: RightPaneContent) => void;
   /** Currently open right-pane id (highlights the matching chip). */
@@ -221,11 +223,6 @@ function ThinkingBody({ text, live }: { text: string; live: boolean }) {
   );
 }
 
-function clipToolTail(text: string, max = 12000): string {
-  if (text.length <= max) return text;
-  return `…${text.slice(-max)}`;
-}
-
 /** Wait this long before painting a live log so `ls` / `git status` never flash a pane. */
 const SHELL_TAIL_AFTER_MS = 3000;
 
@@ -286,7 +283,7 @@ function ToolOutputTail({ text, live }: { text: string; live: boolean }) {
         pinToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
       }}
     >
-      {clipToolTail(text)}
+      {text.length <= 12000 ? text : `…${text.slice(-12000)}`}
     </pre>
   );
 }
@@ -339,6 +336,7 @@ export function AgentMessage({
   onOpenFile,
   onRevealDirectory,
   onOpenThread,
+  onArtifactLinkClick,
   onOpenArtifact,
   activeArtifactId = null,
   artifactIdPrefix,
@@ -539,6 +537,7 @@ export function AgentMessage({
                 worktreePath={worktreePath}
                 onFileReferenceClick={threadId ? openFileReference : undefined}
                 onThreadLinkClick={onOpenThread}
+                onArtifactLinkClick={onArtifactLinkClick}
                 isStreaming={Boolean(streaming && i === phases.length - 1)}
               />
             </div>
@@ -597,6 +596,7 @@ export function AgentMessage({
             worktreePath={worktreePath}
             onFileReferenceClick={threadId ? openFileReference : undefined}
             onThreadLinkClick={onOpenThread}
+            onArtifactLinkClick={onArtifactLinkClick}
             isStreaming={streaming}
           />
         </div>

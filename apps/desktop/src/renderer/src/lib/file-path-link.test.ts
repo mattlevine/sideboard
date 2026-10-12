@@ -28,6 +28,18 @@ describe('parseFilePathLink', () => {
     });
   });
 
+  it('reads GitHub line ranges, including #L12-L40', () => {
+    expect(parseFilePathLink('apps/desktop/src/App.tsx#L12-L40')).toEqual({
+      path: 'apps/desktop/src/App.tsx',
+      startLine: 12,
+      endLine: 40,
+    });
+    expect(parseFilePathLink('./apps/desktop/src/App.tsx#L4')).toEqual({
+      path: 'apps/desktop/src/App.tsx',
+      startLine: 4,
+    });
+  });
+
   it('matches directory-like paths without an extension', () => {
     expect(
       parseFilePathLink('.context/.sideboard/detached-jobs/typecheck-workspaces-skill'),

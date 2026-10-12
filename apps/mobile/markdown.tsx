@@ -307,11 +307,11 @@ export function MarkdownText({
   /** Worktree images are cached per chat, not by path alone. */
   chatId?: string;
   onChatLink?: (chatId: string) => void;
-  /** Backtick paths and workspace images: the Mac opens the file. */
+  /** Backtick paths and workspace images open on this phone. */
   onFileLink?: (link: FilePathLink) => void;
   /** Ask the Mac for a worktree image that is not already an https URL. */
   onLocalImage?: (src: string) => void;
-  /** Document artifacts open on the Mac, the same way file paths do. */
+  /** Document artifacts open on this phone, the same way file paths do. */
   onArtifact?: (artifact: ArtifactLink) => void;
   /** Long-press the bubble to select text, including a press that starts on a link. */
   onLongPress?: () => void;

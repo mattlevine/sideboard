@@ -11,6 +11,9 @@ export type PhoneChat = {
   preview: string;
   updatedAt: string;
   agent?: string;
+  prUrl?: string;
+  prNumber?: string;
+  prStatus?: string;
 };
 
 export type PhonePrBadge = { id: 'review' | 'pending'; label: string; title: string };
