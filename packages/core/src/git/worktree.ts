@@ -1330,7 +1330,6 @@ export type FastForwardMainResult = {
   reason:
     | 'updated'
     | 'already-current'
-    | 'not-on-default'
     | 'dirty'
     | 'diverged'
     | 'no-origin-tip'
@@ -1338,9 +1337,15 @@ export type FastForwardMainResult = {
 };
 
 /**
- * Fast-forward the project-folder checkout to `origin/<default>` when that is
- * safe: already on the default branch, clean, and a strict ancestor of the
- * remote tip. Never checkout, reset, or merge if it would not fast-forward.
+ * Fast-forward the local default branch to `origin/<default>` when that is a
+ * strict fast-forward.
+ *
+ * Sidecar worktrees do the work, so the project folder is often on some other
+ * branch and `refs/heads/<default>` would otherwise stay stale after every
+ * fetch. When that branch is not checked out anywhere, move the ref only
+ * (`git branch -f`). When it is checked out and that worktree is clean,
+ * `git merge --ff-only` updates the working tree too. Never checkout, reset,
+ * or move a diverged or dirty branch.
  */
 export async function fastForwardMainCheckoutIfSafe(
   repoPath: string,
@@ -1350,21 +1355,8 @@ export async function fastForwardMainCheckoutIfSafe(
     const branch =
       opts?.branch?.trim() ||
       (await resolveDefaultBranch(repoPath, { network: false }));
-    const head = await git(['rev-parse', '--abbrev-ref', 'HEAD'], repoPath, {
-      reject: false,
-    });
-    const current = head.stdout.trim();
-    if (
-      head.exitCode !== 0 ||
-      !current ||
-      current === 'HEAD' ||
-      current !== branch
-    ) {
-      return { updated: false, reason: 'not-on-default' };
-    }
-
-    if (await isDirty(repoPath)) {
-      return { updated: false, reason: 'dirty' };
+    if (!branch || branch === 'HEAD' || branch.includes('..')) {
+      return { updated: false, reason: 'ff-failed' };
     }
 
     const remote = `origin/${branch}`;
@@ -1375,8 +1367,29 @@ export async function fastForwardMainCheckoutIfSafe(
       return { updated: false, reason: 'no-origin-tip' };
     }
 
+    const worktrees = await listWorktrees(repoPath);
+    if (worktrees.length === 0) {
+      return { updated: false, reason: 'ff-failed' };
+    }
+    const checkout = worktrees.find((entry) => entry.branch === branch) ?? null;
+
+    const localRef = `refs/heads/${branch}`;
+    const localOk = await git(['rev-parse', '--verify', localRef], repoPath, {
+      reject: false,
+    });
+    if (localOk.exitCode !== 0) {
+      if (checkout) return { updated: false, reason: 'ff-failed' };
+      const created = await git(['branch', '--track', branch, remote], repoPath, {
+        reject: false,
+      });
+      if (created.exitCode !== 0) {
+        return { updated: false, reason: 'ff-failed' };
+      }
+      return { updated: true, reason: 'updated' };
+    }
+
     const ancestor = await git(
-      ['merge-base', '--is-ancestor', 'HEAD', remote],
+      ['merge-base', '--is-ancestor', localRef, remote],
       repoPath,
       { reject: false },
     );
@@ -1385,7 +1398,7 @@ export async function fastForwardMainCheckoutIfSafe(
     }
 
     const behind = await git(
-      ['rev-list', '--count', `HEAD..${remote}`],
+      ['rev-list', '--count', `${localRef}..${remote}`],
       repoPath,
       { reject: false },
     );
@@ -1394,10 +1407,23 @@ export async function fastForwardMainCheckoutIfSafe(
       return { updated: false, reason: 'already-current' };
     }
 
-    const ff = await git(['merge', '--ff-only', remote], repoPath, {
+    if (checkout) {
+      if (await isDirty(checkout.path)) {
+        return { updated: false, reason: 'dirty' };
+      }
+      const ff = await git(['merge', '--ff-only', remote], checkout.path, {
+        reject: false,
+      });
+      if (ff.exitCode !== 0) {
+        return { updated: false, reason: 'ff-failed' };
+      }
+      return { updated: true, reason: 'updated' };
+    }
+
+    const moved = await git(['branch', '-f', branch, remote], repoPath, {
       reject: false,
     });
-    if (ff.exitCode !== 0) {
+    if (moved.exitCode !== 0) {
       return { updated: false, reason: 'ff-failed' };
     }
     return { updated: true, reason: 'updated' };
@@ -1406,7 +1432,7 @@ export async function fastForwardMainCheckoutIfSafe(
   }
 }
 
-/** Fetch the create start-point (and default branch) and ff the project folder if safe. */
+/** Fetch the create start-point (and default branch) and fast-forward the local default branch when that is safe. */
 async function refreshOriginAndMaybeFastForwardMain(
   repoPath: string,
   sourceRef: string,
