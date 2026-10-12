@@ -67,9 +67,9 @@ export function PhoneDiffView({ patch, onAdd }: { patch: string; onAdd?: (range:
             }}
             accessibilityRole="button"
             accessibilityLabel="Add reference to chat"
-            style={[styles.add, !range && styles.addOff]}
+            style={[styles.addBtn, !range && styles.addBtnOff]}
           >
-            <Text style={styles.addText}>{label}</Text>
+            <Text style={styles.addBtnText}>{label}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -146,12 +146,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hint: { flex: 1, color: palette.muted, fontSize: 13 },
-  add: {
+  addBtn: {
     backgroundColor: palette.accent,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  addOff: { opacity: 0.35 },
-  addText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  addBtnOff: { opacity: 0.35 },
+  addBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });
