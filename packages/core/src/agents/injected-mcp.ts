@@ -44,7 +44,8 @@ export const SIDEBOARD_MCP_ALLOWED_TOOLS = [
  * Worktree Claude turns: auto-approve the UI + schedule tools that the
  * worktree MCP profile always registers (present_* / ask_user / wait_for_job /
  * stop_job / run_dev_script / stop_dev_script / get_run_log /
- * notify_orchestrator / set_workspace_tags / schedules / posthog_api). Slack / list_* stay
+ * notify_orchestrator / set_workspace_tags / schedules). `posthog_api` is
+ * omitted unless a personal API key is stored. Slack / list_* stay
  * orchestration-only so they stay out of the cached tools prefix.
  */
 export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
@@ -82,8 +83,14 @@ export function sideboardWorktreeAllowedTools(opts?: {
   abletime?: boolean;
   /** present_plan is Plan-mode-only; omit unless the composer Plan chip is on. */
   planMode?: boolean;
+  /** `posthog_api` only when a personal API key is stored. */
+  posthog?: boolean;
 }): string[] {
   const out: string[] = [...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS];
+  if (!opts?.posthog) {
+    const posthogIdx = out.indexOf('mcp__sideboard__posthog_api');
+    if (posthogIdx >= 0) out.splice(posthogIdx, 1);
+  }
   if (!opts?.planMode) {
     const idx = out.indexOf('mcp__sideboard__present_plan');
     if (idx >= 0) out.splice(idx, 1);

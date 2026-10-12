@@ -58,6 +58,12 @@ describe('optional services', () => {
     expect(reminder).toMatch(/Do not add vendor MCPs/);
     expect(reminder).toMatch(/\.context\/cli\//);
     expect(reminder).toMatch(/`vercel` \(not installed/);
+    expect(reminder).not.toMatch(/posthog_api/);
+    expect(reminder).not.toMatch(/PostHog/);
+    const vercelOnly = mod.formatOptionalServicesDirective({ vercelToken: 'v' }, { vercel: true });
+    expect(vercelOnly).toMatch(/Vercel, Supabase, or Sentry MCP/);
+    expect(vercelOnly).not.toMatch(/posthog_api/);
+    expect(vercelOnly).not.toMatch(/PostHog/);
     const posthogOnly = mod.formatOptionalServicesReminder({ posthogPersonalApiKey: 'p' });
     expect(posthogOnly).toMatch(/`posthog_api`/);
     expect(posthogOnly).not.toMatch(/tokens are already in this process/);

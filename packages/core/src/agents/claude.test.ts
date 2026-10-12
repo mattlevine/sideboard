@@ -12,6 +12,7 @@ const claudeSettings = {
   chromeEnabled: false,
   linearConnected: false,
   abletimeConnected: false,
+  posthogConnected: false,
 };
 
 vi.mock('../store/app-settings.js', () => ({
@@ -19,6 +20,7 @@ vi.mock('../store/app-settings.js', () => ({
   claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
   isLinearConnected: () => Boolean(claudeSettings.linearConnected),
   isAbleTimeConnected: () => Boolean(claudeSettings.abletimeConnected),
+  isPosthogConnected: () => Boolean(claudeSettings.posthogConnected),
   loadAppSettings: () => ({
     environment: {},
     claude: {
@@ -57,6 +59,7 @@ beforeEach(() => {
   claudeSettings.chromeEnabled = false;
   claudeSettings.linearConnected = false;
   claudeSettings.abletimeConnected = false;
+  claudeSettings.posthogConnected = false;
   for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   vi.mocked(run).mockClear();
 });
@@ -246,6 +249,9 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__delete_schedule');
     expect(allowed).toContain('mcp__sideboard__run_schedule');
     expect(allowed).toContain('mcp__sideboard__github_*');
+    expect(allowed).toContain('mcp__claude_ai_PostHog');
+    expect(allowed).toContain('mcp__claude_ai_PostHog__*');
+    expect(allowed).not.toContain('mcp__sideboard__posthog_api');
     expect(allowed).not.toContain('mcp__sideboard__linear_*');
     expect(allowed).not.toContain('mcp__sideboard__abletime_*');
     expect(allowed).not.toContain('mcp__sideboard__slack_post');
@@ -281,6 +287,17 @@ describe('claudeAdapter.buildTurn', () => {
       if (prev === undefined) delete process.env.SIDEBOARD_APP_DATA;
       else process.env.SIDEBOARD_APP_DATA = prev;
     }
+  });
+
+  it('auto-approves posthog_api and skips the Claude PostHog connector when a key is set', async () => {
+    claudeSettings.posthogConnected = true;
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'query events' });
+    const allowed = cmd.args
+      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
+      .filter(Boolean);
+    expect(allowed).toContain('mcp__sideboard__posthog_api');
+    expect(allowed).not.toContain('mcp__claude_ai_PostHog');
+    expect(allowed).not.toContain('mcp__claude_ai_PostHog__*');
   });
 
   it('auto-approves Account Linear and AbleTime tools when those sources are connected', async () => {
@@ -324,6 +341,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('orchestration');
     expect(cfg.mcpServers.gmail).toBeUndefined();
     expect(allowed).not.toContain('mcp__gmail');
+    expect(allowed).not.toContain('mcp__claude_ai_PostHog');
   });
 
   it('Global threads keep Sideboard MCP even if sourceType was demoted to branch', async () => {

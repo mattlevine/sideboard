@@ -321,6 +321,15 @@ function connectorDirectiveLine(spec: OptionalServiceSpec, cli?: OptionalCliPres
   return `- ${spec.label}: call \`posthog_api\`. Path must start with \`/api/\`. GET is the default. POST \`/api/projects/:id/query/\` or \`/api/environments/:id/query/\` is a read and does not need \`write=true\`. Other POST and PATCH require \`write=true\` only when the user asked to change data. Do not read the API key from the environment. Do not add a ${spec.label} MCP.`;
 }
 
+function connectorAuthCaution(posthog: boolean, cliConnected: boolean): string {
+  const signIn = posthog
+    ? 'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP.'
+    : 'If a Vercel, Supabase, or Sentry MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP.';
+  const token = cliConnected ? ' CLI tokens are already in this process.' : '';
+  const key = posthog ? ' Do not read a PostHog key from the environment.' : '';
+  return `${signIn}${token}${key}`;
+}
+
 function connectorReminderBit(spec: OptionalServiceSpec, cli?: OptionalCliPresence): string {
   if (!spec.cli) return `${spec.label}: \`posthog_api\``;
   const presence = cliPresencePhrase(spec, cli);
@@ -338,14 +347,13 @@ export function formatOptionalServicesDirective(
   const connected = connectedOptionalServices(integrations);
   if (connected.length === 0) return null;
   const cliConnected = connected.some((spec) => spec.cli);
+  const posthog = connected.some((spec) => spec.id === 'posthog');
   const lines = [
     cliConnected
       ? 'Optional connectors (connected — CLI tokens are already in this process env):'
       : 'Optional connectors (connected):',
     ...connected.map((spec) => connectorDirectiveLine(spec, cli)),
-    cliConnected
-      ? 'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP. CLI tokens are already in this process. Do not read a PostHog key from the environment.'
-      : 'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP. Do not read a PostHog key from the environment.',
+    connectorAuthCaution(posthog, cliConnected),
     'Do not add a vendor MCP. When a binary is missing, ask the user to press Install CLI in Settings → Connectors.',
     'When you shell a connector CLI, write bulky output to `.context/cli/` and read a slice.',
   ];
@@ -363,7 +371,11 @@ export function formatOptionalServicesReminder(
   const tokenBit = connected.some((spec) => spec.cli)
     ? 'CLI tokens are already in this process. '
     : '';
-  return `Settings → Connectors: ${tokenBit}${bits}. If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or \`posthog_api\`. Do not add vendor MCPs. Do not read a PostHog key from the environment. Shell dumps from those CLIs go in \`.context/cli/\` — read a slice.`;
+  const posthog = connected.some((spec) => spec.id === 'posthog');
+  const auth = posthog
+    ? 'If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or `posthog_api`. Do not read a PostHog key from the environment.'
+    : 'If a Vercel, Supabase, or Sentry MCP needsAuth or is unauthorized, ignore it and use the CLI.';
+  return `Settings → Connectors: ${tokenBit}${bits}. ${auth} Do not add vendor MCPs. Shell dumps from those CLIs go in \`.context/cli/\` — read a slice.`;
 }
 
 /** `which` for connected CLI connectors. Skips `npm prefix -g`. PostHog is omitted. */

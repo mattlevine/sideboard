@@ -4,12 +4,14 @@ import {
   claudeChromeEnabled,
   isAbleTimeConnected,
   isLinearConnected,
+  isPosthogConnected,
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import {
   BASE_ALLOWED_TOOLS,
   CLAUDE_CHROME_ALLOWED_TOOLS,
+  CLAUDE_POSTHOG_CONNECTOR_ALLOWED_TOOLS,
   CLAUDE_PRINT_BG_WAIT_CEILING_MS,
   mcpAllowToolsFromNames,
 } from './claude-mcp.js';
@@ -647,6 +649,7 @@ export const claudeAdapter: AgentAdapter = {
     // plus Sideboard MCP for fleet control. Identity prompts forbid treating the
     // synthetic global cwd as a project worktree.
     const chromeOn = claudeChromeEnabled();
+    const posthogConnected = isPosthogConnected();
     // `--strict-mcp-config` only loads the temp file. Copy user ~/.claude.json
     // servers (not sideboard/brightsy) into it so Gmail/etc. still work, and
     // only auto-approve names we actually wrote. Coordinators stay injected-only
@@ -668,8 +671,11 @@ export const claudeAdapter: AgentAdapter = {
           linear: isLinearConnected(),
           abletime: isAbleTimeConnected(),
           planMode: thread.planMode,
+          posthog: posthogConnected,
         }),
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
+        // No Sideboard key: acceptEdits would deny Claude's PostHog connector.
+        ...(posthogConnected ? [] : CLAUDE_POSTHOG_CONNECTOR_ALLOWED_TOOLS),
       ];
     }
     if (chromeOn) {

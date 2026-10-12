@@ -2054,6 +2054,13 @@ export function disconnectLinearConnection(): AppSettings {
   return saveAppSettings({ ...current, integrations });
 }
 
+/** True when Settings → Connectors has a PostHog personal API key. */
+export function isPosthogConnected(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.integrations.posthogPersonalApiKey?.trim());
+}
+
 /** True when Sideboard has an AbleTime OAuth token, PAT, or org key stored. */
 export function isAbleTimeConnected(
   settings: AppSettings = loadAppSettings(),
