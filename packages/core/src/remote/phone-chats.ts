@@ -30,6 +30,7 @@ import {
   type PhoneHeader,
   type PhoneHeaderGitAction,
 } from './phone-header.js';
+import { parsePhoneCodeRefs, type PhoneCodeRef } from './phone-code-refs.js';
 import { parsePhonePane, type PhonePaneReply, type PhonePaneRequest } from './phone-panes.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 import { phonePrPill } from './phone-header.js';
@@ -150,6 +151,7 @@ export interface PhoneDraft {
   autonomy?: Autonomy;
   files?: PhoneFile[];
   links?: PhoneIssueLink[];
+  refs?: PhoneCodeRef[];
   prompt?: string;
 }
 
@@ -317,7 +319,7 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     const text = typeof (value as { text?: unknown }).text === 'string'
       ? (value as { text: string }).text.trim()
       : '';
-    const hasPayload = Boolean(text || draft.files?.length || draft.links?.length);
+    const hasPayload = Boolean(text || draft.files?.length || draft.links?.length || draft.refs?.length);
     if (!hasPayload) return 'invalid';
     return { op: 'prompt', chatId, text, ...draft };
   }
@@ -386,6 +388,9 @@ function parsePhoneDraft(value: object): PhoneDraft | 'invalid' {
   const links = parsePhoneLinks((value as { links?: unknown }).links);
   if (links === 'invalid') return 'invalid';
   if (links.length) draft.links = links;
+  const refs = parsePhoneCodeRefs((value as { refs?: unknown }).refs);
+  if (refs === 'invalid') return 'invalid';
+  if (refs.length) draft.refs = refs;
   const prompt = textField(value, 'prompt');
   if (prompt) draft.prompt = prompt.slice(0, 20_000);
   return draft;

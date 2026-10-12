@@ -18,13 +18,14 @@ export function dispatchPhoneWorkspace(
       emit({ op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
       return;
     }
-    void readPhonePane(thread, cmd.pane, cmd.scope).then((body) => {
+    void readPhonePane(thread, cmd.pane, cmd.scope, cmd.query).then((body) => {
       emit({
         op: 'pane',
         chatId: cmd.chatId,
         pane: cmd.pane,
         rows: body.rows,
         ...(body.note ? { note: body.note } : {}),
+        ...(cmd.pane === 'files' ? { query: cmd.query ?? '' } : {}),
       });
     });
     return;

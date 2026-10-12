@@ -1337,7 +1337,6 @@ export function App() {
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
               onOpenThreadLink: openThreadByRef,
-              onReadAloud: readAloud.open,
             };
             const urlPreviewProps = {
               openUrls,
@@ -1386,7 +1385,6 @@ export function App() {
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
               onOpenThreadLink={openThreadByRef}
-              onReadAloud={readAloud.open}
               {...urlPreviewProps}
             />
           ) : (

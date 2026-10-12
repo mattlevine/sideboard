@@ -1,5 +1,6 @@
 import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
+import { buildCodeRefAttachment } from '../composer/code-ref.js';
 import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
@@ -107,7 +108,8 @@ function stagePhoneTurnFiles(worktreePath: string, draft: PhoneDraft): ThreadAtt
     worktreePath,
     (draft.files ?? []).map((file) => ({ name: file.name, dataBase64: file.dataBase64 })),
   );
-  return [...links, ...files];
+  const refs = (draft.refs ?? []).map((ref) => buildCodeRefAttachment(ref));
+  return [...links, ...files, ...refs];
 }
 
 function handlePhoneControl(

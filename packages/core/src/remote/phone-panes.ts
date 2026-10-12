@@ -16,6 +16,8 @@ export type PhonePaneRequest = {
   pane: PhonePaneId;
   /** Changes filter. Omitted means the branch-vs-base view. */
   scope?: 'uncommitted' | 'commits';
+  /** All-files path filter. Omitted means the unfiltered list. */
+  query?: string;
 };
 
 export type PhonePaneReply = {
@@ -24,16 +26,34 @@ export type PhonePaneReply = {
   pane: PhonePaneId;
   rows: PhonePaneRow[];
   note?: string;
+  /** Echoed All-files filter so the phone can drop a stale reply. */
+  query?: string;
 };
 
 const MAX_ROWS = 200;
+const MAX_QUERY = 200;
 
 export function parsePhonePane(value: unknown, chatId: string): PhonePaneRequest | 'invalid' {
   const pane = value && typeof value === 'object' ? (value as { pane?: unknown }).pane : undefined;
   if (pane !== 'files' && pane !== 'changes' && pane !== 'checks') return 'invalid';
   const scopeRaw = (value as { scope?: unknown }).scope;
   const scope = scopeRaw === 'uncommitted' || scopeRaw === 'commits' ? scopeRaw : undefined;
-  return { op: 'pane', chatId, pane, ...(scope && pane === 'changes' ? { scope } : {}) };
+  const queryRaw = (value as { query?: unknown }).query;
+  const query = typeof queryRaw === 'string' ? queryRaw.trim().slice(0, MAX_QUERY) : '';
+  return {
+    op: 'pane',
+    chatId,
+    pane,
+    ...(scope && pane === 'changes' ? { scope } : {}),
+    ...(query && pane === 'files' ? { query } : {}),
+  };
+}
+
+/** Case-insensitive path match, same rule as the desktop file tree. */
+export function filterPhoneFiles(paths: string[], query: string): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return paths;
+  return paths.filter((path) => path.toLowerCase().includes(q));
 }
 
 /** Files, Changes, and Checks for the phone tab row. Same sources as the desktop sidebar. */
@@ -41,9 +61,10 @@ export async function readPhonePane(
   thread: Thread,
   pane: PhonePaneId,
   scope?: 'uncommitted' | 'commits',
+  query?: string,
 ): Promise<{ rows: PhonePaneRow[]; note?: string }> {
   try {
-    if (pane === 'files') return await readFiles(thread.id);
+    if (pane === 'files') return await readFiles(thread.id, query);
     if (pane === 'changes') return await readChanges(thread.id, scope ?? 'commits');
     return await readChecks(thread.id);
   } catch (err) {
@@ -52,12 +73,19 @@ export async function readPhonePane(
   }
 }
 
-async function readFiles(threadId: string): Promise<{ rows: PhonePaneRow[]; note?: string }> {
-  const paths = await getOrchestrator().listFiles(threadId);
+async function readFiles(threadId: string, query?: string): Promise<{ rows: PhonePaneRow[]; note?: string }> {
+  const paths = filterPhoneFiles(await getOrchestrator().listFiles(threadId), query ?? '');
   const shown = paths.slice(0, MAX_ROWS);
+  const extra = paths.length - shown.length;
+  const note =
+    extra > 0
+      ? query?.trim()
+        ? `${extra} more matching files`
+        : `${extra} more files on the Mac`
+      : undefined;
   return {
     rows: shown.map((path) => ({ label: path, path })),
-    ...(paths.length > shown.length ? { note: `${paths.length - shown.length} more files on the Mac` } : {}),
+    ...(note ? { note } : {}),
   };
 }
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { wrapReactArtifactHtml, type ChatArtifact } from '../lib/artifacts';
 import { useDetachedJobLog } from '../lib/job-log-follow';
-import { artifactSpeakableText } from '../lib/artifact-speakable';
 import {
   artifactPreviewUrlsMatch,
   cancelArtifactPreviewClear,
@@ -33,8 +32,6 @@ interface Props {
   embedded?: boolean;
   /** Extra header control (e.g. maximize), shown before Code/Preview. */
   headerAction?: ReactNode;
-  /** Speak this document with the app Read Aloud modal. */
-  onReadAloud?: (text: string) => void;
   /** Worktree thread, so a running job log can follow its files after the agent stops. */
   worktreeThreadId?: string;
 }
@@ -74,7 +71,6 @@ export function ArtifactPane({
   onClose,
   embedded = false,
   headerAction,
-  onReadAloud,
   worktreeThreadId,
   artifact: source,
 }: Props) {
@@ -178,12 +174,6 @@ export function ArtifactPane({
         setCopied(false);
       }, 1200);
     });
-  }
-
-  function readAloud() {
-    const text = artifactSpeakableText(artifact).trim();
-    if (!text) return;
-    onReadAloud?.(text.slice(0, 50_000));
   }
 
   const previewSrcDoc = useMemo(() => {
@@ -336,33 +326,6 @@ export function ArtifactPane({
           >
             {copied ? '✓' : '⧉'}
           </button>
-          {onReadAloud ? (
-            <button
-              type="button"
-              className="artifact-pane-speak"
-              title="Read Aloud"
-              aria-label="Read artifact aloud"
-              disabled={!artifactSpeakableText(artifact).trim()}
-              onClick={readAloud}
-            >
-              <svg
-                className="artifact-pane-speak-icon"
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-                <path d="M19 5a9 9 0 0 1 0 14" />
-              </svg>
-            </button>
-          ) : null}
           {headerAction}
           {!embedded ? (
             <button

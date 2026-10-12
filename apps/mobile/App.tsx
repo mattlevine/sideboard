@@ -28,10 +28,13 @@ import {
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
+import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
+import { PhoneCodeRefChips } from './phone-file-select';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
-import { bindPhoneViewer, viewerFromPhoneReply, type PhoneViewerModel } from './phone-viewer';
+import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
+import { viewerFromPhoneReply } from './phone-viewer';
 import { PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
 import { createRelayLink, type RelayLink } from './relay-link';
@@ -197,6 +200,7 @@ export default function App() {
   const [pendingAdd, setPendingAdd] = useState<string | null>(null);
   const [files, setFiles] = useState<FileChip[]>([]);
   const [links, setLinks] = useState<LinkChip[]>([]);
+  const [codeRefs, setCodeRefs] = useState<Array<PhoneCodeSelection & { id: string }>>([]);
   const [chatOptions, setChatOptions] = useState<Record<string, ComposerOptions>>({});
   const [createMode, setCreateMode] = useState<CreateMode | null>(null);
   const [createDraft, setCreateDraft] = useState('');
@@ -207,8 +211,8 @@ export default function App() {
   const [modelsByAgent, setModelsByAgent] = useState<Partial<Record<AgentId, Array<{ id: string; label: string }>>>>({});
   const [listening, setListening] = useState(false);
   const [issuePickerFor, setIssuePickerFor] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<PhoneViewerModel | null>(null);
   const [rightHeader, setRightHeader] = useState<PhoneRightHeader | null | false>(null);
+  const openDocs = usePhoneOpenDocs();
 
   const tagChoices = useMemo(() => phoneTagChoices(projects, tagFilters), [projects, tagFilters]);
   const visibleOrchestration = useMemo(
@@ -241,8 +245,6 @@ export default function App() {
   const lastPhoneOpRef = useRef<string | null>(null);
   const headerOkRef = useRef(true);
   const headerPendingRef = useRef(false);
-  const viewerRef = useRef<PhoneViewerModel | null>(null);
-  const viewerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingImageRef = useRef<string | null>(null);
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
@@ -395,12 +397,6 @@ export default function App() {
     setOrchestration((prev) => [chat, ...prev.filter((row) => row.id !== chat.id)]);
   }
 
-  const { settle: settleViewer, showOpening } = bindPhoneViewer({
-    viewerRef,
-    timerRef: viewerTimerRef,
-    setViewer,
-  });
-
   function applyControl(control: PhoneControl) {
     if (control.op === 'sidebar') {
       const nextOrchestration = Array.isArray(control.orchestration)
@@ -473,7 +469,10 @@ export default function App() {
     }
     if (control.op === 'opened' && control.chat?.id) {
       const chat = { ...control.chat, agent: control.chat.agent || control.options?.agent };
-      if (chat.id !== activeChatIdRef.current) clearChatTools();
+      if (chat.id !== activeChatIdRef.current) {
+        clearChatTools();
+        openDocs.closeAll(); setCodeRefs([]);
+      }
       setPendingAdd(null);
       setCreateMode(null);
       if (control.options) {
@@ -590,13 +589,13 @@ export default function App() {
     }
     const decision = viewerFromPhoneReply(
       control,
-      viewerRef.current,
+      openDocs.current(),
       lastPhoneOpRef.current === 'open-file',
       activeChatIdRef.current,
     );
     if (decision.handled) {
       lastPhoneOpRef.current = null;
-      if (decision.viewer) settleViewer(decision.viewer);
+      if (decision.viewer) openDocs.apply(decision.viewer);
       return;
     }
     if (control.op === 'header') {
@@ -811,7 +810,7 @@ export default function App() {
 
   function showAgents() {
     if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
-    settleViewer(null);
+    openDocs.closeAll();
     panes.setPane('chat');
     setError(null);
     screenRef.current = 'agents';
@@ -845,7 +844,7 @@ export default function App() {
     const id = activeChatIdRef.current;
     if (!id) return;
     lastPhoneOpRef.current = 'open-file';
-    showOpening(artifact.title);
+    openDocs.showOpening(artifactDocId(artifact.title), artifact.title);
     panes.setPane('doc');
     link.send(phoneCommand({
       op: 'open-artifact',
@@ -859,7 +858,7 @@ export default function App() {
     const id = activeChatIdRef.current;
     if (!id) return;
     lastPhoneOpRef.current = 'open-file';
-    showOpening(file.path);
+    openDocs.showOpening(fileDocId(file.path), file.path);
     panes.setPane('doc');
     link.send(
       phoneCommand({
@@ -908,7 +907,7 @@ export default function App() {
   }
 
   function openChat(chatId: string) {
-    settleViewer(null);
+    openDocs.closeAll(); setCodeRefs([]);
     panes.setPane('chat');
     setError(null);
     pinTranscriptRef.current = true;
@@ -1092,15 +1091,18 @@ export default function App() {
     link.send(phoneCommand({ op: 'restore', chatId }));
   }
 
+  function addCodeRef(ref: PhoneCodeSelection) {
+    setCodeRefs((prev) => [...prev, { ...ref, id: `${Date.now()}-${prev.length}` }]);
+    panes.setPane('chat');
+  }
+
   function sendText(text: string) {
     const body = text.trim();
     const id = activeChatIdRef.current;
-    const attached = files.length > 0 || links.length > 0;
-    if ((!body && !attached) || !id) return;
+    const extras = phoneSendExtras(files, links, codeRefs);
     const stopping = body.toLowerCase() === 'stop';
-    const bubble = [body, ...files.map((file) => file.name), ...links.map((link) => link.ref)]
-      .filter(Boolean)
-      .join('\n');
+    if ((!body && !extras.attached) || !id) return;
+    const bubble = [body, ...extras.names].filter(Boolean).join('\n');
     if (!stopping) pinTranscriptRef.current = true;
     setTranscripts((prev) => {
       const current = prev[id] ?? EMPTY;
@@ -1125,7 +1127,7 @@ export default function App() {
     if (!stopping) {
       setDraft('');
       setFiles([]);
-      setLinks([]);
+      setLinks([]); setCodeRefs([]);
       patchChat(id, { status: 'running', updatedAt: new Date().toISOString() });
     }
     const options = chatOptions[id];
@@ -1135,8 +1137,7 @@ export default function App() {
           op: 'prompt',
           chatId: id,
           text: body,
-          ...(files.length ? { files: files.map(({ name, dataBase64 }) => ({ name, dataBase64 })) } : {}),
-          ...(links.length ? { links } : {}),
+          ...extras.payload,
           ...(options ?? {}),
         });
     if (attachedRef.current) {
@@ -1510,17 +1511,24 @@ export default function App() {
         </View>
         <PhoneWorkspace
           pane={panes.pane}
-          viewer={viewer}
+          docs={openDocs.docs}
+          activeDocId={openDocs.activeId}
           side={panes.side}
           header={chatHeader}
           onSelect={panes.selectPane}
           onReview={panes.askReview}
-          onOpenPath={openDesktopFile}
-          onCloseDoc={() => {
-            settleViewer(null);
-            panes.setPane('chat');
+          onSelectDoc={(id) => {
+            openDocs.select(id);
+            panes.setPane('doc');
           }}
-          onHeaderStatus={() => panes.selectPane('changes', chatHeader?.dirty ? 'uncommitted' : 'commits')}
+          onOpenPath={openDesktopFile}
+          onAddCodeRef={addCodeRef}
+          onCloseDoc={(id) => {
+            const next = openDocs.close(id);
+            if (!next && panes.pane === 'doc') panes.setPane('chat');
+          }}
+          fileQuery={panes.fileQuery}
+          onFileQuery={panes.setFileSearch}
           onHeaderAction={runHeaderAction}
           onHeaderArchive={archiveOpenChat}
         >
@@ -1639,6 +1647,7 @@ export default function App() {
           ))}
         </ScrollView>
         {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
+        <PhoneCodeRefChips refs={codeRefs} onRemove={(id) => setCodeRefs((prev) => prev.filter((row) => row.id !== id))} />
         <ComposerDock
           draft={draft}
           placeholder={composerPlaceholder({
@@ -1649,6 +1658,7 @@ export default function App() {
           onSend={() => sendText(draft)}
           files={files}
           links={links}
+          allowEmpty={codeRefs.length > 0}
           onRemoveFile={(id) => setFiles((prev) => prev.filter((file) => file.id !== id))}
           onRemoveLink={(ref) => setLinks((prev) => prev.filter((link) => link.ref !== ref))}
           options={activeOptions}

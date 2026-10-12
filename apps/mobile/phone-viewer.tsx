@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,7 +12,11 @@ import {
   View,
 } from 'react-native';
 import WebView from 'react-native-webview';
+import { highlightCode } from './code-highlight';
+import { languageFromPath } from './code-language';
 import type { FilePathLink } from './file-link';
+import { selectableFileText, type PhoneCodeSelection } from './phone-code-ref';
+import { PhoneFileSelect } from './phone-file-select';
 import { MarkdownText } from './markdown';
 import { palette } from './styles';
 
@@ -40,31 +45,6 @@ export type PhoneViewerModel =
     };
 
 export type PhoneViewerDecision = { handled: false } | { handled: true; viewer: PhoneViewerModel | null };
-
-export function bindPhoneViewer(opts: {
-  viewerRef: { current: PhoneViewerModel | null };
-  timerRef: { current: ReturnType<typeof setTimeout> | null };
-  setViewer: (next: PhoneViewerModel | null) => void;
-}) {
-  function settle(next: PhoneViewerModel | null) {
-    if (opts.timerRef.current) clearTimeout(opts.timerRef.current);
-    opts.timerRef.current = null;
-    opts.viewerRef.current = next;
-    opts.setViewer(next);
-  }
-  function showOpening(title: string) {
-    settle({ status: 'loading', title });
-    opts.timerRef.current = setTimeout(() => {
-      if (opts.viewerRef.current?.status !== 'loading') return;
-      settle({
-        status: 'error',
-        title,
-        message: 'The Mac did not send this. Update Sideboard on the Mac so the phone can show it.',
-      });
-    }, 12_000);
-  }
-  return { settle, showOpening };
-}
 
 function textField(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -143,37 +123,64 @@ function viewerHtml(kind: 'html' | 'svg', content: string): string {
 
 function FileText({
   content,
+  language,
   startLine,
   endLine,
 }: {
   content: string;
+  language: string;
   startLine?: number;
   endLine?: number;
 }) {
-  const lines = content.split('\n');
+  const lines = useMemo(() => content.split('\n'), [content]);
   const end = endLine ?? startLine;
-  if (startLine == null || end == null || lines.length > 2500) {
+  const marked = startLine != null && end != null && lines.length <= 2500;
+  const whole = useMemo(
+    () => (marked ? null : content ? highlightCode(content, language, 'file') : ' '),
+    [marked, content, language],
+  );
+  const paintedLines = useMemo(() => {
+    if (!marked || startLine == null || end == null) return null;
+    const from = startLine;
+    const to = end;
+    return lines.map((line, index) => {
+      const n = index + 1;
+      return {
+        n,
+        on: n >= from && n <= to,
+        text: line.length ? highlightCode(line, language, `L${n}`) : ' ',
+      };
+    });
+  }, [marked, lines, language, startLine, end]);
+  if (!paintedLines) {
     return (
       <ScrollView contentContainerStyle={styles.pad}>
         <Text selectable style={styles.code}>
-          {content || ' '}
+          {whole}
         </Text>
       </ScrollView>
     );
   }
   return (
     <ScrollView contentContainerStyle={styles.pad}>
-      {lines.map((line, index) => {
-        const n = index + 1;
-        const on = n >= startLine && n <= end;
-        return (
-          <Text key={n} selectable style={[styles.code, on && styles.mark]}>
-            {line.length ? line : ' '}
-          </Text>
-        );
-      })}
+      {paintedLines.map((line) => (
+        <Text key={line.n} selectable style={[styles.code, line.on && styles.mark]}>
+          {line.text}
+        </Text>
+      ))}
     </ScrollView>
   );
+}
+
+function fileLanguage(viewer: PhoneViewerModel): string {
+  if (viewer.status === 'file') {
+    if (viewer.binary || viewer.directory || viewer.encoding !== 'utf8') return '';
+    return languageFromPath(viewer.path);
+  }
+  if (viewer.status !== 'artifact') return '';
+  if (viewer.kind === 'react') return 'tsx';
+  if (viewer.kind === 'text') return languageFromPath(viewer.title);
+  return '';
 }
 
 function DirectoryList({
@@ -259,10 +266,10 @@ function ViewerBody({
   ) {
     return <Image source={{ uri: viewer.content }} style={styles.image} resizeMode="contain" />;
   }
-  const content = viewer.content;
   return (
     <FileText
-      content={content}
+      content={viewer.content}
+      language={fileLanguage(viewer)}
       startLine={viewer.status === 'file' ? viewer.startLine : undefined}
       endLine={viewer.status === 'file' ? viewer.endLine : undefined}
     />
@@ -274,14 +281,23 @@ export function PhoneViewer({
   viewer,
   onClose,
   onOpenPath,
+  onAddCodeRef,
   inline = false,
 }: {
   viewer: PhoneViewerModel | null;
   onClose: () => void;
   onOpenPath: (link: FilePathLink) => void;
-  /** In the tab row, under the page. The chat stays a tab beside it. */
+  /** Select text and add a code reference to the chat composer. */
+  onAddCodeRef?: (ref: PhoneCodeSelection) => void;
+  /** Under the open-files row. Chat stays on the row above. */
   inline?: boolean;
 }) {
+  const source = viewer?.status === 'file' ? selectableFileText(viewer) : null;
+  const [selecting, setSelecting] = useState(false);
+  const sourcePath = source?.path ?? '';
+  useEffect(() => {
+    setSelecting(false);
+  }, [sourcePath]);
   const truncated =
     viewer && viewer.status !== 'loading' && viewer.status !== 'error' && viewer.truncated
       ? viewer.status === 'artifact'
@@ -297,10 +313,30 @@ export function PhoneViewer({
         <Text style={styles.title} numberOfLines={1}>
           {viewer?.title ?? ''}
         </Text>
+        {source && onAddCodeRef ? (
+          <Pressable
+            onPress={() => setSelecting((on) => !on)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={selecting ? 'Done selecting' : 'Select text'}
+          >
+            <Text style={styles.link}>{selecting ? 'Done' : 'Select'}</Text>
+          </Pressable>
+        ) : null}
       </View>
       {viewer?.status === 'artifact' && viewer.kind === 'react' ? <Text style={styles.caption}>React source</Text> : null}
       {truncated ? <Text style={styles.caption}>{truncated}</Text> : null}
-      {viewer ? <ViewerBody viewer={viewer} onOpenPath={onOpenPath} /> : null}
+      {selecting && source && onAddCodeRef ? (
+        <PhoneFileSelect
+          content={source.content}
+          onAdd={(range) => {
+            onAddCodeRef({ path: source.path, ...range });
+            setSelecting(false);
+          }}
+        />
+      ) : viewer ? (
+        <ViewerBody viewer={viewer} onOpenPath={onOpenPath} />
+      ) : null}
     </View>
   );
   if (inline) return body;

@@ -258,8 +258,6 @@ interface Props {
   rightSidebarToggle?: ReactNode;
   /** Rendered under the tab strip (orchestrator child-thread chips). */
   belowTabs?: ReactNode;
-  /** Speak artifact text with the app Read Aloud modal. */
-  onReadAloud?: (text: string) => void;
 }
 
 const queuedIconStroke = {
@@ -735,7 +733,6 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
   belowTabs,
-  onReadAloud,
 }: Props) {
   const live = useLiveThread(thread.id);
   const liveOutput = live.output;
@@ -3174,7 +3171,6 @@ export function ThreadPanel({
             onActivate={activateRightTab}
             onCloseTab={closeRightTab}
             onSchemaContentChange={updateSchemaTab}
-            onReadAloud={onReadAloud}
             worktreeThreadId={thread.id}
             filePicker={filePicker}
             onFilePickerChange={setFilePicker}
