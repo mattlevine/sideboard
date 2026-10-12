@@ -20,6 +20,7 @@ import {
   importCursorSdk,
   resolveCursorSdkRoot,
 } from './cursor-sdk-resolve.js';
+import { acquireCursorCatalogLock, repairCursorLocalCatalog } from './cursor-catalog.js';
 import { cursorSdkStoreDir } from './cursor-store.js';
 import {
   CURSOR_STREAM_IDLE_MS,
@@ -69,6 +70,14 @@ function localAgentStore(
   const root = cursorSdkStoreDir(threadId);
   mkdirSync(root, { recursive: true });
   return new Store(root);
+}
+
+let releaseCatalogLock: (() => Promise<void>) | undefined;
+
+async function unlockCatalog(): Promise<void> {
+  const release = releaseCatalogLock;
+  releaseCatalogLock = undefined;
+  if (release) await release().catch(() => undefined);
 }
 
 /**
@@ -178,6 +187,11 @@ async function main(): Promise<number> {
     fast: Boolean(req.fast),
   });
   const mode = req.planMode ? ('plan' as const) : ('agent' as const);
+  const storeRoot = cursorSdkStoreDir(req.threadId);
+  mkdirSync(storeRoot, { recursive: true });
+  releaseCatalogLock = await acquireCursorCatalogLock(storeRoot);
+  const catalog = repairCursorLocalCatalog(storeRoot);
+  for (const note of catalog.notes) emit({ type: 'stderr', data: note });
   const store = localAgentStore(JsonlLocalAgentStore, req.threadId);
   const isolateSources: NonNullable<LocalAgentOptions['settingSources']> = [];
   // Built-in Read has no offset/limit in the SDK schema — whole files crash
@@ -240,24 +254,35 @@ async function main(): Promise<number> {
     return retryTransport(() => Agent.create(createOpts));
   }
 
+  function resumeAgent(agentId: string) {
+    return retryTransport(() =>
+      Agent.resume(agentId, {
+        apiKey,
+        model,
+        mode,
+        local,
+        disallowedTools: ['read'],
+        ...(mcpServers ? { mcpServers } : {}),
+      }),
+    );
+  }
+
   async function openAgent() {
     try {
-      return req.agentId
-        ? await retryTransport(() =>
-            Agent.resume(req.agentId!, {
-              apiKey,
-              model,
-              mode,
-              local,
-              disallowedTools: ['read'],
-              ...(mcpServers ? { mcpServers } : {}),
-            }),
-          )
-        : await createAgent();
+      return req.agentId ? await resumeAgent(req.agentId) : await createAgent();
     } catch (err) {
-      // Stale / purged cloud ids, cwd-reused dead agents, and JSONL checkpoints
-      // whose root blob never landed ("Corrupt local agent checkpoint").
+      // Stale / purged cloud ids and cwd-reused dead agents cannot be repaired.
+      // A missing checkpoint blob can: roll the agent back, then resume it.
       if (!isUnresumableCursorSession(err)) throw err;
+      const again = repairCursorLocalCatalog(storeRoot);
+      for (const note of again.notes) emit({ type: 'stderr', data: note });
+      if (again.repaired && req.agentId) {
+        try {
+          return await resumeAgent(req.agentId);
+        } catch (err2) {
+          if (!isUnresumableCursorSession(err2)) throw err2;
+        }
+      }
       emit({
         type: 'stderr',
         data: cursorSessionRecoveryMessage(err, req.agentId),
@@ -326,7 +351,9 @@ async function main(): Promise<number> {
       new Promise<void>((resolve) => {
         setTimeout(resolve, 2_000);
       }),
-    ]).finally(() => process.exit(1));
+    ]).finally(() => {
+      void unlockCatalog().finally(() => process.exit(1));
+    });
   };
   process.once('SIGTERM', onSignal);
   process.once('SIGINT', onSignal);
@@ -441,11 +468,22 @@ async function main(): Promise<number> {
         }
         // send() can throw the same unresumable errors after a "successful" resume.
         if (!isUnresumableCursorSession(err)) throw err;
+        const agentId = agent.agentId;
+        const again = repairCursorLocalCatalog(storeRoot);
+        for (const note of again.notes) emit({ type: 'stderr', data: note });
+        await agent[Symbol.asyncDispose]().catch(() => undefined);
+        if (again.repaired) {
+          try {
+            agent = await resumeAgent(agentId);
+            return await runTurn(agent);
+          } catch (err2) {
+            if (!isUnresumableCursorSession(err2)) throw err2;
+          }
+        }
         emit({
           type: 'stderr',
-          data: cursorSessionRecoveryMessage(err, agent.agentId),
+          data: cursorSessionRecoveryMessage(err, agentId),
         });
-        await agent[Symbol.asyncDispose]().catch(() => undefined);
         agent = await createAgent();
         return await runTurn(agent);
       }
@@ -463,6 +501,8 @@ async function main(): Promise<number> {
     const message = err instanceof Error ? err.message : String(err);
     emit({ type: 'stderr', data: message });
     return 1;
+  } finally {
+    await unlockCatalog();
   }
 }
 
