@@ -867,6 +867,7 @@ export default function App() {
         path: file.path,
         ...(file.startLine != null ? { startLine: file.startLine } : {}),
         ...(file.endLine != null ? { endLine: file.endLine } : {}),
+        ...(file.view === 'diff' ? { view: 'diff' } : {}),
       }),
     );
   }

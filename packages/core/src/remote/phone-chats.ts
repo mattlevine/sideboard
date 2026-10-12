@@ -182,7 +182,7 @@ export type PhoneControlRequest =
   | { op: 'header'; chatId: string }
   | { op: 'git'; chatId: string; action: PhoneHeaderGitAction }
   | PhonePaneRequest
-  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number }
+  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff' }
   | PhoneOpenArtifact
   | { op: 'media'; chatId: string; path: string };
 
@@ -304,12 +304,14 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     if (op === 'media') return { op, chatId, path };
     const startLine = lineField(value, 'startLine');
     const endLine = lineField(value, 'endLine');
+    const view = textField(value, 'view') === 'diff' ? 'diff' : undefined;
     return {
       op,
       chatId,
       path,
       ...(startLine != null ? { startLine } : {}),
       ...(endLine != null ? { endLine } : {}),
+      ...(view ? { view } : {}),
     };
   }
   const draft = parsePhoneDraft(value);

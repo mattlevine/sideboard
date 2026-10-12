@@ -31,10 +31,11 @@ describe('selectableFileText', () => {
     expect(selectableFileText(file)?.path).toBe('apps/mobile/App.tsx');
   });
 
-  it('skips images, folders, and binary files', () => {
+  it('skips images, folders, binary files, and diffs', () => {
     expect(selectableFileText({ ...file, mime: 'image/png' })).toBeNull();
     expect(selectableFileText({ ...file, directory: true })).toBeNull();
     expect(selectableFileText({ ...file, encoding: 'base64' })).toBeNull();
+    expect(selectableFileText({ ...file, diff: true })).toBeNull();
   });
 });
 

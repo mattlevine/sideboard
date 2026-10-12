@@ -15,6 +15,7 @@ import WebView from 'react-native-webview';
 import { highlightCode } from './code-highlight';
 import { languageFromPath } from './code-language';
 import type { FilePathLink } from './file-link';
+import { PhoneDiffView } from './phone-diff-view';
 import { selectableFileText, type PhoneCodeSelection } from './phone-code-ref';
 import { PhoneFileSelect } from './phone-file-select';
 import { MarkdownText } from './markdown';
@@ -35,6 +36,8 @@ export type PhoneViewerModel =
       mime?: string;
       startLine?: number;
       endLine?: number;
+      /** Unified patch from Changes, drawn like the desktop diff. */
+      diff?: boolean;
     }
   | {
       status: 'artifact';
@@ -82,6 +85,7 @@ export function viewerFromPhoneReply(
           mime: textField(record.mime),
           startLine: typeof record.startLine === 'number' ? record.startLine : undefined,
           endLine: typeof record.endLine === 'number' ? record.endLine : undefined,
+          diff: record.view === 'diff' ? true : undefined,
         },
       };
     }
@@ -251,6 +255,9 @@ function ViewerBody({
         <MarkdownText text={viewer.content} onFileLink={onOpenPath} />
       </ScrollView>
     );
+  }
+  if (viewer.status === 'file' && viewer.diff) {
+    return <PhoneDiffView patch={viewer.content} />;
   }
   if (viewer.status === 'file' && viewer.directory) {
     return <DirectoryList path={viewer.path} content={viewer.content} onOpenPath={onOpenPath} />;

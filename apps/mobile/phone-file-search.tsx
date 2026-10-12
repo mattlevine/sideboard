@@ -1,4 +1,5 @@
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { changeBadge } from './phone-diff';
 import type { PhonePaneId, PhoneSide } from './phone-pane-types';
 import { palette } from './styles';
 
@@ -60,7 +61,9 @@ export function PhonePaneBody({
                 <Text style={styles.label} numberOfLines={1}>
                   {row.label}
                 </Text>
-                {row.detail ? <RowDetail pane={ready.pane} detail={row.detail} /> : null}
+                {row.detail || (ready.pane === 'changes' && row.status) ? (
+                  <RowDetail pane={ready.pane} detail={row.detail} status={row.status} />
+                ) : null}
               </View>
             </Pressable>
           ))}
@@ -72,24 +75,22 @@ export function PhonePaneBody({
   );
 }
 
-/** Changes rows arrive as `+12 −3`. Color them like the desktop git badge. */
-function RowDetail({ pane, detail }: { pane: PhonePaneId; detail: string }) {
-  const counts = pane === 'changes' ? parseChangeCounts(detail) : null;
-  if (!counts) return <Text style={styles.detail}>{detail}</Text>;
+/** Changes rows use the desktop badge: status letter, then only non-zero counts. */
+function RowDetail({ pane, detail, status }: { pane: PhonePaneId; detail?: string; status?: string }) {
+  if (pane !== 'changes') return <Text style={styles.detail}>{detail}</Text>;
+  const badge = changeBadge(status, detail);
+  if (!badge) return detail ? <Text style={styles.detail}>{detail}</Text> : null;
   return (
-    <Text style={styles.detail}>
-      <Text style={styles.add}>+{counts.add}</Text>
-      <Text> </Text>
-      <Text style={styles.del}>−{counts.del}</Text>
+    <Text style={styles.badge}>
+      {badge.letter ? <Text style={{ color: badge.letterColor, fontWeight: '700' }}>{badge.letter}</Text> : null}
+      {badge.add != null ? (
+        <Text style={styles.add}>{`${badge.letter ? ' ' : ''}+${badge.add}`}</Text>
+      ) : null}
+      {badge.del != null ? (
+        <Text style={styles.del}>{`${badge.letter || badge.add != null ? ' ' : ''}-${badge.del}`}</Text>
+      ) : null}
     </Text>
   );
-}
-
-/** `+12 −3` from the Mac. The minus may be U+2212 or a hyphen. */
-function parseChangeCounts(detail: string): { add: number; del: number } | null {
-  const match = /^\+(\d+)\s+[−-](\d+)$/.exec(detail.trim());
-  if (!match) return null;
-  return { add: Number(match[1]), del: Number(match[2]) };
 }
 
 const styles = StyleSheet.create({
@@ -107,6 +108,11 @@ const styles = StyleSheet.create({
   },
   label: { flex: 1, color: palette.text, fontSize: 14 },
   detail: { color: palette.muted, fontSize: 12 },
+  badge: {
+    color: palette.muted,
+    fontSize: 11,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+  },
   add: { color: '#6a9955' },
   del: { color: '#f14c4c' },
   search: {

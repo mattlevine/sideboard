@@ -18,6 +18,7 @@ import {
   phoneArtifactReply,
   type PhoneOpenArtifactRequest,
 } from './phone-artifact.js';
+import { readPhoneChangePatch } from './phone-panes.js';
 import { dispatchPhoneWorkspace } from './phone-workspace-ops.js';
 import {
   archivePhoneChat,
@@ -334,6 +335,32 @@ function handlePhoneControl(
     const relative = thread ? phoneWorktreeRelative(thread.worktreePath, cmd.path) : null;
     if (!thread || !relative) {
       emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
+      return;
+    }
+    if (cmd.view === 'diff') {
+      void readPhoneChangePatch(thread.id, relative)
+        .then((body) => {
+          if (!body) {
+            emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file has no changes to show.' });
+            return;
+          }
+          emitControl(opts, {
+            op: 'file',
+            chatId: cmd.chatId,
+            path: relative,
+            content: body.content,
+            encoding: 'utf8',
+            view: 'diff',
+            ...(body.truncated ? { truncated: true } : {}),
+          });
+        })
+        .catch(() => {
+          emitControl(opts, {
+            op: 'error',
+            chatId: cmd.chatId,
+            message: 'That file could not be opened on the phone.',
+          });
+        });
       return;
     }
     void getOrchestrator()

@@ -181,6 +181,8 @@ export type PhoneFileReply = {
   mime?: string;
   startLine?: number;
   endLine?: number;
+  /** Unified patch, the same view the desktop opens from Changes. */
+  view?: 'diff';
 };
 
 export type PhoneArtifactReply = {
