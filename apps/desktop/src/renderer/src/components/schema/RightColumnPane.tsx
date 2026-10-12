@@ -84,8 +84,6 @@ interface Props {
     returnTabId: string;
     picker?: FilePickerRequest | null;
   }) => void;
-  /** Speak document artifacts with the app Read Aloud modal. */
-  onReadAloud?: (text: string) => void;
 }
 
 function tabKind(content: RightPaneContent): string {
@@ -108,7 +106,6 @@ export function RightColumnPane({
   filePicker = null,
   onFilePickerChange,
   onRequestFilesTab,
-  onReadAloud,
 }: Props) {
   const [maximized, setMaximized] = useState(false);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0] ?? null;
@@ -208,7 +205,6 @@ export function RightColumnPane({
         worktreeThreadId={worktreeThreadId}
         onClose={() => onCloseTab(content.id)}
         headerAction={maximizeButton}
-        onReadAloud={onReadAloud}
       />
     );
   }

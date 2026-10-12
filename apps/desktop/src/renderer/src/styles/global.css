@@ -401,8 +401,7 @@ body.resizing-panels webview {
   justify-content: center;
 }
 
-.artifact-pane-copy,
-.artifact-pane-speak {
+.artifact-pane-copy {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -426,19 +425,9 @@ body.resizing-panels webview {
   border-color: var(--border);
 }
 
-.artifact-pane-copy:hover,
-.artifact-pane-speak:hover {
+.artifact-pane-copy:hover {
   background: var(--bg-hover);
   color: var(--text);
-}
-
-.artifact-pane-speak:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.artifact-pane-speak-icon {
-  display: block;
 }
 
 .artifact-pane-body {
