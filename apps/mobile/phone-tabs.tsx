@@ -2,9 +2,11 @@ import { useRef, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PhoneViewer } from './phone-viewer';
 import type { FilePathLink } from './file-link';
+import { PhonePaneBody } from './phone-file-search';
 import { PhoneOpenFiles } from './phone-open-files';
+import type { PhoneCodeSelection } from './phone-code-ref';
 import type { PhoneOpenDoc } from './phone-open-docs';
-import type { PhonePaneId, PhonePaneRow } from './phone-pane-types';
+import type { PhonePaneId, PhonePaneRow, PhoneSide } from './phone-pane-types';
 import { palette } from './styles';
 
 export type PhoneTab = 'chat' | 'doc' | PhonePaneId;
@@ -25,13 +27,6 @@ export type PhoneRightHeader = {
   actionLabel?: string;
 };
 
-export type PhoneSide = {
-  pane: PhonePaneId;
-  rows: PhonePaneRow[];
-  note?: string;
-  loading?: boolean;
-};
-
 const TABS: Array<{ id: PhonePaneId; label: string }> = [
   { id: 'files', label: 'All files' },
   { id: 'changes', label: 'Changes' },
@@ -43,15 +38,22 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
   const [side, setSide] = useState<PhoneSide | null>(null);
   const sideRef = useRef(side);
   sideRef.current = side;
-  const requestedRef = useRef<{ chatId: string; pane: PhonePaneId } | null>(null);
+  const requestedRef = useRef<{ chatId: string; pane: PhonePaneId; query: string } | null>(null);
+  const [fileQuery, setFileQuery] = useState('');
+  const fileQueryRef = useRef('');
+  const paneRef = useRef<PhoneTab>('chat');
+  const queryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  paneRef.current = pane;
 
   function takeControl(control: object): boolean {
-    const record = control as { op?: unknown; chatId?: unknown; message?: unknown };
+    const record = control as { op?: unknown; chatId?: unknown; message?: unknown; query?: unknown };
     const replyChat = typeof record.chatId === 'string' ? record.chatId : '';
     const wanted = requestedRef.current;
     const next = sideFromPhoneReply(control);
     if (next) {
+      const replyQuery = typeof record.query === 'string' ? record.query : null;
       if (!wanted || wanted.pane !== next.pane || (replyChat && replyChat !== wanted.chatId)) return true;
+      if (replyQuery != null && replyQuery !== wanted.query) return true;
       requestedRef.current = null;
       setSide(next);
       return true;
@@ -71,30 +73,66 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
 
   function selectPane(next: PhoneTab, scope?: 'uncommitted' | 'commits') {
     setPane(next);
+    paneRef.current = next;
+    if (next !== 'files' && queryTimer.current) {
+      clearTimeout(queryTimer.current);
+      queryTimer.current = null;
+    }
     if (next !== 'files' && next !== 'changes' && next !== 'checks') {
       requestedRef.current = null;
       return;
     }
     const id = chatId();
-    const loading = { pane: next, rows: [], loading: true };
+    const query = next === 'files' ? fileQueryRef.current.trim() : '';
+    const previous = sideRef.current;
+    const keep = next === 'files' && previous?.pane === 'files';
+    const loading: PhoneSide = keep
+      ? { pane: next, rows: previous.rows, note: previous.note, loading: true }
+      : { pane: next, rows: [], loading: true };
     sideRef.current = loading;
     setSide(loading);
     if (!id) {
       requestedRef.current = null;
       return;
     }
-    requestedRef.current = { chatId: id, pane: next };
-    send({ op: 'pane', chatId: id, pane: next, ...(scope ? { scope } : {}) });
+    requestedRef.current = { chatId: id, pane: next, query };
+    send({
+      op: 'pane',
+      chatId: id,
+      pane: next,
+      ...(scope ? { scope } : {}),
+      ...(query ? { query } : {}),
+    });
+  }
+
+  function setFileSearch(value: string) {
+    setFileQuery(value);
+    fileQueryRef.current = value;
+    if (queryTimer.current) clearTimeout(queryTimer.current);
+    queryTimer.current = setTimeout(() => {
+      queryTimer.current = null;
+      if (paneRef.current !== 'files') return;
+      selectPane('files');
+    }, 250);
+  }
+
+  function setVisiblePane(next: PhoneTab) {
+    if (next !== 'files' && queryTimer.current) {
+      clearTimeout(queryTimer.current);
+      queryTimer.current = null;
+    }
+    paneRef.current = next;
+    setPane(next);
   }
 
   function askReview() {
     const id = chatId();
     if (!id) return;
-    setPane('chat');
+    setVisiblePane('chat');
     send({ op: 'review', chatId: id });
   }
 
-  return { pane, side, setPane, takeControl, selectPane, askReview };
+  return { pane, side, fileQuery, setFileSearch, setPane: setVisiblePane, takeControl, selectPane, askReview };
 }
 
 export function PhoneWorkspace({
@@ -108,9 +146,11 @@ export function PhoneWorkspace({
   onSelectDoc,
   onCloseDoc,
   onOpenPath,
-  onHeaderStatus,
+  onAddCodeRef,
   onHeaderAction,
   onHeaderArchive,
+  fileQuery,
+  onFileQuery,
   children,
 }: {
   pane: PhoneTab;
@@ -122,8 +162,10 @@ export function PhoneWorkspace({
   onReview: () => void;
   onSelectDoc: (id: string) => void;
   onCloseDoc: (id: string) => void;
+  fileQuery: string;
+  onFileQuery: (value: string) => void;
   onOpenPath: (link: FilePathLink) => void;
-  onHeaderStatus: () => void;
+  onAddCodeRef?: (ref: PhoneCodeSelection) => void;
   onHeaderAction: () => void;
   onHeaderArchive: () => void;
   children: ReactNode;
@@ -132,12 +174,7 @@ export function PhoneWorkspace({
   return (
     <View style={styles.workspace}>
       {header ? (
-        <PhoneRightTop
-          header={header}
-          onStatus={onHeaderStatus}
-          onAction={onHeaderAction}
-          onArchive={onHeaderArchive}
-        />
+        <PhoneRightTop header={header} onAction={onHeaderAction} onArchive={onHeaderArchive} />
       ) : null}
       <PhoneTabBar tab={pane} onSelect={onSelect} onReview={onReview} />
       <PhoneOpenFiles
@@ -157,28 +194,31 @@ export function PhoneWorkspace({
               if (activeDocId) onCloseDoc(activeDocId);
             }}
             onOpenPath={onOpenPath}
+            onAddCodeRef={onAddCodeRef}
           />
         ) : (
-          <PhonePaneBody side={side} onOpenPath={(path) => onOpenPath({ path })} />
+          <PhonePaneBody
+            side={side}
+            fileQuery={fileQuery}
+            onFileQuery={onFileQuery}
+            onOpenPath={(path) => onOpenPath({ path })}
+          />
         )}
       </View>
     </View>
   );
 }
 
-/** Branch, diff counts, pull request, and Commit / Archive — the desktop right-sidebar top row. */
+/** Pull request, Commit, and Archive — the desktop right-sidebar top row. */
 export function PhoneRightTop({
   header,
-  onStatus,
   onAction,
   onArchive,
 }: {
   header: PhoneRightHeader;
-  onStatus: () => void;
   onAction: () => void;
   onArchive: () => void;
 }) {
-  const title = header.title?.replace(/\n/g, ', ') || header.branch;
   const showPr = Boolean(header.prNumber || header.prStatus || header.prUrl);
   return (
     <View style={styles.top}>
@@ -187,22 +227,6 @@ export function PhoneRightTop({
           <PrChip number={header.prNumber} status={header.prStatus} url={header.prUrl} />
         ) : null}
         <View style={styles.topGap} />
-        <Pressable onPress={onStatus} style={styles.git} accessibilityRole="button" accessibilityLabel={title}>
-          <Text style={styles.branch} numberOfLines={1}>
-            {header.branch}
-          </Text>
-          {header.ready && header.dirty && (header.additions > 0 || header.deletions > 0) ? (
-            <Text style={styles.counts}>
-              <Text style={styles.add}>+{header.additions}</Text>
-              <Text style={styles.del}> −{header.deletions}</Text>
-            </Text>
-          ) : header.ready && header.dirty ? (
-            <Text style={styles.gitMeta}>dirty</Text>
-          ) : header.ready && header.unpushed === 0 ? (
-            <Text style={styles.gitMeta}>clean</Text>
-          ) : null}
-          {header.ready && header.unpushed > 0 ? <Text style={styles.gitMeta}>↑{header.unpushed}</Text> : null}
-        </Pressable>
         {header.actionLabel ? (
           <Pressable onPress={onAction} style={styles.action} accessibilityRole="button">
             <Text style={styles.actionText}>{header.actionLabel}</Text>
@@ -298,45 +322,7 @@ function paneRow(value: unknown): PhonePaneRow[] {
   ];
 }
 
-export function PhonePaneBody({
-  side,
-  onOpenPath,
-}: {
-  side: PhoneSide | null;
-  onOpenPath: (path: string) => void;
-}) {
-  if (!side || side.loading) {
-    return (
-      <View style={styles.fill}>
-        <Text style={styles.note}>Loading…</Text>
-      </View>
-    );
-  }
-  return (
-    <ScrollView style={styles.fill} contentContainerStyle={styles.list}>
-      {side.note ? <Text style={styles.note}>{side.note}</Text> : null}
-      {side.rows.length === 0 && !side.note ? <Text style={styles.note}>Nothing here.</Text> : null}
-      {side.rows.map((row) => (
-        <Pressable
-          key={`${row.label}:${row.detail ?? ''}`}
-          onPress={() => {
-            if (row.path) onOpenPath(row.path);
-            else if (row.href) void Linking.openURL(row.href);
-          }}
-        >
-          <View style={styles.row}>
-            <Text style={styles.label} numberOfLines={1}>
-              {row.label}
-            </Text>
-            {row.detail ? <Text style={styles.detail}>{row.detail}</Text> : null}
-          </View>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
-/** Chat sits with All files, Changes, Checks, and Review, under the git header. */
+/** Chat sits with All files, Changes, Checks, and Review, under the workspace header. */
 export function PhoneTabBar({
   tab,
   onSelect,
@@ -398,23 +384,6 @@ const styles = StyleSheet.create({
   prStatus: { fontSize: 12, fontWeight: '500' },
   prExt: { justifyContent: 'center', paddingHorizontal: 8 },
   prExtText: { fontSize: 13, fontWeight: '600' },
-  git: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-    maxWidth: 200,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  branch: { color: palette.text, fontSize: 12, fontWeight: '500', flexShrink: 1 },
-  counts: { fontSize: 12, fontWeight: '600' },
-  add: { color: palette.ok },
-  del: { color: palette.err },
-  gitMeta: { color: palette.muted, fontSize: 12, fontWeight: '600' },
   action: {
     borderWidth: 1,
     borderColor: palette.accent,
@@ -433,19 +402,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   archiveText: { color: palette.text, fontSize: 12, fontWeight: '600' },
-  list: { paddingVertical: 8 },
-  note: { color: palette.muted, fontSize: 14, paddingHorizontal: 16, paddingVertical: 12 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
-  },
-  label: { flex: 1, color: palette.text, fontSize: 14 },
-  detail: { color: palette.muted, fontSize: 12 },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

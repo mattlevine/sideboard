@@ -7,3 +7,10 @@ export type PhonePaneRow = {
   detail?: string;
   href?: string;
 };
+
+export type PhoneSide = {
+  pane: PhonePaneId;
+  rows: PhonePaneRow[];
+  note?: string;
+  loading?: boolean;
+};

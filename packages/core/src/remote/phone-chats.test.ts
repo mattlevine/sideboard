@@ -130,6 +130,20 @@ describe('phone orchestration chats', () => {
     expect(takePhoneControl(encodePhoneControl({ op: 'prompt', chatId: 'chat-1', text: '' }))).toBe(
       'invalid',
     );
+    expect(
+      takePhoneControl(
+        encodePhoneControl({
+          op: 'prompt',
+          chatId: 'chat-1',
+          text: '',
+          refs: [{ path: 'apps/mobile/App.tsx', startLine: 10, endLine: 12, text: 'const n = 1' }],
+        }),
+      ),
+    ).toMatchObject({
+      op: 'prompt',
+      text: '',
+      refs: [{ path: 'apps/mobile/App.tsx', startLine: 10, endLine: 12, text: 'const n = 1' }],
+    });
   });
 
   it('creates, lists, opens, and archives a global orchestration chat', () => {

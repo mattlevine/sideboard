@@ -4,7 +4,8 @@ import Markdown, { type RenderRules } from 'react-native-markdown-display';
 import { linkifyChatUrls, parseChatLink } from './chat-link';
 import { chatMarkdown } from './chat-markdown';
 import { chatSearchQuery, highlightSegments } from './chat-search';
-import { fenceLanguage, highlightCode } from './code-highlight';
+import { highlightCode } from './code-highlight';
+import { fenceLanguage } from './code-language';
 import {
   parseFilePathLink,
   parseSideboardArtifactLink,
