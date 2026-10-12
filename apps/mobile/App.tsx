@@ -292,6 +292,7 @@ export default function App() {
         checkingHostsRef.current = true;
         linkRef.current?.send({ type: 'list_hosts', sessionTokens: tokens });
       },
+      hasHosts: () => screenRef.current === 'desktops' && desktopsRef.current.length > 0,
       attached: () => attachedRef.current,
       inChat: () => onMac(screenRef.current),
       sessionToken: () => {

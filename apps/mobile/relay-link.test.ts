@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextRelayPhase } from './relay-link';
+import { nextRelayPhase, relayReconnectAction } from './relay-link';
 
 describe('nextRelayPhase', () => {
   it('retries a live drop before telling the user', () => {
@@ -16,5 +16,43 @@ describe('nextRelayPhase', () => {
 
   it('reports immediately when there is nothing to retry', () => {
     expect(nextRelayPhase('up', false)).toEqual({ phase: 'down', reportError: true, retry: false });
+  });
+});
+
+describe('relayReconnectAction', () => {
+  it('re-lists saved desktops when none is selected', () => {
+    expect(
+      relayReconnectAction({
+        attached: false,
+        inChat: false,
+        hasSession: false,
+        queued: false,
+        hasHosts: true,
+      }),
+    ).toBe('hosts');
+  });
+
+  it('resumes a chat before refreshing the desktop list', () => {
+    expect(
+      relayReconnectAction({
+        attached: false,
+        inChat: true,
+        hasSession: true,
+        queued: false,
+        hasHosts: true,
+      }),
+    ).toBe('resume');
+  });
+
+  it('stops when nothing is queued and no desktop can be asked again', () => {
+    expect(
+      relayReconnectAction({
+        attached: false,
+        inChat: false,
+        hasSession: false,
+        queued: false,
+        hasHosts: false,
+      }),
+    ).toBe('stop');
   });
 });

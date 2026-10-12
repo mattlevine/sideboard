@@ -37,6 +37,14 @@ export function selectionLineRange(
   return { startLine, endLine, text };
 }
 
+/**
+ * Opening a citation focuses the field, and iOS reports a caret.
+ * Hold the cited range until the user drags a real selection.
+ */
+export function holdsCitedSelection(holding: boolean, start: number, end: number): boolean {
+  return holding && start === end;
+}
+
 /** Character offset where a 1-based line starts. Past the end is `content.length`. */
 export function lineStartOffset(content: string, line: number): number {
   if (line <= 1) return 0;

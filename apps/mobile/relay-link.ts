@@ -6,6 +6,30 @@ export const RELAY_UNREACHABLE = 'Could not reach the relay.';
 
 export type RelayLinkPhase = 'up' | 'retrying' | 'down';
 
+export type RelayReconnect = 'resume' | 'connect' | 'hosts' | 'up' | 'stop';
+
+/**
+ * What a dropped socket should do next. The desktop list is refreshed even
+ * when no Mac is selected. `stop` means there is nothing to try again.
+ */
+export function relayReconnectAction(input: {
+  attached: boolean;
+  inChat: boolean;
+  hasSession: boolean;
+  queued: boolean;
+  hasHosts: boolean;
+}): RelayReconnect {
+  if (input.attached) return 'up';
+  if (input.inChat && input.hasSession) return 'resume';
+  if (input.queued) return 'connect';
+  if (input.hasHosts) return 'hosts';
+  return 'stop';
+}
+
+function relayDropCanRetry(action: RelayReconnect): boolean {
+  return action === 'resume' || action === 'connect' || action === 'hosts';
+}
+
 /**
  * A dropped socket retries once before the phone says the relay is down.
  * Further retries stay quiet until a connection opens again.
@@ -41,6 +65,8 @@ export function createRelayLink(opts: {
   onClose: () => void;
   /** Desktop list has nothing queued, so the phone asks again after a drop. */
   onNeedsRetry?: () => void;
+  /** Saved desktops are on screen, so a drop can re-list them with none selected. */
+  hasHosts?: () => boolean;
   attached: () => boolean;
   inChat: () => boolean;
   sessionToken: () => string | null;
@@ -89,7 +115,7 @@ export function createRelayLink(opts: {
       clearKeepalive();
       if (socket === next) socket = null;
       opts.onClose();
-      const step = nextRelayPhase(phase, queue.length > 0 || Boolean(opts.sessionToken()));
+      const step = nextRelayPhase(phase, relayDropCanRetry(reconnectAction()));
       phase = step.phase;
       if (step.reportError) opts.onError(RELAY_UNREACHABLE);
       if (step.retry) scheduleReconnect();
@@ -105,24 +131,34 @@ export function createRelayLink(opts: {
     connect();
   };
 
+  const reconnectAction = () =>
+    relayReconnectAction({
+      attached: opts.attached(),
+      inChat: opts.inChat(),
+      hasSession: Boolean(opts.sessionToken()),
+      queued: queue.length > 0,
+      hasHosts: Boolean(opts.hasHosts?.()),
+    });
+
   const scheduleReconnect = () => {
     if (resumeTimer) return;
     resumeTimer = setTimeout(() => {
       resumeTimer = null;
-      if (opts.attached()) {
+      const action = reconnectAction();
+      if (action === 'up') {
         phase = 'up';
         return;
       }
       const token = opts.sessionToken();
-      if (opts.inChat() && token) {
+      if (action === 'resume' && token) {
         send({ type: 'resume', sessionToken: token });
         return;
       }
-      if (queue.length > 0) {
+      if (action === 'connect') {
         connect();
         return;
       }
-      if (token) opts.onNeedsRetry?.();
+      if (action === 'hosts') opts.onNeedsRetry?.();
     }, RESUME_MS);
   };
 

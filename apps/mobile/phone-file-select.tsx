@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import {
   codeRefChipLabel,
   codeRefRangeLabel,
+  holdsCitedSelection,
   lineStartOffset,
   selectionLineRange,
   type PhoneCodeRef,
@@ -38,9 +39,12 @@ export function PhoneFileSelect({
           end: lineStartOffset(content, (endLine ?? startLine) + 1),
         }
       : null;
+  const citedSelection = cited && cited.end > cited.start ? cited : null;
+  const holdCitation = useRef(citedSelection != null);
+  const restoredCitation = useRef(false);
   const pick = (start: number, end: number) =>
     rangeFor ? rangeFor(start, end) : selectionLineRange(content, start, end);
-  const [selection, setSelection] = useState(cited && cited.end > cited.start ? cited : null);
+  const [selection, setSelection] = useState(citedSelection);
   const [range, setRange] = useState<LineRange | null>(() => (selection ? pick(selection.start, selection.end) : null));
   const label = range ? `Add to chat ${codeRefRangeLabel(range.startLine, range.endLine)}` : 'Add to chat';
   return (
@@ -54,7 +58,15 @@ export function PhoneFileSelect({
         onChangeText={() => inputRef.current?.setNativeProps({ text: content })}
         onSelectionChange={(event) => {
           const next = event.nativeEvent.selection;
-          if (selection) setSelection(next);
+          if (holdsCitedSelection(holdCitation.current, next.start, next.end)) {
+            if (!restoredCitation.current && citedSelection) {
+              restoredCitation.current = true;
+              inputRef.current?.setNativeProps({ selection: citedSelection });
+            }
+            return;
+          }
+          holdCitation.current = false;
+          if (citedSelection) setSelection(next.start === next.end ? null : next);
           setRange(pick(next.start, next.end));
         }}
         {...(selection ? { selection } : {})}
