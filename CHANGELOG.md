@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switching Macs on the phone re-lists saved desktops before the relay banner. A cited range stays selected when focus reports a caret.
 - A killed Cursor runner resumes the same agent after the catalog is repaired, instead of starting a new session.
 - The project folder's local main moves forward when commits land in worktrees.
+- The signed Mac build stages `proper-lockfile` with the Cursor runner so catalog repair can load inside the app.
 
 ## [0.1.292] - 2026-10-11
 
