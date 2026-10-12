@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.293] - 2026-10-12
+
+### Fixed
+
+- Phone files and diffs open ready to select. Add to chat sends the same code reference the desktop composer uses.
+- The phone shows the relay error only after reconnect fails, so a brief socket drop does not flash the banner.
+- The phone hides the host crash-continue prompt, matching the desktop transcript.
+- Switching Macs on the phone re-lists saved desktops before the relay banner. A cited range stays selected when focus reports a caret.
+- A killed Cursor runner resumes the same agent after the catalog is repaired, instead of starting a new session.
+- The project folder's local main moves forward when commits land in worktrees.
+
 ## [0.1.292] - 2026-10-11
 
 ### Added
