@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.291] - 2026-10-11
+
+### Added
+
+- On the phone, files and artifacts you open stay on their own tab row under Chat, All files, Changes, Checks, and Review.
+- All files on the phone filters the worktree. Matching runs on the Mac.
+- Selecting text in a phone file adds that range to the chat as a code reference, the same chip the desktop composer uses.
+
+### Changed
+
+- Phone Changes counts are green for additions and red for deletions.
+- Phone chat links use the same blue as the desktop.
+- The branch name and diff badge are no longer in the desktop right sidebar or the phone workspace header. Diff counts stay in Changes.
+- The artifact header no longer has a read-aloud speaker button. Selecting text still offers Read Aloud.
+
 ## [0.1.290] - 2026-10-11
 
 ### Added
