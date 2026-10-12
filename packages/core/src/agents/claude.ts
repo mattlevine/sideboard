@@ -3,13 +3,14 @@ import { run } from '../git/run.js';
 import {
   claudeChromeEnabled,
   isAbleTimeConnected,
-  isLinearConnected,
+  isLinearConnected, isPosthogConnected,
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import {
   BASE_ALLOWED_TOOLS,
   CLAUDE_CHROME_ALLOWED_TOOLS,
+  CLAUDE_POSTHOG_CONNECTOR_ALLOWED_TOOLS,
   CLAUDE_PRINT_BG_WAIT_CEILING_MS,
   mcpAllowToolsFromNames,
 } from './claude-mcp.js';
@@ -668,8 +669,10 @@ export const claudeAdapter: AgentAdapter = {
           linear: isLinearConnected(),
           abletime: isAbleTimeConnected(),
           planMode: thread.planMode,
+          posthog: isPosthogConnected(),
         }),
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
+        ...(isPosthogConnected() ? [] : CLAUDE_POSTHOG_CONNECTOR_ALLOWED_TOOLS),
       ];
     }
     if (chromeOn) {

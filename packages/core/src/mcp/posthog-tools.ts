@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { httpFetch } from '../http/fetch.js';
 import { normalizeServiceOrigin } from '../integrations/optional-services.js';
-import { loadAppSettings } from '../store/app-settings.js';
+import { isPosthogConnected, loadAppSettings } from '../store/app-settings.js';
 import { mcpJson } from './issue-list.js';
 
 const POSTHOG_METHODS = ['GET', 'POST', 'PATCH'] as const;
@@ -163,6 +163,9 @@ const POSTHOG_API_DESCRIPTION =
   'Call the connected PostHog project (Settings → Connectors). path must start with /api/ and is joined to the stored host. GET is the default. POST /api/projects/:id/query/ and POST /api/environments/:id/query/ are reads (HogQL and insights) and do not need write=true. Other POST and PATCH require write=true, and only when the user asked to change PostHog data. The API key is not in the environment. Do not sign in to a PostHog MCP.';
 
 export function registerPosthogTools(server: McpServer): void {
+  // No key: do not advertise posthog_api. Its description tells the agent not
+  // to sign in to a PostHog MCP, which blocks Claude's connector.
+  if (!isPosthogConnected()) return;
   server.tool(
     'posthog_api',
     POSTHOG_API_DESCRIPTION,

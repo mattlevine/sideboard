@@ -1,3 +1,4 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -66,6 +67,21 @@ describe('posthog_api', () => {
     );
     expect(getBody.body.error).toMatch(/does not take a body/);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('does not register posthog_api when no personal API key is stored', async () => {
+    const mod = await load();
+    const names: string[] = [];
+    const server = {
+      tool: (name: string) => {
+        names.push(name);
+      },
+    } as unknown as McpServer;
+    mod.registerPosthogTools(server);
+    expect(names).toEqual([]);
+    mod.settings.updateIntegrationsSettings({ posthogPersonalApiKey: 'phx_test' });
+    mod.registerPosthogTools(server);
+    expect(names).toEqual(['posthog_api']);
   });
 
   it('says PostHog is not connected before calling the network', async () => {

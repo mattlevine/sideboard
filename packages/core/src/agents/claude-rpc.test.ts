@@ -13,6 +13,7 @@ const claudeSettings = {
   chromeEnabled: false,
   linearConnected: false,
   abletimeConnected: false,
+  posthogConnected: false,
 };
 
 const userClaudeMcpEntries: Record<string, Record<string, unknown>> = {};
@@ -22,6 +23,7 @@ vi.mock('../store/app-settings.js', () => ({
   claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
   isLinearConnected: () => Boolean(claudeSettings.linearConnected),
   isAbleTimeConnected: () => Boolean(claudeSettings.abletimeConnected),
+  isPosthogConnected: () => Boolean(claudeSettings.posthogConnected),
   loadAppSettings: () => ({
     environment: {},
     claude: {

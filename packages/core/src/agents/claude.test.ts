@@ -12,6 +12,7 @@ const claudeSettings = {
   chromeEnabled: false,
   linearConnected: false,
   abletimeConnected: false,
+  posthogConnected: false,
 };
 
 vi.mock('../store/app-settings.js', () => ({
@@ -19,6 +20,7 @@ vi.mock('../store/app-settings.js', () => ({
   claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
   isLinearConnected: () => Boolean(claudeSettings.linearConnected),
   isAbleTimeConnected: () => Boolean(claudeSettings.abletimeConnected),
+  isPosthogConnected: () => Boolean(claudeSettings.posthogConnected),
   loadAppSettings: () => ({
     environment: {},
     claude: {
@@ -57,10 +59,14 @@ beforeEach(() => {
   claudeSettings.chromeEnabled = false;
   claudeSettings.linearConnected = false;
   claudeSettings.abletimeConnected = false;
+  claudeSettings.posthogConnected = false;
   for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   vi.mocked(run).mockClear();
 });
 
+function allowedOf(args: string[]): string[] {
+  return args.flatMap((arg, i) => (arg === '--allowedTools' && args[i + 1] ? [args[i + 1]] : []));
+}
 describe('claudeAdapter.buildTurn', () => {
   const baseThread = {
     id: 't1',
@@ -89,9 +95,7 @@ describe('claudeAdapter.buildTurn', () => {
     );
     expect(cmd.args).toContain('--permission-mode');
     expect(cmd.args[cmd.args.indexOf('--permission-mode') + 1]).toBe('plan');
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__sideboard__present_plan');
   });
 
@@ -152,9 +156,7 @@ describe('claudeAdapter.buildTurn', () => {
 
   it('auto-approves WebFetch and WebSearch so headless turns can use the internet', async () => {
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'search docs' });
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('WebFetch');
     expect(allowed).toContain('WebSearch');
     expect(allowed).toContain('Task');
@@ -171,9 +173,7 @@ describe('claudeAdapter.buildTurn', () => {
     claudeSettings.chromeEnabled = true;
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'browse' });
     expect(cmd.args).toContain('--chrome');
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__claude-in-chrome');
     expect(allowed).toContain('mcp__claude-in-chrome__*');
     expect(allowed).toContain('Skill(claude-in-chrome)');
@@ -182,9 +182,7 @@ describe('claudeAdapter.buildTurn', () => {
   it('omits Chrome flags and allow-list when Chrome is disabled', async () => {
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'no browser' });
     expect(cmd.args).not.toContain('--chrome');
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).not.toContain('mcp__claude-in-chrome');
   });
 
@@ -206,9 +204,7 @@ describe('claudeAdapter.buildTurn', () => {
   it('loads user ~/.claude.json MCP into the strict config and auto-approves those tools', async () => {
     userClaudeMcpEntries.gmail = { command: 'npx', args: ['-y', 'gmail'] };
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__gmail');
     expect(allowed).toContain('mcp__gmail__*');
     expect(allowed).not.toContain('mcp__sideboard__*');
@@ -223,9 +219,7 @@ describe('claudeAdapter.buildTurn', () => {
 
   it('worktree turns inject Sideboard MCP but only auto-approve present_* UI tools', async () => {
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'make a page' });
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__sideboard__present_artifact');
     expect(allowed).toContain('mcp__sideboard__present_schema');
     expect(allowed).toContain('mcp__sideboard__present_files');
@@ -246,6 +240,9 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('mcp__sideboard__delete_schedule');
     expect(allowed).toContain('mcp__sideboard__run_schedule');
     expect(allowed).toContain('mcp__sideboard__github_*');
+    expect(allowed).toContain('mcp__claude_ai_PostHog');
+    expect(allowed).toContain('mcp__claude_ai_PostHog__*');
+    expect(allowed).not.toContain('mcp__sideboard__posthog_api');
     expect(allowed).not.toContain('mcp__sideboard__linear_*');
     expect(allowed).not.toContain('mcp__sideboard__abletime_*');
     expect(allowed).not.toContain('mcp__sideboard__slack_post');
@@ -283,13 +280,19 @@ describe('claudeAdapter.buildTurn', () => {
     }
   });
 
+  it('auto-approves posthog_api and skips the Claude PostHog connector when a key is set', async () => {
+    claudeSettings.posthogConnected = true;
+    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'query events' });
+    const allowed = allowedOf(cmd.args);
+    expect(allowed).toContain('mcp__sideboard__posthog_api');
+    expect(allowed).not.toEqual(expect.arrayContaining(['mcp__claude_ai_PostHog', 'mcp__claude_ai_PostHog__*']));
+  });
+
   it('auto-approves Account Linear and AbleTime tools when those sources are connected', async () => {
     claudeSettings.linearConnected = true;
     claudeSettings.abletimeConnected = true;
     const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'comment on the ticket' });
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__sideboard__github_*');
     expect(allowed).toContain('mcp__sideboard__linear_*');
     expect(allowed).toContain('mcp__sideboard__abletime_*');
@@ -306,9 +309,7 @@ describe('claudeAdapter.buildTurn', () => {
       },
       { prompt: 'list threads' },
     );
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__sideboard');
     expect(allowed).toContain('mcp__sideboard__*');
     expect(allowed).toContain('Bash');
@@ -324,6 +325,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(cfg.mcpServers.sideboard.env?.SIDEBOARD_MCP_PROFILE).toBe('orchestration');
     expect(cfg.mcpServers.gmail).toBeUndefined();
     expect(allowed).not.toContain('mcp__gmail');
+    expect(allowed).not.toContain('mcp__claude_ai_PostHog');
   });
 
   it('Global threads keep Sideboard MCP even if sourceType was demoted to branch', async () => {
@@ -338,9 +340,7 @@ describe('claudeAdapter.buildTurn', () => {
       },
       { prompt: "what's going on" },
     );
-    const allowed = cmd.args
-      .map((a, i) => (a === '--allowedTools' ? cmd.args[i + 1] : null))
-      .filter(Boolean);
+    const allowed = allowedOf(cmd.args);
     expect(allowed).toContain('mcp__sideboard__*');
     expect(allowed).toContain('Bash');
     expect(cmd.args).toContain('--strict-mcp-config');

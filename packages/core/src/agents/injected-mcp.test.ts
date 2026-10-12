@@ -57,6 +57,10 @@ describe('injected-mcp', () => {
       'mcp__sideboard__posthog_api',
     ]);
     expect(SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.join(' ')).not.toMatch(/slack|list_teams/i);
+    expect(sideboardWorktreeAllowedTools()).not.toContain('mcp__sideboard__posthog_api');
+    expect(sideboardWorktreeAllowedTools({ posthog: true })).toContain(
+      'mcp__sideboard__posthog_api',
+    );
     expect(sideboardWorktreeAllowedTools()).toContain('mcp__sideboard__github_*');
     expect(sideboardWorktreeAllowedTools()).not.toContain('mcp__sideboard__linear_*');
     expect(sideboardWorktreeAllowedTools()).not.toContain(

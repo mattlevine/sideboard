@@ -117,3 +117,13 @@ export const CLAUDE_CHROME_ALLOWED_TOOLS = [
   'Skill(claude-in-chrome)',
 ] as const;
 
+/**
+ * Claude.ai directory connector ("claude.ai PostHog").
+ * `--allowedTools` skips prompts; unlisted MCP tools are denied on `-p`.
+ * Include these only when Sideboard has no PostHog API key.
+ */
+export const CLAUDE_POSTHOG_CONNECTOR_ALLOWED_TOOLS = [
+  'mcp__claude_ai_PostHog',
+  'mcp__claude_ai_PostHog__*',
+] as const;
+

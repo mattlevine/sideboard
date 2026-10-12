@@ -80,14 +80,14 @@ export function sideboardWorktreeAllowedTools(opts?: {
   github?: boolean;
   linear?: boolean;
   abletime?: boolean;
-  /** present_plan is Plan-mode-only; omit unless the composer Plan chip is on. */
-  planMode?: boolean;
+  /** present_plan is Plan-mode-only; posthog_api only when a key is stored. */
+  planMode?: boolean; posthog?: boolean;
 }): string[] {
-  const out: string[] = [...SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS];
-  if (!opts?.planMode) {
-    const idx = out.indexOf('mcp__sideboard__present_plan');
-    if (idx >= 0) out.splice(idx, 1);
-  }
+  const out: string[] = SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.filter(
+    (tool) =>
+      (opts?.planMode || tool !== 'mcp__sideboard__present_plan') &&
+      (opts?.posthog || tool !== 'mcp__sideboard__posthog_api'),
+  );
   if (opts?.github !== false) out.push(...SIDEBOARD_GITHUB_MCP_ALLOWED_TOOLS);
   if (opts?.linear) out.push(...SIDEBOARD_LINEAR_MCP_ALLOWED_TOOLS);
   if (opts?.abletime) out.push(...SIDEBOARD_ABLETIME_MCP_ALLOWED_TOOLS);
