@@ -326,6 +326,12 @@ export function PhoneViewer({
           endLine={viewer?.status === 'file' ? viewer.endLine : undefined}
           onAdd={(range) => onAddCodeRef({ path: fileSource.path, ...range })}
         />
+      ) : viewer?.status === 'file' && viewer.diff ? (
+        <PhoneDiffView
+          key={`diff:${viewer.path}`}
+          patch={viewer.content}
+          onAdd={onAddCodeRef ? (range) => onAddCodeRef({ path: viewer.path, ...range }) : undefined}
+        />
       ) : viewer ? (
         <ViewerBody viewer={viewer} onOpenPath={onOpenPath} />
       ) : null}

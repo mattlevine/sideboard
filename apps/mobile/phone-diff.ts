@@ -71,6 +71,37 @@ export function diffCodeSelection(
   return { startLine: Math.min(...nos), endLine: Math.max(...nos), text: rough.text };
 }
 
+export type DiffRowSelection = { anchor: number; focus: number };
+
+/**
+ * First tap selects one colored row. The next tap extends that range.
+ * A tap after a range starts over on the row you hit.
+ */
+export function tapDiffRow(current: DiffRowSelection | null, index: number): DiffRowSelection {
+  if (current && current.anchor === current.focus) return { anchor: current.anchor, focus: index };
+  return { anchor: index, focus: index };
+}
+
+/** File lines for a tap range on the colored diff, including the +/− marks. */
+export function diffIndexSelection(
+  rows: PhoneDiffRow[],
+  anchor: number,
+  focus: number,
+): { startLine: number; endLine: number; text: string } | null {
+  const lo = Math.min(anchor, focus);
+  const hi = Math.max(anchor, focus);
+  if (lo < 0 || hi >= rows.length) return null;
+  const start = rowOffset(rows, lo);
+  const end = rowOffset(rows, hi) + 1 + rows[hi].text.length;
+  return diffCodeSelection(rows, start, end);
+}
+
+function rowOffset(rows: PhoneDiffRow[], index: number): number {
+  let offset = 0;
+  for (let i = 0; i < index; i++) offset += 1 + rows[i].text.length + 1;
+  return offset;
+}
+
 export type ChangeBadge = {
   letter?: string;
   letterColor?: string;
