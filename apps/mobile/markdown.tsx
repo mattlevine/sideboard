@@ -5,7 +5,12 @@ import { linkifyChatUrls, parseChatLink } from './chat-link';
 import { chatMarkdown } from './chat-markdown';
 import { chatSearchQuery, highlightSegments } from './chat-search';
 import { fenceLanguage, highlightCode } from './code-highlight';
-import { parseFilePathLink, type FilePathLink } from './file-link';
+import {
+  parseFilePathLink,
+  parseSideboardArtifactLink,
+  parseSideboardFileLink,
+  type FilePathLink,
+} from './file-link';
 import { imageCacheKey, peekImage, watchImage } from './media-cache';
 import { MermaidView } from './mermaid-view';
 import {
@@ -307,11 +312,11 @@ export function MarkdownText({
   /** Worktree images are cached per chat, not by path alone. */
   chatId?: string;
   onChatLink?: (chatId: string) => void;
-  /** Backtick paths and workspace images: the Mac opens the file. */
+  /** Backtick paths and workspace images open on this phone. */
   onFileLink?: (link: FilePathLink) => void;
   /** Ask the Mac for a worktree image that is not already an https URL. */
   onLocalImage?: (src: string) => void;
-  /** Document artifacts open on the Mac, the same way file paths do. */
+  /** Document artifacts open on this phone, the same way file paths do. */
   onArtifact?: (artifact: ArtifactLink) => void;
   /** Long-press the bubble to select text, including a press that starts on a link. */
   onLongPress?: () => void;
@@ -339,6 +344,16 @@ export function MarkdownText({
     const linked = parseChatLink(url);
     if (linked) {
       onChatLinkRef.current?.(linked);
+      return false;
+    }
+    const artifact = parseSideboardArtifactLink(url);
+    if (artifact) {
+      onArtifactRef.current?.({ title: artifact });
+      return false;
+    }
+    const sideboardFile = parseSideboardFileLink(url);
+    if (sideboardFile) {
+      onFileLinkRef.current?.(sideboardFile);
       return false;
     }
     if (isWebUrl(url)) return true;

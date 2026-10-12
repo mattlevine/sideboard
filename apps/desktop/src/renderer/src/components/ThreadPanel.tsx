@@ -32,7 +32,9 @@ import {
   type RightColumnFilePicker,
 } from './schema/RightColumnPane';
 import type { FilePickerRequest } from './schema/FileManagerColumn';
+import { findRightPaneByRef } from '../lib/chat-open-link';
 import {
+  extractRightPaneContents,
   finalizeRightPaneAfterStream,
   findLiveTabReplaceIndex,
   isFilesPane,
@@ -70,6 +72,7 @@ import { useLiveThread } from '../lib/live-paint-context';
 import { usePhoneOpenArtifact } from '../lib/phone-open-file';
 import { shouldShowClaudePlanUsage, useClaudePlanUsage } from '../lib/use-claude-usage';
 import { AgentMessage } from './AgentMessage';
+import { UserMessageText } from './user-message-text';
 import { ChatTabs } from './ChatTabs';
 import { AccountSwitcher } from './AccountSwitcher';
 import { ClaudeUsageMeter } from './ClaudeUsageMeter';
@@ -300,11 +303,6 @@ function QueuedRemoveIcon() {
   );
 }
 
-/** Keep typed single newlines as markdown hard breaks. */
-function userTextToMarkdown(text: string): string {
-  return text.replace(/([^\n])\n(?!\n)/g, '$1  \n');
-}
-
 /** User bubble after send — including the ask-user answer transcript. */
 function looksLikeAutoContinuePrompt(text: string): boolean {
   const t = text.trim();
@@ -312,52 +310,6 @@ function looksLikeAutoContinuePrompt(text: string): boolean {
     t.startsWith('Detached job still running:') ||
     t.startsWith('You ended the turn after promising to report later') ||
     t.startsWith('The previous agent process ended before it finished.')
-  );
-}
-
-function UserMessageText({
-  text,
-  threadId,
-  worktreePath,
-  knownFilePaths,
-  onOpenFile,
-  onRevealDirectory,
-  onThreadLinkClick,
-}: {
-  text: string;
-  threadId?: string;
-  worktreePath?: string;
-  knownFilePaths?: string[];
-  onOpenFile?: (
-    path: string,
-    opts?: { startLine?: number; endLine?: number },
-  ) => void;
-  onRevealDirectory?: (path: string) => void;
-  onThreadLinkClick?: (threadRef: string) => void;
-}) {
-  const onFileReferenceClick =
-    onOpenFile || onRevealDirectory
-      ? (link: FilePathLink) => {
-          void openWorktreePathLink({
-            link,
-            threadId,
-            worktreePath,
-            knownFilePaths,
-            onOpenFile,
-            onRevealDirectory,
-          });
-        }
-      : undefined;
-  return (
-    <div className="msg-body msg-body-md" data-chat-text="">
-      <MarkdownMessage
-        text={userTextToMarkdown(text)}
-        knownFilePaths={knownFilePaths}
-        worktreePath={worktreePath}
-        onFileReferenceClick={onFileReferenceClick}
-        onThreadLinkClick={onThreadLinkClick}
-      />
-    </div>
   );
 }
 
@@ -431,6 +383,39 @@ const ChatTranscript = memo(function ChatTranscript({
 }) {
   const h = handlersRef.current;
   const [earlierPinned, setEarlierPinned] = useState(false);
+  function openArtifactLink(ref: string) {
+    const panes: RightPaneContent[] = [];
+    const push = (
+      text: string,
+      parts: MessagePart[] | undefined,
+      prefix: string,
+      role: string,
+    ) => {
+      if (role !== 'agent' && role !== 'summary') return;
+      panes.push(...extractRightPaneContents(text, parts, prefix));
+    };
+    (compactedMessages ?? []).forEach((m, i) => {
+      if (m.origin === 'continue') return;
+      push(m.text, m.parts, `earlier-${i}`, m.role);
+    });
+    messages.forEach((m, i) => {
+      if (m.origin === 'continue') return;
+      push(m.text, m.parts, `msg-${i}`, m.role);
+    });
+    if (showStreaming) push(liveOutput, liveParts, 'live', 'agent');
+    const match = findRightPaneByRef(panes, ref);
+    if (match) h.openRightPane(match);
+  }
+  function openChatFile(link: FilePathLink) {
+    void openWorktreePathLink({
+      link,
+      threadId,
+      worktreePath,
+      knownFilePaths: filePaths,
+      onOpenFile: h.onSelectFile,
+      onRevealDirectory: h.onRevealDirectory,
+    });
+  }
   useEffect(() => {
     setEarlierPinned(false);
   }, [threadId]);
@@ -473,6 +458,7 @@ const ChatTranscript = memo(function ChatTranscript({
                         onOpenFile={h.onSelectFile}
                         onRevealDirectory={h.onRevealDirectory}
                         onThreadLinkClick={h.onOpenThreadLink}
+                        onArtifactLinkClick={openArtifactLink}
                       />
                     ) : null}
                   </div>
@@ -482,6 +468,9 @@ const ChatTranscript = memo(function ChatTranscript({
                       text={m.text}
                       knownFilePaths={filePaths}
                       worktreePath={worktreePath}
+                      onFileReferenceClick={openChatFile}
+                      onThreadLinkClick={h.onOpenThreadLink}
+                      onArtifactLinkClick={openArtifactLink}
                     />
                   </div>
                 )}
@@ -527,6 +516,7 @@ const ChatTranscript = memo(function ChatTranscript({
                   onOpenFile={h.onSelectFile}
                   onRevealDirectory={h.onRevealDirectory}
                   onOpenThread={h.onOpenThreadLink}
+                  onArtifactLinkClick={openArtifactLink}
                   onOpenArtifact={h.openRightPane}
                   activeArtifactId={activeArtifactId}
                   artifactIdPrefix={`msg-${i}`}
@@ -566,6 +556,7 @@ const ChatTranscript = memo(function ChatTranscript({
                 onOpenFile={h.onSelectFile}
                 onRevealDirectory={h.onRevealDirectory}
                 onOpenThread={h.onOpenThreadLink}
+                onArtifactLinkClick={openArtifactLink}
                 onOpenArtifact={h.openRightPane}
                 activeArtifactId={activeArtifactId}
                 artifactIdPrefix={`msg-${i}`}
@@ -591,6 +582,7 @@ const ChatTranscript = memo(function ChatTranscript({
                     onOpenFile={h.onSelectFile}
                     onRevealDirectory={h.onRevealDirectory}
                     onThreadLinkClick={h.onOpenThreadLink}
+                    onArtifactLinkClick={openArtifactLink}
                   />
                 ) : null}
               </div>
@@ -618,6 +610,7 @@ const ChatTranscript = memo(function ChatTranscript({
                   onOpenFile={h.onSelectFile}
                   onRevealDirectory={h.onRevealDirectory}
                   onThreadLinkClick={h.onOpenThreadLink}
+                  onArtifactLinkClick={openArtifactLink}
                 />
               ) : null}
             </div>
@@ -644,6 +637,7 @@ const ChatTranscript = memo(function ChatTranscript({
               onOpenFile={h.onSelectFile}
               onRevealDirectory={h.onRevealDirectory}
               onOpenThread={h.onOpenThreadLink}
+              onArtifactLinkClick={openArtifactLink}
               onOpenArtifact={h.openRightPane}
               activeArtifactId={activeArtifactId}
               artifactIdPrefix="live"

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { MessagePart } from '../types/thread.js';
-import { artifactHint, parseOpenArtifact, phoneArtifactText, pickArtifactMatch } from './phone-artifact.js';
+import {
+  artifactHint,
+  parseOpenArtifact,
+  phoneArtifactDocuments,
+  phoneArtifactReply,
+  phoneArtifactText,
+  pickArtifactMatch,
+  PHONE_ARTIFACT_MAX_CHARS,
+} from './phone-artifact.js';
 
 const html = `<!DOCTYPE html>
 <html><head><title>Dashboard</title></head>
@@ -77,5 +85,42 @@ describe('pickArtifactMatch', () => {
       { title: 'Settings', content: `${sharedHead}<body>newer</body></html>` },
     ];
     expect(pickArtifactMatch(items, { title: 'Dashboard', hint: sharedHead.slice(0, 80) })).toBe(items[0]);
+  });
+});
+
+describe('phoneArtifactDocuments', () => {
+  it('returns the fence body a chip would open', () => {
+    const text = `See this.\n\n\`\`\`html\n${html}\n\`\`\``;
+    const docs = phoneArtifactDocuments([{ text }]);
+    const reply = phoneArtifactReply(docs, { title: 'Dashboard', hint: artifactHint(html) });
+    expect(reply?.kind).toBe('html');
+    expect(reply?.content).toContain('Hello from the artifact');
+    expect(reply?.truncated).toBe(false);
+  });
+
+  it('returns a titled markdown artifact', () => {
+    const content = `# Notes\n\n${'A longer document for the side column. '.repeat(6)}`;
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't1',
+        name: 'present_artifact',
+        status: 'done',
+        input: { title: 'Notes', type: 'markdown', content },
+      },
+    ];
+    const reply = phoneArtifactReply(phoneArtifactDocuments([{ text: 'Done.', parts }]), {
+      title: 'Notes',
+      hint: artifactHint(content),
+    });
+    expect(reply?.kind).toBe('markdown');
+    expect(reply?.content).toBe(content);
+  });
+
+  it('truncates a document that would not fit in one phone frame', () => {
+    const content = 'x'.repeat(PHONE_ARTIFACT_MAX_CHARS + 20);
+    const reply = phoneArtifactReply([{ title: 'Big', content, kind: 'text' }], { title: 'Big' });
+    expect(reply?.truncated).toBe(true);
+    expect(reply?.content.length).toBe(PHONE_ARTIFACT_MAX_CHARS);
   });
 });

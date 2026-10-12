@@ -24,21 +24,22 @@ import { isRemovedWorkspace, listWorkspaces } from '../store/workspaces.js';
 import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { createThread } from '../threads/create.js';
 import { startOrchestration } from '../orchestrator/orchestrator.js';
-import { parseOpenArtifact, type PhoneOpenArtifact } from './phone-artifact.js';
+import { parseOpenArtifact, type PhoneOpenArtifact, type PhoneShownReply } from './phone-artifact.js';
+import {
+  PHONE_HEADER_GIT_ACTIONS,
+  type PhoneHeader,
+  type PhoneHeaderGitAction,
+} from './phone-header.js';
+import { parsePhonePane, type PhonePaneReply, type PhonePaneRequest } from './phone-panes.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
+import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
 import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
 
-/**
- * Phone chat control rides inside the existing prompt/assistant text so it
- * works with the deployed relay, which only forwards those two shapes.
- * The leading NUL keeps a person from typing this by accident.
- */
+/** Phone control rides in prompt text. The leading NUL keeps a person from typing it. */
 export const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 const PREVIEW_LIMIT = 90;
-/** One History page. The archive can be long; the phone asks for the next page. */
-const HISTORY_PAGE_SIZE = 40;
 
 export interface PhoneChatSummary {
   id: string;
@@ -47,6 +48,10 @@ export interface PhoneChatSummary {
   preview: string;
   updatedAt: string;
   agent: AgentKind;
+  /** Set when this chat has a pull request. The phone paints the desktop PR pill from these. */
+  prUrl?: string;
+  prNumber?: string;
+  prStatus?: string;
 }
 
 export interface PhoneChatMessage {
@@ -171,11 +176,14 @@ export type PhoneControlRequest =
   | { op: 'restore'; chatId: string }
   | ({ op: 'prompt'; chatId: string; text: string } & PhoneDraft)
   | { op: 'stop'; chatId: string }
+  | { op: 'review'; chatId: string }
+  | { op: 'header'; chatId: string }
+  | { op: 'git'; chatId: string; action: PhoneHeaderGitAction }
+  | PhonePaneRequest
   | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number }
   | PhoneOpenArtifact
   | { op: 'media'; chatId: string; path: string };
 
-/** Same review / pending pill the desktop sidebar shows on a worktree in review. */
 export interface PhoneWorktreeBadge {
   id: 'review' | 'pending';
   label: string;
@@ -226,6 +234,9 @@ export type PhoneControlReply =
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
   | { op: 'stopped'; chatId: string }
   | { op: 'media'; chatId: string; path: string; dataUrl?: string }
+  | PhoneShownReply
+  | PhonePaneReply
+  | ({ op: 'header'; chatId: string } & PhoneHeader)
   | { op: 'error'; message: string; chatId?: string };
 
 export function encodePhoneControl(payload: PhoneControlRequest | PhoneControlReply): string {
@@ -275,7 +286,15 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     ? (value as { chatId: string }).chatId.trim()
     : '';
   if (!chatId) return 'invalid';
-  if (op === 'open' || op === 'archive' || op === 'restore' || op === 'stop') return { op, chatId };
+  if (op === 'open' || op === 'archive' || op === 'restore' || op === 'stop' || op === 'review' || op === 'header') {
+    return { op, chatId };
+  }
+  if (op === 'git') {
+    const action = textField(value, 'action');
+    if (!PHONE_HEADER_GIT_ACTIONS.includes(action as PhoneHeaderGitAction)) return 'invalid';
+    return { op: 'git', chatId, action: action as PhoneHeaderGitAction };
+  }
+  if (op === 'pane') return parsePhonePane(value, chatId);
   if (op === 'open-artifact') return parseOpenArtifact(value, chatId);
   if (op === 'open-file' || op === 'media') {
     const path = textField(value, 'path');
@@ -450,6 +469,7 @@ function parsePhoneCreate(value: object): PhoneControlRequest | 'invalid' {
 }
 
 function summarize(thread: Thread): PhoneChatSummary {
+  const pr = phonePrPill(thread);
   return {
     id: thread.id,
     title: thread.title?.trim() || 'Untitled',
@@ -457,6 +477,9 @@ function summarize(thread: Thread): PhoneChatSummary {
     preview: previewOf(thread),
     updatedAt: thread.updatedAt,
     agent: thread.agent,
+    ...(pr?.url ? { prUrl: pr.url } : {}),
+    ...(pr?.number ? { prNumber: pr.number } : {}),
+    ...(pr?.status ? { prStatus: pr.status } : {}),
   };
 }
 
@@ -525,50 +548,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
   return { orchestration: listPhoneChats(), projects, defaults: phoneAccountDefaults() };
 }
 
-function historyStamp(thread: Thread): string {
-  return thread.archivedAt || thread.updatedAt;
-}
-
-function historyCursor(chat: PhoneHistoryChat): string {
-  return `${chat.updatedAt}\t${chat.id}`;
-}
-
-function historyQueryMatch(chat: PhoneHistoryChat, query: string): boolean {
-  if (!query) return true;
-  return `${chat.title} ${chat.where} ${chat.agent} ${chat.preview}`.toLowerCase().includes(query);
-}
-
-/** Settings → History: one page of archived chats, newest first. */
-export function listPhoneHistory(opts?: { query?: string; after?: string }): PhoneHistoryPage {
-  const query = opts?.query?.trim().toLowerCase() ?? '';
-  const after = opts?.after?.trim() ?? '';
-  const all = listThreads({ includeArchived: true })
-    .filter((thread) => thread.status === 'archived')
-    .filter((thread) => isGlobalThread(thread) || isProjectPath(thread.repoPath))
-    .sort((a, b) => (historyStamp(a) < historyStamp(b) ? 1 : historyStamp(a) > historyStamp(b) ? -1 : 0))
-    .map((thread) => ({
-      id: thread.id,
-      title: thread.title?.trim() || 'Untitled',
-      preview: previewOf(thread),
-      updatedAt: historyStamp(thread),
-      where: isGlobalThread(thread) ? 'Orchestration' : repoName(thread.repoPath),
-      agent: thread.agent,
-    }))
-    .filter((chat) => historyQueryMatch(chat, query));
-  let start = 0;
-  if (after) {
-    const index = all.findIndex((chat) => historyCursor(chat) === after);
-    start = index >= 0 ? index + 1 : all.length;
-  }
-  const chats = all.slice(start, start + HISTORY_PAGE_SIZE);
-  const last = chats.at(-1);
-  const more = start + chats.length < all.length;
-  return {
-    chats,
-    total: all.length,
-    ...(more && last ? { next: historyCursor(last) } : {}),
-  };
-}
+export { listPhoneHistory } from './phone-history.js';
 
 function matchPhoneThread(chatId: string): Thread | null {
   const id = chatId.trim();

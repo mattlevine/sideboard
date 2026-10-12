@@ -1,6 +1,6 @@
 import type { MessagePart } from '../types/thread.js';
 
-/** Phone tap: open this document in the Mac’s side column. */
+/** Phone tap: ask the Mac for this document and show it on the phone. */
 export type PhoneOpenArtifact = {
   op: 'open-artifact';
   chatId: string;
@@ -159,6 +159,92 @@ export function parseOpenArtifact(value: unknown, chatId: string): PhoneOpenArti
   if (!title) return 'invalid';
   const hint = oneLine(str(record.hint), 200);
   return { op: 'open-artifact', chatId, title, ...(hint ? { hint } : {}) };
+}
+
+export type PhoneArtifactKind = 'html' | 'svg' | 'markdown' | 'react' | 'text';
+
+export type PhoneArtifactDocument = {
+  title: string;
+  content: string;
+  kind: PhoneArtifactKind;
+};
+
+export type PhoneFileReply = {
+  op: 'file';
+  chatId: string;
+  path: string;
+  content: string;
+  encoding: 'utf8' | 'base64';
+  binary?: boolean;
+  directory?: boolean;
+  truncated?: boolean;
+  mime?: string;
+  startLine?: number;
+  endLine?: number;
+};
+
+export type PhoneArtifactReply = {
+  op: 'artifact';
+  chatId: string;
+  title: string;
+  kind: PhoneArtifactKind;
+  content: string;
+  truncated?: boolean;
+};
+
+export type PhoneShownReply = PhoneFileReply | PhoneArtifactReply;
+
+/** Keep a phone frame small enough to cross the relay. */
+export const PHONE_ARTIFACT_MAX_CHARS = 180_000;
+
+/**
+ * Documents a phone chip can open. Fences match `phoneArtifactText`.
+ * Tool chips use the tool title, then the same body hash.
+ */
+export function phoneArtifactDocuments(
+  sources: Array<{ text: string; parts?: MessagePart[] }>,
+): PhoneArtifactDocument[] {
+  const docs: PhoneArtifactDocument[] = [];
+  for (const source of sources) {
+    const hints = new Set<string>();
+    for (const match of source.text.matchAll(new RegExp(FENCE_RE.source, 'g'))) {
+      const language = match[1] ?? '';
+      const content = match[2] ?? '';
+      const kind = kindFor(language, content);
+      if (!kind) continue;
+      const hint = artifactHint(content);
+      if (hint) hints.add(hint);
+      docs.push({ title: titleFor(kind, content), content, kind });
+    }
+    for (const part of source.parts ?? []) {
+      if (part.type !== 'tool' || part.parentId || !isArtifactTool(part.name)) continue;
+      const input = asRecord(part.input);
+      const content = toolContent(input);
+      const hint = artifactHint(content);
+      if (hint && hints.has(hint)) continue;
+      const typed = kindFor(str(input?.type), content) ?? kindFor('', content);
+      const title = oneLine(str(input?.title), 80) || (typed ? titleFor(typed, content) : 'Artifact');
+      if (!str(input?.title) && content.trim().length < MIN_FENCE_CHARS) continue;
+      if (hint) hints.add(hint);
+      docs.push({ title, content, kind: typed ?? 'text' });
+    }
+  }
+  return docs;
+}
+
+export function phoneArtifactReply(
+  docs: PhoneArtifactDocument[],
+  request: { title: string; hint?: string },
+): { title: string; kind: PhoneArtifactKind; content: string; truncated: boolean } | null {
+  const match = pickArtifactMatch(docs, request);
+  if (!match) return null;
+  const truncated = match.content.length > PHONE_ARTIFACT_MAX_CHARS;
+  return {
+    title: match.title,
+    kind: match.kind,
+    content: truncated ? match.content.slice(0, PHONE_ARTIFACT_MAX_CHARS) : match.content,
+    truncated,
+  };
 }
 
 function newest<T>(items: T[]): T | null {

@@ -42,8 +42,11 @@ export function isKnownDirectoryPath(path: string, knownPaths?: string[]): boole
   return knownPaths.some((p) => p.startsWith(prefix));
 }
 
-function lineRangeFromHash(text: string): { startLine?: number; endLine?: number } {
-  const match = /#L(\d+)(?:-(\d+))?$/.exec(text);
+/** `#L12`, `#L12-40`, and `#L12-L40` (GitHub-style). */
+const LINE_HASH_RE = /#L(\d+)(?:-L?(\d+))?$/i;
+
+export function lineRangeFromHash(text: string): { startLine?: number; endLine?: number } {
+  const match = LINE_HASH_RE.exec(text.trim());
   if (!match) return {};
   return {
     startLine: Number(match[1]),
@@ -80,7 +83,7 @@ export function parseFilePathLink(
   }
 
   const range = lineRangeFromHash(trimmed);
-  const stripped = trimmed.replace(/#L\d+(?:-\d+)?$/, '').replace(/\/+$/, '');
+  const stripped = trimmed.replace(LINE_HASH_RE, '').replace(/\/+$/, '').replace(/^\.\//, '');
   if (!stripped) return null;
 
   const known = resolveKnownPath(stripped, knownPaths);

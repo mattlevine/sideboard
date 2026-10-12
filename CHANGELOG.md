@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.290] - 2026-10-11
+
+### Added
+
+- The phone shows Files, Changes, and Checks for the open workspace, and a header with the branch, diff counts, and the primary git action.
+- `sideboard://file` and `sideboard://artifact` links open that file or artifact on the phone and in the desktop side column.
+- The desktop right sidebar shows the branch and the uncommitted or unpushed counts.
+
+### Changed
+
+- Tapping a file path or an artifact on the phone opens it on the phone instead of focusing the Mac.
+
 ## [0.1.289] - 2026-10-10
 
 ### Changed

@@ -4,12 +4,20 @@ import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
+import { visibleAssistantText } from '../agents/message-parts.js';
+import { readTurnLiveParts } from '../store/turn-live.js';
 import {
+  phoneFilePreview,
   phoneImageDataUrl,
   phoneWorktreeRelative,
   type PhoneOpenFileRequest,
 } from './phone-media.js';
-import { type PhoneOpenArtifactRequest } from './phone-artifact.js';
+import {
+  phoneArtifactDocuments,
+  phoneArtifactReply,
+  type PhoneOpenArtifactRequest,
+} from './phone-artifact.js';
+import { dispatchPhoneWorkspace } from './phone-workspace-ops.js';
 import {
   archivePhoneChat,
   createPhoneChat,
@@ -333,10 +341,25 @@ function handlePhoneControl(
           emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file is not in this worktree.' });
           return;
         }
-        opts.onOpenWorktreeFile?.({
-          threadId: thread.id,
+        const preview = phoneFilePreview(thread.worktreePath, relative, kind === 'dir' ? 'dir' : 'file');
+        if (!preview) {
+          emitControl(opts, {
+            op: 'error',
+            chatId: cmd.chatId,
+            message: 'That file could not be opened on the phone.',
+          });
+          return;
+        }
+        emitControl(opts, {
+          op: 'file',
+          chatId: cmd.chatId,
           path: relative,
-          ...(kind === 'dir' ? { directory: true } : {}),
+          content: preview.content,
+          encoding: preview.encoding,
+          ...(preview.binary ? { binary: true } : {}),
+          ...(preview.directory ? { directory: true } : {}),
+          ...(preview.truncated ? { truncated: true } : {}),
+          ...(preview.mime ? { mime: preview.mime } : {}),
           ...(cmd.startLine != null ? { startLine: cmd.startLine } : {}),
           ...(cmd.endLine != null ? { endLine: cmd.endLine } : {}),
         });
@@ -352,11 +375,34 @@ function handlePhoneControl(
       emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
       return;
     }
-    opts.onOpenArtifact?.({
-      threadId: thread.id,
-      title: cmd.title,
-      ...(cmd.hint ? { hint: cmd.hint } : {}),
+    const liveParts = readTurnLiveParts(thread.id);
+    const docs = phoneArtifactDocuments([
+      ...(thread.messages ?? [])
+        .filter((message) => message.role === 'agent')
+        .map((message) => ({ text: message.text.trim(), parts: message.parts })),
+      { text: visibleAssistantText(undefined, liveParts), parts: liveParts },
+    ]);
+    const body = phoneArtifactReply(docs, { title: cmd.title, ...(cmd.hint ? { hint: cmd.hint } : {}) });
+    if (!body) {
+      emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That artifact is not in this chat.' });
+      return;
+    }
+    emitControl(opts, {
+      op: 'artifact',
+      chatId: cmd.chatId,
+      title: body.title,
+      kind: body.kind,
+      content: body.content,
+      ...(body.truncated ? { truncated: true } : {}),
     });
+    return;
+  }
+  if (cmd.op === 'pane' || cmd.op === 'header' || cmd.op === 'git' || cmd.op === 'review') {
+    dispatchPhoneWorkspace(
+      cmd,
+      (reply) => emitControl(opts, reply),
+      (chatId) => publishOpenedChat(opts, chatId),
+    );
     return;
   }
   if (cmd.op === 'stop') {

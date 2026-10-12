@@ -28,6 +28,12 @@ describe('thread-link', () => {
     expect(markdownUrlTransform('sideboard://chat/abc-123')).toBe(
       'sideboard://chat/abc-123',
     );
+    expect(markdownUrlTransform('sideboard://artifact/dashboard')).toBe(
+      'sideboard://artifact/dashboard',
+    );
+    expect(markdownUrlTransform('sideboard://file/apps/a.ts#L12-L40')).toBe(
+      'sideboard://file/apps/a.ts#L12-L40',
+    );
     expect(markdownUrlTransform('https://example.com')).toBe('https://example.com');
     expect(markdownUrlTransform('javascript:alert(1)')).toBe('');
   });
@@ -38,6 +44,12 @@ describe('thread-link', () => {
     );
     expect(linkifyThreadUrls('[Arsenal](sideboard://chat/abc-123)')).toBe(
       '[Arsenal](sideboard://chat/abc-123)',
+    );
+    expect(linkifyThreadUrls('open sideboard://file/apps/desktop/src/App.tsx#L12-L40')).toBe(
+      'open [App.tsx:12-40](sideboard://file/apps/desktop/src/App.tsx#L12-L40)',
+    );
+    expect(linkifyThreadUrls('see sideboard://artifact/Dashboard')).toBe(
+      'see [Dashboard](sideboard://artifact/Dashboard)',
     );
   });
 });

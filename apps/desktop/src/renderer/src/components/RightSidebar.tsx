@@ -46,6 +46,7 @@ import {
   writeRightSidebarLower,
   writeTerminalSplit,
 } from '../lib/right-sidebar-prefs';
+import { sidebarGitStatusView } from '../lib/sidebar-git-status';
 import { eventOnWorktree, sameWorktreePath } from '../lib/worktree-events';
 import { RunOutputPanel, type RunClearRequest } from './RunOutputPanel';
 import { SetupOutputStream } from './SetupOutputStream';
@@ -870,6 +871,19 @@ export function RightSidebar({
   /** Local work that still needs to land before merge. */
   const hasLocalChanges =
     Boolean(diff?.dirty) || (diff?.unpushed ?? 0) > 0;
+  const uncommittedStat = diff?.scopeStats?.uncommitted;
+  const gitStatus = sidebarGitStatusView({
+    branchName: thread.branchName,
+    dirty: Boolean(diff?.dirty),
+    additions: uncommittedStat?.additions ?? 0,
+    deletions: uncommittedStat?.deletions ?? 0,
+    unpushed: diff?.unpushed ?? 0,
+    ready: gitMetaReady,
+  });
+  const gitUnavailable = Boolean(
+    diffError && (isNotGitError(diffError) || isMissingWorktreeError(diffError)),
+  );
+  const showGitStatus = gitStatus.visible && !gitUnavailable;
   /** Origin has every local commit and the working tree is clean. */
   const originInSync = gitMetaReady && !hasLocalChanges;
   const prBase =
@@ -1215,6 +1229,33 @@ export function RightSidebar({
             </div>
           ) : null}
           <div className="right-actions">
+            {showGitStatus ? (
+              <button
+                type="button"
+                className={`right-git-status${gitStatus.dirty ? ' is-dirty' : ''}${gitStatus.unpushed > 0 ? ' has-unpushed' : ''}`}
+                title={gitStatus.title}
+                aria-label={gitStatus.title.replace(/\n/g, ', ')}
+                onClick={() => {
+                  setUpper('changes');
+                  onDiffScopeChange(gitStatus.dirty ? 'uncommitted' : 'commits');
+                }}
+              >
+                <span className="pill-name-scroll">{gitStatus.branch}</span>
+                {gitStatus.dirty && (gitStatus.additions > 0 || gitStatus.deletions > 0) ? (
+                  <span className="right-git-counts">
+                    <span className="add">+{gitStatus.additions}</span>
+                    <span className="del">−{gitStatus.deletions}</span>
+                  </span>
+                ) : gitStatus.dirty ? (
+                  <span className="right-git-dirty">dirty</span>
+                ) : gitStatus.ready && gitStatus.unpushed === 0 ? (
+                  <span className="right-git-clean">clean</span>
+                ) : null}
+                {gitStatus.unpushed > 0 ? (
+                  <span className="right-git-unpushed">↑{gitStatus.unpushed}</span>
+                ) : null}
+              </button>
+            ) : null}
             {gitAction !== 'live' ? (
             <div className="split-btn" ref={prMenuRef}>
               <button

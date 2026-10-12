@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { phoneImageDataUrl, phoneWorktreeRelative } from './phone-media.js';
+import { phoneDirectoryListing, phoneFilePreview, phoneImageDataUrl, phoneWorktreeRelative } from './phone-media.js';
 
 describe('phoneWorktreeRelative', () => {
   const root = '/tmp/sideboard-wt';
@@ -34,5 +34,27 @@ describe('phoneImageDataUrl', () => {
     expect(url?.startsWith('data:image/png;base64,')).toBe(true);
     expect(phoneImageDataUrl(dir, '/etc/passwd.png')).toBeNull();
     expect(phoneImageDataUrl(dir, 'notes.txt')).toBeNull();
+  });
+});
+
+describe('phoneFilePreview', () => {
+  let dir = '';
+  afterEach(() => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lists a folder and reads text and svg without leaving the worktree', () => {
+    dir = mkdtempSync(join(tmpdir(), 'phone-file-'));
+    mkdirSync(join(dir, 'src'));
+    writeFileSync(join(dir, 'src', 'a.ts'), 'export const n = 1;\n');
+    writeFileSync(join(dir, 'src', 'b.ts'), 'export const m = 2;\n');
+    writeFileSync(join(dir, 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    expect(phoneDirectoryListing(dir, 'src')?.content).toBe('a.ts\nb.ts');
+    expect(phoneFilePreview(dir, 'src', 'dir')?.directory).toBe(true);
+    expect(phoneFilePreview(dir, 'src/a.ts', 'file')?.content).toContain('export const n = 1');
+    const svg = phoneFilePreview(dir, 'icon.svg', 'file');
+    expect(svg?.encoding).toBe('utf8');
+    expect(svg?.mime).toBe('image/svg+xml');
+    expect(svg?.content.startsWith('<svg')).toBe(true);
   });
 });

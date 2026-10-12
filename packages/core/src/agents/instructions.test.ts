@@ -36,6 +36,8 @@ describe('formatArtifactDirective', () => {
     expect(text).toMatch(/never say artifacts, the CMS UI, or the Files column are unavailable/i);
     expect(text).toMatch(/Do not unprompted-duplicate|markdown table/i);
     expect(text).toMatch(/editable|asks for an editable/i);
+    expect(text).toMatch(/sideboard:\/\/artifact\//);
+    expect(text).toMatch(/sideboard:\/\/file\//);
   });
 });
 
@@ -53,6 +55,8 @@ describe('formatUiReminder', () => {
     expect(text).toMatch(/markdown table is enough|present_schema if they ask to edit/i);
     expect(text).toMatch(/not both for the same document/i);
     expect(text).toMatch(/type=log appends/);
+    expect(text).toMatch(/sideboard:\/\/artifact\//);
+    expect(text).toMatch(/sideboard:\/\/file\//);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/get_run_log/);
     expect(text).toMatch(/SIDEBOARD_PORT/);
