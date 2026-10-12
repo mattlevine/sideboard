@@ -83,7 +83,7 @@ export function sideboardWorktreeAllowedTools(opts?: {
   /** present_plan is Plan-mode-only; posthog_api only when a key is stored. */
   planMode?: boolean; posthog?: boolean;
 }): string[] {
-  const out = SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.filter(
+  const out: string[] = SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS.filter(
     (tool) =>
       (opts?.planMode || tool !== 'mcp__sideboard__present_plan') &&
       (opts?.posthog || tool !== 'mcp__sideboard__posthog_api'),
