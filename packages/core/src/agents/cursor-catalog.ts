@@ -45,6 +45,34 @@ export async function acquireCursorCatalogLock(storeDir: string): Promise<() => 
   }
 }
 
+type CatalogNote = (line: string) => void;
+
+let heldCatalogRelease: (() => Promise<void>) | undefined;
+
+function publishRepair(repair: CursorCatalogRepair, note: CatalogNote): void {
+  for (const line of repair.notes) note(line);
+}
+
+/** Lock the thread catalog, fold a torn write, then let the runner resume. */
+export async function openCursorCatalogTurn(storeDir: string, note: CatalogNote): Promise<void> {
+  mkdirSync(storeDir, { recursive: true });
+  heldCatalogRelease = await acquireCursorCatalogLock(storeDir);
+  publishRepair(repairCursorLocalCatalog(storeDir), note);
+}
+
+/** Repair again after resume/send reports a missing checkpoint. */
+export function repairCursorCatalogForResume(storeDir: string, note: CatalogNote): boolean {
+  const repair = repairCursorLocalCatalog(storeDir);
+  publishRepair(repair, note);
+  return repair.repaired;
+}
+
+export async function closeCursorCatalogTurn(): Promise<void> {
+  const release = heldCatalogRelease;
+  heldCatalogRelease = undefined;
+  if (release) await release().catch(() => undefined);
+}
+
 /**
  * Put an interrupted JSONL rewrite back, then point the agent at a checkpoint
  * blob that is actually on disk. A killed runner can rename `agents.ndjson`
