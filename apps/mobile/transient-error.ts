@@ -2,16 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const ERROR_VISIBLE_MS = 5000;
 
-/** Chat and list error lines, such as a file outside the worktree, leave after a few seconds. */
-export function useTransientError(): [string | null, (message: string | null) => void] {
+/** Chat and list error lines, such as a file outside the worktree, leave after a few seconds. A sticky line stays until cleared. */
+export function useTransientError(): [string | null, (message: string | null, sticky?: boolean) => void] {
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const show = useCallback((message: string | null) => {
+  const show = useCallback((message: string | null, sticky = false) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     setError(message);
-    if (!message) return;
+    if (!message || sticky) return;
     const id = setTimeout(() => {
       if (timer.current !== id) return;
       timer.current = null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeBadge, parseUnifiedPatch } from './phone-diff';
+import { changeBadge, diffCodeSelection, diffSelectableBody, parseUnifiedPatch } from './phone-diff';
 
 const PATCH = [
   'diff --git a/a.ts b/a.ts',
@@ -38,6 +38,22 @@ describe('parseUnifiedPatch', () => {
       { kind: 'add', lineNo: 2, text: '' },
       { kind: 'context', lineNo: 3, text: 'tail' },
     ]);
+  });
+});
+
+describe('diffCodeSelection', () => {
+  const rows = parseUnifiedPatch(PATCH);
+
+  it('keeps add and delete marks and uses the file line numbers', () => {
+    const body = diffSelectableBody(rows);
+    expect(body).toBe(' same\n-old\n+new\n+added\n tail');
+    const at = body.indexOf('-old');
+    const range = diffCodeSelection(rows, at, at + '-old\n+new'.length);
+    expect(range).toEqual({ startLine: 2, endLine: 2, text: '-old\n+new' });
+  });
+
+  it('ignores a blank selection', () => {
+    expect(diffCodeSelection(rows, 0, 0)).toBeNull();
   });
 });
 
