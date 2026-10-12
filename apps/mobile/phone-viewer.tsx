@@ -15,7 +15,6 @@ import WebView from 'react-native-webview';
 import { highlightCode } from './code-highlight';
 import { languageFromPath } from './code-language';
 import type { FilePathLink } from './file-link';
-import { diffCodeSelection, diffSelectableBody, parseUnifiedPatch } from './phone-diff';
 import { PhoneDiffView } from './phone-diff-view';
 import { selectableFileText, type PhoneCodeSelection } from './phone-code-ref';
 import { PhoneFileSelect } from './phone-file-select';
@@ -301,8 +300,6 @@ export function PhoneViewer({
   inline?: boolean;
 }) {
   const fileSource = viewer?.status === 'file' && !viewer.diff ? selectableFileText(viewer) : null;
-  const diffRows = viewer?.status === 'file' && viewer.diff ? parseUnifiedPatch(viewer.content) : null;
-  const diffBody = diffRows && diffRows.length > 0 ? diffSelectableBody(diffRows) : null;
   const truncated =
     viewer && viewer.status !== 'loading' && viewer.status !== 'error' && viewer.truncated
       ? viewer.status === 'artifact'
@@ -328,13 +325,6 @@ export function PhoneViewer({
           startLine={viewer?.status === 'file' ? viewer.startLine : undefined}
           endLine={viewer?.status === 'file' ? viewer.endLine : undefined}
           onAdd={(range) => onAddCodeRef({ path: fileSource.path, ...range })}
-        />
-      ) : diffBody && diffRows && onAddCodeRef && viewer?.status === 'file' ? (
-        <PhoneFileSelect
-          key={`diff:${viewer.path}`}
-          content={diffBody}
-          rangeFor={(start, end) => diffCodeSelection(diffRows, start, end)}
-          onAdd={(range) => onAddCodeRef({ path: viewer.path, ...range })}
         />
       ) : viewer ? (
         <ViewerBody viewer={viewer} onOpenPath={onOpenPath} />
