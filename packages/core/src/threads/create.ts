@@ -239,7 +239,8 @@ export async function createThread(
   } else if (sourceType === 'branch') {
     // Quick create / "default branch" → repo default (usually main).
     // createThreadWorktree fetches origin/<default> and forks from that tip.
-    // The project folder is fast-forwarded only when it is on that branch and clean.
+    // The local default branch fast-forwards to that tip when it is a strict
+    // ancestor. The working tree updates only if that branch is checked out and clean.
     if (!sourceRef || sourceRef === 'HEAD' || sourceRef === 'default') {
       sourceRef = await resolveDefaultBranch(repoPath);
     } else {

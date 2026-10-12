@@ -66,14 +66,72 @@ describe('fastForwardMainCheckoutIfSafe', () => {
     expect(await revParse(root, 'HEAD')).toBe(before);
   });
 
-  it('skips when HEAD is not the default branch', async () => {
+  it('fast-forwards local main when the project folder is on another branch', async () => {
     await setupBehindOrigin();
     await git(root, ['checkout', '-b', 'feat']);
-    const before = await revParse(root, 'HEAD');
+    const head = await revParse(root, 'HEAD');
+    const origin = await revParse(root, 'origin/main');
+    expect(await revParse(root, 'refs/heads/main')).not.toBe(origin);
 
     const result = await fastForwardMainCheckoutIfSafe(root);
-    expect(result).toEqual({ updated: false, reason: 'not-on-default' });
-    expect(await revParse(root, 'HEAD')).toBe(before);
+    expect(result).toEqual({ updated: true, reason: 'updated' });
+    expect(await revParse(root, 'refs/heads/main')).toBe(origin);
+    expect(await revParse(root, 'HEAD')).toBe(head);
+    expect(await revParse(root, 'feat')).toBe(head);
+  });
+
+  it('fast-forwards a clean worktree that has main checked out', async () => {
+    await setupBehindOrigin();
+    await git(root, ['checkout', '-b', 'feat']);
+    const wt = join(root, 'wt-main');
+    await git(root, ['worktree', 'add', wt, 'main']);
+    const head = await revParse(root, 'HEAD');
+    const origin = await revParse(root, 'origin/main');
+
+    const result = await fastForwardMainCheckoutIfSafe(root);
+    expect(result).toEqual({ updated: true, reason: 'updated' });
+    expect(await revParse(wt, 'HEAD')).toBe(origin);
+    expect(await revParse(root, 'HEAD')).toBe(head);
+  });
+
+  it('skips when the worktree that has main checked out is dirty', async () => {
+    await setupBehindOrigin();
+    await git(root, ['checkout', '-b', 'feat']);
+    const wt = join(root, 'wt-main');
+    await git(root, ['worktree', 'add', wt, 'main']);
+    const before = await revParse(root, 'refs/heads/main');
+    writeFileSync(join(wt, 'a.txt'), 'dirty-worktree\n');
+
+    const result = await fastForwardMainCheckoutIfSafe(root);
+    expect(result).toEqual({ updated: false, reason: 'dirty' });
+    expect(await revParse(root, 'refs/heads/main')).toBe(before);
+  });
+
+  it('skips when local main diverged and is not checked out', async () => {
+    await setupBehindOrigin();
+    writeFileSync(join(root, 'a.txt'), 'local-commit\n');
+    await git(root, ['add', '.']);
+    await git(root, ['commit', '-m', 'diverge']);
+    const before = await revParse(root, 'refs/heads/main');
+    await git(root, ['checkout', '-b', 'feat']);
+
+    const result = await fastForwardMainCheckoutIfSafe(root);
+    expect(result).toEqual({ updated: false, reason: 'diverged' });
+    expect(await revParse(root, 'refs/heads/main')).toBe(before);
+  });
+
+  it('creates a missing local main at origin/main', async () => {
+    await setupBehindOrigin();
+    await git(root, ['checkout', '-b', 'feat']);
+    await git(root, ['branch', '-D', 'main']);
+    const origin = await revParse(root, 'origin/main');
+
+    const head = await revParse(root, 'HEAD');
+    const result = await fastForwardMainCheckoutIfSafe(root);
+    expect(result).toEqual({ updated: true, reason: 'updated' });
+    expect(await revParse(root, 'refs/heads/main')).toBe(origin);
+    expect(await revParse(root, 'HEAD')).toBe(head);
+    expect(await revParse(root, 'feat')).toBe(head);
   });
 
   it('skips when local main has diverged from origin', async () => {
