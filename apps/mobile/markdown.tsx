@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Image, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
-import Markdown, { type RenderRules } from 'react-native-markdown-display';
+import Markdown, { hasParents, type RenderRules } from 'react-native-markdown-display';
 import { linkifyChatUrls, parseChatLink } from './chat-link';
 import { chatMarkdown } from './chat-markdown';
 import { chatSearchQuery, highlightSegments } from './chat-search';
@@ -238,8 +238,16 @@ function markdownRules(
         </Text>
       );
     },
-    text: (node, _children, _parent, styles, inheritedStyles = {}) => (
-      <Text key={node.key} style={[inheritedStyles, styles.text]}>
+    text: (node, _children, parent, styles, inheritedStyles = {}) => (
+      <Text
+        key={node.key}
+        style={[
+          inheritedStyles,
+          styles.text,
+          // Body color on this node would cover the desktop link blue.
+          hasParents(parent, 'link') || hasParents(parent, 'blocklink') ? styles.link : null,
+        ]}
+      >
         {paintFind(String(node.content ?? ''), findPaint, String(node.key))}
       </Text>
     ),
