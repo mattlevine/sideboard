@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.292] - 2026-10-11
+
+### Added
+
+- Opening a file from Changes on the phone shows the unified diff, with additions and deletions colored the same way as the desktop.
+
+### Changed
+
+- Phone Changes rows show the git status letter and only the non-zero line counts, matching the desktop badge.
+
 ## [0.1.291] - 2026-10-11
 
 ### Added
