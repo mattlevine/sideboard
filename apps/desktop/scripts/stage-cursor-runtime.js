@@ -7,8 +7,9 @@
  * to the asar so a real node can exec the runner without nested Chromium.
  *
  * `@cursor/sdk` is user-installed (`npm i -g`), not staged here. The runner
- * still imports `execa` / `smol-toml` / `ws` from this tree, and the Claude
- * runner also needs `@anthropic-ai/claude-agent-sdk` and `zod`. Those resolve
+ * still imports `execa` / `smol-toml` / `ws` / `proper-lockfile` from this tree,
+ * and the Claude runner also needs `@anthropic-ai/claude-agent-sdk` and `zod`.
+ * Those resolve
  * in the repo by walking up to root node_modules; inside Sideboard.app that
  * walk stops at Resources/. Flattening by package name is not enough either
  * (execa@9 vs extract-zip's get-stream@5).
@@ -106,7 +107,7 @@ fs.writeFileSync(
 const packageCount = copyProductionDeps({
   destNm,
   fromFile: corePkg,
-  names: ['execa', 'smol-toml', 'ws', 'zod', '@anthropic-ai/claude-agent-sdk'],
+  names: ['execa', 'smol-toml', 'ws', 'zod', 'proper-lockfile', '@anthropic-ai/claude-agent-sdk'],
   platformSdk,
 });
 
