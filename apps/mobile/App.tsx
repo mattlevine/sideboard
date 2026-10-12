@@ -37,7 +37,7 @@ import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
 import { PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
-import { createRelayLink, type RelayLink } from './relay-link';
+import { createRelayLink, RELAY_UNREACHABLE, type RelayLink } from './relay-link';
 import { AgentKindIcon } from './agent-icons';
 import { SearchGlyph } from './sidebar-icons';
 import {
@@ -196,7 +196,9 @@ export default function App() {
   const [textToolId, setTextToolId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
   const [draft, setDraft] = useState('');
-  const [error, setError] = useTransientError();
+  const [error, setTransientError] = useTransientError();
+  const errorRef = useRef<string | null>(null);
+  const setError = (message: string | null, sticky = false) => (errorRef.current = message, setTransientError(message, sticky));
   const [pendingAdd, setPendingAdd] = useState<string | null>(null);
   const [files, setFiles] = useState<FileChip[]>([]);
   const [links, setLinks] = useState<LinkChip[]>([]);
@@ -281,16 +283,14 @@ export default function App() {
     linkRef.current = createRelayLink({
       url: () => urlRef.current.trim() || DEFAULT_URL,
       onMessage: (raw) => onMessageRef.current(raw),
-      onError: (message) => {
-        if (screenRef.current === 'desktops' && checkingHostsRef.current) return;
-        setError(message);
-      },
-      onClose: () => {
-        attachedRef.current = false;
-        if (screenRef.current === 'desktops' && checkingHostsRef.current) {
-          checkingHostsRef.current = false;
-          setError('Could not reach the relay.');
-        }
+      onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
+      onOpen: () => (errorRef.current === RELAY_UNREACHABLE ? setError(null) : undefined),
+      onClose: () => (attachedRef.current = false),
+      onNeedsRetry: () => {
+        const tokens = screenRef.current === 'desktops' ? desktopsRef.current.map((row) => row.sessionToken) : [];
+        if (tokens.length === 0) return;
+        checkingHostsRef.current = true;
+        linkRef.current?.send({ type: 'list_hosts', sessionTokens: tokens });
       },
       attached: () => attachedRef.current,
       inChat: () => onMac(screenRef.current),
