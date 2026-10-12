@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.294] - 2026-10-12
+
+### Fixed
+
+- Phone Changes diffs stay colored while a range is selected, and opening a file stays at the top.
+- With no PostHog personal API key stored, Claude's PostHog connector stays available. A stored key still routes agents through Sideboard's PostHog tool.
+
+### Changed
+
+- Marketing site download links use download.sideboard.cloud.
+
 ## [0.1.293] - 2026-10-12
 
 ### Fixed
