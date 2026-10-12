@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyThread, writeThread } from '../store/thread-store.js';
 import { clearTurnLive, noteTurnLiveEvent } from '../store/turn-live.js';
-import { listPhoneMessages } from './phone-transcript.js';
+import { isHostContinuePrompt, listPhoneMessages } from './phone-transcript.js';
 
 describe('listPhoneMessages', () => {
   let dataDir: string;
@@ -41,5 +41,41 @@ describe('listPhoneMessages', () => {
     clearTurnLive(thread.id);
     expect(live.map((row) => row.text)).toEqual(['ship it', 'working on it', 'follow up']);
     expect(live[1]?.streaming).toBe(true);
+  });
+
+  it('omits host crash-continue prompts the desktop transcript hides', () => {
+    const thread = createEmptyThread({
+      title: 'Phone',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/phone',
+      worktreePath: join(dataDir, 'wt'),
+      repoPath: join(dataDir, 'repo'),
+      agent: 'cursor',
+    });
+    const crash =
+      'The previous agent process ended before it finished. Error:\nCursor run failed (run-1): [unavailable] Error — retry the turn (Sideboard will start a fresh Cursor session).';
+    const saved = {
+      ...thread,
+      status: 'idle' as const,
+      messages: [
+        { role: 'user' as const, text: 'Phone\n\nship it', ts: thread.createdAt },
+        { role: 'agent' as const, text: 'On it.', ts: thread.createdAt },
+        { role: 'user' as const, text: crash, origin: 'continue' as const, ts: thread.createdAt },
+        { role: 'agent' as const, text: 'Picking up from the cutoff.', ts: thread.createdAt },
+      ],
+      queue: [
+        'Detached job still running: pack.',
+        'The previous agent process ended before it finished. Error:\nagain',
+        'Phone\n\nreal follow up',
+      ],
+    };
+    expect(isHostContinuePrompt(crash)).toBe(true);
+    expect(listPhoneMessages(saved).map((row) => row.text)).toEqual([
+      'ship it',
+      'On it.',
+      'Picking up from the cutoff.',
+      'real follow up',
+    ]);
   });
 });

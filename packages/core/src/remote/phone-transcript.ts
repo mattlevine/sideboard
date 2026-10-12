@@ -1,3 +1,4 @@
+import { isJobContinuePrompt } from '../mcp/wait-for-job.js';
 import type { Thread } from '../types/thread.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import { phoneArtifactText } from './phone-artifact.js';
@@ -12,6 +13,14 @@ export interface PhoneTranscriptMessage {
 const PHONE_USER_PREFIX = 'Phone\n\n';
 const TRANSCRIPT_LIMIT = 40;
 const MESSAGE_LIMIT = 4_000;
+/** Same prefix the desktop transcript hides (`looksLikeAutoContinuePrompt`). */
+const CRASH_CONTINUE_PREFIX = 'The previous agent process ended before it finished.';
+
+/** Host keep-alive queued after a crash or a detached job — not something the person typed. */
+export function isHostContinuePrompt(text: string): boolean {
+  const trimmed = text.trim();
+  return isJobContinuePrompt(trimmed) || trimmed.startsWith(CRASH_CONTINUE_PREFIX);
+}
 
 export function phoneVisibleText(role: 'user' | 'agent', text: string): string {
   const trimmed = text.trim();
@@ -46,6 +55,10 @@ export function listPhoneMessages(thread: Thread): PhoneTranscriptMessage[] {
   const out: PhoneTranscriptMessage[] = [];
   for (const message of thread.messages) {
     if (message.role !== 'user' && message.role !== 'agent') continue;
+    // Desktop omits origin:'continue'. Match the text too when an older row has no origin.
+    if (message.origin === 'continue' || (message.role === 'user' && isHostContinuePrompt(message.text))) {
+      continue;
+    }
     const names = (message.attachments ?? []).map((item) => item.name.trim()).filter(Boolean);
     const visible = [phoneVisibleText(message.role, message.text), names.length ? names.join(', ') : '']
       .filter(Boolean)
@@ -57,6 +70,7 @@ export function listPhoneMessages(thread: Thread): PhoneTranscriptMessage[] {
   }
   const live = withLiveTail(thread, out);
   for (const prompt of thread.queue) {
+    if (isHostContinuePrompt(prompt)) continue;
     const text = clip(phoneVisibleText('user', prompt), MESSAGE_LIMIT);
     if (text) live.push({ role: 'user', text });
   }
