@@ -40,8 +40,6 @@ import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js
 export const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 const PREVIEW_LIMIT = 90;
-/** One History page. The archive can be long; the phone asks for the next page. */
-const HISTORY_PAGE_SIZE = 40;
 
 export interface PhoneChatSummary {
   id: string;
@@ -550,50 +548,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
   return { orchestration: listPhoneChats(), projects, defaults: phoneAccountDefaults() };
 }
 
-function historyStamp(thread: Thread): string {
-  return thread.archivedAt || thread.updatedAt;
-}
-
-function historyCursor(chat: PhoneHistoryChat): string {
-  return `${chat.updatedAt}\t${chat.id}`;
-}
-
-function historyQueryMatch(chat: PhoneHistoryChat, query: string): boolean {
-  if (!query) return true;
-  return `${chat.title} ${chat.where} ${chat.agent} ${chat.preview}`.toLowerCase().includes(query);
-}
-
-/** Settings → History: one page of archived chats, newest first. */
-export function listPhoneHistory(opts?: { query?: string; after?: string }): PhoneHistoryPage {
-  const query = opts?.query?.trim().toLowerCase() ?? '';
-  const after = opts?.after?.trim() ?? '';
-  const all = listThreads({ includeArchived: true })
-    .filter((thread) => thread.status === 'archived')
-    .filter((thread) => isGlobalThread(thread) || isProjectPath(thread.repoPath))
-    .sort((a, b) => (historyStamp(a) < historyStamp(b) ? 1 : historyStamp(a) > historyStamp(b) ? -1 : 0))
-    .map((thread) => ({
-      id: thread.id,
-      title: thread.title?.trim() || 'Untitled',
-      preview: previewOf(thread),
-      updatedAt: historyStamp(thread),
-      where: isGlobalThread(thread) ? 'Orchestration' : repoName(thread.repoPath),
-      agent: thread.agent,
-    }))
-    .filter((chat) => historyQueryMatch(chat, query));
-  let start = 0;
-  if (after) {
-    const index = all.findIndex((chat) => historyCursor(chat) === after);
-    start = index >= 0 ? index + 1 : all.length;
-  }
-  const chats = all.slice(start, start + HISTORY_PAGE_SIZE);
-  const last = chats.at(-1);
-  const more = start + chats.length < all.length;
-  return {
-    chats,
-    total: all.length,
-    ...(more && last ? { next: historyCursor(last) } : {}),
-  };
-}
+export { listPhoneHistory } from './phone-history.js';
 
 function matchPhoneThread(chatId: string): Thread | null {
   const id = chatId.trim();

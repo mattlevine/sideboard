@@ -17,8 +17,7 @@ import {
   phoneArtifactReply,
   type PhoneOpenArtifactRequest,
 } from './phone-artifact.js';
-import { readPhoneHeader } from './phone-header.js';
-import { readPhonePane } from './phone-panes.js';
+import { dispatchPhoneWorkspace } from './phone-workspace-ops.js';
 import {
   archivePhoneChat,
   createPhoneChat,
@@ -398,58 +397,12 @@ function handlePhoneControl(
     });
     return;
   }
-  if (cmd.op === 'pane') {
-    const thread = readPhoneThread(cmd.chatId);
-    if (!thread) {
-      emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
-      return;
-    }
-    void readPhonePane(thread, cmd.pane, cmd.scope).then((body) => {
-      emitControl(opts, {
-        op: 'pane',
-        chatId: cmd.chatId,
-        pane: cmd.pane,
-        rows: body.rows,
-        ...(body.note ? { note: body.note } : {}),
-      });
-    });
-    return;
-  }
-  if (cmd.op === 'header') {
-    const thread = readPhoneThread(cmd.chatId);
-    if (!thread) {
-      emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
-      return;
-    }
-    void readPhoneHeader(thread).then((header) => {
-      emitControl(opts, { op: 'header', chatId: cmd.chatId, ...header });
-    });
-    return;
-  }
-  if (cmd.op === 'git') {
-    void getOrchestrator()
-      .askGit(cmd.chatId, cmd.action)
-      .then((tab) => publishOpenedChat(opts, tab.id))
-      .catch((err: unknown) => {
-        emitControl(opts, {
-          op: 'error',
-          chatId: cmd.chatId,
-          message: err instanceof Error ? err.message : String(err),
-        });
-      });
-    return;
-  }
-  if (cmd.op === 'review') {
-    void getOrchestrator()
-      .requestReview(cmd.chatId)
-      .then((tab) => publishOpenedChat(opts, tab.id))
-      .catch((err: unknown) => {
-        emitControl(opts, {
-          op: 'error',
-          chatId: cmd.chatId,
-          message: err instanceof Error ? err.message : String(err),
-        });
-      });
+  if (cmd.op === 'pane' || cmd.op === 'header' || cmd.op === 'git' || cmd.op === 'review') {
+    dispatchPhoneWorkspace(
+      cmd,
+      (reply) => emitControl(opts, reply),
+      (chatId) => publishOpenedChat(opts, chatId),
+    );
     return;
   }
   if (cmd.op === 'stop') {

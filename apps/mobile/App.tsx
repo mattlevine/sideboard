@@ -15,7 +15,6 @@ import type { AudioRecorder } from 'expo-audio';
 import { StatusBar } from 'expo-status-bar';
 import {
   ComposerDock,
-  CreateChatSheet,
   DEFAULT_OPTIONS,
   IssuePicker,
   type AgentId,
@@ -34,22 +33,17 @@ import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
 import { bindPhoneViewer, viewerFromPhoneReply, type PhoneViewerModel } from './phone-viewer';
 import { PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
+import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
 import { createRelayLink, type RelayLink } from './relay-link';
 import { AgentKindIcon } from './agent-icons';
-import { FilterGlyph, ProjectGlyph, SearchGlyph, WorktreeStatusIcon, worktreeStatusKind } from './sidebar-icons';
+import { SearchGlyph } from './sidebar-icons';
 import {
-  AddButton,
   Brand,
-  BrandMark,
-  ChatRow,
   HistoryRow,
   type PhoneChat,
   type PhoneHistoryChat,
-  type PhonePrBadge,
   phonePrBadge,
-  PrBadge,
   StreamStatus,
-  TagChip,
 } from './phone-chrome';
 import { ChatFindBar, MessageTextTool } from './chat-find';
 import { currentLocalIndex, findBubbleSearchHits, nextChatSearchIndex, seedChatSearchQuery } from './chat-search';
@@ -78,8 +72,6 @@ type Transcript = {
   activity?: string;
 };
 type Screen = 'loading' | 'desktops' | 'pair' | 'agents' | 'history' | 'chat';
-type PhoneWorktree = { label: string; chats: PhoneChat[]; tags?: string[]; badge?: PhonePrBadge };
-type PhoneProject = { name: string; path: string; worktrees: PhoneWorktree[] };
 type PhonePlace =
   | { kind: 'orchestration' }
   | { kind: 'project'; repoPath: string; worktree: string };
@@ -1361,209 +1353,62 @@ export default function App() {
 
   if (screen === 'agents') {
     return (
-      <SafeAreaView style={styles.screen}>
-        <StatusBar style="light" />
-        <View style={styles.chrome}>
-          <BrandMark />
-          <Text style={styles.chromeTitle} numberOfLines={1}>
-            {active?.deviceLabel || 'Chats'}
-          </Text>
-          <Pressable onPress={showDesktops} hitSlop={8}>
-            <Text style={styles.link}>Desktops</Text>
-          </Pressable>
-        </View>
-        <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad} keyboardShouldPersistTaps="handled">
-          {showOrchestration ? (
-            <>
-              <View style={styles.sectionRow}>
-                <Text style={styles.sectionLabel}>Orchestration</Text>
-                <AddButton
-                  label="New agent"
-                  hint="Add orchestration agent"
-                  busy={pendingAdd === 'orchestration'}
-                  onPress={() => openCreate({ kind: 'orchestration' })}
-                />
-              </View>
-              {visibleOrchestration.length === 0 ? <Text style={styles.meta}>No agents yet</Text> : null}
-              {visibleOrchestration.map((chat) => (
-                <ChatRow key={chat.id} chat={chat} onOpen={() => openChat(chat.id)} onArchive={() => archiveChat(chat.id)} />
-              ))}
-            </>
-          ) : null}
-          <View style={[styles.sectionRow, styles.projectsHead]}>
-            <Text style={styles.sectionLabel}>Projects</Text>
-            <Pressable
-              style={[styles.filterBtn, (filterOpen || tagFilters.length > 0) && styles.filterBtnOn]}
-              onPress={() => setFilterOpen((open) => !open)}
-              accessibilityRole="button"
-              accessibilityLabel="Filter projects and tags"
-              accessibilityState={{ expanded: filterOpen }}
-            >
-              <FilterGlyph active={filterOpen || tagFilters.length > 0} />
-            </Pressable>
-          </View>
-          {filterOpen ? (
-            <View style={styles.filterPanel}>
-              <TextInput
-                style={styles.input}
-                autoFocus
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="Filter projects and tags…"
-                placeholderTextColor={palette.muted}
-                value={sidebarQuery}
-                onChangeText={setSidebarQuery}
-              />
-              {tagChoices.length > 0 ? (
-                <View
-                  style={styles.tagChoices}
-                  accessibilityLabel="Filter by tags. A workspace must have every selected tag."
-                >
-                  {tagChoices.map((tag) => (
-                    <TagChip
-                      key={tag.toLowerCase()}
-                      tag={tag}
-                      selected={tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase())}
-                      filtering={tagFilters.length > 0}
-                      onPress={() => toggleSidebarTag(tag)}
-                    />
-                  ))}
-                  {tagFilters.length > 0 ? (
-                    <Pressable onPress={() => setTagFilters([])} accessibilityRole="button" accessibilityLabel="Clear tags">
-                      <Text style={styles.clearTags}>Clear</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-          {!filterOpen && tagFilters.length > 0 ? (
-            <View style={styles.taggedRow}>
-              <Text style={styles.taggedLabel}>Tagged</Text>
-              {tagFilters.map((tag) => (
-                <TagChip
-                  key={tag.toLowerCase()}
-                  tag={tag}
-                  selected
-                  filtering
-                  remove
-                  onPress={() => toggleSidebarTag(tag)}
-                />
-              ))}
-              {tagFilters.length > 1 ? (
-                <Pressable onPress={() => setTagFilters([])} accessibilityRole="button" accessibilityLabel="Clear tags">
-                  <Text style={styles.clearTags}>Clear</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ) : null}
-          {visibleProjects.length === 0 ? (
-            <Text style={styles.meta}>{sidebarFiltering ? 'Nothing matched' : 'No projects yet'}</Text>
-          ) : null}
-          {visibleProjects.map((project) => (
-            <View key={project.path} style={styles.projectBlock}>
-              <View style={styles.sectionRow}>
-                <View style={styles.glyphRow}>
-                  <ProjectGlyph />
-                  <Text style={styles.projectName} numberOfLines={1}>
-                    {project.name}
-                  </Text>
-                </View>
-                <AddButton
-                  label="New worktree"
-                  hint={`New worktree in ${project.name}`}
-                  busy={pendingAdd === `project:${project.path}`}
-                  onPress={() => openCreate({ kind: 'project', repoPath: project.path, name: project.name })}
-                />
-              </View>
-              {project.worktrees.length === 0 ? <Text style={styles.meta}>No workspaces</Text> : null}
-              {project.worktrees.map((worktree) => {
-                const anchor = worktree.chats[0];
-                return (
-                  <View key={`${project.path}:${worktree.label}`} style={styles.worktreeBlock}>
-                    <View style={[styles.sectionRow, styles.worktreeHead]}>
-                      <View style={styles.glyphRow}>
-                        <WorktreeStatusIcon kind={worktreeStatusKind(worktree.chats)} />
-                        <Text style={styles.worktreeName} numberOfLines={1}>
-                          {worktree.label}
-                        </Text>
-                        {worktree.badge ? <PrBadge badge={worktree.badge} /> : null}
-                      </View>
-                      {anchor ? (
-                        <AddButton
-                          label="Add agent"
-                          hint={`Add agent to ${worktree.label}`}
-                          busy={pendingAdd === `worktree:${anchor.id}`}
-                          onPress={() => openCreate({ kind: 'worktree', chatId: anchor.id, label: worktree.label })}
-                        />
-                      ) : null}
-                    </View>
-                    {worktree.tags?.length ? (
-                      <View style={styles.tagRow}>
-                        {worktree.tags.map((tag) => (
-                          <TagChip
-                            key={tag}
-                            tag={tag}
-                            selected={tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase())}
-                            filtering={tagFilters.length > 0}
-                            onPress={() => toggleSidebarTag(tag)}
-                          />
-                        ))}
-                      </View>
-                    ) : null}
-                    {worktree.chats.map((chat) => (
-                      <ChatRow
-                        key={chat.id}
-                        chat={chat}
-                        onOpen={() => openChat(chat.id)}
-                        onArchive={() => archiveChat(chat.id)}
-                      />
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-        </ScrollView>
-        {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
-        <View style={styles.footer}>
-          <Pressable style={styles.historyButton} onPress={showHistory} accessibilityRole="button">
-            <Text style={styles.link}>Archived chats</Text>
-          </Pressable>
-        </View>
-        {createMode ? (
-          <CreateChatSheet
-            mode={createMode}
-            sources={sources}
-            draft={createDraft}
-            onChangeDraft={setCreateDraft}
-            files={createFiles}
-            links={createLinks}
-            onRemoveFile={(id) => setCreateFiles((prev) => prev.filter((file) => file.id !== id))}
-            onRemoveLink={(ref) => setCreateLinks((prev) => prev.filter((link) => link.ref !== ref))}
-            options={createOptions}
-            onChangeOptions={setCreateOptions}
-            models={modelsByAgent[createOptions.agent] ?? []}
-            onNeedModels={requestModels}
-            listening={listening}
-            onClose={() => setCreateMode(null)}
-            onSubmit={submitCreate}
-            onRequestSources={(query) => {
-              if (createMode.kind === 'project') requestSources(createMode.repoPath, query);
-            }}
-            onMic={() =>
-              void toggleMic((spoken) => {
-                setCreateDraft((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
-              })
-            }
-            onCamera={() => void addPicked('camera', 'create')}
-            onPhotos={() => void addPicked('photos', 'create')}
-            onFiles={() => void addPicked('files', 'create')}
-          />
-        ) : null}
-      </SafeAreaView>
+      <PhoneAgentsScreen
+        deviceLabel={active?.deviceLabel || 'Chats'}
+        error={error}
+        showOrchestration={showOrchestration}
+        orchestration={visibleOrchestration}
+        pendingAdd={pendingAdd}
+        filterOpen={filterOpen}
+        onToggleFilter={() => setFilterOpen((open) => !open)}
+        query={sidebarQuery}
+        onQuery={setSidebarQuery}
+        tagChoices={tagChoices}
+        tagFilters={tagFilters}
+        onToggleTag={toggleSidebarTag}
+        onClearTags={() => setTagFilters([])}
+        filtering={sidebarFiltering}
+        projects={visibleProjects}
+        onOpenCreate={openCreate}
+        onOpenChat={openChat}
+        onArchiveChat={archiveChat}
+        onDesktops={showDesktops}
+        onHistory={showHistory}
+        create={
+          createMode
+            ? {
+                mode: createMode,
+                sources,
+                draft: createDraft,
+                onChangeDraft: setCreateDraft,
+                files: createFiles,
+                links: createLinks,
+                onRemoveFile: (id) => setCreateFiles((prev) => prev.filter((file) => file.id !== id)),
+                onRemoveLink: (ref) => setCreateLinks((prev) => prev.filter((link) => link.ref !== ref)),
+                options: createOptions,
+                onChangeOptions: setCreateOptions,
+                models: modelsByAgent[createOptions.agent] ?? [],
+                onNeedModels: requestModels,
+                listening,
+                onClose: () => setCreateMode(null),
+                onSubmit: submitCreate,
+                onRequestSources: (query) => {
+                  if (createMode.kind === 'project') requestSources(createMode.repoPath, query);
+                },
+                onMic: () =>
+                  void toggleMic((spoken) => {
+                    setCreateDraft((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+                  }),
+                onCamera: () => void addPicked('camera', 'create'),
+                onPhotos: () => void addPicked('photos', 'create'),
+                onFiles: () => void addPicked('files', 'create'),
+              }
+            : null
+        }
+      />
     );
   }
+
 
   if (screen === 'history') {
     return (
