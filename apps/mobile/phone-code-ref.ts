@@ -37,6 +37,19 @@ export function selectionLineRange(
   return { startLine, endLine, text };
 }
 
+/** Character offset where a 1-based line starts. Past the end is `content.length`. */
+export function lineStartOffset(content: string, line: number): number {
+  if (line <= 1) return 0;
+  let seen = 1;
+  for (let i = 0; i < content.length; i++) {
+    if (content.charCodeAt(i) === 10) {
+      seen += 1;
+      if (seen === line) return i + 1;
+    }
+  }
+  return content.length;
+}
+
 /** Text files can be selected. Images, folders, and binary bodies cannot. */
 export function selectableFileText(file: {
   encoding: 'utf8' | 'base64';

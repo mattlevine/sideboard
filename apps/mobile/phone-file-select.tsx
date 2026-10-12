@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } fr
 import {
   codeRefChipLabel,
   codeRefRangeLabel,
+  lineStartOffset,
   selectionLineRange,
   type PhoneCodeRef,
 } from './phone-code-ref';
@@ -12,15 +13,35 @@ import { palette } from './styles';
  * Plain field so iOS can show selection handles on a file.
  * Keystrokes are ignored; the Mac file stays the source.
  */
+type LineRange = { startLine: number; endLine: number; text: string };
+
 export function PhoneFileSelect({
   content,
   onAdd,
+  rangeFor,
+  startLine,
+  endLine,
 }: {
   content: string;
-  onAdd: (range: { startLine: number; endLine: number; text: string }) => void;
+  onAdd: (range: LineRange) => void;
+  /** Diffs map the selection onto file line numbers. Files use the text as-is. */
+  rangeFor?: (start: number, end: number) => LineRange | null;
+  /** Open with this file range already selected, the way a desktop citation does. */
+  startLine?: number;
+  endLine?: number;
 }) {
   const inputRef = useRef<TextInput>(null);
-  const [range, setRange] = useState<{ startLine: number; endLine: number; text: string } | null>(null);
+  const cited =
+    startLine != null
+      ? {
+          start: lineStartOffset(content, startLine),
+          end: lineStartOffset(content, (endLine ?? startLine) + 1),
+        }
+      : null;
+  const pick = (start: number, end: number) =>
+    rangeFor ? rangeFor(start, end) : selectionLineRange(content, start, end);
+  const [selection, setSelection] = useState(cited && cited.end > cited.start ? cited : null);
+  const [range, setRange] = useState<LineRange | null>(() => (selection ? pick(selection.start, selection.end) : null));
   const label = range ? `Add to chat ${codeRefRangeLabel(range.startLine, range.endLine)}` : 'Add to chat';
   return (
     <View style={styles.fill}>
@@ -33,9 +54,12 @@ export function PhoneFileSelect({
         onChangeText={() => inputRef.current?.setNativeProps({ text: content })}
         onSelectionChange={(event) => {
           const next = event.nativeEvent.selection;
-          setRange(selectionLineRange(content, next.start, next.end));
+          if (selection) setSelection(next);
+          setRange(pick(next.start, next.end));
         }}
+        {...(selection ? { selection } : {})}
         inputMode="none"
+        showSoftInputOnFocus={false}
         autoFocus
         selectionColor="rgba(61, 143, 212, 0.45)"
         style={styles.field}

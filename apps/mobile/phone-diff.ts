@@ -1,3 +1,5 @@
+import { selectionLineRange } from './phone-code-ref';
+
 /** Unified diff rows, matching the desktop Changes view. */
 export type PhoneDiffRow =
   | { kind: 'context'; lineNo: number; text: string }
@@ -39,6 +41,34 @@ export function parseUnifiedPatch(patch: string): PhoneDiffRow[] {
     newLine++;
   }
   return rows;
+}
+
+function diffMark(kind: PhoneDiffRow['kind']): string {
+  if (kind === 'add') return '+';
+  if (kind === 'del') return '-';
+  return ' ';
+}
+
+/** Diff text the phone can select. Each row is one line, with a git-style mark. */
+export function diffSelectableBody(rows: PhoneDiffRow[]): string {
+  return rows.map((row) => `${diffMark(row.kind)}${row.text}`).join('\n');
+}
+
+/**
+ * Map a character selection in `diffSelectableBody` to file line numbers.
+ * The text keeps the +/− marks so the chat can see what changed.
+ */
+export function diffCodeSelection(
+  rows: PhoneDiffRow[],
+  start: number,
+  end: number,
+): { startLine: number; endLine: number; text: string } | null {
+  const rough = selectionLineRange(diffSelectableBody(rows), start, end);
+  if (!rough) return null;
+  const slice = rows.slice(rough.startLine - 1, rough.endLine);
+  if (slice.length === 0) return null;
+  const nos = slice.map((row) => Math.max(1, row.lineNo));
+  return { startLine: Math.min(...nos), endLine: Math.max(...nos), text: rough.text };
 }
 
 export type ChangeBadge = {
