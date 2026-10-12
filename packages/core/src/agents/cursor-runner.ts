@@ -449,10 +449,11 @@ async function main(): Promise<number> {
           return await runTurn(agent);
         }
         // send() can throw the same unresumable errors after a "successful" resume.
+        // Dispose first so that flush cannot overwrite the repaired catalog.
         if (!isUnresumableCursorSession(err)) throw err;
         const agentId = agent.agentId;
-        const repaired = repairCursorCatalogForResume(storeRoot, note);
         await agent[Symbol.asyncDispose]().catch(() => undefined);
+        const repaired = repairCursorCatalogForResume(storeRoot, note);
         if (repaired) {
           try {
             agent = await resumeAgent(agentId);
