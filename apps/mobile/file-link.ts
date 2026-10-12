@@ -2,6 +2,8 @@ export interface FilePathLink {
   path: string;
   startLine?: number;
   endLine?: number;
+  /** Changes opens the unified diff. Other links open the file. */
+  view?: 'diff';
 }
 
 const CITATION_RE = /^(\d+):(\d+):(.+)$/;

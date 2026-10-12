@@ -201,7 +201,7 @@ export function PhoneWorkspace({
             side={side}
             fileQuery={fileQuery}
             onFileQuery={onFileQuery}
-            onOpenPath={(path) => onOpenPath({ path })}
+            onOpenPath={(path) => onOpenPath(pane === 'changes' ? { path, view: 'diff' } : { path })}
           />
         )}
       </View>
@@ -310,14 +310,16 @@ export function sideFromPhoneReply(control: object): PhoneSide | undefined {
 
 function paneRow(value: unknown): PhonePaneRow[] {
   if (!value || typeof value !== 'object') return [];
-  const row = value as { label?: unknown; path?: unknown; detail?: unknown; href?: unknown };
+  const row = value as { label?: unknown; path?: unknown; detail?: unknown; href?: unknown; status?: unknown };
   if (typeof row.label !== 'string' || !row.label) return [];
+  const status = typeof row.status === 'string' && row.status.length > 0 && row.status.length <= 8 ? row.status : undefined;
   return [
     {
       label: row.label,
       ...(typeof row.path === 'string' ? { path: row.path } : {}),
       ...(typeof row.detail === 'string' ? { detail: row.detail } : {}),
       ...(typeof row.href === 'string' ? { href: row.href } : {}),
+      ...(status ? { status } : {}),
     },
   ];
 }

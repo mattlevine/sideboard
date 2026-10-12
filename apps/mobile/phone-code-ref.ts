@@ -45,8 +45,9 @@ export function selectableFileText(file: {
   mime?: string;
   path: string;
   content: string;
+  diff?: boolean;
 }): { path: string; content: string } | null {
-  if (file.directory || file.binary || file.encoding !== 'utf8') return null;
+  if (file.diff || file.directory || file.binary || file.encoding !== 'utf8') return null;
   if (file.mime?.startsWith('image/')) return null;
   if (!file.path || !file.content) return null;
   return { path: file.path, content: file.content };

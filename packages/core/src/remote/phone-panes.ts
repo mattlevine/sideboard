@@ -6,6 +6,8 @@ export type PhonePaneId = 'files' | 'changes' | 'checks';
 export type PhonePaneRow = {
   label: string;
   path?: string;
+  /** Git name-status letter (M/A/D/…). Changes rows only. */
+  status?: string;
   detail?: string;
   href?: string;
 };
@@ -96,11 +98,15 @@ async function readChanges(
   const diff = await getOrchestrator().diff(threadId, { includePatches: false, scope });
   const shown = diff.files.slice(0, MAX_ROWS);
   return {
-    rows: shown.map((file) => ({
-      label: file.path,
-      path: file.path,
-      detail: changeDetail(file.additions, file.deletions),
-    })),
+    rows: shown.map((file) => {
+      const detail = changeDetail(file.additions, file.deletions);
+      return {
+        label: file.path,
+        path: file.path,
+        ...(file.status ? { status: file.status } : {}),
+        ...(detail ? { detail } : {}),
+      };
+    }),
     ...(diff.files.length > shown.length ? { note: `${diff.files.length - shown.length} more changed files` } : {}),
   };
 }
@@ -110,6 +116,24 @@ function changeDetail(additions?: number, deletions?: number): string | undefine
   const del = deletions ?? 0;
   if (add === 0 && del === 0) return undefined;
   return `+${add} −${del}`;
+}
+
+/** One file's unified patch, same scope as the phone Changes list (branch vs base). */
+export async function readPhoneChangePatch(
+  threadId: string,
+  path: string,
+): Promise<{ content: string; truncated: boolean } | null> {
+  const diff = await getOrchestrator().diff(threadId, {
+    path,
+    scope: 'commits',
+    includePatches: true,
+    includeMeta: false,
+    includeUntracked: false,
+  });
+  const file = diff.files.find((row) => row.path === path) ?? diff.files[0];
+  if (!file) return null;
+  const content = file.patch ?? '';
+  return { content, truncated: content.includes('… truncated') };
 }
 
 async function readChecks(threadId: string): Promise<{ rows: PhonePaneRow[]; note?: string }> {

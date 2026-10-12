@@ -4,6 +4,8 @@ export type PhonePaneId = 'files' | 'changes' | 'checks';
 export type PhonePaneRow = {
   label: string;
   path?: string;
+  /** Git name-status letter (M/A/D/…). Changes rows only. */
+  status?: string;
   detail?: string;
   href?: string;
 };
