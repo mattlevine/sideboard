@@ -41,31 +41,6 @@ export type PhoneViewerModel =
 
 export type PhoneViewerDecision = { handled: false } | { handled: true; viewer: PhoneViewerModel | null };
 
-export function bindPhoneViewer(opts: {
-  viewerRef: { current: PhoneViewerModel | null };
-  timerRef: { current: ReturnType<typeof setTimeout> | null };
-  setViewer: (next: PhoneViewerModel | null) => void;
-}) {
-  function settle(next: PhoneViewerModel | null) {
-    if (opts.timerRef.current) clearTimeout(opts.timerRef.current);
-    opts.timerRef.current = null;
-    opts.viewerRef.current = next;
-    opts.setViewer(next);
-  }
-  function showOpening(title: string) {
-    settle({ status: 'loading', title });
-    opts.timerRef.current = setTimeout(() => {
-      if (opts.viewerRef.current?.status !== 'loading') return;
-      settle({
-        status: 'error',
-        title,
-        message: 'The Mac did not send this. Update Sideboard on the Mac so the phone can show it.',
-      });
-    }, 12_000);
-  }
-  return { settle, showOpening };
-}
-
 function textField(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
@@ -279,7 +254,7 @@ export function PhoneViewer({
   viewer: PhoneViewerModel | null;
   onClose: () => void;
   onOpenPath: (link: FilePathLink) => void;
-  /** In the tab row, under the page. The chat stays a tab beside it. */
+  /** Under the open-files row. Chat stays on the row above. */
   inline?: boolean;
 }) {
   const truncated =

@@ -31,7 +31,8 @@ import { type FilePathLink } from './file-link';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
-import { bindPhoneViewer, viewerFromPhoneReply, type PhoneViewerModel } from './phone-viewer';
+import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
+import { viewerFromPhoneReply } from './phone-viewer';
 import { PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
 import { createRelayLink, type RelayLink } from './relay-link';
@@ -207,8 +208,8 @@ export default function App() {
   const [modelsByAgent, setModelsByAgent] = useState<Partial<Record<AgentId, Array<{ id: string; label: string }>>>>({});
   const [listening, setListening] = useState(false);
   const [issuePickerFor, setIssuePickerFor] = useState<string | null>(null);
-  const [viewer, setViewer] = useState<PhoneViewerModel | null>(null);
   const [rightHeader, setRightHeader] = useState<PhoneRightHeader | null | false>(null);
+  const openDocs = usePhoneOpenDocs();
 
   const tagChoices = useMemo(() => phoneTagChoices(projects, tagFilters), [projects, tagFilters]);
   const visibleOrchestration = useMemo(
@@ -241,8 +242,6 @@ export default function App() {
   const lastPhoneOpRef = useRef<string | null>(null);
   const headerOkRef = useRef(true);
   const headerPendingRef = useRef(false);
-  const viewerRef = useRef<PhoneViewerModel | null>(null);
-  const viewerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingImageRef = useRef<string | null>(null);
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
@@ -395,12 +394,6 @@ export default function App() {
     setOrchestration((prev) => [chat, ...prev.filter((row) => row.id !== chat.id)]);
   }
 
-  const { settle: settleViewer, showOpening } = bindPhoneViewer({
-    viewerRef,
-    timerRef: viewerTimerRef,
-    setViewer,
-  });
-
   function applyControl(control: PhoneControl) {
     if (control.op === 'sidebar') {
       const nextOrchestration = Array.isArray(control.orchestration)
@@ -473,7 +466,10 @@ export default function App() {
     }
     if (control.op === 'opened' && control.chat?.id) {
       const chat = { ...control.chat, agent: control.chat.agent || control.options?.agent };
-      if (chat.id !== activeChatIdRef.current) clearChatTools();
+      if (chat.id !== activeChatIdRef.current) {
+        clearChatTools();
+        openDocs.closeAll();
+      }
       setPendingAdd(null);
       setCreateMode(null);
       if (control.options) {
@@ -590,13 +586,13 @@ export default function App() {
     }
     const decision = viewerFromPhoneReply(
       control,
-      viewerRef.current,
+      openDocs.current(),
       lastPhoneOpRef.current === 'open-file',
       activeChatIdRef.current,
     );
     if (decision.handled) {
       lastPhoneOpRef.current = null;
-      if (decision.viewer) settleViewer(decision.viewer);
+      if (decision.viewer) openDocs.apply(decision.viewer);
       return;
     }
     if (control.op === 'header') {
@@ -811,7 +807,7 @@ export default function App() {
 
   function showAgents() {
     if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
-    settleViewer(null);
+    openDocs.closeAll();
     panes.setPane('chat');
     setError(null);
     screenRef.current = 'agents';
@@ -845,7 +841,7 @@ export default function App() {
     const id = activeChatIdRef.current;
     if (!id) return;
     lastPhoneOpRef.current = 'open-file';
-    showOpening(artifact.title);
+    openDocs.showOpening(artifactDocId(artifact.title), artifact.title);
     panes.setPane('doc');
     link.send(phoneCommand({
       op: 'open-artifact',
@@ -859,7 +855,7 @@ export default function App() {
     const id = activeChatIdRef.current;
     if (!id) return;
     lastPhoneOpRef.current = 'open-file';
-    showOpening(file.path);
+    openDocs.showOpening(fileDocId(file.path), file.path);
     panes.setPane('doc');
     link.send(
       phoneCommand({
@@ -908,7 +904,7 @@ export default function App() {
   }
 
   function openChat(chatId: string) {
-    settleViewer(null);
+    openDocs.closeAll();
     panes.setPane('chat');
     setError(null);
     pinTranscriptRef.current = true;
@@ -1510,15 +1506,20 @@ export default function App() {
         </View>
         <PhoneWorkspace
           pane={panes.pane}
-          viewer={viewer}
+          docs={openDocs.docs}
+          activeDocId={openDocs.activeId}
           side={panes.side}
           header={chatHeader}
           onSelect={panes.selectPane}
           onReview={panes.askReview}
+          onSelectDoc={(id) => {
+            openDocs.select(id);
+            panes.setPane('doc');
+          }}
           onOpenPath={openDesktopFile}
-          onCloseDoc={() => {
-            settleViewer(null);
-            panes.setPane('chat');
+          onCloseDoc={(id) => {
+            const next = openDocs.close(id);
+            if (!next && panes.pane === 'doc') panes.setPane('chat');
           }}
           onHeaderStatus={() => panes.selectPane('changes', chatHeader?.dirty ? 'uncommitted' : 'commits')}
           onHeaderAction={runHeaderAction}

@@ -1,7 +1,9 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { PhoneViewer, type PhoneViewerModel } from './phone-viewer';
+import { PhoneViewer } from './phone-viewer';
 import type { FilePathLink } from './file-link';
+import { PhoneOpenFiles } from './phone-open-files';
+import type { PhoneOpenDoc } from './phone-open-docs';
 import type { PhonePaneId, PhonePaneRow } from './phone-pane-types';
 import { palette } from './styles';
 
@@ -97,11 +99,13 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
 
 export function PhoneWorkspace({
   pane,
-  viewer,
+  docs,
+  activeDocId,
   side,
   header,
   onSelect,
   onReview,
+  onSelectDoc,
   onCloseDoc,
   onOpenPath,
   onHeaderStatus,
@@ -110,18 +114,21 @@ export function PhoneWorkspace({
   children,
 }: {
   pane: PhoneTab;
-  viewer: PhoneViewerModel | null;
+  docs: PhoneOpenDoc[];
+  activeDocId: string | null;
   side: PhoneSide | null;
   header: PhoneRightHeader | null;
   onSelect: (tab: PhoneTab, scope?: 'uncommitted' | 'commits') => void;
   onReview: () => void;
-  onCloseDoc: () => void;
+  onSelectDoc: (id: string) => void;
+  onCloseDoc: (id: string) => void;
   onOpenPath: (link: FilePathLink) => void;
   onHeaderStatus: () => void;
   onHeaderAction: () => void;
   onHeaderArchive: () => void;
   children: ReactNode;
 }) {
+  const open = docs.find((doc) => doc.id === activeDocId)?.viewer ?? null;
   return (
     <View style={styles.workspace}>
       {header ? (
@@ -132,12 +139,25 @@ export function PhoneWorkspace({
           onArchive={onHeaderArchive}
         />
       ) : null}
-      <PhoneTabBar tab={pane} docTitle={viewer?.title} onSelect={onSelect} onReview={onReview} />
+      <PhoneTabBar tab={pane} onSelect={onSelect} onReview={onReview} />
+      <PhoneOpenFiles
+        docs={docs}
+        activeId={pane === 'doc' ? activeDocId : null}
+        onSelect={onSelectDoc}
+        onClose={onCloseDoc}
+      />
       <View style={styles.fill}>
         {pane === 'chat' ? (
           children
         ) : pane === 'doc' ? (
-          <PhoneViewer inline viewer={viewer} onClose={onCloseDoc} onOpenPath={onOpenPath} />
+          <PhoneViewer
+            inline
+            viewer={open}
+            onClose={() => {
+              if (activeDocId) onCloseDoc(activeDocId);
+            }}
+            onOpenPath={onOpenPath}
+          />
         ) : (
           <PhonePaneBody side={side} onOpenPath={(path) => onOpenPath({ path })} />
         )}
@@ -319,21 +339,17 @@ export function PhonePaneBody({
 /** Chat sits with All files, Changes, Checks, and Review, under the git header. */
 export function PhoneTabBar({
   tab,
-  docTitle,
   onSelect,
   onReview,
 }: {
   tab: PhoneTab;
-  docTitle?: string;
   onSelect: (tab: PhoneTab) => void;
   onReview: () => void;
 }) {
-  const doc = docTitle ? docTitle.split('/').pop() || docTitle : '';
   return (
     <View style={styles.bar}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         <Tab label="Chat" active={tab === 'chat'} onPress={() => onSelect('chat')} />
-        {doc ? <Tab label={doc} active={tab === 'doc'} onPress={() => onSelect('doc')} /> : null}
         {TABS.map((item) => (
           <Tab key={item.id} label={item.label} active={tab === item.id} onPress={() => onSelect(item.id)} />
         ))}
