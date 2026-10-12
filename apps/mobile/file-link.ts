@@ -9,12 +9,42 @@ const PATH_LIKE_RE =
   /^(?:\/)?(?:[\w@.-]+\/)+[\w.-]+\.[A-Za-z0-9]+(?:#L\d+(?:-\d+)?)?$|^(?:\/)?(?:[\w@.-]+\/)+[\w.-]+$/;
 
 function lineRange(text: string): { startLine?: number; endLine?: number } {
-  const match = /#L(\d+)(?:-(\d+))?$/.exec(text);
+  const match = /#L(\d+)(?:-L?(\d+))?$/i.exec(text);
   if (!match) return {};
   return {
     startLine: Number(match[1]),
     endLine: match[2] ? Number(match[2]) : undefined,
   };
+}
+
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+const SIDEBOARD_FILE_RE = /^sideboard:\/\/file\/([^?#]*?)\/?(?:#([^?#]*))?$/i;
+const SIDEBOARD_ARTIFACT_RE = /^sideboard:\/\/artifact\/([^#?]+?)\/?(?:#.*)?$/i;
+
+/** `sideboard://file/<repo-relative-path>#L12-L40`. */
+export function parseSideboardFileLink(href: string): FilePathLink | null {
+  const match = SIDEBOARD_FILE_RE.exec(href.trim());
+  if (!match) return null;
+  const path = safeDecode(match[1] ?? '')
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '');
+  if (!path || path.startsWith('/') || path.split('/').includes('..')) return null;
+  return { path, ...(match[2] ? lineRange(`#${match[2]}`) : {}) };
+}
+
+/** `sideboard://artifact/<artifact_id or title>`. */
+export function parseSideboardArtifactLink(href: string): string | null {
+  const match = SIDEBOARD_ARTIFACT_RE.exec(href.trim());
+  if (!match?.[1]) return null;
+  const ref = safeDecode(match[1]).trim();
+  return ref || null;
 }
 
 /**

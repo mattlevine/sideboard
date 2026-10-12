@@ -41,31 +41,48 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
   const [side, setSide] = useState<PhoneSide | null>(null);
   const sideRef = useRef(side);
   sideRef.current = side;
+  const requestedRef = useRef<{ chatId: string; pane: PhonePaneId } | null>(null);
 
   function takeControl(control: object): boolean {
+    const record = control as { op?: unknown; chatId?: unknown; message?: unknown };
+    const replyChat = typeof record.chatId === 'string' ? record.chatId : '';
+    const wanted = requestedRef.current;
     const next = sideFromPhoneReply(control);
     if (next) {
+      if (!wanted || wanted.pane !== next.pane || (replyChat && replyChat !== wanted.chatId)) return true;
+      requestedRef.current = null;
       setSide(next);
       return true;
     }
-    const record = control as { op?: unknown; message?: unknown };
-    if (record.op !== 'error' || !sideRef.current?.loading) return false;
+    if (record.op !== 'error' || !sideRef.current?.loading || !wanted) return false;
+    if (replyChat && replyChat !== wanted.chatId) return false;
+    const raw = typeof record.message === 'string' ? record.message : '';
+    if (raw !== 'invalid phone command' && raw !== 'That agent is not on this Mac.') return false;
+    requestedRef.current = null;
     const message =
-      record.message === 'invalid phone command'
+      raw === 'invalid phone command'
         ? 'This Mac’s Sideboard app doesn’t have these tabs yet. Update Sideboard on the Mac.'
-        : typeof record.message === 'string' && record.message
-          ? record.message
-          : 'Could not load that.';
+        : raw;
     setSide({ ...sideRef.current, loading: false, rows: [], note: message });
     return true;
   }
 
   function selectPane(next: PhoneTab, scope?: 'uncommitted' | 'commits') {
     setPane(next);
-    if (next !== 'files' && next !== 'changes' && next !== 'checks') return;
+    if (next !== 'files' && next !== 'changes' && next !== 'checks') {
+      requestedRef.current = null;
+      return;
+    }
     const id = chatId();
-    setSide({ pane: next, rows: [], loading: true });
-    if (id) send({ op: 'pane', chatId: id, pane: next, ...(scope ? { scope } : {}) });
+    const loading = { pane: next, rows: [], loading: true };
+    sideRef.current = loading;
+    setSide(loading);
+    if (!id) {
+      requestedRef.current = null;
+      return;
+    }
+    requestedRef.current = { chatId: id, pane: next };
+    send({ op: 'pane', chatId: id, pane: next, ...(scope ? { scope } : {}) });
   }
 
   function askReview() {

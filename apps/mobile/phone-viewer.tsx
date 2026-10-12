@@ -119,12 +119,19 @@ export function viewerFromPhoneReply(
       },
     };
   }
-  if (op === 'error' && openingFile) {
+  if (op === 'error' && openingFile && !otherChat && current?.status === 'loading') {
+    const raw = textField(record.message) || '';
+    const forOpen =
+      raw === 'invalid phone command' ||
+      raw === 'That agent is not on this Mac.' ||
+      raw.startsWith('That file ') ||
+      raw.startsWith('That artifact ');
+    if (!forOpen) return { handled: false };
     const message =
-      record.message === 'invalid phone command'
+      raw === 'invalid phone command'
         ? 'This Mac’s Sideboard app can’t open that on the phone yet. Update Sideboard on the Mac.'
-        : textField(record.message) || 'Could not open that.';
-    return { handled: true, viewer: current ? { status: 'error', title: current.title, message } : null };
+        : raw || 'Could not open that.';
+    return { handled: true, viewer: { status: 'error', title: current.title, message } };
   }
   return { handled: false };
 }

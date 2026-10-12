@@ -5,7 +5,12 @@ import { linkifyChatUrls, parseChatLink } from './chat-link';
 import { chatMarkdown } from './chat-markdown';
 import { chatSearchQuery, highlightSegments } from './chat-search';
 import { fenceLanguage, highlightCode } from './code-highlight';
-import { parseFilePathLink, type FilePathLink } from './file-link';
+import {
+  parseFilePathLink,
+  parseSideboardArtifactLink,
+  parseSideboardFileLink,
+  type FilePathLink,
+} from './file-link';
 import { imageCacheKey, peekImage, watchImage } from './media-cache';
 import { MermaidView } from './mermaid-view';
 import {
@@ -339,6 +344,16 @@ export function MarkdownText({
     const linked = parseChatLink(url);
     if (linked) {
       onChatLinkRef.current?.(linked);
+      return false;
+    }
+    const artifact = parseSideboardArtifactLink(url);
+    if (artifact) {
+      onArtifactRef.current?.({ title: artifact });
+      return false;
+    }
+    const sideboardFile = parseSideboardFileLink(url);
+    if (sideboardFile) {
+      onFileLinkRef.current?.(sideboardFile);
       return false;
     }
     if (isWebUrl(url)) return true;

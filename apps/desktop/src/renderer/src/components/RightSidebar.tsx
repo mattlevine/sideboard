@@ -1237,7 +1237,7 @@ export function RightSidebar({
                 aria-label={gitStatus.title.replace(/\n/g, ', ')}
                 onClick={() => {
                   setUpper('changes');
-                  if (gitStatus.dirty) onDiffScopeChange('uncommitted');
+                  onDiffScopeChange(gitStatus.dirty ? 'uncommitted' : 'commits');
                 }}
               >
                 <span className="pill-name-scroll">{gitStatus.branch}</span>
