@@ -43,6 +43,12 @@ import { slicedReadCustomToolConfig } from './sliced-file-read.js';
 import { sideboardCursorRpcTools } from '../agent-rpc/cursor-tools.js';
 import { clipAgentEventForEmit } from './tool-result-clip.js';
 import {
+  cursorRunErrorRecoveryPrompt,
+  guardCursorCustomTool,
+  shouldReturnRunErrorToAgent,
+} from './cursor-tool-guard.js';
+import { cancelStaleCursorRuns } from './cursor-stale-runs.js';
+import {
   cursorCostOnlyUsageEvent,
   cursorDeltaToEvents,
   cursorSdkMessageToEvents,
@@ -59,7 +65,6 @@ import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 dropNestedElectronEnvFromProcess();
 
 type CursorSdk = NonNullable<Awaited<ReturnType<typeof importCursorSdk>>>;
-type AgentApi = CursorSdk['Agent'];
 type StoreCtor = CursorSdk['JsonlLocalAgentStore'];
 
 function emit(event: unknown): void {
@@ -74,63 +79,6 @@ function localAgentStore(
   const root = cursorSdkStoreDir(threadId);
   mkdirSync(root, { recursive: true });
   return new Store(root);
-}
-
-/**
- * Cancel leftover runs so a follow-up `send` can proceed.
- * A previous runner can die without cancelling, and a phone/desktop Steer
- * can arrive while Cursor still reports the run as active
- * (`already has active run`, `agent still running`).
- */
-async function cancelStaleRuns(
-  Agent: AgentApi,
-  agentId: string,
-  opts: { cwd: string; store: InstanceType<StoreCtor>; apiKey?: string },
-): Promise<number> {
-  let cancelled = 0;
-  const listed = await Agent.listRuns(agentId, {
-    runtime: 'local',
-    cwd: opts.cwd,
-    store: opts.store,
-    limit: 20,
-  });
-  for (const run of listed.items) {
-    if (run.status !== 'running') continue;
-    try {
-      await Agent.cancelRun(run.id, {
-        runtime: 'local',
-        cwd: opts.cwd,
-        store: opts.store,
-      });
-      cancelled += 1;
-    } catch {
-      /* best-effort */
-    }
-  }
-  if (cancelled > 0 || !opts.apiKey) return cancelled;
-  try {
-    const cloud = await Agent.listRuns(agentId, {
-      runtime: 'cloud',
-      apiKey: opts.apiKey,
-      limit: 20,
-    });
-    for (const run of cloud.items) {
-      if (run.status !== 'running') continue;
-      try {
-        await Agent.cancelRun(run.id, {
-          runtime: 'cloud',
-          agentId,
-          apiKey: opts.apiKey,
-        });
-        cancelled += 1;
-      } catch {
-        /* best-effort */
-      }
-    }
-  } catch {
-    /* local-only agents have no cloud runs */
-  }
-  return cancelled;
 }
 
 async function readStdinJson(): Promise<CursorTurnRequest> {
@@ -214,10 +162,18 @@ async function main(): Promise<number> {
         },
       })
     : {};
-  const customTools = {
+  const rawCustomTools: Record<string, SDKCustomTool> = {
     read: slicedReadCustomToolConfig(req.cwd) as unknown as SDKCustomTool,
     ...(rpcTools as unknown as Record<string, SDKCustomTool>),
   };
+  // Throws and oversized payloads stay on the tool result so the model can
+  // switch to a smaller read instead of killing the turn.
+  const customTools = Object.fromEntries(
+    Object.entries(rawCustomTools).map(([name, tool]) => [
+      name,
+      guardCursorCustomTool(tool, { cwd: req.cwd, name }) as unknown as SDKCustomTool,
+    ]),
+  );
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
     store,
@@ -274,7 +230,7 @@ async function main(): Promise<number> {
   }
 
   async function retryAfterBusy(agent: { agentId: string }): Promise<void> {
-    const n = await cancelStaleRuns(Agent, agent.agentId, {
+    const n = await cancelStaleCursorRuns(Agent, agent.agentId, {
       cwd: req.cwd,
       store,
       ...(apiKey ? { apiKey } : {}),
@@ -293,6 +249,7 @@ async function main(): Promise<number> {
 
   async function sendPrompt(
     agent: Awaited<ReturnType<typeof createAgent>>,
+    prompt: string,
     extra?: { onDelta?: (args: { update: unknown }) => void },
   ) {
     const sendOpts = {
@@ -300,11 +257,11 @@ async function main(): Promise<number> {
       ...extra,
     };
     try {
-      return await retryTransport(() => agent.send(req.prompt, sendOpts));
+      return await retryTransport(() => agent.send(prompt, sendOpts));
     } catch (err) {
       if (!isAgentBusyError(err)) throw err;
       await retryAfterBusy(agent);
-      return retryTransport(() => agent.send(req.prompt, sendOpts));
+      return retryTransport(() => agent.send(prompt, sendOpts));
     }
   }
 
@@ -340,7 +297,11 @@ async function main(): Promise<number> {
   process.once('SIGTERM', onSignal);
   process.once('SIGINT', onSignal);
 
-  async function runTurn(agent: Awaited<ReturnType<typeof createAgent>>): Promise<number> {
+  async function runTurn(
+    agent: Awaited<ReturnType<typeof createAgent>>,
+    prompt = req.prompt,
+    recoveryLeft = 1,
+  ): Promise<number> {
     emit({ type: 'session_id', data: agent.agentId });
     const stream = createAgentStreamCoalescer(emit);
     const activity = { at: Date.now() };
@@ -357,7 +318,7 @@ async function main(): Promise<number> {
     }
 
     let lastUsageRunId: string | undefined;
-    const run = await sendPrompt(agent, {
+    const run = await sendPrompt(agent, prompt, {
       onDelta: ({ update }) => {
         bump();
         for (const event of cursorDeltaToEvents(update as never)) {
@@ -404,6 +365,14 @@ async function main(): Promise<number> {
         const detail = formatUnknownDetail(result.error);
         if (isAgentBusyError(detail)) {
           throw Object.assign(new Error(detail || 'agent still running'), { name: 'AgentBusyError' });
+        }
+        if (recoveryLeft > 0 && shouldReturnRunErrorToAgent(detail)) {
+          const brief = detail.replace(/\s+/g, ' ').trim().slice(0, 240);
+          emit({
+            type: 'stderr',
+            data: `Cursor tool error — handing it back to the agent (${brief})`,
+          });
+          return runTurn(agent, cursorRunErrorRecoveryPrompt(detail), 0);
         }
         emit({
           type: 'stderr',

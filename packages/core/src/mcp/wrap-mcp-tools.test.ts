@@ -26,4 +26,32 @@ describe('wrapMcpToolResults', () => {
     expect(result.content[0]?.text.length).toBeLessThan(TOOL_RESULT_STORE_MAX_CHARS + 40);
     expect(result.content[0]?.text).toMatch(/truncated/);
   });
+
+  it('returns a thrown tool error to the caller instead of rejecting', async () => {
+    const captured: { cb?: (args: unknown) => Promise<unknown> } = {};
+    const live = {
+      tool: (
+        name: string,
+        desc: string,
+        schema: unknown,
+        cb: (args: unknown) => Promise<unknown>,
+      ) => {
+        void name;
+        void desc;
+        void schema;
+        captured.cb = cb;
+      },
+    };
+    wrapMcpToolResults(live as never, () => undefined);
+    live.tool('boom', 'boom', {}, async () => {
+      throw new Error('openrouter request failed');
+    });
+    const result = (await captured.cb?.({})) as {
+      isError?: boolean;
+      content: { text: string }[];
+    };
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toMatch(/openrouter request failed/);
+    expect(result.content[0]?.text).toMatch(/smaller request/);
+  });
 });
