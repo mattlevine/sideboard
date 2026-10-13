@@ -3,14 +3,27 @@
  * Codex / OpenCode. One wrap at registration — tools do not opt out.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { cursorToolErrorText } from '../agents/cursor-tool-guard.js';
 import { clipMcpToolResult } from '../agents/tool-result-clip.js';
 
 type ToolFn = (...args: unknown[]) => unknown;
 
 function wrapToolCallback(fn: ToolFn, cwd: () => string | undefined): ToolFn {
   return async (...args: unknown[]) => {
-    const result = await fn(...args);
-    return clipMcpToolResult(result as { content?: Array<{ type?: string; text?: string }> }, cwd());
+    try {
+      const result = await fn(...args);
+      return clipMcpToolResult(
+        result as { content?: Array<{ type?: string; text?: string }> },
+        cwd(),
+      );
+    } catch (err) {
+      // A throw used to kill the MCP stdio pipe (Cursor: Premature close).
+      // Return it as a tool error so the model can try a smaller call.
+      return {
+        isError: true,
+        content: [{ type: 'text', text: cursorToolErrorText(err) }],
+      };
+    }
   };
 }
 

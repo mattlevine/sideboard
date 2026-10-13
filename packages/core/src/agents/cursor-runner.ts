@@ -43,6 +43,11 @@ import { slicedReadCustomToolConfig } from './sliced-file-read.js';
 import { sideboardCursorRpcTools } from '../agent-rpc/cursor-tools.js';
 import { clipAgentEventForEmit } from './tool-result-clip.js';
 import {
+  cursorRunErrorRecoveryPrompt,
+  guardCursorCustomTool,
+  shouldReturnRunErrorToAgent,
+} from './cursor-tool-guard.js';
+import {
   cursorCostOnlyUsageEvent,
   cursorDeltaToEvents,
   cursorSdkMessageToEvents,
@@ -214,10 +219,18 @@ async function main(): Promise<number> {
         },
       })
     : {};
-  const customTools = {
+  const rawCustomTools: Record<string, SDKCustomTool> = {
     read: slicedReadCustomToolConfig(req.cwd) as unknown as SDKCustomTool,
     ...(rpcTools as unknown as Record<string, SDKCustomTool>),
   };
+  // Throws and oversized payloads stay on the tool result so the model can
+  // switch to a smaller read instead of killing the turn.
+  const customTools = Object.fromEntries(
+    Object.entries(rawCustomTools).map(([name, tool]) => [
+      name,
+      guardCursorCustomTool(tool, { cwd: req.cwd, name }) as unknown as SDKCustomTool,
+    ]),
+  );
   const local = withCursorLocalHangGuards({
     cwd: req.cwd,
     store,
@@ -293,6 +306,7 @@ async function main(): Promise<number> {
 
   async function sendPrompt(
     agent: Awaited<ReturnType<typeof createAgent>>,
+    prompt: string,
     extra?: { onDelta?: (args: { update: unknown }) => void },
   ) {
     const sendOpts = {
@@ -300,11 +314,11 @@ async function main(): Promise<number> {
       ...extra,
     };
     try {
-      return await retryTransport(() => agent.send(req.prompt, sendOpts));
+      return await retryTransport(() => agent.send(prompt, sendOpts));
     } catch (err) {
       if (!isAgentBusyError(err)) throw err;
       await retryAfterBusy(agent);
-      return retryTransport(() => agent.send(req.prompt, sendOpts));
+      return retryTransport(() => agent.send(prompt, sendOpts));
     }
   }
 
@@ -340,7 +354,11 @@ async function main(): Promise<number> {
   process.once('SIGTERM', onSignal);
   process.once('SIGINT', onSignal);
 
-  async function runTurn(agent: Awaited<ReturnType<typeof createAgent>>): Promise<number> {
+  async function runTurn(
+    agent: Awaited<ReturnType<typeof createAgent>>,
+    prompt = req.prompt,
+    recoveryLeft = 1,
+  ): Promise<number> {
     emit({ type: 'session_id', data: agent.agentId });
     const stream = createAgentStreamCoalescer(emit);
     const activity = { at: Date.now() };
@@ -357,7 +375,7 @@ async function main(): Promise<number> {
     }
 
     let lastUsageRunId: string | undefined;
-    const run = await sendPrompt(agent, {
+    const run = await sendPrompt(agent, prompt, {
       onDelta: ({ update }) => {
         bump();
         for (const event of cursorDeltaToEvents(update as never)) {
@@ -404,6 +422,14 @@ async function main(): Promise<number> {
         const detail = formatUnknownDetail(result.error);
         if (isAgentBusyError(detail)) {
           throw Object.assign(new Error(detail || 'agent still running'), { name: 'AgentBusyError' });
+        }
+        if (recoveryLeft > 0 && shouldReturnRunErrorToAgent(detail)) {
+          const brief = detail.replace(/\s+/g, ' ').trim().slice(0, 240);
+          emit({
+            type: 'stderr',
+            data: `Cursor tool error — handing it back to the agent (${brief})`,
+          });
+          return runTurn(agent, cursorRunErrorRecoveryPrompt(detail), 0);
         }
         emit({
           type: 'stderr',

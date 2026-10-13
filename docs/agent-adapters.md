@@ -47,7 +47,7 @@ Reference implementations:
 ## Guidelines
 
 - Prefer shelling out to the vendor’s official CLI or SDK; don’t scrape private UIs.
-- Cursor is the only adapter that owns create/resume/send (`cursor-runner.ts`). Transient `CursorAgentError.isRetryable` / `Network request failed` is retried there. CLI agents (Claude, Codex, OpenCode, Brightsy) already retry inside the vendor process — do not wrap `buildTurn` / `execa` in that same transport retry.
+- Cursor is the only adapter that owns create/resume/send (`cursor-runner.ts`). Transient `CursorAgentError.isRetryable` / `Network request failed` is retried there. A custom-tool throw, an oversized tool result, or any other non-auth run error is handed back to the same agent once (`cursor-tool-guard.ts`) so it can continue with a smaller read — do not fail the turn on the first tool error. CLI agents (Claude, Codex, OpenCode, Brightsy) already retry inside the vendor process — do not wrap `buildTurn` / `execa` in that same transport retry.
 - Keep mechanical control on Sideboard’s CLI/MCP; the adapter owns turn spawn + session resume.
 - Chat-only agents (no local file edits) are fine — document that limitation like Brightsy.
 - Use `permissionMode()` from `types.ts` when the agent supports plan / autonomy modes.
