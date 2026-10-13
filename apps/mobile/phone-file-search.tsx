@@ -1,7 +1,7 @@
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { emptyChangesNote, PhoneChangeScopeMenu } from './phone-change-scope';
+import { PhoneChangeScopeMenu } from './phone-change-scope';
 import { changeBadge } from './phone-diff';
-import type { PhoneChangeScope, PhonePaneId, PhoneSide } from './phone-pane-types';
+import { emptyChangesNote, type PhoneChangeScope, type PhonePaneId, type PhoneSide } from './phone-pane-types';
 import { palette } from './styles';
 
 /** Path filter for All files. The Mac searches the worktree; this only collects the text. */
@@ -48,7 +48,7 @@ export function PhonePaneBody({
   const files = side?.pane === 'files';
   const changes = side?.pane === 'changes';
   const ready = side && !(side.loading && side.rows.length === 0) ? side : null;
-  const empty = changes ? emptyChangesNote(changeScope) : 'Nothing here.';
+  const empty = changes ? emptyChangesNote(changeScope, commitSha, side?.base) : 'Nothing here.';
   return (
     <View style={styles.fill}>
       {files ? <PhoneFileSearch value={fileQuery} onChange={onFileQuery} /> : null}

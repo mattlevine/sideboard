@@ -7,7 +7,7 @@ import { PhoneOpenFiles } from './phone-open-files';
 import type { PhoneCodeSelection } from './phone-code-ref';
 import type { PhoneOpenDoc } from './phone-open-docs';
 import { changeFilterFromReply } from './phone-change-scope';
-import { keepPaneOnOpenedChat, type PhoneChangeScope, type PhonePaneId, type PhonePaneRow, type PhoneSide } from './phone-pane-types';
+import { keepPaneOnOpenedChat, staleChangeReply, type PhoneChangeScope, type PhonePaneId, type PhonePaneRow, type PhoneSide } from './phone-pane-types';
 import { palette } from './styles';
 
 export { keepPaneOnOpenedChat };
@@ -69,10 +69,7 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
       const replyQuery = typeof record.query === 'string' ? record.query : null;
       if (!wanted || wanted.pane !== next.pane || (replyChat && replyChat !== wanted.chatId)) return true;
       if (replyQuery != null && replyQuery !== wanted.query) return true;
-      if (next.pane === 'changes' && next.scope && wanted.scope && next.scope !== wanted.scope) return true;
-      if (next.pane === 'changes' && wanted.commitSha && next.commitSha && next.commitSha !== wanted.commitSha) {
-        return true;
-      }
+      if (next.pane === 'changes' && staleChangeReply(wanted, next)) return true;
       requestedRef.current = null;
       setSide(next);
       return true;

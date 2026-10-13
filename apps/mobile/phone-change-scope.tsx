@@ -148,14 +148,6 @@ function StatText({ stat }: { stat?: PhoneChangeStat }) {
   );
 }
 
-export function emptyChangesNote(scope: PhoneChangeScope): string {
-  if (scope === 'uncommitted') return 'No uncommitted changes';
-  if (scope === 'staged') return 'No staged changes';
-  if (scope === 'unstaged') return 'No unstaged changes';
-  if (scope === 'last_turn') return 'No changes in the last agent turn';
-  return 'No commits on this branch';
-}
-
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 12, paddingTop: 8 },
   trigger: {
@@ -208,14 +200,16 @@ const CHANGE_SCOPES: PhoneChangeScope[] = ['last_turn', 'uncommitted', 'staged',
 /** Scope fields on a Changes pane reply. Missing fields stay off so an older Mac still loads the list. */
 export function changeFilterFromReply(record: Record<string, unknown>): Pick<
   PhoneSide,
-  'scope' | 'commitSha' | 'hasLastTurnBase' | 'commits' | 'scopeStats'
+  'scope' | 'commitSha' | 'base' | 'hasLastTurnBase' | 'commits' | 'scopeStats'
 > {
   const scope = CHANGE_SCOPES.find((item) => item === record.scope);
   const commitSha = typeof record.commitSha === 'string' && record.commitSha ? record.commitSha : null;
+  const base = typeof record.base === 'string' && record.base ? record.base : undefined;
   const commits = Array.isArray(record.commits) ? record.commits.flatMap(changeCommit) : [];
   return {
     ...(scope ? { scope } : {}),
     commitSha,
+    ...(base ? { base } : {}),
     hasLastTurnBase: record.hasLastTurnBase === true,
     commits,
     scopeStats: changeStats(record.scopeStats),

@@ -53,6 +53,8 @@ export type PhonePaneReply = {
   /** Echoed Changes filter so the phone can drop a stale reply. */
   scope?: PhoneChangeScope;
   commitSha?: string | null;
+  /** Merge-base label, so an empty All Commits list can say what it compared. */
+  base?: string;
   hasLastTurnBase?: boolean;
   commits?: DiffCommit[];
   scopeStats?: Record<PhoneChangeScope, DiffScopeStat>;
@@ -144,6 +146,7 @@ async function readChanges(
     ...(diff.files.length > shown.length ? { note: `${diff.files.length - shown.length} more changed files` } : {}),
     scope: diff.scope,
     commitSha: selected?.sha ?? null,
+    ...(diff.base ? { base: diff.base } : {}),
     hasLastTurnBase: diff.hasLastTurnBase,
     commits: diff.commits.slice(0, 40),
     scopeStats: diff.scopeStats,

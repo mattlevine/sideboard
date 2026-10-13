@@ -30,6 +30,7 @@ export function dispatchPhoneWorkspace(
           ? {
               scope: body.scope,
               commitSha: body.commitSha ?? null,
+              ...(body.base ? { base: body.base } : {}),
               hasLastTurnBase: body.hasLastTurnBase,
               commits: body.commits ?? [],
               ...(body.scopeStats ? { scopeStats: body.scopeStats } : {}),
