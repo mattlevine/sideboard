@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.295] - 2026-10-12
+
+### Fixed
+
+- Cursor tool failures stay in the turn. A thrown custom tool or Sideboard MCP tool comes back as an error the agent can recover from, including by reading a smaller slice. If the Cursor run still ends in a non-auth error, that failure is handed back once so the same agent can continue.
+
 ## [0.1.294] - 2026-10-12
 
 ### Fixed
