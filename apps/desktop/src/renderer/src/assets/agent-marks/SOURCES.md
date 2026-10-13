@@ -2,7 +2,7 @@
 
 | File | Source |
 |------|--------|
-| brightsy.svg | Brightsy desktop app icon (`apps/desktop/assets/icon.svg` in a Brightsy worktree) |
+| brightsy.svg | Brightsy seal: black field, white B (`BrandMark` in `apps/web/components/app-logo.tsx` on brightsy-ai `main`) |
 
 Claude, Codex, Cursor, and OpenCode marks are inline Simple Icons paths
 (Claude spark, OpenAI, Cursor, OpenCode) in `AgentKindIcon.tsx` — Claude uses
