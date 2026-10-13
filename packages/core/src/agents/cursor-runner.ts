@@ -47,6 +47,7 @@ import {
   guardCursorCustomTool,
   shouldReturnRunErrorToAgent,
 } from './cursor-tool-guard.js';
+import { cancelStaleCursorRuns } from './cursor-stale-runs.js';
 import {
   cursorCostOnlyUsageEvent,
   cursorDeltaToEvents,
@@ -64,7 +65,6 @@ import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 dropNestedElectronEnvFromProcess();
 
 type CursorSdk = NonNullable<Awaited<ReturnType<typeof importCursorSdk>>>;
-type AgentApi = CursorSdk['Agent'];
 type StoreCtor = CursorSdk['JsonlLocalAgentStore'];
 
 function emit(event: unknown): void {
@@ -79,63 +79,6 @@ function localAgentStore(
   const root = cursorSdkStoreDir(threadId);
   mkdirSync(root, { recursive: true });
   return new Store(root);
-}
-
-/**
- * Cancel leftover runs so a follow-up `send` can proceed.
- * A previous runner can die without cancelling, and a phone/desktop Steer
- * can arrive while Cursor still reports the run as active
- * (`already has active run`, `agent still running`).
- */
-async function cancelStaleRuns(
-  Agent: AgentApi,
-  agentId: string,
-  opts: { cwd: string; store: InstanceType<StoreCtor>; apiKey?: string },
-): Promise<number> {
-  let cancelled = 0;
-  const listed = await Agent.listRuns(agentId, {
-    runtime: 'local',
-    cwd: opts.cwd,
-    store: opts.store,
-    limit: 20,
-  });
-  for (const run of listed.items) {
-    if (run.status !== 'running') continue;
-    try {
-      await Agent.cancelRun(run.id, {
-        runtime: 'local',
-        cwd: opts.cwd,
-        store: opts.store,
-      });
-      cancelled += 1;
-    } catch {
-      /* best-effort */
-    }
-  }
-  if (cancelled > 0 || !opts.apiKey) return cancelled;
-  try {
-    const cloud = await Agent.listRuns(agentId, {
-      runtime: 'cloud',
-      apiKey: opts.apiKey,
-      limit: 20,
-    });
-    for (const run of cloud.items) {
-      if (run.status !== 'running') continue;
-      try {
-        await Agent.cancelRun(run.id, {
-          runtime: 'cloud',
-          agentId,
-          apiKey: opts.apiKey,
-        });
-        cancelled += 1;
-      } catch {
-        /* best-effort */
-      }
-    }
-  } catch {
-    /* local-only agents have no cloud runs */
-  }
-  return cancelled;
 }
 
 async function readStdinJson(): Promise<CursorTurnRequest> {
@@ -287,7 +230,7 @@ async function main(): Promise<number> {
   }
 
   async function retryAfterBusy(agent: { agentId: string }): Promise<void> {
-    const n = await cancelStaleRuns(Agent, agent.agentId, {
+    const n = await cancelStaleCursorRuns(Agent, agent.agentId, {
       cwd: req.cwd,
       store,
       ...(apiKey ? { apiKey } : {}),
