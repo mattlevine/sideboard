@@ -178,6 +178,7 @@ import {
   deleteSchedule,
   fireSchedule,
   armSchedules,
+  answerToolPermission,
   hasEnabledSchedules,
   updateAdvancedSettings,
   updateAppEnvironment,
@@ -1474,6 +1475,7 @@ function registerIpc(): void {
   ipcMain.handle('sendToThread', (_e, ref: string, prompt: string) =>
     orch.send(ref, prompt, { followUp: followUpBehavior() }),
   );
+  ipcMain.handle('answerToolPermission', (_e, id: string, decision: 'allow' | 'deny' | 'allow_session') => answerToolPermission(id, decision));
   ipcMain.handle('editQueuedMessage', (_e, ref: string, index: number, text: string) =>
     orch.editQueuedMessage(ref, index, text),
   );

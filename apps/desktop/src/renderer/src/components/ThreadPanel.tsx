@@ -88,6 +88,7 @@ import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
 import { ThinkingEffortChip } from './ThinkingEffortChip';
 import { PlanQuestionsPanel } from './PlanQuestionsPanel';
+import { ToolPermissionBar, toolPermissionFromThread } from './ToolPermissionBar';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { PlanReadyBar } from './PlanReadyBar';
 import {
@@ -866,6 +867,7 @@ export function ThreadPanel({
   const showPlanQuestions =
     Boolean(pendingPlanQuestions) &&
     pendingPlanQuestions!.signature !== dismissedPlanQuestionsId;
+  const toolPermission = toolPermissionFromThread(thread);
 
   const planAwaitingApproval = useMemo(
     () =>
@@ -2832,6 +2834,7 @@ export function ThreadPanel({
               onApprove={() => void implementPlan()}
             />
           )}
+          {toolPermission ? <ToolPermissionBar prompt={toolPermission} /> : null}
           {showPlanQuestions && pendingPlanQuestions ? (
             <PlanQuestionsPanel
               pending={pendingPlanQuestions}

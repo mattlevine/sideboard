@@ -33,6 +33,7 @@ import { PhoneCodeRefChips } from './phone-file-select';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
+import { PhoneAsks, PhonePermissionBar, type PhonePermission } from './phone-prompts';
 import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
 import { keepPaneOnOpenedChat, PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
@@ -95,10 +96,12 @@ type PhoneControl =
       messages: Array<{ role: 'user' | 'agent'; text: string; streaming?: boolean }>;
       place?: PhonePlace;
       options?: ComposerOptions;
+      permission?: PhonePermission | null;
     }
   | { op: 'assistant'; chatId: string; text: string }
   | { op: 'stream'; chatId: string; text: string; activity?: string }
   | { op: 'ask'; chatId: string; text: string; questions: AskQuestion[] }
+  | { op: 'permission'; chatId: string; prompt: PhonePermission | null }
   | { op: 'stopped'; chatId: string }
   | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | { op: 'error'; message: string; chatId?: string }
@@ -195,6 +198,7 @@ export default function App() {
   const [findIndex, setFindIndex] = useState(0);
   const [textToolId, setTextToolId] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Record<string, Transcript>>({});
+  const [permissionByChat, setPermissionByChat] = useState<Record<string, PhonePermission | null>>({});
   const [draft, setDraft] = useState('');
   const [error, setTransientError] = useTransientError();
   const errorRef = useRef<string | null>(null);
@@ -399,6 +403,10 @@ export default function App() {
   }
 
   function applyControl(control: PhoneControl) {
+    if (control.op === 'permission' && control.chatId) {
+      setPermissionByChat((prev) => ({ ...prev, [control.chatId]: control.prompt ?? null }));
+      return;
+    }
     if (control.op === 'sidebar') {
       const nextOrchestration = Array.isArray(control.orchestration)
         ? control.orchestration.filter((row) => row?.id && row.title)
@@ -480,6 +488,7 @@ export default function App() {
         setChatOptions((prev) => ({ ...prev, [chat.id]: control.options! }));
       }
       rememberOpened(chat, control.place);
+      setPermissionByChat((prev) => ({ ...prev, [chat.id]: control.permission ?? null }));
       if (!keepPaneOnOpenedChat(panes.paneNow(), chat.id === activeChatIdRef.current)) panes.setPane('chat');
       setActiveChatId(chat.id);
       screenRef.current = 'chat';
@@ -1533,6 +1542,7 @@ export default function App() {
           onFileQuery={panes.setFileSearch}
           onHeaderAction={runHeaderAction}
           onHeaderArchive={archiveOpenChat}
+          notice={<PhonePermissionBar prompt={permissionByChat[activeChatId ?? ''] ?? null} onDecide={(id, decision) => { if (activeChatId) link.send(phoneCommand({ op: 'permission', chatId: activeChatId, id, decision })); }} />}
         >
         {findOpen ? (
           <ChatFindBar
@@ -1631,22 +1641,7 @@ export default function App() {
               )}
             />
           ) : null}
-          {transcript.questions?.map((question) => (
-            <View key={question.question} style={styles.ask}>
-              <MarkdownText text={question.question} tone="ask" chatId={activeChatId ?? ''} onChatLink={openChat} />
-              {question.options.map((option, index) => (
-                <Pressable key={option.label} style={styles.option} onPress={() => sendText(option.label)}>
-                  <View style={styles.optionNum}>
-                    <Text style={styles.optionNumText}>{index + 1}</Text>
-                  </View>
-                  <View style={styles.optionBody}>
-                    <Text style={styles.optionLabel}>{option.label}</Text>
-                    {option.description ? <Text style={styles.optionDesc}>{option.description}</Text> : null}
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          ))}
+          <PhoneAsks questions={transcript.questions} chatId={activeChatId ?? ''} onChatLink={openChat} onPick={sendText} />
         </ScrollView>
         {error ? <Text style={[styles.error, styles.errorPad]}>{error}</Text> : null}
         <PhoneCodeRefChips refs={codeRefs} onRemove={(id) => setCodeRefs((prev) => prev.filter((row) => row.id !== id))} />

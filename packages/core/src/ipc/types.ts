@@ -336,6 +336,7 @@ export interface IpcApi {
   listConductor(): Promise<ConductorWorkspace[]>;
   adoptFromConductor(workspaceId: string): Promise<Thread>;
   sendToThread(threadRef: string, prompt: string): Promise<Thread>;
+  answerToolPermission(id: string, decision: 'allow' | 'deny' | 'allow_session'): Promise<boolean>;
   /** Edit the text of a not-yet-started queued message. */
   editQueuedMessage(threadRef: string, index: number, text: string): Promise<Thread>;
   /** Remove a not-yet-started queued message. */

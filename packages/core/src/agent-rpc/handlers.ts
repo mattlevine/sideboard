@@ -9,6 +9,7 @@ import {
   waitForTurnToolResult,
   type WaitForTurnToolResult,
 } from '../mcp/wait-for-turn.js';
+import { handlePermissionAsk } from './permission-handler.js';
 import {
   AGENT_RPC_JOB_HOLD_MAX_MS,
   AGENT_RPC_JOB_SLICE_MS,
@@ -262,5 +263,6 @@ export function createAgentRpcDispatcher(): Record<string, AgentRpcHandler> {
     'job.wait': handleJobWait,
     'job.stop': handleJobStop,
     'turn.wait': handleTurnWait,
+    'permission.ask': handlePermissionAsk,
   };
 }

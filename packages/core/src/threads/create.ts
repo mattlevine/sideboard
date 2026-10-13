@@ -271,7 +271,8 @@ export async function createThread(
 
   // Conductor-style: worktree dir + placeholder branch = soccer team slug.
   // Tickets keep the identifier in the slug (`eng-12-ajax`).
-  // Sidebar later shows renamed branch / PR title (not the create prompt).
+  // Sidebar shows the first-prompt purpose while this branch is still a
+  // placeholder, then the renamed branch / PR title.
   const team = allocateTeamSlug(repoPath);
   const slug =
     sourceType === 'ticket'

@@ -42,6 +42,7 @@ import {
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
+import type { PhonePermissionView } from './phone-permission.js';
 import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
 
 /** Phone control rides in prompt text. The leading NUL keeps a person from typing it. */
@@ -81,6 +82,7 @@ export interface PhoneOpened {
   place?: PhonePlace;
   /** Composer chips for this chat: agent, effort, plan, and autonomy. */
   options?: PhoneComposerOptions;
+  permission?: PhonePermissionView | null;
 }
 
 /** Same knobs as the desktop composer and create modal. */
@@ -241,6 +243,7 @@ export type PhoneControlReply =
   | { op: 'assistant'; chatId: string; text: string }
   | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
+  | { op: 'permission'; chatId: string; prompt: PhonePermissionView | null }
   | { op: 'stopped'; chatId: string }
   | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | PhoneShownReply

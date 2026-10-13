@@ -1,3 +1,4 @@
+import { denyPendingToolPermissions } from '../agents/tool-permission.js';
 import { extractPendingPlanQuestions, isAskUserToolName } from '../plan/ask-user.js';
 import { extractPresentedPlan, isPresentPlanToolName } from '../plan/plan-present.js';
 import { readThread, updateThread } from '../store/thread-store.js';
@@ -106,6 +107,7 @@ export function settleAgentBlock(
   parts: MessagePart[] | undefined,
   failed: boolean,
 ): void {
+  denyPendingToolPermissions(threadId);
   const thread = readThread(threadId);
   if (!thread || thread.status === 'archived') return;
   const next = agentBlockAfterTurn({

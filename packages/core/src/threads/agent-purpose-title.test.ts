@@ -84,6 +84,45 @@ describe('agentPurposeStamp', () => {
     ).toBeNull();
   });
 
+  it('names an orchestration agent from the first prompt', () => {
+    expect(
+      agentPurposeStamp({
+        thread: thread({
+          title: 'Arsenal',
+          userSetTitle: true,
+          sourceType: 'orchestration',
+          branchName: 'global',
+          worktreePath: '/Users/me/.sideboard/global',
+          prTitle: null,
+          messages: [{ role: 'user', text: 'coordinate the fleet release', ts: '1' }],
+        }),
+        prompt: 'coordinate the fleet release',
+        autoContinue: false,
+      }),
+    ).toEqual({ title: 'Coordinate the fleet release' });
+  });
+
+  it('does not rename an orchestration agent after the first prompt', () => {
+    expect(
+      agentPurposeStamp({
+        thread: thread({
+          title: 'Coordinate the fleet release',
+          userSetTitle: true,
+          sourceType: 'orchestration',
+          branchName: 'global',
+          worktreePath: '/Users/me/.sideboard/global',
+          prTitle: null,
+          messages: [
+            { role: 'user', text: 'coordinate the fleet release', ts: '1' },
+            { role: 'user', text: 'also check CI', ts: '2' },
+          ],
+        }),
+        prompt: 'also check CI',
+        autoContinue: false,
+      }),
+    ).toBeNull();
+  });
+
   it('upgrades a soccer tab nickname from the first prompt', () => {
     expect(
       agentPurposeStamp({

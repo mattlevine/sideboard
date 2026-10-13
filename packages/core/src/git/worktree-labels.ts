@@ -1,4 +1,4 @@
-import { soccerTokenFromTakenSlug, teamNameFromSlug } from './teams.js';
+import { soccerTokenFromTakenSlug, teamNameFromSlug, teamSlugFromName } from './teams.js';
 
 /** Canonical worktree path for grouping tabs (browser-safe, no node:path). */
 export function normalizeWorktreePath(worktreePath: string): string {
@@ -155,8 +155,22 @@ export function branchDisplayLabel(branchName: string, worktreePath: string): st
 }
 
 /**
+ * Chat title that names the task. Soccer-club nicknames are placeholders, not
+ * a description of the work.
+ */
+export function taskPurposeTitle(title: string | null | undefined): string | null {
+  const trimmed = title?.trim() ?? '';
+  if (!trimmed || teamSlugFromName(trimmed)) return null;
+  return trimmed;
+}
+
+/**
  * Conductor-style sidebar label:
- * user override → PR title → branch (task name after rename) → soccer-team nickname.
+ * user override → PR title → purpose (while the branch is still a placeholder)
+ * → renamed branch → soccer-team nickname.
+ *
+ * The purpose title is stamped from the first prompt, so the workspace is
+ * named for the task before the agent renames the git branch.
  */
 export function threadDisplayLabel(thread: {
   branchName: string;
@@ -167,6 +181,10 @@ export function threadDisplayLabel(thread: {
 }): string {
   if (thread.userSetTitle && thread.title?.trim()) return thread.title.trim();
   if (thread.prTitle?.trim()) return thread.prTitle.trim();
+  if (isPlaceholderBranch(thread.branchName, thread.worktreePath)) {
+    const purpose = taskPurposeTitle(thread.title);
+    if (purpose) return purpose;
+  }
   return branchDisplayLabel(thread.branchName, thread.worktreePath);
 }
 
@@ -213,6 +231,7 @@ export function worktreeAnchorLabel(
     worktreePath: string;
     createdAt: string;
     prTitle?: string | null;
+    title?: string | null;
   }[],
 ): WorktreeAnchorLabel {
   if (threads.length === 0) return { title: 'Worktree', subtitle: null };
@@ -228,6 +247,12 @@ export function worktreeAnchorLabel(
       title: pr,
       subtitle: realBranch && realBranch !== pr ? realBranch : null,
     };
+  }
+  // Name the checkout for the task as soon as the first prompt (or an explicit
+  // create title) replaces the soccer nickname — don't wait for `git branch -m`.
+  if (placeholder) {
+    const purpose = taskPurposeTitle(canonical.title);
+    if (purpose) return { title: purpose, subtitle: null };
   }
   if (display) {
     return {

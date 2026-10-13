@@ -208,6 +208,7 @@ export function PhoneWorkspace({
   changeScope,
   commitSha,
   onFileQuery,
+  notice,
   children,
 }: {
   pane: PhoneTab;
@@ -227,6 +228,7 @@ export function PhoneWorkspace({
   onAddCodeRef?: (ref: PhoneCodeSelection) => void;
   onHeaderAction: () => void;
   onHeaderArchive: () => void;
+  notice?: ReactNode;
   children: ReactNode;
 }) {
   const open = docs.find((doc) => doc.id === activeDocId)?.viewer ?? null;
@@ -273,6 +275,7 @@ export function PhoneWorkspace({
           />
         )}
       </View>
+      {notice}
     </View>
   );
 }

@@ -1,7 +1,8 @@
 /**
  * Legacy helpers kept for callers that still want a short label from free text
- * (e.g. orchestration goals). Workspace UI titles follow Conductor:
- * PR title → renamed branch → soccer-team nickname (see worktree-labels).
+ * (e.g. orchestration goals and the first-prompt workspace name). Workspace
+ * UI titles follow Conductor, with that purpose title filling in while the
+ * branch is still a soccer-team placeholder (see worktree-labels).
  */
 export function titleFromPrompt(prompt: string, max = 60): string {
   let t = (prompt.trim().split(/\n/)[0] ?? '').trim().replace(/\s+/g, ' ');

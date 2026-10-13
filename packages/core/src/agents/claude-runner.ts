@@ -7,6 +7,7 @@ import { createInterface } from 'node:readline';
 import { AGENT_RPC_CLAUDE_SDK_SERVER } from '../agent-rpc/protocol.js';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
 import { createClaudePilotSdkServer } from './claude-sdk-tools.js';
+import { claudePermissionResult } from './claude-permission.js';
 import type { ClaudeTurnRequest } from './claude-turn-request.js';
 
 dropNestedElectronEnvFromProcess();
@@ -79,6 +80,30 @@ async function main(): Promise<void> {
     if (req.systemPrompt) options.appendSystemPrompt = req.systemPrompt;
     if (req.effort) options.effort = req.effort;
     if (req.chrome) options.chrome = true;
+    // acceptEdits still asks for paths outside the worktree (a home-directory
+    // skill, for example). Without this callback those asks are denied.
+    options.canUseTool = (
+      toolName: string,
+      toolInput: Record<string, unknown>,
+      toolOpts: {
+        signal: AbortSignal;
+        suggestions?: unknown;
+        blockedPath?: string;
+        title?: string;
+        description?: string;
+        displayName?: string;
+        suppressAlwaysAllowRule?: boolean;
+        defaultToNo?: boolean;
+      },
+    ) =>
+      claudePermissionResult({
+        permissionMode: req.permissionMode,
+        threadId: process.env.SIDEBOARD_THREAD_ID?.trim() || '',
+        toolName,
+        toolInput,
+        options: toolOpts,
+        rpc: req.agentRpc,
+      });
     // Match CLI `--strict-mcp-config`: only servers we pass (injected + copied
     // user stdio). Default settingSources would merge ~/.claude.json and nest.
     options.settingSources = [];

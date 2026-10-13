@@ -20,6 +20,7 @@ import {
 } from './phone-artifact.js';
 import { readPhoneChangePatch } from './phone-panes.js';
 import { dispatchPhoneWorkspace } from './phone-workspace-ops.js';
+import { dispatchPhonePermission, phonePermissionView } from './phone-permission.js';
 import {
   archivePhoneChat,
   createPhoneChat,
@@ -73,7 +74,7 @@ function emitOpened(
   opened: PhoneOpened,
 ): void {
   setPhoneOpenChat(opened.chat.id);
-  emitControl(opts, { op: 'opened', ...opened });
+  emitControl(opts, { op: 'opened', ...opened, permission: phonePermissionView(opened.chat.id) });
 }
 
 function publishOpenedChat(
@@ -522,6 +523,7 @@ export function handleRemoteInbound(
   },
 ): void {
   const body = text.trim();
+  if (dispatchPhonePermission(body, (reply) => emitControl(opts, reply))) return;
   const control = takePhoneControl(body);
   if (control) {
     if (control === 'invalid') {
