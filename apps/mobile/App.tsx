@@ -35,7 +35,7 @@ import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
 import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
-import { PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
+import { keepPaneOnOpenedChat, PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
 import { createRelayLink, RELAY_UNREACHABLE, type RelayLink } from './relay-link';
 import { AgentKindIcon } from './agent-icons';
@@ -480,8 +480,8 @@ export default function App() {
         setChatOptions((prev) => ({ ...prev, [chat.id]: control.options! }));
       }
       rememberOpened(chat, control.place);
+      if (!keepPaneOnOpenedChat(panes.paneNow(), chat.id === activeChatIdRef.current)) panes.setPane('chat');
       setActiveChatId(chat.id);
-      panes.setPane('chat');
       screenRef.current = 'chat';
       setScreen('chat');
       setTranscripts((prev) => ({
@@ -868,7 +868,7 @@ export default function App() {
         path: file.path,
         ...(file.startLine != null ? { startLine: file.startLine } : {}),
         ...(file.endLine != null ? { endLine: file.endLine } : {}),
-        ...(file.view === 'diff' ? { view: 'diff' } : {}),
+        ...(file.view === 'diff' ? { view: 'diff' as const, ...(file.scope ? { scope: file.scope } : {}), ...(file.commitSha ? { commitSha: file.commitSha } : {}) } : {}),
       }),
     );
   }
@@ -1529,7 +1529,7 @@ export default function App() {
             const next = openDocs.close(id);
             if (!next && panes.pane === 'doc') panes.setPane('chat');
           }}
-          fileQuery={panes.fileQuery}
+          fileQuery={panes.fileQuery} changeScope={panes.changeScope} commitSha={panes.commitSha}
           onFileQuery={panes.setFileSearch}
           onHeaderAction={runHeaderAction}
           onHeaderArchive={archiveOpenChat}

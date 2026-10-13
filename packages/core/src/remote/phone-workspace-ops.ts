@@ -18,7 +18,7 @@ export function dispatchPhoneWorkspace(
       emit({ op: 'error', chatId: cmd.chatId, message: 'That agent is not on this Mac.' });
       return;
     }
-    void readPhonePane(thread, cmd.pane, cmd.scope, cmd.query).then((body) => {
+    void readPhonePane(thread, cmd.pane, cmd.scope, cmd.query, cmd.commitSha).then((body) => {
       emit({
         op: 'pane',
         chatId: cmd.chatId,
@@ -26,6 +26,15 @@ export function dispatchPhoneWorkspace(
         rows: body.rows,
         ...(body.note ? { note: body.note } : {}),
         ...(cmd.pane === 'files' ? { query: cmd.query ?? '' } : {}),
+        ...(cmd.pane === 'changes'
+          ? {
+              scope: body.scope,
+              commitSha: body.commitSha ?? null,
+              hasLastTurnBase: body.hasLastTurnBase,
+              commits: body.commits ?? [],
+              ...(body.scopeStats ? { scopeStats: body.scopeStats } : {}),
+            }
+          : {}),
       });
     });
     return;

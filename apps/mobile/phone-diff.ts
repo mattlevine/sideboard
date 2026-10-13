@@ -54,6 +54,32 @@ export function diffSelectableBody(rows: PhoneDiffRow[]): string {
   return rows.map((row) => `${diffMark(row.kind)}${row.text}`).join('\n');
 }
 
+/** Code column the diff draws. Marks stay out so the selection lines up with the text. */
+export function diffVisibleBody(rows: PhoneDiffRow[]): string {
+  return rows.map((row) => row.text).join('\n');
+}
+
+/**
+ * Map a selection in `diffVisibleBody` onto file lines.
+ * The chat text still includes the +/− marks.
+ */
+export function diffVisibleSelection(
+  rows: PhoneDiffRow[],
+  start: number,
+  end: number,
+): { startLine: number; endLine: number; text: string } | null {
+  const rough = selectionLineRange(diffVisibleBody(rows), start, end);
+  if (!rough) return null;
+  const slice = rows.slice(rough.startLine - 1, rough.endLine);
+  if (slice.length === 0) return null;
+  const nos = slice.map((row) => Math.max(1, row.lineNo));
+  return {
+    startLine: Math.min(...nos),
+    endLine: Math.max(...nos),
+    text: slice.map((row) => `${diffMark(row.kind)}${row.text}`).join('\n'),
+  };
+}
+
 /**
  * Map a character selection in `diffSelectableBody` to file line numbers.
  * The text keeps the +/− marks so the chat can see what changed.

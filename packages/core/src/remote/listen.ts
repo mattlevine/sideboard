@@ -338,7 +338,7 @@ function handlePhoneControl(
       return;
     }
     if (cmd.view === 'diff') {
-      void readPhoneChangePatch(thread.id, relative)
+      void readPhoneChangePatch(thread.id, relative, cmd.scope, cmd.commitSha)
         .then((body) => {
           if (!body) {
             emitControl(opts, { op: 'error', chatId: cmd.chatId, message: 'That file has no changes to show.' });

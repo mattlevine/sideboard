@@ -119,6 +119,18 @@ export function languageFromPath(path: string): string {
   return resolveLanguage(ext);
 }
 
+/** Stay under a few thousand Text nodes. The rest of a long file stays plain. */
+export const FILE_HIGHLIGHT_MAX_CHARS = 48_000;
+
+/** Split source so highlighting stops on a line boundary. */
+export function splitFileHighlight(content: string): { head: string; rest: string } {
+  if (content.length <= FILE_HIGHLIGHT_MAX_CHARS) return { head: content, rest: '' };
+  const slice = content.slice(0, FILE_HIGHLIGHT_MAX_CHARS);
+  const breakAt = slice.lastIndexOf('\n');
+  const cut = breakAt > 0 ? breakAt + 1 : FILE_HIGHLIGHT_MAX_CHARS;
+  return { head: content.slice(0, cut), rest: content.slice(cut) };
+}
+
 /** Highlighted HTML, or null when the language is unknown or highlighting fails. */
 export function highlightHtml(code: string, language: string): string | null {
   const name = resolveLanguage(language);

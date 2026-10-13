@@ -4,6 +4,9 @@ export interface FilePathLink {
   endLine?: number;
   /** Changes opens the unified diff. Other links open the file. */
   view?: 'diff';
+  /** Changes filter to use for that diff. */
+  scope?: 'last_turn' | 'uncommitted' | 'staged' | 'unstaged' | 'commits';
+  commitSha?: string;
 }
 
 const CITATION_RE = /^(\d+):(\d+):(.+)$/;

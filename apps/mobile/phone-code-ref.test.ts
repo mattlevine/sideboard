@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   codeRefChipLabel,
   holdsCitedSelection,
+  keepOpenCursor,
   lineStartOffset,
+  openCursorSelection,
   phoneSendExtras,
+  scrollOffsetForLine,
   selectableFileText,
   selectionLineRange,
 } from './phone-code-ref';
@@ -35,6 +38,43 @@ describe('holdsCitedSelection', () => {
   it('lets a drag replace the citation', () => {
     expect(holdsCitedSelection(true, 6, 11)).toBe(false);
     expect(holdsCitedSelection(false, 0, 0)).toBe(false);
+  });
+});
+
+describe('keepOpenCursor', () => {
+  const top = { start: 0, end: 0 };
+  const cited = { start: 6, end: 11 };
+
+  it('holds the top caret when focus reports the end of the file', () => {
+    expect(keepOpenCursor(true, 0, 0, 20, top)).toBe(true);
+    expect(keepOpenCursor(true, 20, 20, 20, top)).toBe(true);
+  });
+
+  it('lets a tap or a drag move the cursor', () => {
+    expect(keepOpenCursor(true, 4, 4, 20, top)).toBe(false);
+    expect(keepOpenCursor(true, 0, 6, 20, top)).toBe(false);
+    expect(keepOpenCursor(false, 20, 20, 20, top)).toBe(false);
+  });
+
+  it('keeps a cited range until the user drags', () => {
+    expect(keepOpenCursor(true, 20, 20, 20, cited)).toBe(true);
+    expect(keepOpenCursor(true, 4, 9, 20, cited)).toBe(false);
+  });
+});
+
+describe('openCursorSelection', () => {
+  const content = 'alpha\nbeta\ngamma\n';
+
+  it('puts the caret on the first character when the file has no citation', () => {
+    expect(openCursorSelection(content)).toEqual({ start: 0, end: 0 });
+    expect(scrollOffsetForLine(undefined)).toBe(0);
+    expect(scrollOffsetForLine(1)).toBe(0);
+  });
+
+  it('selects the cited lines and scrolls to that line', () => {
+    expect(openCursorSelection(content, 2, 2)).toEqual({ start: 6, end: 11 });
+    expect(openCursorSelection(content, 2)).toEqual({ start: 6, end: 11 });
+    expect(scrollOffsetForLine(2, 20)).toBe(20);
   });
 });
 

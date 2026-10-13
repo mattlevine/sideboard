@@ -31,7 +31,14 @@ import {
   type PhoneHeaderGitAction,
 } from './phone-header.js';
 import { parsePhoneCodeRefs, type PhoneCodeRef } from './phone-code-refs.js';
-import { parsePhonePane, type PhonePaneReply, type PhonePaneRequest } from './phone-panes.js';
+import {
+  parsePhonePane,
+  phoneChangeScope,
+  phoneCommitSha,
+  type PhoneChangeScope,
+  type PhonePaneReply,
+  type PhonePaneRequest,
+} from './phone-panes.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
@@ -182,7 +189,7 @@ export type PhoneControlRequest =
   | { op: 'header'; chatId: string }
   | { op: 'git'; chatId: string; action: PhoneHeaderGitAction }
   | PhonePaneRequest
-  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff' }
+  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff'; scope?: PhoneChangeScope; commitSha?: string }
   | PhoneOpenArtifact
   | { op: 'media'; chatId: string; path: string };
 
@@ -305,6 +312,8 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     const startLine = lineField(value, 'startLine');
     const endLine = lineField(value, 'endLine');
     const view = textField(value, 'view') === 'diff' ? 'diff' : undefined;
+    const scope = phoneChangeScope((value as { scope?: unknown }).scope);
+    const commitSha = phoneCommitSha((value as { commitSha?: unknown }).commitSha);
     return {
       op,
       chatId,
@@ -312,6 +321,8 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
       ...(startLine != null ? { startLine } : {}),
       ...(endLine != null ? { endLine } : {}),
       ...(view ? { view } : {}),
+      ...(view && scope ? { scope } : {}),
+      ...(view && scope === 'commits' && commitSha ? { commitSha } : {}),
     };
   }
   const draft = parsePhoneDraft(value);

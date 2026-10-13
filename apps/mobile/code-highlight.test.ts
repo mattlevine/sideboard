@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { highlightHtml, languageFromPath } from './code-language';
+import { FILE_HIGHLIGHT_MAX_CHARS, highlightHtml, languageFromPath, splitFileHighlight } from './code-language';
 
 describe('languageFromPath', () => {
   it('maps extensions and well-known filenames', () => {
@@ -17,6 +17,15 @@ describe('languageFromPath', () => {
     expect(languageFromPath('README')).toBe('');
     expect(languageFromPath('notes.unknown')).toBe('');
     expect(languageFromPath('')).toBe('');
+  });
+
+  it('highlights the start of a long file and keeps the rest', () => {
+    const content = `${'const n = 1;\n'.repeat(5000)}tail`;
+    expect(content.length).toBeGreaterThan(FILE_HIGHLIGHT_MAX_CHARS);
+    const parts = splitFileHighlight(content);
+    expect(parts.head.endsWith('\n')).toBe(true);
+    expect(parts.head.length).toBeLessThanOrEqual(FILE_HIGHLIGHT_MAX_CHARS);
+    expect(parts.head + parts.rest).toBe(content);
   });
 
   it('colors a keyword in source', () => {
