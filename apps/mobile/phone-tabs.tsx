@@ -6,8 +6,11 @@ import { PhonePaneBody } from './phone-file-search';
 import { PhoneOpenFiles } from './phone-open-files';
 import type { PhoneCodeSelection } from './phone-code-ref';
 import type { PhoneOpenDoc } from './phone-open-docs';
-import type { PhonePaneId, PhonePaneRow, PhoneSide } from './phone-pane-types';
+import { changeFilterFromReply } from './phone-change-scope';
+import { keepPaneOnOpenedChat, staleChangeReply, type PhoneChangeScope, type PhonePaneId, type PhonePaneRow, type PhoneSide } from './phone-pane-types';
 import { palette } from './styles';
+
+export { keepPaneOnOpenedChat };
 
 export type PhoneTab = 'chat' | 'doc' | PhonePaneId;
 
@@ -38,7 +41,19 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
   const [side, setSide] = useState<PhoneSide | null>(null);
   const sideRef = useRef(side);
   sideRef.current = side;
-  const requestedRef = useRef<{ chatId: string; pane: PhonePaneId; query: string } | null>(null);
+  const requestedRef = useRef<{
+    chatId: string;
+    pane: PhonePaneId;
+    query: string;
+    scope?: PhoneChangeScope;
+    commitSha?: string | null;
+  } | null>(null);
+  const [changeScope, setChangeScope] = useState<PhoneChangeScope>('commits');
+  const [commitSha, setCommitSha] = useState<string | null>(null);
+  const changeScopeRef = useRef(changeScope);
+  const commitShaRef = useRef(commitSha);
+  changeScopeRef.current = changeScope;
+  commitShaRef.current = commitSha;
   const [fileQuery, setFileQuery] = useState('');
   const fileQueryRef = useRef('');
   const paneRef = useRef<PhoneTab>('chat');
@@ -54,6 +69,7 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
       const replyQuery = typeof record.query === 'string' ? record.query : null;
       if (!wanted || wanted.pane !== next.pane || (replyChat && replyChat !== wanted.chatId)) return true;
       if (replyQuery != null && replyQuery !== wanted.query) return true;
+      if (next.pane === 'changes' && staleChangeReply(wanted, next)) return true;
       requestedRef.current = null;
       setSide(next);
       return true;
@@ -71,7 +87,15 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
     return true;
   }
 
-  function selectPane(next: PhoneTab, scope?: 'uncommitted' | 'commits') {
+  function selectPane(next: PhoneTab, scope?: PhoneChangeScope, sha?: string | null) {
+    const nextScope = next === 'changes' ? (scope ?? changeScopeRef.current) : changeScopeRef.current;
+    const nextSha = next !== 'changes' ? commitShaRef.current : nextScope === 'commits' ? (sha === undefined ? commitShaRef.current : sha) : null;
+    if (next === 'changes') {
+      changeScopeRef.current = nextScope;
+      commitShaRef.current = nextSha;
+      setChangeScope(nextScope);
+      setCommitSha(nextSha);
+    }
     setPane(next);
     paneRef.current = next;
     if (next !== 'files' && queryTimer.current) {
@@ -86,21 +110,40 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
     const query = next === 'files' ? fileQueryRef.current.trim() : '';
     const previous = sideRef.current;
     const keep = next === 'files' && previous?.pane === 'files';
+    const keepChanges = next === 'changes' && previous?.pane === 'changes';
     const loading: PhoneSide = keep
       ? { pane: next, rows: previous.rows, note: previous.note, loading: true }
-      : { pane: next, rows: [], loading: true };
+      : {
+          pane: next,
+          rows: [],
+          loading: true,
+          ...(keepChanges
+            ? {
+                commits: previous.commits,
+                scopeStats: previous.scopeStats,
+                hasLastTurnBase: previous.hasLastTurnBase,
+                scope: nextScope,
+                commitSha: nextSha,
+              }
+            : {}),
+        };
     sideRef.current = loading;
     setSide(loading);
     if (!id) {
       requestedRef.current = null;
       return;
     }
-    requestedRef.current = { chatId: id, pane: next, query };
+    requestedRef.current = {
+      chatId: id,
+      pane: next,
+      query,
+      ...(next === 'changes' ? { scope: nextScope, commitSha: nextSha } : {}),
+    };
     send({
       op: 'pane',
       chatId: id,
       pane: next,
-      ...(scope ? { scope } : {}),
+      ...(next === 'changes' ? { scope: nextScope, ...(nextSha ? { commitSha: nextSha } : {}) } : {}),
       ...(query ? { query } : {}),
     });
   }
@@ -132,7 +175,19 @@ export function usePhonePanes(send: (payload: object) => void, chatId: () => str
     send({ op: 'review', chatId: id });
   }
 
-  return { pane, side, fileQuery, setFileSearch, setPane: setVisiblePane, takeControl, selectPane, askReview };
+  return {
+    pane,
+    paneNow: () => paneRef.current,
+    side,
+    fileQuery,
+    changeScope,
+    commitSha,
+    setFileSearch,
+    setPane: setVisiblePane,
+    takeControl,
+    selectPane,
+    askReview,
+  };
 }
 
 export function PhoneWorkspace({
@@ -150,7 +205,10 @@ export function PhoneWorkspace({
   onHeaderAction,
   onHeaderArchive,
   fileQuery,
+  changeScope,
+  commitSha,
   onFileQuery,
+  notice,
   children,
 }: {
   pane: PhoneTab;
@@ -158,16 +216,19 @@ export function PhoneWorkspace({
   activeDocId: string | null;
   side: PhoneSide | null;
   header: PhoneRightHeader | null;
-  onSelect: (tab: PhoneTab, scope?: 'uncommitted' | 'commits') => void;
+  onSelect: (tab: PhoneTab, scope?: PhoneChangeScope, commitSha?: string | null) => void;
   onReview: () => void;
   onSelectDoc: (id: string) => void;
   onCloseDoc: (id: string) => void;
   fileQuery: string;
+  changeScope: PhoneChangeScope;
+  commitSha: string | null;
   onFileQuery: (value: string) => void;
   onOpenPath: (link: FilePathLink) => void;
   onAddCodeRef?: (ref: PhoneCodeSelection) => void;
   onHeaderAction: () => void;
   onHeaderArchive: () => void;
+  notice?: ReactNode;
   children: ReactNode;
 }) {
   const open = docs.find((doc) => doc.id === activeDocId)?.viewer ?? null;
@@ -201,10 +262,20 @@ export function PhoneWorkspace({
             side={side}
             fileQuery={fileQuery}
             onFileQuery={onFileQuery}
-            onOpenPath={(path) => onOpenPath(pane === 'changes' ? { path, view: 'diff' } : { path })}
+            changeScope={changeScope}
+            commitSha={commitSha}
+            onChangeScope={(scope, sha) => onSelect('changes', scope, sha)}
+            onOpenPath={(path) =>
+              onOpenPath(
+                pane === 'changes'
+                  ? { path, view: 'diff', scope: changeScope, ...(commitSha ? { commitSha } : {}) }
+                  : { path },
+              )
+            }
           />
         )}
       </View>
+      {notice}
     </View>
   );
 }
@@ -305,7 +376,14 @@ export function sideFromPhoneReply(control: object): PhoneSide | undefined {
   if (pane !== 'files' && pane !== 'changes' && pane !== 'checks') return undefined;
   const rows = Array.isArray(record.rows) ? record.rows.flatMap(paneRow) : [];
   const note = typeof record.note === 'string' ? record.note : undefined;
-  return { pane, rows, note, loading: false };
+  if (pane !== 'changes') return { pane, rows, note, loading: false };
+  return {
+    pane,
+    rows,
+    note,
+    loading: false,
+    ...changeFilterFromReply(record),
+  };
 }
 
 function paneRow(value: unknown): PhonePaneRow[] {

@@ -88,5 +88,5 @@ export type TurnResult = {
   lastActivityAt: string | null;
   usage: TokenUsage | null;
   blockedReason?: string | null;
-  blockedSource?: 'ask_user' | 'plan' | 'reported' | null;
+  blockedSource?: 'ask_user' | 'plan' | 'reported' | 'permission' | null;
 };

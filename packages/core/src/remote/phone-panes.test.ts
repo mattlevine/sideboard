@@ -21,6 +21,29 @@ describe('parsePhonePane', () => {
       pane: 'changes',
     });
   });
+
+  it('keeps a Changes filter and one commit', () => {
+    expect(parsePhonePane({ pane: 'changes', scope: 'staged' }, 'chat-1')).toEqual({
+      op: 'pane',
+      chatId: 'chat-1',
+      pane: 'changes',
+      scope: 'staged',
+    });
+    expect(
+      parsePhonePane({ pane: 'changes', scope: 'commits', commitSha: 'abc1234' }, 'chat-1'),
+    ).toEqual({
+      op: 'pane',
+      chatId: 'chat-1',
+      pane: 'changes',
+      scope: 'commits',
+      commitSha: 'abc1234',
+    });
+    expect(parsePhonePane({ pane: 'changes', scope: 'nope', commitSha: 'zz' }, 'chat-1')).toEqual({
+      op: 'pane',
+      chatId: 'chat-1',
+      pane: 'changes',
+    });
+  });
 });
 
 describe('filterPhoneFiles', () => {

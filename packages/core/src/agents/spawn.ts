@@ -25,6 +25,7 @@ import {
 } from './message-parts.js';
 import { foldDuplicateStdout, textSoFar } from './stdout-replay.js';
 import { sanitizeAgentHostEnv } from '../hook/agent-host-env.js';
+import { SIDEBOARD_THREAD_ID_ENV } from '../mcp/profile.js';
 import { applyWorktreePkgCacheEnv } from '../hook/worktree-pkg-cache.js';
 import { applyAgentRunnerHeapEnv } from './node-launch.js';
 import { ensureAgentPath } from './path.js';
@@ -143,6 +144,7 @@ export async function spawnAgentTurn(
   // INIT_CWD, host node_modules/.bin, and SIDEBOARD_WORKSPACE_* into Claude.
   // Packaged builds do not set those — worktree agents only hang in local Electron.
   sanitizeAgentHostEnv(env, cmd.cwd);
+  env[SIDEBOARD_THREAD_ID_ENV] = thread.id;
   ensureAgentPath(env);
   applyPromptCacheTtlEnv(thread.agent, env);
   applyAgentRunnerHeapEnv(env);

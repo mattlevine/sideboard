@@ -1,5 +1,6 @@
 export * from './types/thread.js';
-export type { AgentBlock, AgentBlockSource } from './types/agent-block.js';
+export type { AgentBlock, AgentBlockSource, AgentPermissionPrompt } from './types/agent-block.js';
+export { answerToolPermission } from './agents/tool-permission.js';
 export * from './types/thinking-effort.js';
 export * from './store/paths.js';
 export * from './store/app-settings.js';

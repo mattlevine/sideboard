@@ -1,7 +1,25 @@
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
-import type { Thread } from '../types/thread.js';
+import type { DiffCommit, DiffScope, DiffScopeStat, Thread } from '../types/thread.js';
 
 export type PhonePaneId = 'files' | 'changes' | 'checks';
+
+/** Same filters as the desktop Changes menu. */
+export type PhoneChangeScope = DiffScope;
+
+export const PHONE_CHANGE_SCOPES = ['last_turn', 'uncommitted', 'staged', 'unstaged', 'commits'] as const;
+
+/** All commits on the branch, including uncommitted edits. Same default as the desktop sidebar. */
+export const PHONE_CHANGE_SCOPE_DEFAULT: PhoneChangeScope = 'commits';
+
+export function phoneChangeScope(value: unknown): PhoneChangeScope | undefined {
+  return typeof value === 'string' && (PHONE_CHANGE_SCOPES as readonly string[]).includes(value)
+    ? (value as PhoneChangeScope)
+    : undefined;
+}
+
+export function phoneCommitSha(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[0-9a-f]{4,40}$/i.test(value) ? value : undefined;
+}
 
 export type PhonePaneRow = {
   label: string;
@@ -16,8 +34,10 @@ export type PhonePaneRequest = {
   op: 'pane';
   chatId: string;
   pane: PhonePaneId;
-  /** Changes filter. Omitted means the branch-vs-base view. */
-  scope?: 'uncommitted' | 'commits';
+  /** Changes filter. Omitted means all commits on the branch. */
+  scope?: PhoneChangeScope;
+  /** One commit when scope is commits. Omitted means every commit on the branch. */
+  commitSha?: string;
   /** All-files path filter. Omitted means the unfiltered list. */
   query?: string;
 };
@@ -30,6 +50,14 @@ export type PhonePaneReply = {
   note?: string;
   /** Echoed All-files filter so the phone can drop a stale reply. */
   query?: string;
+  /** Echoed Changes filter so the phone can drop a stale reply. */
+  scope?: PhoneChangeScope;
+  commitSha?: string | null;
+  /** Merge-base label, so an empty All Commits list can say what it compared. */
+  base?: string;
+  hasLastTurnBase?: boolean;
+  commits?: DiffCommit[];
+  scopeStats?: Record<PhoneChangeScope, DiffScopeStat>;
 };
 
 const MAX_ROWS = 200;
@@ -38,8 +66,8 @@ const MAX_QUERY = 200;
 export function parsePhonePane(value: unknown, chatId: string): PhonePaneRequest | 'invalid' {
   const pane = value && typeof value === 'object' ? (value as { pane?: unknown }).pane : undefined;
   if (pane !== 'files' && pane !== 'changes' && pane !== 'checks') return 'invalid';
-  const scopeRaw = (value as { scope?: unknown }).scope;
-  const scope = scopeRaw === 'uncommitted' || scopeRaw === 'commits' ? scopeRaw : undefined;
+  const scope = phoneChangeScope((value as { scope?: unknown }).scope);
+  const commitSha = phoneCommitSha((value as { commitSha?: unknown }).commitSha);
   const queryRaw = (value as { query?: unknown }).query;
   const query = typeof queryRaw === 'string' ? queryRaw.trim().slice(0, MAX_QUERY) : '';
   return {
@@ -47,6 +75,7 @@ export function parsePhonePane(value: unknown, chatId: string): PhonePaneRequest
     chatId,
     pane,
     ...(scope && pane === 'changes' ? { scope } : {}),
+    ...(commitSha && pane === 'changes' && scope === 'commits' ? { commitSha } : {}),
     ...(query && pane === 'files' ? { query } : {}),
   };
 }
@@ -62,12 +91,13 @@ export function filterPhoneFiles(paths: string[], query: string): string[] {
 export async function readPhonePane(
   thread: Thread,
   pane: PhonePaneId,
-  scope?: 'uncommitted' | 'commits',
+  scope?: PhoneChangeScope,
   query?: string,
-): Promise<{ rows: PhonePaneRow[]; note?: string }> {
+  commitSha?: string,
+): Promise<Omit<PhonePaneReply, 'op' | 'chatId' | 'pane'>> {
   try {
     if (pane === 'files') return await readFiles(thread.id, query);
-    if (pane === 'changes') return await readChanges(thread.id, scope ?? 'commits');
+    if (pane === 'changes') return await readChanges(thread.id, scope ?? PHONE_CHANGE_SCOPE_DEFAULT, commitSha);
     return await readChecks(thread.id);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -93,10 +123,16 @@ async function readFiles(threadId: string, query?: string): Promise<{ rows: Phon
 
 async function readChanges(
   threadId: string,
-  scope: 'uncommitted' | 'commits',
-): Promise<{ rows: PhonePaneRow[]; note?: string }> {
-  const diff = await getOrchestrator().diff(threadId, { includePatches: false, scope });
+  scope: PhoneChangeScope,
+  commitSha?: string,
+): Promise<Omit<PhonePaneReply, 'op' | 'chatId' | 'pane'>> {
+  const diff = await getOrchestrator().diff(threadId, {
+    includePatches: false,
+    scope,
+    commitSha: scope === 'commits' ? (commitSha ?? null) : null,
+  });
   const shown = diff.files.slice(0, MAX_ROWS);
+  const selected = diff.commits.find((commit) => commit.sha === commitSha || commit.shortSha === commitSha);
   return {
     rows: shown.map((file) => {
       const detail = changeDetail(file.additions, file.deletions);
@@ -108,6 +144,12 @@ async function readChanges(
       };
     }),
     ...(diff.files.length > shown.length ? { note: `${diff.files.length - shown.length} more changed files` } : {}),
+    scope: diff.scope,
+    commitSha: selected?.sha ?? null,
+    ...(diff.base ? { base: diff.base } : {}),
+    hasLastTurnBase: diff.hasLastTurnBase,
+    commits: diff.commits.slice(0, 40),
+    scopeStats: diff.scopeStats,
   };
 }
 
@@ -118,17 +160,21 @@ function changeDetail(additions?: number, deletions?: number): string | undefine
   return `+${add} −${del}`;
 }
 
-/** One file's unified patch, same scope as the phone Changes list (branch vs base). */
+/** One file's unified patch, using the same Changes filter as the list. */
 export async function readPhoneChangePatch(
   threadId: string,
   path: string,
+  scope: PhoneChangeScope = PHONE_CHANGE_SCOPE_DEFAULT,
+  commitSha?: string,
 ): Promise<{ content: string; truncated: boolean } | null> {
   const diff = await getOrchestrator().diff(threadId, {
     path,
-    scope: 'commits',
+    scope,
+    commitSha: scope === 'commits' ? (commitSha ?? null) : null,
     includePatches: true,
     includeMeta: false,
-    includeUntracked: false,
+    includeUntracked:
+      scope === 'uncommitted' || scope === 'unstaged' || scope === 'last_turn' || (scope === 'commits' && !commitSha),
   });
   const file = diff.files.find((row) => row.path === path) ?? diff.files[0];
   if (!file) return null;

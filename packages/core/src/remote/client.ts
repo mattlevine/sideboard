@@ -4,6 +4,7 @@ import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
 import { startPhoneBoardSync } from './phone-board-sync.js';
 import { refreshPhoneViewerLogin } from './phone-viewer-login.js';
 import { deliverPhoneTurn, emitControl, getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
+import { setPhonePermissionPush } from './phone-permission.js';
 import {
   parseRemoteServerMessage,
   REMOTE_PING_INTERVAL_MS,
@@ -283,6 +284,11 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
     }
     send({ type: 'ask_user', text: outbound.text, questions: outbound.questions });
   };
+
+  setPhonePermissionPush((chatId, prompt) => {
+    if (getPhoneOpenChat() !== chatId) return;
+    emitControl({ onOutbound: emit }, { op: 'permission', chatId, prompt });
+  });
 
   void loop();
 

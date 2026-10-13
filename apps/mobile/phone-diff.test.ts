@@ -4,6 +4,8 @@ import {
   diffCodeSelection,
   diffIndexSelection,
   diffSelectableBody,
+  diffVisibleBody,
+  diffVisibleSelection,
   parseUnifiedPatch,
   tapDiffRow,
 } from './phone-diff';
@@ -61,6 +63,21 @@ describe('diffCodeSelection', () => {
 
   it('ignores a blank selection', () => {
     expect(diffCodeSelection(rows, 0, 0)).toBeNull();
+  });
+});
+
+describe('diffVisibleSelection', () => {
+  const rows = parseUnifiedPatch(PATCH);
+
+  it('selects the code column and keeps the add and delete marks', () => {
+    const body = diffVisibleBody(rows);
+    expect(body).toBe('same\nold\nnew\nadded\ntail');
+    const at = body.indexOf('old');
+    expect(diffVisibleSelection(rows, at, at + 'old\nnew'.length)).toEqual({
+      startLine: 2,
+      endLine: 2,
+      text: '-old\n+new',
+    });
   });
 });
 

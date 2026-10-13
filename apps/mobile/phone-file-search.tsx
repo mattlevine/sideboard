@@ -1,6 +1,7 @@
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { PhoneChangeScopeMenu } from './phone-change-scope';
 import { changeBadge } from './phone-diff';
-import type { PhonePaneId, PhoneSide } from './phone-pane-types';
+import { emptyChangesNote, type PhoneChangeScope, type PhonePaneId, type PhoneSide } from './phone-pane-types';
 import { palette } from './styles';
 
 /** Path filter for All files. The Mac searches the worktree; this only collects the text. */
@@ -30,24 +31,35 @@ export function PhoneFileSearch({
 export function PhonePaneBody({
   side,
   fileQuery,
+  changeScope,
+  commitSha,
   onFileQuery,
+  onChangeScope,
   onOpenPath,
 }: {
   side: PhoneSide | null;
   fileQuery: string;
+  changeScope: PhoneChangeScope;
+  commitSha: string | null;
   onFileQuery: (value: string) => void;
+  onChangeScope: (scope: PhoneChangeScope, commitSha: string | null) => void;
   onOpenPath: (path: string) => void;
 }) {
   const files = side?.pane === 'files';
+  const changes = side?.pane === 'changes';
   const ready = side && !(side.loading && side.rows.length === 0) ? side : null;
+  const empty = changes ? emptyChangesNote(changeScope, commitSha, side?.base) : 'Nothing here.';
   return (
     <View style={styles.fill}>
       {files ? <PhoneFileSearch value={fileQuery} onChange={onFileQuery} /> : null}
+      {changes ? (
+        <PhoneChangeScopeMenu side={side} scope={changeScope} commitSha={commitSha} onPick={onChangeScope} />
+      ) : null}
       {ready ? (
         <ScrollView style={styles.fill} contentContainerStyle={styles.list}>
           {ready.note ? <Text style={styles.note}>{ready.note}</Text> : null}
           {ready.rows.length === 0 && !ready.note ? (
-            <Text style={styles.note}>{files && fileQuery.trim() ? 'No matching files.' : 'Nothing here.'}</Text>
+            <Text style={styles.note}>{files && fileQuery.trim() ? 'No matching files.' : empty}</Text>
           ) : null}
           {ready.rows.map((row) => (
             <Pressable

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -16,7 +16,7 @@ import { highlightCode } from './code-highlight';
 import { languageFromPath } from './code-language';
 import type { FilePathLink } from './file-link';
 import { PhoneDiffView } from './phone-diff-view';
-import { selectableFileText, type PhoneCodeSelection } from './phone-code-ref';
+import { scrollOffsetForLine, selectableFileText, type PhoneCodeSelection } from './phone-code-ref';
 import { PhoneFileSelect } from './phone-file-select';
 import { MarkdownText } from './markdown';
 import { palette } from './styles';
@@ -143,6 +143,14 @@ function FileText({
     () => (marked ? null : content ? highlightCode(content, language, 'file') : ' '),
     [marked, content, language],
   );
+  const scrollRef = useRef<ScrollView>(null);
+  const revealed = useRef('');
+  const token = `${startLine ?? ''}:${content.length}`;
+  const reveal = () => {
+    if (revealed.current === token) return;
+    revealed.current = token;
+    scrollRef.current?.scrollTo({ y: scrollOffsetForLine(startLine), animated: false });
+  };
   const paintedLines = useMemo(() => {
     if (!marked || startLine == null || end == null) return null;
     const from = startLine;
@@ -158,7 +166,7 @@ function FileText({
   }, [marked, lines, language, startLine, end]);
   if (!paintedLines) {
     return (
-      <ScrollView contentContainerStyle={styles.pad}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.pad} onContentSizeChange={reveal}>
         <Text selectable style={styles.code}>
           {whole}
         </Text>
@@ -166,7 +174,7 @@ function FileText({
     );
   }
   return (
-    <ScrollView contentContainerStyle={styles.pad}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.pad} onContentSizeChange={reveal}>
       {paintedLines.map((line) => (
         <Text key={line.n} selectable style={[styles.code, line.on && styles.mark]}>
           {line.text}
@@ -257,7 +265,7 @@ function ViewerBody({
     );
   }
   if (viewer.status === 'file' && viewer.diff) {
-    return <PhoneDiffView patch={viewer.content} />;
+    return <PhoneDiffView patch={viewer.content} language={languageFromPath(viewer.path)} />;
   }
   if (viewer.status === 'file' && viewer.directory) {
     return <DirectoryList path={viewer.path} content={viewer.content} onOpenPath={onOpenPath} />;
@@ -300,6 +308,7 @@ export function PhoneViewer({
   inline?: boolean;
 }) {
   const fileSource = viewer?.status === 'file' && !viewer.diff ? selectableFileText(viewer) : null;
+  const language = viewer?.status === 'file' ? fileLanguage(viewer) : '';
   const truncated =
     viewer && viewer.status !== 'loading' && viewer.status !== 'error' && viewer.truncated
       ? viewer.status === 'artifact'
@@ -322,6 +331,7 @@ export function PhoneViewer({
         <PhoneFileSelect
           key={`${fileSource.path}:${viewer?.status === 'file' ? (viewer.startLine ?? '') : ''}:${viewer?.status === 'file' ? (viewer.endLine ?? '') : ''}`}
           content={fileSource.content}
+          language={language}
           startLine={viewer?.status === 'file' ? viewer.startLine : undefined}
           endLine={viewer?.status === 'file' ? viewer.endLine : undefined}
           onAdd={(range) => onAddCodeRef({ path: fileSource.path, ...range })}
@@ -330,6 +340,7 @@ export function PhoneViewer({
         <PhoneDiffView
           key={`diff:${viewer.path}`}
           patch={viewer.content}
+          language={language}
           onAdd={onAddCodeRef ? (range) => onAddCodeRef({ path: viewer.path, ...range }) : undefined}
         />
       ) : viewer ? (

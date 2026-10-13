@@ -1,4 +1,4 @@
-import { branchDisplayLabel } from '@sideboard/worktree-labels';
+import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { GLOBAL_WORKSPACE_ID } from './global-workspace';
 import { nestedChatDisplayTitle } from './nested-chat-title';
 
@@ -9,7 +9,7 @@ export function repoBasename(repoPath: string): string {
 
 export type WorkspaceChromeLabels = {
   project: string;
-  /** PR title when linked, otherwise the git branch (or soccer nickname). */
+  /** PR title, else the task purpose while the branch is still a placeholder, else the git branch. */
   task: string | null;
   /** Purpose name of the current agent — not the worktree/PR title. */
   agent: string | null;
@@ -28,7 +28,8 @@ function isOrchestrationChrome(thread: {
 }
 
 /**
- * Titlebar: `project > PR/branch > agent` for git worktrees.
+ * Titlebar: `project > task > agent` for git worktrees.
+ * Task is the PR, the first-prompt purpose while the branch is still a placeholder, or the renamed branch.
  * Orchestration has no worktree, so it is only `Orchestration > agent`.
  */
 export function workspaceChromeLabels(thread: {
@@ -48,9 +49,14 @@ export function workspaceChromeLabels(thread: {
     };
   }
   const project = repoBasename(thread.repoPath);
-  const pr = thread.prTitle?.trim();
-  const branch = branchDisplayLabel(thread.branchName ?? '', thread.worktreePath);
-  const task = pr || branch || null;
+  const task =
+    threadDisplayLabel({
+      branchName: thread.branchName ?? '',
+      worktreePath: thread.worktreePath,
+      title: thread.title,
+      prTitle: thread.prTitle,
+      userSetTitle: thread.userSetTitle,
+    }) || null;
   const agent = nestedChatDisplayTitle(thread, task || project);
   return { project, task, agent };
 }

@@ -46,6 +46,22 @@ describe('workspaceChromeLabels', () => {
     });
   });
 
+  it('names a placeholder worktree for the task before the branch is renamed', () => {
+    expect(
+      workspaceChromeLabels({
+        repoPath: '/Users/me/Projects/sideboard',
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/sirius',
+        title: 'Add dark mode to settings',
+        sourceType: 'branch',
+        branchName: 'thread/sirius',
+      }),
+    ).toEqual({
+      project: 'sideboard',
+      task: 'Add dark mode to settings',
+      agent: 'Sirius',
+    });
+  });
+
   it('names a placeholder worktree after the soccer nickname, not the git ref', () => {
     expect(
       workspaceChromeLabels({

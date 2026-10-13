@@ -45,6 +45,49 @@ export function holdsCitedSelection(holding: boolean, start: number, end: number
   return holding && start === end;
 }
 
+/**
+ * Keep the open caret in place while iOS reports a caret at the end of the field.
+ * A tap elsewhere, or a drag, hands the cursor to the user.
+ * A cited range stays selected until that drag.
+ */
+export function keepOpenCursor(
+  holding: boolean,
+  start: number,
+  end: number,
+  contentLength: number,
+  pinned: { start: number; end: number },
+): boolean {
+  if (!holding || start !== end) return false;
+  if (start === pinned.start && end === pinned.end) return true;
+  if (pinned.end > pinned.start) return true;
+  return contentLength > 0 && start === contentLength;
+}
+
+/** Matches the phone code font so a cited line scrolls into view. */
+export const PHONE_CODE_LINE_HEIGHT = 20;
+
+/**
+ * Caret when a file opens. A citation selects that range.
+ * Otherwise the caret sits on the first character, not the end of the file.
+ */
+export function openCursorSelection(
+  content: string,
+  startLine?: number,
+  endLine?: number,
+): { start: number; end: number } {
+  if (startLine == null) return { start: 0, end: 0 };
+  const start = lineStartOffset(content, startLine);
+  const end = lineStartOffset(content, (endLine ?? startLine) + 1);
+  if (end <= start) return { start: 0, end: 0 };
+  return { start, end };
+}
+
+/** Scroll offset for a 1-based line. No line means the top of the file. */
+export function scrollOffsetForLine(line: number | undefined, lineHeight = PHONE_CODE_LINE_HEIGHT): number {
+  if (line == null || line < 1) return 0;
+  return (line - 1) * lineHeight;
+}
+
 /** Character offset where a 1-based line starts. Past the end is `content.length`. */
 export function lineStartOffset(content: string, line: number): number {
   if (line <= 1) return 0;

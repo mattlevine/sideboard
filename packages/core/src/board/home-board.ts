@@ -1151,7 +1151,7 @@ export type HomeBoardThreadCard = {
   prUrl: string | null;
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
-  chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported';
+  chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported' | 'permission';
   tags?: string[];
 };
 

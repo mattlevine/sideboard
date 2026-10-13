@@ -11,6 +11,9 @@ import { titleFromPrompt } from './title.js';
 /**
  * Agent row title: first-prompt purpose when it is not the PR/branch, else the
  * soccer nickname. Worktree identity stays on the parent card.
+ *
+ * Orchestration chats start as a soccer nickname too. The first real prompt
+ * renames them for the goal — they have no branch rename to do it later.
  */
 export function agentPurposeStamp(input: {
   thread: Pick<
@@ -27,7 +30,6 @@ export function agentPurposeStamp(input: {
   autoContinue: boolean;
 }): { title: string } | null {
   if (input.autoContinue) return null;
-  if (input.thread.sourceType === 'orchestration') return null;
   if (input.thread.title.trim() === REVIEW_TAB_TITLE) return null;
 
   const identities = worktreeIdentityTitles(input.thread);

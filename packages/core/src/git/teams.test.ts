@@ -86,6 +86,16 @@ describe('worktreeDisplayLabel', () => {
     ).toBe('West Ham');
   });
 
+  it('uses the task purpose while the branch is still a placeholder', () => {
+    expect(
+      worktreeDisplayLabel({
+        branchName: 'west-ham',
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/west-ham',
+        title: 'Add dark mode to settings',
+      }),
+    ).toBe('Add dark mode to settings');
+  });
+
   it('shows the renamed task branch (Conductor-style)', () => {
     expect(
       worktreeDisplayLabel({
@@ -177,6 +187,32 @@ describe('worktreeAnchorLabel', () => {
           branchName: 'thread/lens',
           worktreePath: '/wt/lens',
           createdAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    ).toEqual({ title: 'Lens', subtitle: null });
+  });
+
+  it('names a placeholder checkout for the task before the branch is renamed', () => {
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'lens',
+          worktreePath: '/wt/lens',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          title: 'Add dark mode to settings',
+        },
+      ]),
+    ).toEqual({ title: 'Add dark mode to settings', subtitle: null });
+  });
+
+  it('keeps the soccer nickname until a purpose title exists', () => {
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'lens',
+          worktreePath: '/wt/lens',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          title: 'Lens',
         },
       ]),
     ).toEqual({ title: 'Lens', subtitle: null });

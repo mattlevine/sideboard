@@ -69,6 +69,37 @@ describe('phone orchestration chats', () => {
       takePhoneControl(encodePhoneControl({ op: 'open-file', chatId: 'chat-1', path: 'a.ts', view: 'diff' })),
     ).toEqual({ op: 'open-file', chatId: 'chat-1', path: 'a.ts', view: 'diff' });
     expect(
+      takePhoneControl(
+        encodePhoneControl({
+          op: 'open-file',
+          chatId: 'chat-1',
+          path: 'a.ts',
+          view: 'diff',
+          scope: 'uncommitted',
+          commitSha: 'abc1234',
+        }),
+      ),
+    ).toEqual({ op: 'open-file', chatId: 'chat-1', path: 'a.ts', view: 'diff', scope: 'uncommitted' });
+    expect(
+      takePhoneControl(
+        encodePhoneControl({
+          op: 'open-file',
+          chatId: 'chat-1',
+          path: 'a.ts',
+          view: 'diff',
+          scope: 'commits',
+          commitSha: 'abc1234',
+        }),
+      ),
+    ).toEqual({
+      op: 'open-file',
+      chatId: 'chat-1',
+      path: 'a.ts',
+      view: 'diff',
+      scope: 'commits',
+      commitSha: 'abc1234',
+    });
+    expect(
       takePhoneControl(encodePhoneControl({ op: 'open-artifact', chatId: 'chat-1', title: 'Dashboard', hint: '<p>' })),
     ).toEqual({ op: 'open-artifact', chatId: 'chat-1', title: 'Dashboard', hint: '<p>' });
     expect(takePhoneControl(encodePhoneControl({ op: 'media', chatId: 'chat-1', path: 'shot.png' }))).toEqual({

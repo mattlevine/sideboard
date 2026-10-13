@@ -31,10 +31,18 @@ import {
   type PhoneHeaderGitAction,
 } from './phone-header.js';
 import { parsePhoneCodeRefs, type PhoneCodeRef } from './phone-code-refs.js';
-import { parsePhonePane, type PhonePaneReply, type PhonePaneRequest } from './phone-panes.js';
+import {
+  parsePhonePane,
+  phoneChangeScope,
+  phoneCommitSha,
+  type PhoneChangeScope,
+  type PhonePaneReply,
+  type PhonePaneRequest,
+} from './phone-panes.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
+import type { PhonePermissionView } from './phone-permission.js';
 import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
 
 /** Phone control rides in prompt text. The leading NUL keeps a person from typing it. */
@@ -74,6 +82,7 @@ export interface PhoneOpened {
   place?: PhonePlace;
   /** Composer chips for this chat: agent, effort, plan, and autonomy. */
   options?: PhoneComposerOptions;
+  permission?: PhonePermissionView | null;
 }
 
 /** Same knobs as the desktop composer and create modal. */
@@ -182,7 +191,7 @@ export type PhoneControlRequest =
   | { op: 'header'; chatId: string }
   | { op: 'git'; chatId: string; action: PhoneHeaderGitAction }
   | PhonePaneRequest
-  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff' }
+  | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff'; scope?: PhoneChangeScope; commitSha?: string }
   | PhoneOpenArtifact
   | { op: 'media'; chatId: string; path: string };
 
@@ -234,6 +243,7 @@ export type PhoneControlReply =
   | { op: 'assistant'; chatId: string; text: string }
   | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
+  | { op: 'permission'; chatId: string; prompt: PhonePermissionView | null }
   | { op: 'stopped'; chatId: string }
   | { op: 'media'; chatId: string; path: string; dataUrl?: string }
   | PhoneShownReply
@@ -305,6 +315,8 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     const startLine = lineField(value, 'startLine');
     const endLine = lineField(value, 'endLine');
     const view = textField(value, 'view') === 'diff' ? 'diff' : undefined;
+    const scope = phoneChangeScope((value as { scope?: unknown }).scope);
+    const commitSha = phoneCommitSha((value as { commitSha?: unknown }).commitSha);
     return {
       op,
       chatId,
@@ -312,6 +324,8 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
       ...(startLine != null ? { startLine } : {}),
       ...(endLine != null ? { endLine } : {}),
       ...(view ? { view } : {}),
+      ...(view && scope ? { scope } : {}),
+      ...(view && scope === 'commits' && commitSha ? { commitSha } : {}),
     };
   }
   const draft = parsePhoneDraft(value);
