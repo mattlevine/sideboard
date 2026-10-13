@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.296] - 2026-10-13
+
+### Added
+
+- Phone files use syntax highlighting and open at the top, or on a cited range.
+- Phone Changes uses the same scopes as the desktop and defaults to all commits, including uncommitted edits.
+- A write outside the worktree asks on the desktop and the phone: Allow, Deny, or Allow for this session.
+- A new workspace and its orchestration agent take their name from the first prompt while the branch is still a placeholder.
+
+### Fixed
+
+- Switching the phone Changes filter between All Commits and one commit keeps the file list that matches the selection. An empty Commits view says there is no diff against the base, or no changes in that commit.
+
 ## [0.1.295] - 2026-10-12
 
 ### Fixed
