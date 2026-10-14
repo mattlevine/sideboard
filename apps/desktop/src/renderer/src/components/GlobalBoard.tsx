@@ -138,15 +138,22 @@ export function GlobalBoard({
   );
 
   const byColumn = useMemo(() => {
-    const map: Record<'new' | 'draft' | 'review' | 'done', Thread[][]> = {
+    const map: Record<'new' | 'draft' | 'review' | 'approved' | 'done', Thread[][]> = {
       new: [],
       draft: [],
       review: [],
+      approved: [],
       done: [],
     };
     for (const group of worktrees) {
       const col = classifyWorktreeColumn(group);
-      if (col === 'new' || col === 'draft' || col === 'review' || col === 'done') {
+      if (
+        col === 'new' ||
+        col === 'draft' ||
+        col === 'review' ||
+        col === 'approved' ||
+        col === 'done'
+      ) {
         map[col].push(group);
       }
     }

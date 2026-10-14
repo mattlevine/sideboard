@@ -154,6 +154,16 @@ describe('classifyThreadColumn', () => {
         }),
       ),
     ).toBe('draft');
+    expect(
+      classifyThreadColumn(
+        thread({
+          id: 'approved',
+          prUrl: 'https://github.com/acme/app/pull/7',
+          prState: 'OPEN',
+          prReviewDecision: 'APPROVED',
+        }),
+      ),
+    ).toBe('approved');
   });
 });
 

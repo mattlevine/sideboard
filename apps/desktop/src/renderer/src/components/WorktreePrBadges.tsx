@@ -3,7 +3,7 @@ import {
   type WorktreeListBadgeThread,
 } from '@sideboard/home-board';
 
-/** Review / pending pills on sidebar and Home worktree titles. */
+/** Path-to-merge pills on sidebar and Home worktree titles. */
 export function WorktreePrBadges({
   group,
   viewerLogin,

@@ -196,7 +196,7 @@ export type PhoneControlRequest =
   | { op: 'media'; chatId: string; path: string };
 
 export interface PhoneWorktreeBadge {
-  id: 'review' | 'pending';
+  id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
   label: string;
   title: string;
 }
@@ -206,7 +206,7 @@ export interface PhoneWorktree {
   chats: PhoneChatSummary[];
   /** Shared labels for this checkout. Omitted when the workspace has none. */
   tags?: string[];
-  /** Set only while a pull request on this workspace is in review. */
+  /** Path-to-merge pill: new, draft, pending, review, approved, or merged. */
   badge?: PhoneWorktreeBadge;
 }
 

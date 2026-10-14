@@ -311,7 +311,11 @@ describe('phone orchestration chats', () => {
       label: 'review',
       title: "Someone else's PR",
     });
-    expect(badge(draft.id)).toBeUndefined();
+    expect(badge(draft.id)).toEqual({
+      id: 'draft',
+      label: 'draft',
+      title: 'Draft pull request',
+    });
     const mineChat = labeled?.worktrees.flatMap((worktree) => worktree.chats).find((chat) => chat.id === mine.id);
     expect(mineChat).toMatchObject({
       prUrl: 'https://github.com/acme/app/pull/4',

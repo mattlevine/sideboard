@@ -177,6 +177,14 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 1,
   },
+  prBadgeNew: {
+    borderColor: palette.border,
+  },
+  prBadgeDraft: {
+    borderStyle: 'dashed',
+    borderColor: 'rgba(117, 190, 255, 0.55)',
+    backgroundColor: 'rgba(117, 190, 255, 0.1)',
+  },
   prBadgeReview: {
     borderColor: 'rgba(204, 167, 0, 0.45)',
     backgroundColor: 'rgba(204, 167, 0, 0.16)',
@@ -185,9 +193,21 @@ export const styles = StyleSheet.create({
     borderColor: 'rgba(210, 153, 34, 0.5)',
     backgroundColor: 'rgba(210, 153, 34, 0.12)',
   },
+  prBadgeApproved: {
+    borderColor: 'rgba(111, 207, 151, 0.55)',
+    backgroundColor: 'rgba(111, 207, 151, 0.12)',
+  },
+  prBadgeMerged: {
+    borderColor: 'rgba(210, 168, 255, 0.55)',
+    backgroundColor: 'rgba(210, 168, 255, 0.12)',
+  },
   prBadgeText: { fontSize: 10, fontWeight: '600', letterSpacing: 0.2 },
+  prBadgeTextNew: { color: palette.muted },
+  prBadgeTextDraft: { color: '#9cdcfe' },
   prBadgeTextReview: { color: palette.warn },
   prBadgeTextPending: { color: '#e2b340' },
+  prBadgeTextApproved: { color: '#8fd9a8' },
+  prBadgeTextMerged: { color: '#d2a8ff' },
   glyphRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   projectBlock: { marginTop: 12 },
   worktreeBlock: { marginLeft: 8, marginBottom: 4 },
