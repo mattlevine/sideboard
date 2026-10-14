@@ -202,13 +202,34 @@ export function PhoneAgentsScreen({
               const anchor = worktree.chats[0];
               return (
                 <View key={`${project.path}:${worktree.label}`} style={styles.worktreeBlock}>
-                  <View style={[styles.sectionRow, styles.worktreeHead]}>
-                    <View style={styles.glyphRow}>
-                      <WorktreeStatusIcon kind={worktreeStatusKind(worktree.chats)} />
-                      <Text style={styles.worktreeName} numberOfLines={1}>
-                        {worktree.label}
-                      </Text>
-                      {worktree.badge ? <PrBadge badge={worktree.badge} /> : null}
+                  <View
+                    style={[
+                      styles.sectionRow,
+                      styles.worktreeHead,
+                      worktree.tags?.length ? styles.worktreeHeadTagged : null,
+                    ]}
+                  >
+                    <View style={styles.worktreeIdentity}>
+                      <View style={styles.worktreeTitle}>
+                        <WorktreeStatusIcon kind={worktreeStatusKind(worktree.chats)} />
+                        <Text style={styles.worktreeName} numberOfLines={1}>
+                          {worktree.label}
+                        </Text>
+                        {worktree.badge ? <PrBadge badge={worktree.badge} /> : null}
+                      </View>
+                      {worktree.tags?.length ? (
+                        <View style={styles.tagRow}>
+                          {worktree.tags.map((tag) => (
+                            <TagChip
+                              key={tag}
+                              tag={tag}
+                              selected={tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase())}
+                              filtering={tagFilters.length > 0}
+                              onPress={() => onToggleTag(tag)}
+                            />
+                          ))}
+                        </View>
+                      ) : null}
                     </View>
                     {anchor ? (
                       <AddButton
@@ -219,19 +240,6 @@ export function PhoneAgentsScreen({
                       />
                     ) : null}
                   </View>
-                  {worktree.tags?.length ? (
-                    <View style={styles.tagRow}>
-                      {worktree.tags.map((tag) => (
-                        <TagChip
-                          key={tag}
-                          tag={tag}
-                          selected={tagFilters.some((item) => item.toLowerCase() === tag.toLowerCase())}
-                          filtering={tagFilters.length > 0}
-                          onPress={() => onToggleTag(tag)}
-                        />
-                      ))}
-                    </View>
-                  ) : null}
                   {worktree.chats.map((chat) => (
                     <ChatRow
                       key={chat.id}
