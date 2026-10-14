@@ -53,7 +53,7 @@ Do not call this Slack. Sideboard no longer uses a Slack app. The public page at
 | List / read chats | `list_chats` / `get_chat` |
 | Steer a chat | `send_to_chat` |
 | Wait for a turn | `wait_for_turn` / `get_turn_result` |
-| Stop / archive / restore a chat | `stop_chat` / `archive_chat` / `restore_chat` |
+| [test-board] conflict fixture — do not merge | `stop_chat` |
 | New checkout + chat (copy transcript) | `fork_workspace` |
 | New chat on the same workspace | `fork_chat` |
 | Parent orchestration chat | `parentChatId` (legacy `parentThreadId` still accepted) |
