@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Dimensions,
   Image,
+  Keyboard,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -328,6 +332,48 @@ export type CreateSelection =
   | { kind: 'pr'; ref: string; title: string }
   | { kind: 'ticket'; ref: string; title: string; url?: string };
 
+/** How much of this window the keyboard covers. A modal's layout frame is not the keyboard's coordinate space. */
+function keyboardOverlap(frame: { height: number; screenY: number } | undefined): number {
+  if (!frame || frame.height <= 0) return 0;
+  const covered = Dimensions.get('window').height - frame.screenY;
+  if (covered <= 0) return 0;
+  return Math.min(frame.height, covered);
+}
+
+function useKeyboardBottomInset(): number {
+  const [inset, setInset] = useState(() => (Platform.OS === 'ios' ? keyboardOverlap(Keyboard.metrics()) : 0));
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const apply = (next: number, duration: number) => {
+      const ms = duration > 10 ? duration : 10;
+      LayoutAnimation.configureNext({
+        duration: ms,
+        update: { duration: ms, type: 'keyboard' },
+      });
+      setInset(next);
+    };
+    const change = Keyboard.addListener('keyboardWillChangeFrame', (event) => {
+      apply(keyboardOverlap(event.endCoordinates), event.duration);
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', (event) => {
+      apply(0, event.duration);
+    });
+    const didShow = Keyboard.addListener('keyboardDidShow', (event) => {
+      setInset(keyboardOverlap(event.endCoordinates));
+    });
+    const didHide = Keyboard.addListener('keyboardDidHide', () => {
+      setInset(0);
+    });
+    return () => {
+      change.remove();
+      hide.remove();
+      didShow.remove();
+      didHide.remove();
+    };
+  }, []);
+  return inset;
+}
+
 export function CreateChatSheet(props: {
   mode: CreateMode;
   sources: PhoneSources | null;
@@ -368,6 +414,7 @@ export function CreateChatSheet(props: {
       : props.mode.kind === 'project'
         ? props.mode.name
         : 'Add agent';
+  const keyboardInset = useKeyboardBottomInset();
   const rows =
     tab === 'prs' ? props.sources?.prs ?? [] : tab === 'branches' ? props.sources?.branches ?? [] : props.sources?.issues ?? [];
   const selectedLabel = cowboy
@@ -379,7 +426,7 @@ export function CreateChatSheet(props: {
         : selection.ref;
   return (
     <Modal visible animationType="slide" onRequestClose={props.onClose}>
-      <View style={styles.createScreen}>
+      <View style={[styles.createScreen, keyboardInset > 0 ? { paddingBottom: keyboardInset } : null]}>
         <View style={styles.createHead}>
           <Pressable onPress={props.onClose} hitSlop={8}>
             <Text style={styles.link}>Close</Text>
@@ -550,92 +597,39 @@ export function IssuePicker(props: {
 
 const styles = StyleSheet.create({
   shell: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 14, backgroundColor: palette.bg },
-  box: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 14,
-    backgroundColor: palette.elevated,
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 8,
-  },
+  box: { borderWidth: 1, borderColor: palette.border, borderRadius: 14, backgroundColor: palette.elevated, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, gap: 8 },
   input: { color: palette.text, fontSize: 16, lineHeight: 22, minHeight: 44, maxHeight: 120, padding: 0 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   chipScroll: { flex: 1, minWidth: 0 },
   chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 6 },
-  chip: {
-    flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: palette.bg,
-  },
+  chip: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: palette.border, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: palette.bg },
   chipOn: { borderColor: palette.accent, backgroundColor: '#143044' },
   chipText: { color: palette.secondary, fontSize: 12, fontWeight: '600' },
-  round: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.hover,
-  },
+  round: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.hover },
   roundOn: { backgroundColor: '#5a1d1d' },
   roundText: { color: palette.text, fontSize: 16 },
-  send: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.text,
-  },
+  send: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.text },
   sendOff: { opacity: 0.35 },
   sendText: { color: palette.bg, fontSize: 16, fontWeight: '700', marginTop: -1 },
   menu: { borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 4 },
   menuRow: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8 },
   menuText: { color: palette.text, fontSize: 15 },
   fileRow: { gap: 8 },
-  fileChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    maxWidth: 180,
-  },
+  fileChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: palette.border, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6, maxWidth: 180 },
   thumb: { width: 28, height: 28, borderRadius: 4 },
   fileName: { color: palette.secondary, fontSize: 12, flexShrink: 1 },
   fileX: { color: palette.muted, fontSize: 16 },
   banner: { color: palette.muted, fontSize: 12, lineHeight: 16 },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: {
-    backgroundColor: palette.elevated,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
-    gap: 10,
-    maxHeight: '88%',
-  },
+  sheet: { backgroundColor: palette.elevated, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, gap: 10, maxHeight: '88%' },
   sheetTitle: { color: palette.text, fontSize: 18, fontWeight: '600' },
   sheetLabel: { color: palette.muted, fontSize: 12, fontWeight: '600', marginTop: 4 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   modelList: { maxHeight: 160 },
-  primary: {
-    marginTop: 8,
-    backgroundColor: palette.text,
-    borderRadius: 10,
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
+  primary: { marginTop: 8, backgroundColor: palette.text, borderRadius: 10, alignItems: 'center', paddingVertical: 12 },
   primaryText: { color: palette.bg, fontWeight: '700', fontSize: 16 },
   createScreen: { flex: 1, backgroundColor: palette.bg, paddingTop: 54 },
-  createEmpty: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
+  createEmpty: { flex: 1, minHeight: 0, overflow: 'hidden', justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
   createHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
   createTitle: { flex: 1, textAlign: 'center', color: palette.text, fontSize: 16, fontWeight: '600' },
   link: { color: palette.accent, fontSize: 16 },
@@ -643,15 +637,7 @@ const styles = StyleSheet.create({
   sourceBlock: { paddingHorizontal: 16, gap: 8, flex: 1, minHeight: 0 },
   sourceHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   selected: { color: palette.text, fontSize: 15, fontWeight: '600', flex: 1 },
-  search: {
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderRadius: 10,
-    color: palette.text,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginHorizontal: 16,
-  },
+  search: { borderWidth: 1, borderColor: palette.border, borderRadius: 10, color: palette.text, paddingHorizontal: 10, paddingVertical: 8, marginHorizontal: 16 },
   sourceList: { flex: 1 },
   meta: { color: palette.muted, fontSize: 13, padding: 8 },
   warn: { color: '#f87171', fontSize: 12, paddingHorizontal: 4, paddingBottom: 4 },
