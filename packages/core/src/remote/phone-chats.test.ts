@@ -268,6 +268,7 @@ describe('phone orchestration chats', () => {
       prState: 'OPEN',
       prAuthorLogin: 'matt',
       prLabels: ['eng-review'],
+      prMergeable: 'CONFLICTING',
     });
     const theirs = createEmptyThread({
       title: 'theirs',
@@ -304,7 +305,8 @@ describe('phone orchestration chats', () => {
     expect(badge(mine.id)).toEqual({
       id: 'pending',
       label: 'pending',
-      title: 'Waiting for review',
+      title: 'Waiting for review · merge conflicts',
+      conflict: true,
     });
     expect(badge(theirs.id)).toEqual({
       id: 'review',
@@ -320,7 +322,7 @@ describe('phone orchestration chats', () => {
     expect(mineChat).toMatchObject({
       prUrl: 'https://github.com/acme/app/pull/4',
       prNumber: '4',
-      prStatus: 'Needs approval',
+      prStatus: 'Merge conflicts',
     });
     expect(
       listPhoneSidebar()

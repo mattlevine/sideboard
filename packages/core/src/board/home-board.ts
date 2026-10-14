@@ -8,6 +8,15 @@ import {
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
 import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
+import { isApprovedOpenPr, isMergedPrState, isOpenPrState } from './pr-state.js';
+import {
+  DEFAULT_BOARD_OWNERSHIP,
+  classifyWorktreeOwnership,
+  loginsInclude,
+  worktreeMatchesOwnership,
+  type BoardOwnershipFilter,
+  type WorktreeOwnership,
+} from './worktree-ownership.js';
 import type { IssueInfo, MessagePart, PrInfo, Thread, ThreadMessage } from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
@@ -114,22 +123,7 @@ export type HomeBoardLoaded = HomeBoardRemoteData & {
   pins: BoardPin[];
 };
 
-export function isOpenPrState(
-  prUrl: string | null | undefined,
-  prState: string | null | undefined,
-): boolean {
-  if (!prUrl?.trim()) return false;
-  const state = (prState ?? 'OPEN').trim().toUpperCase();
-  return state !== 'MERGED' && state !== 'CLOSED';
-}
-
-export function isMergedPrState(
-  prUrl: string | null | undefined,
-  prState: string | null | undefined,
-): boolean {
-  if (!prUrl?.trim()) return false;
-  return (prState ?? '').trim().toUpperCase() === 'MERGED';
-}
+export { isMergedPrState, isOpenPrState };
 
 /**
  * Derived Home column. Path is PR state — not archive or live agent activity.
@@ -243,71 +237,14 @@ export function groupHomeBoardWorktrees<
     .sort((a, b) => compareWorktreeGroups(a, b, sort, labelOf));
 }
 
-/**
- * Mine = PRs you authored, or local WIP with no PR.
- * Reviewing = someone else's PR (author known and not you), a create-from-PR
- * checkout, or a PR that requested your review.
- * Viewer login comes from `gh` (`getGitHubStatus().login`) — not a setting.
- */
-export type WorktreeOwnership = 'mine' | 'reviewing';
-
-/** Board / sidebar filter. Default `all` shows every worktree. */
-export type BoardOwnershipFilter = 'all' | WorktreeOwnership;
-
-export const DEFAULT_BOARD_OWNERSHIP: BoardOwnershipFilter = 'all';
-
-function normalizeViewerLogin(login: string | null | undefined): string {
-  return (login ?? '').trim().toLowerCase();
-}
-
-export function loginsInclude(
-  logins: string[] | null | undefined,
-  viewerLogin: string,
-): boolean {
-  const me = normalizeViewerLogin(viewerLogin);
-  if (!me) return false;
-  return (logins ?? []).some((login) => normalizeViewerLogin(login) === me);
-}
-
-export function classifyWorktreeOwnership(
-  group: Array<
-    Pick<Thread, 'prUrl' | 'prAuthorLogin' | 'prReviewerLogins' | 'sourceType'>
-  >,
-  viewerLogin = '',
-): WorktreeOwnership {
-  const me = normalizeViewerLogin(viewerLogin);
-  if (
-    group.some((t) => {
-      const author = normalizeViewerLogin(t.prAuthorLogin);
-      return Boolean(author && me && author === me);
-    })
-  ) {
-    return 'mine';
-  }
-
-  const reviewing = group.some((t) => {
-    const author = normalizeViewerLogin(t.prAuthorLogin);
-    if (author && me && author !== me) return true;
-    // Create-from-PR is reviewing only after we know the viewer — an empty
-    // login would otherwise badge every PR checkout as reviewing and hide it
-    // from a persisted Mine filter until `gh api user` returns.
-    if (t.sourceType === 'pr' && me && (!author || author !== me)) return true;
-    if (me && loginsInclude(t.prReviewerLogins, me)) return true;
-    return false;
-  });
-  return reviewing ? 'reviewing' : 'mine';
-}
-
-export function worktreeMatchesOwnership(
-  group: Array<
-    Pick<Thread, 'prUrl' | 'prAuthorLogin' | 'prReviewerLogins' | 'sourceType'>
-  >,
-  filter: BoardOwnershipFilter,
-  viewerLogin = '',
-): boolean {
-  if (filter === 'all') return true;
-  return classifyWorktreeOwnership(group, viewerLogin) === filter;
-}
+export {
+  DEFAULT_BOARD_OWNERSHIP,
+  classifyWorktreeOwnership,
+  loginsInclude,
+  worktreeMatchesOwnership,
+  type BoardOwnershipFilter,
+  type WorktreeOwnership,
+};
 
 /** Column for a worktree: merged → Merged, approved open PR → Approved, other open PR → Review, draft → Draft. */
 export function classifyWorktreeColumn(
@@ -324,156 +261,13 @@ export function classifyWorktreeColumn(
   return 'new';
 }
 
-export type WorktreeListBadgeId =
-  | 'new'
-  | 'draft'
-  | 'pending'
-  | 'review'
-  | 'approved'
-  | 'merged';
-
-export type WorktreeListBadge = {
-  id: WorktreeListBadgeId;
-  label: string;
-  title: string;
-  mod: string;
-};
-
-export type WorktreeListBadgeThread = Pick<
-  Thread,
-  | 'prUrl'
-  | 'prState'
-  | 'prIsDraft'
-  | 'prAuthorLogin'
-  | 'prReviewerLogins'
-  | 'sourceType'
-  | 'cowboy'
-  | 'prLabels'
-  | 'prReviewDecision'
->;
-
-function labelsInclude(
-  labels: string[] | null | undefined,
-  name: string,
-): boolean {
-  const want = name.trim().toLowerCase();
-  if (!want) return false;
-  return (labels ?? []).some((label) => label.trim().toLowerCase() === want);
-}
-
-/**
- * Ready-for-review GitHub label for a repo from Settings → Projects
- * (`reviewLabel`), matching exact or descendant worktree paths.
- */
-export function reviewLabelForRepo(
-  labelsByRepo: Record<string, string> | null | undefined,
-  repoPath: string,
-): string {
-  const want = repoPath.trim().replace(/\/+$/, '');
-  if (!want || !labelsByRepo) return '';
-  const direct = labelsByRepo[want]?.trim();
-  if (direct) return direct;
-  let best = '';
-  let bestLen = 0;
-  for (const [key, label] of Object.entries(labelsByRepo)) {
-    const stored = key.trim().replace(/\/+$/, '');
-    const value = label.trim();
-    if (!stored || !value) continue;
-    if (stored === want || want.startsWith(`${stored}/`)) {
-      if (stored.length > bestLen) {
-        best = value;
-        bestLen = stored.length;
-      }
-    }
-  }
-  return best;
-}
-
-function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const thread of group) {
-    for (const label of thread.prLabels ?? []) {
-      const key = label.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      out.push(label.trim());
-    }
-  }
-  return out;
-}
-
-function isApprovedOpenPr(
-  thread: Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft' | 'prReviewDecision'>,
-): boolean {
-  if (!isOpenPrState(thread.prUrl, thread.prState) || thread.prIsDraft) return false;
-  return (thread.prReviewDecision ?? '').trim().toUpperCase() === 'APPROVED';
-}
-
-function isClosedPrState(
-  prUrl: string | null | undefined,
-  prState: string | null | undefined,
-): boolean {
-  if (!prUrl?.trim()) return false;
-  return (prState ?? '').trim().toUpperCase() === 'CLOSED';
-}
-
-function listBadge(id: WorktreeListBadgeId, title: string): WorktreeListBadge {
-  return { id, label: id, title, mod: `is-${id}` };
-}
-
-/**
- * Sidebar / phone / board pills for where a checkout is on the path to merge.
- * Cowboy worktrees keep the separate cowboy badge. A closed PR stays unlabeled.
- *
- * New is no pull request. Draft is your draft. Pending is your published PR
- * waiting for review. Review is someone else's open PR, including their drafts.
- * Approved is an open non-draft PR GitHub has approved. Merged is merged.
- *
- * Yours is pending when the project ready-for-review label (Settings →
- * Projects) is on the PR; if that label is unset, a published PR counts.
- * Without a viewer login, pending and review stay off so someone else's PR
- * is not labeled as yours. New, approved, and merged do not need the login.
- */
-export function classifyWorktreeListBadges(
-  group: WorktreeListBadgeThread[],
-  viewerLogin = '',
-  reviewLabel = '',
-): WorktreeListBadge[] {
-  if (group.length === 0 || group.some((t) => t.cowboy)) return [];
-
-  if (group.some((t) => isMergedPrState(t.prUrl, t.prState))) {
-    return [listBadge('merged', 'Merged')];
-  }
-  if (group.some((t) => isApprovedOpenPr(t))) {
-    return [listBadge('approved', 'Approved, not merged')];
-  }
-
-  const open = group.filter((t) => isOpenPrState(t.prUrl, t.prState));
-  if (open.length === 0) {
-    if (group.some((t) => isClosedPrState(t.prUrl, t.prState))) return [];
-    return [listBadge('new', 'No pull request')];
-  }
-
-  const ownership = classifyWorktreeOwnership(group, viewerLogin);
-  if (ownership === 'reviewing') {
-    return [listBadge('review', "Someone else's PR")];
-  }
-
-  // Without a viewer login we cannot tell mine vs reviewing, so skip
-  // pending and draft — an empty login would badge someone else's PR as yours.
-  if (!normalizeViewerLogin(viewerLogin)) return [];
-
-  if (!open.some((t) => !t.prIsDraft)) {
-    return [listBadge('draft', 'Draft pull request')];
-  }
-
-  const readyLabel = reviewLabel.trim();
-  const inReview = readyLabel ? labelsInclude(groupPrLabels(group), readyLabel) : true;
-  if (!inReview) return [];
-
-  return [listBadge('pending', 'Waiting for review')];
-}
+export {
+  classifyWorktreeListBadges,
+  reviewLabelForRepo,
+  type WorktreeListBadge,
+  type WorktreeListBadgeId,
+  type WorktreeListBadgeThread,
+} from './worktree-list-badges.js';
 
 export { visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus } from './agent-block-view.js';
 

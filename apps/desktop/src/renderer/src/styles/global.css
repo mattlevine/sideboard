@@ -11154,6 +11154,22 @@ body:has(.update-banner) .team-toast-stack {
   color: #d2a8ff;
 }
 
+.board-badge.has-conflict {
+  position: relative;
+}
+
+.board-badge-conflict {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--err);
+  box-shadow: 0 0 0 1.5px var(--bg);
+  pointer-events: none;
+}
+
 .board-row .thread-title {
   display: flex;
   align-items: center;

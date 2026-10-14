@@ -199,6 +199,7 @@ export interface PhoneWorktreeBadge {
   id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
   label: string;
   title: string;
+  conflict?: boolean;
 }
 
 export interface PhoneWorktree {
@@ -206,7 +207,6 @@ export interface PhoneWorktree {
   chats: PhoneChatSummary[];
   /** Shared labels for this checkout. Omitted when the workspace has none. */
   tags?: string[];
-  /** Path-to-merge pill: new, draft, pending, review, approved, or merged. */
   badge?: PhoneWorktreeBadge;
 }
 
@@ -561,7 +561,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(badge
-            ? { badge: { id: badge.id, label: badge.label, title: badge.title } }
+            ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}) } }
             : {}),
         };
       }),

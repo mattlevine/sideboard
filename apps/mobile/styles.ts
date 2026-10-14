@@ -172,10 +172,22 @@ export const styles = StyleSheet.create({
   projectName: { flex: 1, color: palette.text, fontSize: 16, fontWeight: '600' },
   worktreeName: { flexShrink: 1, color: palette.secondary, fontSize: 13 },
   prBadge: {
+    position: 'relative',
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 7,
     paddingVertical: 1,
+  },
+  prBadgeConflictDot: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: palette.err,
+    borderWidth: 1.5,
+    borderColor: palette.bg,
   },
   prBadgeNew: {
     borderColor: palette.border,

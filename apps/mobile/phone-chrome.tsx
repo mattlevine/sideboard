@@ -18,7 +18,12 @@ export type PhoneChat = {
 
 export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
 
-export type PhonePrBadge = { id: PhonePrBadgeId; label: string; title: string };
+export type PhonePrBadge = {
+  id: PhonePrBadgeId;
+  label: string;
+  title: string;
+  conflict?: boolean;
+};
 
 const PHONE_PR_BADGE_IDS = new Set<PhonePrBadgeId>([
   'new',
@@ -304,7 +309,8 @@ export function phonePrBadge(value: unknown): PhonePrBadge | undefined {
   const id = badge.id as PhonePrBadgeId;
   const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : id;
   const title = typeof badge.title === 'string' && badge.title.trim() ? badge.title.trim() : label;
-  return { id, label, title };
+  const conflict = (value as { conflict?: unknown }).conflict === true;
+  return conflict ? { id, label, title, conflict } : { id, label, title };
 }
 
 export function PrBadge({ badge }: { badge: PhonePrBadge }) {
@@ -312,6 +318,7 @@ export function PrBadge({ badge }: { badge: PhonePrBadge }) {
   return (
     <View style={[styles.prBadge, tone.box]} accessibilityLabel={badge.title}>
       <Text style={[styles.prBadgeText, tone.text]}>{badge.label}</Text>
+      {badge.conflict ? <View style={styles.prBadgeConflictDot} /> : null}
     </View>
   );
 }
