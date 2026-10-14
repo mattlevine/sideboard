@@ -11154,6 +11154,12 @@ body:has(.update-banner) .team-toast-stack {
   color: #d2a8ff;
 }
 
+.board-badge.is-error {
+  border-color: color-mix(in srgb, var(--err) 55%, var(--border));
+  background: color-mix(in srgb, var(--err) 14%, var(--bg));
+  color: var(--err);
+}
+
 .board-badge.has-conflict {
   position: relative;
 }

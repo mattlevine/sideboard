@@ -269,6 +269,7 @@ describe('phone orchestration chats', () => {
       prAuthorLogin: 'matt',
       prLabels: ['eng-review'],
       prMergeable: 'CONFLICTING',
+      prChecksFailed: true,
     });
     const theirs = createEmptyThread({
       title: 'theirs',
@@ -307,6 +308,7 @@ describe('phone orchestration chats', () => {
       label: 'pending',
       title: 'Waiting for review · merge conflicts',
       conflict: true,
+      error: { label: 'failing', title: 'Checks failing' },
     });
     expect(badge(theirs.id)).toEqual({
       id: 'review',
@@ -324,11 +326,17 @@ describe('phone orchestration chats', () => {
       prNumber: '4',
       prStatus: 'Merge conflicts',
     });
-    expect(
-      listPhoneSidebar()
-        .projects.find((row) => row.path === '/tmp/sideboard')
-        ?.worktrees.every((worktree) => worktree.badge == null),
-    ).toBe(true);
+    const unlabeled = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard');
+    const quiet = (id: string) =>
+      unlabeled?.worktrees.find((worktree) => worktree.chats.some((chat) => chat.id === id))?.badge;
+    expect(quiet(mine.id)).toEqual({
+      id: 'error',
+      label: 'failing',
+      title: 'Checks failing · merge conflicts',
+      conflict: true,
+    });
+    expect(quiet(theirs.id)).toBeUndefined();
+    expect(quiet(draft.id)).toBeUndefined();
   });
 
   it('adds an agent onto an existing project worktree', () => {

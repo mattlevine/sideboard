@@ -1,4 +1,4 @@
-import { classifyPrMergeIssue } from '../git/pr-gates.js';
+import { classifyPrMergeIssue, mergeStateSuggestsCheckFailure } from '../git/pr-gates.js';
 import type { Thread } from '../types/thread.js';
 import { isApprovedOpenPr, isMergedPrState, isOpenPrState } from './pr-state.js';
 import {
@@ -12,7 +12,14 @@ export type WorktreeListBadgeId =
   | 'pending'
   | 'review'
   | 'approved'
-  | 'merged';
+  | 'merged'
+  | 'error';
+
+/** Checks failing or changes requested. Drawn as its own red pill. */
+export type WorktreeListBadgeError = {
+  label: string;
+  title: string;
+};
 
 export type WorktreeListBadge = {
   id: WorktreeListBadgeId;
@@ -21,6 +28,7 @@ export type WorktreeListBadge = {
   mod: string;
   /** Open pull request has merge conflicts. Drawn as a dot on the pill. */
   conflict?: boolean;
+  error?: WorktreeListBadgeError;
 };
 
 export type WorktreeListBadgeThread = Pick<
@@ -37,6 +45,7 @@ export type WorktreeListBadgeThread = Pick<
   | 'prMergeable'
   | 'prMergeStateStatus'
   | 'prIsInMergeQueue'
+  | 'prChecksFailed'
 >;
 
 function labelsInclude(
@@ -123,6 +132,56 @@ function hasMergeConflict(thread: WorktreeListBadgeThread): boolean {
   );
 }
 
+/** Open PRs only. Behind-base is an update, not a failure. Merge queue hides both. */
+function groupPrError(group: WorktreeListBadgeThread[]): WorktreeListBadgeError | undefined {
+  const open = group.filter(
+    (thread) => isOpenPrState(thread.prUrl, thread.prState) && !thread.prIsInMergeQueue,
+  );
+  if (
+    open.some(
+      (thread) =>
+        thread.prChecksFailed ||
+        mergeStateSuggestsCheckFailure({
+          mergeStateStatus: thread.prMergeStateStatus ?? null,
+          reviewDecision: thread.prReviewDecision ?? null,
+        }),
+    )
+  ) {
+    return { label: 'failing', title: 'Checks failing' };
+  }
+  if (
+    open.some(
+      (thread) =>
+        !thread.prIsDraft &&
+        (thread.prReviewDecision ?? '').trim().toUpperCase() === 'CHANGES_REQUESTED',
+    )
+  ) {
+    return { label: 'changes', title: 'Changes requested' };
+  }
+  return undefined;
+}
+
+function withPrError(
+  badges: WorktreeListBadge[],
+  error: WorktreeListBadgeError | undefined,
+  conflict: boolean,
+): WorktreeListBadge[] {
+  if (!error) return badges;
+  const [first] = badges;
+  if (!first) {
+    return [
+      {
+        id: 'error',
+        label: error.label,
+        title: conflict ? `${error.title} · merge conflicts` : error.title,
+        mod: 'is-error',
+        ...(conflict ? { conflict: true } : {}),
+      },
+    ];
+  }
+  return [{ ...first, error }];
+}
+
 /**
  * Sidebar / phone / board pills for where a checkout is on the path to merge.
  * Cowboy worktrees keep the separate cowboy badge. A closed PR stays unlabeled.
@@ -131,11 +190,13 @@ function hasMergeConflict(thread: WorktreeListBadgeThread): boolean {
  * waiting for review. Review is someone else's open PR, including their drafts.
  * Approved is an open non-draft PR GitHub has approved. Merged is merged.
  * A red dot on the pill means that open pull request has merge conflicts.
+ * A red pill means another blocker: checks failing, or changes requested.
  *
  * Yours is pending when the project ready-for-review label (Settings →
  * Projects) is on the PR; if that label is unset, a published PR counts.
  * Without a viewer login, pending and review stay off so someone else's PR
- * is not labeled as yours. New, approved, and merged do not need the login.
+ * is not labeled as yours. Failing checks and requested changes can still
+ * show. New, approved, and merged do not need the login.
  */
 export function classifyWorktreeListBadges(
   group: WorktreeListBadgeThread[],
@@ -148,32 +209,34 @@ export function classifyWorktreeListBadges(
     return [listBadge('merged', 'Merged')];
   }
   const conflict = group.some(hasMergeConflict);
+  const error = groupPrError(group);
+  const finish = (badges: WorktreeListBadge[]) => withPrError(badges, error, conflict);
   if (group.some((t) => isApprovedOpenPr(t))) {
-    return [listBadge('approved', 'Approved, not merged', conflict)];
+    return finish([listBadge('approved', 'Approved, not merged', conflict)]);
   }
 
   const open = group.filter((t) => isOpenPrState(t.prUrl, t.prState));
   if (open.length === 0) {
     if (group.some((t) => isClosedPrState(t.prUrl, t.prState))) return [];
-    return [listBadge('new', 'No pull request')];
+    return finish([listBadge('new', 'No pull request')]);
   }
 
   const ownership = classifyWorktreeOwnership(group, viewerLogin);
   if (ownership === 'reviewing') {
-    return [listBadge('review', "Someone else's PR", conflict)];
+    return finish([listBadge('review', "Someone else's PR", conflict)]);
   }
 
   // Without a viewer login we cannot tell mine vs reviewing, so skip
   // pending and draft — an empty login would badge someone else's PR as yours.
-  if (!normalizeViewerLogin(viewerLogin)) return [];
+  if (!normalizeViewerLogin(viewerLogin)) return finish([]);
 
   if (!open.some((t) => !t.prIsDraft)) {
-    return [listBadge('draft', 'Draft pull request', conflict)];
+    return finish([listBadge('draft', 'Draft pull request', conflict)]);
   }
 
   const readyLabel = reviewLabel.trim();
   const inReview = readyLabel ? labelsInclude(groupPrLabels(group), readyLabel) : true;
-  if (!inReview) return [];
+  if (!inReview) return finish([]);
 
-  return [listBadge('pending', 'Waiting for review', conflict)];
+  return finish([listBadge('pending', 'Waiting for review', conflict)]);
 }

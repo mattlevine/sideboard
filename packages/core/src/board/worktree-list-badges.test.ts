@@ -271,20 +271,20 @@ describe('classifyWorktreeListBadges', () => {
       conflict: true,
       title: 'Approved, not merged · merge conflicts',
     });
-    expect(
-      classifyWorktreeListBadges(
-        [
-          thread({
-            id: 'behind',
-            prUrl: 'https://github.com/acme/app/pull/9',
-            prState: 'OPEN',
-            prAuthorLogin: 'matt',
-            prMergeStateStatus: 'BEHIND',
-          }),
-        ],
-        'matt',
-      )[0]?.conflict,
-    ).toBeUndefined();
+    const behind = classifyWorktreeListBadges(
+      [
+        thread({
+          id: 'behind',
+          prUrl: 'https://github.com/acme/app/pull/9',
+          prState: 'OPEN',
+          prAuthorLogin: 'matt',
+          prMergeStateStatus: 'BEHIND',
+        }),
+      ],
+      'matt',
+    )[0];
+    expect(behind?.conflict).toBeUndefined();
+    expect(behind?.error).toBeUndefined();
     expect(
       classifyWorktreeListBadges(
         [
@@ -299,6 +299,124 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
       )[0]?.conflict,
+    ).toBeUndefined();
+  });
+
+  it('adds a red badge for failing checks and requested changes', () => {
+    const failing = classifyWorktreeListBadges(
+      [
+        thread({
+          id: 'ci',
+          prUrl: 'https://github.com/acme/app/pull/12',
+          prState: 'OPEN',
+          prAuthorLogin: 'matt',
+          prReviewDecision: 'APPROVED',
+          prChecksFailed: true,
+          prMergeable: 'CONFLICTING',
+        }),
+      ],
+      'matt',
+    );
+    expect(failing.map((badge) => badge.label)).toEqual(['approved']);
+    expect(failing[0]).toMatchObject({
+      conflict: true,
+      error: { label: 'failing', title: 'Checks failing' },
+    });
+
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'unstable',
+            prUrl: 'https://github.com/acme/app/pull/13',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prReviewDecision: 'APPROVED',
+            prMergeStateStatus: 'UNSTABLE',
+          }),
+        ],
+        'matt',
+      )[0]?.error,
+    ).toEqual({ label: 'failing', title: 'Checks failing' });
+
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'changes',
+            prUrl: 'https://github.com/acme/app/pull/14',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prReviewDecision: 'CHANGES_REQUESTED',
+            prLabels: ['eng-review'],
+          }),
+        ],
+        'matt',
+        'eng-review',
+      )[0],
+    ).toMatchObject({
+      id: 'pending',
+      error: { label: 'changes', title: 'Changes requested' },
+    });
+
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'both',
+            prUrl: 'https://github.com/acme/app/pull/15',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prReviewDecision: 'CHANGES_REQUESTED',
+            prChecksFailed: true,
+            prLabels: ['eng-review'],
+          }),
+        ],
+        'matt',
+        'eng-review',
+      )[0]?.error?.label,
+    ).toBe('failing');
+
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'hidden',
+            prUrl: 'https://github.com/acme/app/pull/16',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prChecksFailed: true,
+            prMergeable: 'CONFLICTING',
+          }),
+        ],
+        '',
+        'eng-review',
+      ),
+    ).toEqual([
+      {
+        id: 'error',
+        label: 'failing',
+        title: 'Checks failing · merge conflicts',
+        mod: 'is-error',
+        conflict: true,
+      },
+    ]);
+
+    expect(
+      classifyWorktreeListBadges(
+        [
+          thread({
+            id: 'queued',
+            prUrl: 'https://github.com/acme/app/pull/17',
+            prState: 'OPEN',
+            prAuthorLogin: 'matt',
+            prReviewDecision: 'APPROVED',
+            prChecksFailed: true,
+            prIsInMergeQueue: true,
+          }),
+        ],
+        'matt',
+      )[0]?.error,
     ).toBeUndefined();
   });
 

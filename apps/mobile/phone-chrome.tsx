@@ -16,13 +16,14 @@ export type PhoneChat = {
   prStatus?: string;
 };
 
-export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
+export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged' | 'error';
 
 export type PhonePrBadge = {
   id: PhonePrBadgeId;
   label: string;
   title: string;
   conflict?: boolean;
+  error?: { label: string; title: string };
 };
 
 const PHONE_PR_BADGE_IDS = new Set<PhonePrBadgeId>([
@@ -32,6 +33,7 @@ const PHONE_PR_BADGE_IDS = new Set<PhonePrBadgeId>([
   'review',
   'approved',
   'merged',
+  'error',
 ]);
 
 export type PhoneHistoryChat = {
@@ -298,6 +300,7 @@ const PR_BADGE_TONE: Record<PhonePrBadgeId, { box: ViewStyle; text: TextStyle }>
   review: { box: styles.prBadgeReview, text: styles.prBadgeTextReview },
   approved: { box: styles.prBadgeApproved, text: styles.prBadgeTextApproved },
   merged: { box: styles.prBadgeMerged, text: styles.prBadgeTextMerged },
+  error: { box: styles.prBadgeError, text: styles.prBadgeTextError },
 };
 
 export function phonePrBadge(value: unknown): PhonePrBadge | undefined {
@@ -310,16 +313,39 @@ export function phonePrBadge(value: unknown): PhonePrBadge | undefined {
   const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : id;
   const title = typeof badge.title === 'string' && badge.title.trim() ? badge.title.trim() : label;
   const conflict = (value as { conflict?: unknown }).conflict === true;
-  return conflict ? { id, label, title, conflict } : { id, label, title };
+  const error = phonePrBadgeError((value as { error?: unknown }).error);
+  return {
+    id,
+    label,
+    title,
+    ...(conflict ? { conflict } : {}),
+    ...(error ? { error } : {}),
+  };
+}
+
+function phonePrBadgeError(value: unknown): PhonePrBadge['error'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const row = value as { label?: unknown; title?: unknown };
+  if (typeof row.label !== 'string' || !row.label.trim()) return undefined;
+  const label = row.label.trim();
+  const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : label;
+  return { label, title };
 }
 
 export function PrBadge({ badge }: { badge: PhonePrBadge }) {
   const tone = PR_BADGE_TONE[badge.id];
   return (
-    <View style={[styles.prBadge, tone.box]} accessibilityLabel={badge.title}>
-      <Text style={[styles.prBadgeText, tone.text]}>{badge.label}</Text>
-      {badge.conflict ? <View style={styles.prBadgeConflictDot} /> : null}
-    </View>
+    <>
+      <View style={[styles.prBadge, tone.box]} accessibilityLabel={badge.title}>
+        <Text style={[styles.prBadgeText, tone.text]}>{badge.label}</Text>
+        {badge.conflict ? <View style={styles.prBadgeConflictDot} /> : null}
+      </View>
+      {badge.error ? (
+        <View style={[styles.prBadge, styles.prBadgeError]} accessibilityLabel={badge.error.title}>
+          <Text style={[styles.prBadgeText, styles.prBadgeTextError]}>{badge.error.label}</Text>
+        </View>
+      ) : null}
+    </>
   );
 }
 
