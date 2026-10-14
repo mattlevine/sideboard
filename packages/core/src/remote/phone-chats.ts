@@ -132,14 +132,14 @@ const MAX_PHONE_FILE_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3);
 const MAX_PHONE_FILES_CHARS = Math.ceil((20 * 1024 * 1024 * 4) / 3);
 const MAX_DICTATION_CHARS = Math.ceil((12 * 1024 * 1024 * 4) / 3);
 
-/** Archived chat as Settings → History shows it: where it lived, and which agent. */
+/** Archived chat as Settings → History shows it: where it lived, which agent, and the checkout name. */
 export interface PhoneHistoryChat {
   id: string;
   title: string;
   preview: string;
   updatedAt: string;
   where: string;
-  agent: string;
+  agent: string; workspace?: string;
 }
 
 export interface PhoneHistoryPage {

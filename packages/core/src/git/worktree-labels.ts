@@ -273,6 +273,26 @@ export function agentNicknameFromWorktreePath(worktreePath: string): string | nu
   return teamNameFromSlug(dir);
 }
 
+/**
+ * Short workspace name for History. A club folder shows its nickname; any other
+ * checkout shows the folder. Orchestration and a checkout that is the repo
+ * itself have no separate name.
+ */
+export function workspaceNameLabel(thread: {
+  worktreePath?: string | null;
+  repoPath?: string | null;
+  sourceType?: string | null;
+}): string | null {
+  if (thread.sourceType === 'orchestration' || thread.repoPath === '__global__') return null;
+  const path = thread.worktreePath?.trim() ?? '';
+  if (!path) return null;
+  const dir = worktreeNameFromPath(path);
+  if (!dir || dir === '/' || dir === '.') return null;
+  const repo = thread.repoPath?.trim() ?? '';
+  if (repo && worktreeNameFromPath(repo).toLowerCase() === dir.toLowerCase()) return null;
+  return agentNicknameFromWorktreePath(path) ?? dir;
+}
+
 /** PR / real git branch / parent row — never the nested agent’s own name. */
 export function worktreeIdentityTitles(
   thread: {

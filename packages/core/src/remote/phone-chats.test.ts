@@ -245,7 +245,12 @@ describe('phone orchestration chats', () => {
     ]);
     expect(openPhoneChat(thread.id)?.chat.id).toBe(thread.id);
     expect(archivePhoneChat(thread.id)).toBe(true);
-    expect(listPhoneHistory().chats[0]).toMatchObject({ id: thread.id, where: 'sideboard', agent: 'claude' });
+    expect(listPhoneHistory().chats[0]).toMatchObject({
+      id: thread.id,
+      where: 'sideboard',
+      agent: 'claude',
+      workspace: 'sideboard-ajax',
+    });
     expect(listPhoneSidebar().projects.some((row) => row.path === '/tmp/sideboard')).toBe(false);
   });
 

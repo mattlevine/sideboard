@@ -1,4 +1,5 @@
 import { threadsSharingWorktree } from '../threads/chat-tabs.js';
+import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { findThreadByRef, readThread } from '../store/thread-store.js';
 import { SIDEBOARD_THREAD_ID_ENV } from '../mcp/profile.js';
@@ -101,14 +102,17 @@ function skipReason(opts: {
   child: Pick<Thread, 'parentThreadId'>;
   parent: Thread | null | undefined;
 }): string {
-  if (!opts.child.parentThreadId) {
+  const parentId = opts.child.parentThreadId?.trim();
+  if (!parentId) {
     return 'This chat has no orchestrator parent. notify_orchestrator is for worktree children of a Global chat.';
   }
-  if (!opts.parent) {
-    return 'Parent orchestration chat was not found.';
-  }
-  if (opts.parent.status === 'archived') {
+  if (opts.parent?.status === 'archived') {
     return 'Parent orchestration chat is archived.';
+  }
+  if (!opts.parent) {
+    const immediate = readThread(parentId);
+    if (!immediate) return 'Parent orchestration chat was not found.';
+    return 'Parent is not a Global orchestration chat.';
   }
   if (!isOrchestratorThread(opts.parent)) {
     return 'Parent is not a Global orchestration chat.';
@@ -118,9 +122,11 @@ function skipReason(opts: {
 
 /**
  * Wake the parent Global chat so it notices input-required / blocked without
- * polling `wait_for_turn`. Always queues (`followUp: 'queue'`) — never steers
- * an in-flight coordinator turn. `input-required` is once per child per process
- * so `ask_user` plus an explicit call do not double-wake.
+ * polling `wait_for_turn`. Walks parent links so a forked agent whose parent
+ * is a sibling still reaches the orchestrator. Always queues
+ * (`followUp: 'queue'`) — never steers an in-flight coordinator turn.
+ * `input-required` is once per child per process so `ask_user` plus an
+ * explicit call do not double-wake.
  */
 export async function notifyOrchestrator(input: {
   child: Thread;
@@ -128,9 +134,7 @@ export async function notifyOrchestrator(input: {
   message: string;
   send: NotifyOrchestratorSend;
 }): Promise<NotifyOrchestratorResult> {
-  const parent = input.child.parentThreadId
-    ? readThread(input.child.parentThreadId)
-    : null;
+  const parent = connectedOrchestrator(input.child, (id) => readThread(id));
   if (!shouldNotifyOrchestrator({ child: input.child, parent })) {
     return { ok: false, error: skipReason({ child: input.child, parent }) };
   }

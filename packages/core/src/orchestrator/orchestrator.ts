@@ -143,6 +143,7 @@ import {
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
 import { enqueueByKey } from '../util/enqueue-by-key.js';
+import { archiveWorkspaceAgents, restoreWorkspaceAgents } from './workspace-archive.js';
 import { createLineCoalescer } from '../util/line-coalescer.js';
 import { git } from '../git/run.js';
 import { withRepoGitLock } from '../git/repo-git-lock.js';
@@ -226,6 +227,7 @@ import {
   formatPrGateDirective,
   formatRenameBranchDirective,
   formatUiReminder,
+  connectedOrchestratorTurnReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
   issueTicketFromThread,
@@ -1567,6 +1569,7 @@ export class Orchestrator {
     const turnReminders =
       [
         worktreeReminder,
+        connectedOrchestratorTurnReminder(thread, (id) => readThread(id)),
         optionalServicesReminder,
         issueToolsReminder,
         reviewWriteGateReminder,
@@ -3637,18 +3640,15 @@ export class Orchestrator {
     return threadsSharingWorktree(thread.worktreePath);
   }
 
-  /**
-   * Last-tab teardown must see siblings already archived. Serialize per
-   * worktree so parallel archive/purge of sibling tabs still removes once.
-   */
-  private enqueueWorktreeTeardown<T>(
-    thread: Thread,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const key = isGlobalThread(thread)
-      ? `archive:global:${thread.id}`
-      : `archive:wt:${normalizeWorktreePath(thread.worktreePath)}`;
+  private enqueueWorktreeTeardown<T>(thread: Thread, fn: () => Promise<T>): Promise<T> {
+    const key = isGlobalThread(thread) ? `archive:global:${thread.id}` : `archive:wt:${normalizeWorktreePath(thread.worktreePath)}`;
     return enqueueByKey(key, fn);
+  }
+  archiveWorkspace(threadRef: string): Promise<Thread[]> {
+    return archiveWorkspaceAgents(this, threadRef);
+  }
+  restoreWorkspace(threadRef: string): Promise<Thread[]> {
+    return restoreWorkspaceAgents(this, threadRef);
   }
 
   async archive(threadRef: string): Promise<Thread> {

@@ -1442,7 +1442,7 @@ export default function App() {
             style={styles.input}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="Filter by title, project, or agent"
+            placeholder="Filter by title, workspace, project, or agent"
             placeholderTextColor={palette.muted}
             value={historyQuery}
             onChangeText={onHistoryQuery}

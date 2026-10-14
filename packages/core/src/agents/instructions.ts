@@ -8,6 +8,8 @@ import {
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
+import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
 import type { DevPreview } from '../hook/dev-preview.js';
 import type { ActiveRun, Thread } from '../types/thread.js';
@@ -169,6 +171,29 @@ export function formatWorktreeDirective(
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));
   return lines.join('\n');
+}
+
+/**
+ * Every worktree turn: which orchestration chat this agent is connected to.
+ * Null when the chat was opened on its own.
+ */
+export function formatConnectedOrchestratorReminder(
+  parent: Pick<Thread, 'id' | 'title' | 'status' | 'agent'> | null | undefined,
+): string | null {
+  if (!parent) return null;
+  const title = parent.title?.trim() || 'Orchestration';
+  const archived =
+    parent.status === 'archived' ? ' This orchestrator is archived.' : '';
+  return `Connected orchestrator: "${title}" (${parent.agent}, ${parent.status}). Open [${title}](sideboard://chat/${parent.id}). notify_orchestrator wakes that chat. You are not the orchestrator.${archived}`;
+}
+
+/** Worktree turn reminder. Null for Brightsy and for orchestration chats. */
+export function connectedOrchestratorTurnReminder(
+  thread: Thread,
+  find: (id: string) => Thread | null | undefined,
+): string | null {
+  if (thread.agent === 'brightsy' || isOrchestratorThread(thread)) return null;
+  return formatConnectedOrchestratorReminder(connectedOrchestrator(thread, find));
 }
 
 /** Short isolation line on every worktree turn (survives CLI resume). */

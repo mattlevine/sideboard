@@ -42,6 +42,7 @@ describe('injected-mcp', () => {
       'mcp__sideboard__run_dev_script',
       'mcp__sideboard__stop_dev_script',
       'mcp__sideboard__get_run_log',
+      'mcp__sideboard__get_orchestrator',
       'mcp__sideboard__notify_orchestrator',
       'mcp__sideboard__set_workspace_tags',
       'mcp__sideboard__get_viewer_context',

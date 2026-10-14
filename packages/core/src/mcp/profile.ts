@@ -81,6 +81,7 @@ export const WORKTREE_MCP_TOOLS = [
   'run_dev_script',
   'stop_dev_script',
   'get_run_log',
+  'get_orchestrator',
   'notify_orchestrator',
   'set_workspace_tags',
   'get_viewer_context',

@@ -25,6 +25,7 @@ One project has many workspaces. One workspace has many chats (sibling tabs shar
 - **New workspace** when the work needs its own files or PR (ticket, PR, named branch, or a fork that must not share dirty files). A ticket/PR/named branch may have only one live workspace — `create_workspace` returns that checkout (`alreadyStarted`). Add another agent on it with `fork_chat`.
 - **Add agent** / `fork_chat` when a second conversation should share the same files (review, second harness, provider switch).
 - **Agent** is *which CLI* runs the chat, not the name of the workspace.
+- **Archive a workspace** (`archive_workspace`) when the checkout should leave Home. **Archive one agent** (`archive_chat`) when other agents should keep the files. `list_archive` is Settings → History. `restore_workspace` / `restore_chat` bring a checkout or one agent back.
 
 ## Git vs product
 
@@ -53,8 +54,12 @@ Do not call this Slack. Sideboard no longer uses a Slack app. The public page at
 | List / read chats | `list_chats` / `get_chat` |
 | Steer a chat | `send_to_chat` |
 | Wait for a turn | `wait_for_turn` / `get_turn_result` |
-| Stop / archive / restore a chat | `stop_chat` / `archive_chat` / `restore_chat` |
+| Stop a chat | `stop_chat` |
+| Browse Settings → History | `list_archive` |
+| Archive / restore a workspace | `archive_workspace` / `restore_workspace` |
+| Archive / restore one agent | `archive_chat` / `restore_chat` |
 | New checkout + chat (copy transcript) | `fork_workspace` |
 | New chat on the same workspace | `fork_chat` |
+| This agent's orchestrator | `get_orchestrator` (worktree agents) |
 | Parent orchestration chat | `parentChatId` (legacy `parentThreadId` still accepted) |
 | Schedule target | `chatId` or `chatId=self` (legacy `threadId` still accepted) |
