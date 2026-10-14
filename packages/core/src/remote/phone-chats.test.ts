@@ -306,9 +306,8 @@ describe('phone orchestration chats', () => {
     expect(badge(mine.id)).toEqual({
       id: 'pending',
       label: 'pending',
-      title: 'Waiting for review · merge conflicts',
+      title: 'Waiting for review · checks failing · merge conflicts',
       conflict: true,
-      error: { label: 'failing', title: 'Checks failing' },
     });
     expect(badge(theirs.id)).toEqual({
       id: 'review',
@@ -329,12 +328,7 @@ describe('phone orchestration chats', () => {
     const unlabeled = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard');
     const quiet = (id: string) =>
       unlabeled?.worktrees.find((worktree) => worktree.chats.some((chat) => chat.id === id))?.badge;
-    expect(quiet(mine.id)).toEqual({
-      id: 'error',
-      label: 'failing',
-      title: 'Checks failing · merge conflicts',
-      conflict: true,
-    });
+    expect(quiet(mine.id)).toBeUndefined();
     expect(quiet(theirs.id)).toBeUndefined();
     expect(quiet(draft.id)).toBeUndefined();
   });

@@ -196,11 +196,11 @@ export type PhoneControlRequest =
   | { op: 'media'; chatId: string; path: string };
 
 export interface PhoneWorktreeBadge {
-  id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged' | 'error';
+  id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
   label: string;
   title: string;
+  /** Red dot: merge conflicts, failing checks, or changes requested. */
   conflict?: boolean;
-  error?: { label: string; title: string };
 }
 
 export interface PhoneWorktree {
@@ -561,7 +561,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(badge
-            ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}), ...(badge.error ? { error: badge.error } : {}) } }
+            ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}) } }
             : {}),
         };
       }),

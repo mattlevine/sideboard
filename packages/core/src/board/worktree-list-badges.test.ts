@@ -284,7 +284,6 @@ describe('classifyWorktreeListBadges', () => {
       'matt',
     )[0];
     expect(behind?.conflict).toBeUndefined();
-    expect(behind?.error).toBeUndefined();
     expect(
       classifyWorktreeListBadges(
         [
@@ -302,7 +301,7 @@ describe('classifyWorktreeListBadges', () => {
     ).toBeUndefined();
   });
 
-  it('adds a red badge for failing checks and requested changes', () => {
+  it('marks failing checks and requested changes with the same red dot', () => {
     const failing = classifyWorktreeListBadges(
       [
         thread({
@@ -320,7 +319,7 @@ describe('classifyWorktreeListBadges', () => {
     expect(failing.map((badge) => badge.label)).toEqual(['approved']);
     expect(failing[0]).toMatchObject({
       conflict: true,
-      error: { label: 'failing', title: 'Checks failing' },
+      title: 'Approved, not merged · checks failing · merge conflicts',
     });
 
     expect(
@@ -336,8 +335,12 @@ describe('classifyWorktreeListBadges', () => {
           }),
         ],
         'matt',
-      )[0]?.error,
-    ).toEqual({ label: 'failing', title: 'Checks failing' });
+      )[0],
+    ).toMatchObject({
+      id: 'approved',
+      conflict: true,
+      title: 'Approved, not merged · checks failing',
+    });
 
     expect(
       classifyWorktreeListBadges(
@@ -356,7 +359,8 @@ describe('classifyWorktreeListBadges', () => {
       )[0],
     ).toMatchObject({
       id: 'pending',
-      error: { label: 'changes', title: 'Changes requested' },
+      conflict: true,
+      title: 'Waiting for review · changes requested',
     });
 
     expect(
@@ -374,8 +378,8 @@ describe('classifyWorktreeListBadges', () => {
         ],
         'matt',
         'eng-review',
-      )[0]?.error?.label,
-    ).toBe('failing');
+      )[0]?.title,
+    ).toBe('Waiting for review · checks failing');
 
     expect(
       classifyWorktreeListBadges(
@@ -392,15 +396,7 @@ describe('classifyWorktreeListBadges', () => {
         '',
         'eng-review',
       ),
-    ).toEqual([
-      {
-        id: 'error',
-        label: 'failing',
-        title: 'Checks failing · merge conflicts',
-        mod: 'is-error',
-        conflict: true,
-      },
-    ]);
+    ).toEqual([]);
 
     expect(
       classifyWorktreeListBadges(
@@ -416,7 +412,7 @@ describe('classifyWorktreeListBadges', () => {
           }),
         ],
         'matt',
-      )[0]?.error,
+      )[0]?.conflict,
     ).toBeUndefined();
   });
 
