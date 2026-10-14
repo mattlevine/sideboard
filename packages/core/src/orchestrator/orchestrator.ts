@@ -142,6 +142,8 @@ import {
   normalizeWorktreePath,
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
+import { archivedAgentsOnCheckout } from '../archive/fleet-archive.js';
+import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { enqueueByKey } from '../util/enqueue-by-key.js';
 import { createLineCoalescer } from '../util/line-coalescer.js';
 import { git } from '../git/run.js';
@@ -226,6 +228,7 @@ import {
   formatPrGateDirective,
   formatRenameBranchDirective,
   formatUiReminder,
+  formatConnectedOrchestratorReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
   issueTicketFromThread,
@@ -1531,6 +1534,12 @@ export class Orchestrator {
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? formatWorktreeReminder()
         : null;
+    const connectedOrchestratorReminder =
+      thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
+        ? formatConnectedOrchestratorReminder(
+            connectedOrchestrator(thread, (id) => readThread(id)),
+          )
+        : null;
     const optionalServicesReminder =
       thread.agent !== 'brightsy' && !isOrchestratorThread(thread)
         ? await formatOptionalServicesReminderForTurn(loadAppSettings().integrations)
@@ -1567,6 +1576,7 @@ export class Orchestrator {
     const turnReminders =
       [
         worktreeReminder,
+        connectedOrchestratorReminder,
         optionalServicesReminder,
         issueToolsReminder,
         reviewWriteGateReminder,
@@ -3649,6 +3659,62 @@ export class Orchestrator {
       ? `archive:global:${thread.id}`
       : `archive:wt:${normalizeWorktreePath(thread.worktreePath)}`;
     return enqueueByKey(key, fn);
+  }
+
+  /**
+   * Archive every live agent on a checkout. The last one removes the worktree
+   * (cowboy keeps the project folder). Orchestration chats are agents.
+   */
+  async archiveWorkspace(threadRef: string): Promise<Thread[]> {
+    const thread = this.requireThread(threadRef);
+    if (isOrchestratorThread(thread)) {
+      throw new Error('Orchestration chats are agents, not workspaces. Use archive_chat.');
+    }
+    if (!thread.worktreePath?.trim()) {
+      throw new Error('Chat has no workspace checkout. Use archive_chat.');
+    }
+    const chats = threadsSharingWorktree(thread.worktreePath);
+    if (chats.length === 0) {
+      throw new Error(
+        'That workspace is already archived. Use list_archive, then restore_workspace to bring it back.',
+      );
+    }
+    const archived: Thread[] = [];
+    for (const chat of chats) {
+      archived.push(await this.archive(chat.id));
+    }
+    return archived;
+  }
+
+  /**
+   * Bring every archived agent on a checkout back. Recreates the worktree
+   * when the folder is gone. Skips agents restored earlier so a retry finishes
+   * the rest.
+   */
+  async restoreWorkspace(threadRef: string): Promise<Thread[]> {
+    const thread = this.requireThread(threadRef);
+    if (isOrchestratorThread(thread)) {
+      throw new Error('Orchestration chats are agents, not workspaces. Use restore_chat.');
+    }
+    if (!thread.worktreePath?.trim()) {
+      throw new Error('Chat has no workspace checkout. Use restore_chat.');
+    }
+    const targets = archivedAgentsOnCheckout(
+      listThreads({ includeArchived: true }),
+      thread.worktreePath,
+    );
+    const restored: Thread[] = [];
+    for (const chat of targets) {
+      const latest = readThread(chat.id);
+      if (!latest || latest.status !== 'archived') continue;
+      restored.push(await this.restore(latest.id));
+    }
+    if (restored.length === 0) {
+      throw new Error(
+        'No archived agents on this workspace. list_archive shows what can be restored.',
+      );
+    }
+    return restored;
   }
 
   async archive(threadRef: string): Promise<Thread> {

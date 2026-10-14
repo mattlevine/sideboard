@@ -202,6 +202,10 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).not.toContain('Post this review');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('do not tell the child to comment');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('notify_orchestrator');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('list_archive');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('archive_workspace');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('restore_workspace');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('workspace-live');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('set_workspace_tags');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('same tags');
   });

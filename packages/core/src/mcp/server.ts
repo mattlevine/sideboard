@@ -15,6 +15,7 @@ import {
 import { listIssues } from '../integrations/issues.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
+import { formatFleetArchive, listFleetArchive } from '../archive/fleet-archive.js';
 import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV, shouldRegisterMcpWaitForTurn, worktreeMcpToolNames } from './profile.js';
 import {
@@ -24,7 +25,8 @@ import {
   threadMayPresentPlan,
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
-import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
+import { threadsSharingWorktree, workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
+import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { applyWorkspaceTags, workspaceTagTargetRef } from '../threads/workspace-tags.js';
 import { createOrchChildThread } from './create-orch-child.js';
 import { agentBlockFields, chatBlockedSuffix, stampAskUserBlock, stampNotifyBlock, stampPlanBlock } from '../orchestrator/agent-block.js';
@@ -205,10 +207,10 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_chats',
-    'List chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, blocked: when an agent is waiting on a person, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat.',
+    'List live chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, blocked: when an agent is waiting on a person, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat. Archived workspaces and agents are list_archive, not this list.',
     {},
     async () => {
-      const threads = orch.getThreads(true);
+      const threads = orch.getThreads();
       const lines = threads.map((t) => {
         const repo =
           t.repoPath === GLOBAL_WORKSPACE_ID
@@ -231,7 +233,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of workspaces (New, Draft, Review, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
+    'Home Kanban of workspaces (New, Draft, Review, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
     {
       query: z
         .string()
@@ -742,6 +744,31 @@ export async function startMcpServer(): Promise<void> {
 
   if (worktreeProfile) {
     server.tool(
+      'get_orchestrator',
+      'The orchestration chat this agent is connected to — the parent that lists this workspace among its agents. Returns id, title, status, agent, and a sideboard://chat link. connected is false when this chat was not opened by an orchestrator. notify_orchestrator wakes that chat. You cannot list or steer its other agents from here.',
+      {},
+      async () => {
+        try {
+          const child = resolveNotifyCallerThread();
+          const parent = connectedOrchestrator(child, (id) => orch.getThread(id));
+          if (!parent) return mcpJson({ connected: false, orchestrator: null });
+          return mcpJson({
+            connected: true,
+            orchestrator: {
+              id: parent.id,
+              title: parent.title,
+              status: parent.status,
+              agent: parent.agent,
+              link: `sideboard://chat/${parent.id}`,
+            },
+          });
+        } catch (err) {
+          const text = err instanceof Error ? err.message : String(err);
+          return { content: [{ type: 'text', text }], isError: true };
+        }
+      },
+    );
+    server.tool(
       'notify_orchestrator',
       'Wake the parent Global orchestrator with a short status so it does not have to poll wait_for_turn. Use when you are blocked and the parent may have moved on (missing access, waiting on something the coordinator must handle). The message is shown on the sidebar and board until the next user message in this chat. ask_user already notifies for input-required — do not call this for the same question. Information only: never a git command. Do not use this to steer other worktrees.',
       {
@@ -1160,9 +1187,69 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'list_archive',
+    'Browse Settings → History (archived workspaces and agents), newest first. A workspace row is a checkout with no live agents — it is off Home and list_board. Nested lines are that workspace\'s agents; any of those ids restores the whole checkout. An agent row is an orchestration chat, or one agent archived while its workspace stayed live (workspace-live). kind=agent lists every archived agent, including agents on an archived workspace (workspace-archived). query matches title, branch, repo, agent, ticket, or PR. limit default 40, max 250. Then restore_workspace (whole checkout) or restore_chat (one agent).',
+    {
+      query: z
+        .string()
+        .optional()
+        .describe('Title, branch, repo, agent, ticket, or PR'),
+      kind: z
+        .enum(['all', 'workspace', 'agent'])
+        .optional()
+        .describe('all (default), workspace, or agent'),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(250)
+        .optional()
+        .describe('Page size (default 40, max 250)'),
+    },
+    async ({ query, kind, limit }) => {
+      const view = listFleetArchive(orch.getThreads(true), { query, kind, limit });
+      return { content: [{ type: 'text', text: formatFleetArchive(view) }] };
+    },
+  );
+
+  server.tool(
+    'archive_workspace',
+    'Archive a workspace: every live agent on that checkout, then remove the worktree when the last agent archives (cowboy keeps the project folder). The Home card moves to Settings → History. Pass any chat id on the workspace. Orchestration chats are agents — use archive_chat. To archive one agent and leave the checkout up, use archive_chat.',
+    { ref: z.string().describe('Any chat id on the workspace') },
+    async ({ ref }) => {
+      const thread = orch.getThread(ref);
+      if (!thread) {
+        return { content: [{ type: 'text', text: `Chat not found: ${ref}` }], isError: true };
+      }
+      for (const chat of threadsSharingWorktree(thread.worktreePath)) {
+        const blocked = mcpArchiveBlockedReason(chat);
+        if (blocked) {
+          return { content: [{ type: 'text', text: blocked }], isError: true };
+        }
+      }
+      try {
+        const archived = await orch.archiveWorkspace(ref);
+        return mcpJson({
+          worktreePath: thread.worktreePath,
+          archived: archived.map((chat) => ({
+            id: chat.id,
+            title: chat.title,
+            agent: chat.agent,
+            status: chat.status,
+            link: `sideboard://chat/${chat.id}`,
+          })),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
     'archive_chat',
-    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Coordinators commit, push, and open PRs by asking the worktree agent (ask_git). Merge only when the user explicitly asked.',
-    { ref: z.string() },
+    'Archive one agent chat: stop the turn and move that chat to Settings → History. Other agents on the workspace stay, and the worktree is removed only when this is the last agent. Orchestration chats archive without removing a project checkout. Refuses the cloud coordinator. To archive every agent on a checkout, use archive_workspace. Commit, push, and open PRs via ask_git before archiving when the work should be kept. Merge only when the user explicitly asked.',
+    { ref: z.string().describe('Chat id to archive') },
     async ({ ref }) => {
       const t = orch.getThread(ref);
       if (!t) {
@@ -1187,9 +1274,34 @@ export async function startMcpServer(): Promise<void> {
   );
 
   server.tool(
+    'restore_workspace',
+    'Restore a workspace from Settings → History: recreate the worktree if it was removed and bring every archived agent on that checkout back. Pass any chat id from list_archive. If some agents are still live, only the archived ones return to that checkout. One agent only: restore_chat. Orchestration agents: restore_chat.',
+    { ref: z.string().describe('Any chat id from list_archive on that workspace') },
+    async ({ ref }) => {
+      try {
+        const restored = await orch.restoreWorkspace(ref);
+        return mcpJson({
+          worktreePath: restored[0]?.worktreePath ?? null,
+          restored: restored.map((chat) => ({
+            id: chat.id,
+            title: chat.title,
+            agent: chat.agent,
+            status: chat.status,
+            worktreePath: chat.worktreePath,
+            link: `sideboard://chat/${chat.id}`,
+          })),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: 'text', text: message }], isError: true };
+      }
+    },
+  );
+
+  server.tool(
     'restore_chat',
-    'Restore an archived thread (recreates worktree from branch when needed)',
-    { ref: z.string() },
+    'Restore one archived agent from list_archive. Recreates the worktree when that checkout was fully archived and the folder is gone. Other archived agents on the checkout stay in History until restore_workspace or another restore_chat. Orchestration agents come back as Global chats.',
+    { ref: z.string().describe('Archived chat id from list_archive') },
     async ({ ref }) => {
       try {
         const restored = await orch.restore(ref);

@@ -171,6 +171,20 @@ export function formatWorktreeDirective(
   return lines.join('\n');
 }
 
+/**
+ * Every worktree turn: which orchestration chat this agent is connected to.
+ * Null when the chat was opened on its own.
+ */
+export function formatConnectedOrchestratorReminder(
+  parent: Pick<Thread, 'id' | 'title' | 'status' | 'agent'> | null | undefined,
+): string | null {
+  if (!parent) return null;
+  const title = parent.title?.trim() || 'Orchestration';
+  const archived =
+    parent.status === 'archived' ? ' This orchestrator is archived.' : '';
+  return `Connected orchestrator: "${title}" (${parent.agent}, ${parent.status}). Open [${title}](sideboard://chat/${parent.id}). notify_orchestrator wakes that chat. You are not the orchestrator.${archived}`;
+}
+
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
   return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Schedules: create_schedule (at / every / cron; chatId=self for this chat). set_workspace_tags updates labels on this workspace (omit ref).';

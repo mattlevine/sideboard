@@ -14,6 +14,7 @@ import {
   formatIssueToolsDirective,
   formatIssueToolsReminder,
   formatWorktreeDirective,
+  formatConnectedOrchestratorReminder,
   formatWorktreeReminder,
   issueTicketFromThread,
   mentionsPrGoal,
@@ -249,6 +250,35 @@ describe('formatIssueToolsReminder', () => {
     expect(text).toMatch(/#4/);
     expect(text).toMatch(/do not ask_user after it/);
     expect(text).toMatch(/type next steps/);
+  });
+});
+
+describe('formatConnectedOrchestratorReminder', () => {
+  it('names the orchestration chat this agent is connected to', () => {
+    const text = formatConnectedOrchestratorReminder({
+      id: 'orch-1',
+      title: 'Fleet',
+      status: 'idle',
+      agent: 'claude',
+    });
+    expect(text).toContain('Connected orchestrator: "Fleet"');
+    expect(text).toContain('sideboard://chat/orch-1');
+    expect(text).toContain('notify_orchestrator');
+    expect(text).not.toMatch(/archived/);
+  });
+
+  it('says when that orchestrator is archived', () => {
+    const text = formatConnectedOrchestratorReminder({
+      id: 'orch-1',
+      title: 'Fleet',
+      status: 'archived',
+      agent: 'cursor',
+    });
+    expect(text).toMatch(/archived/);
+  });
+
+  it('is empty when there is no orchestrator', () => {
+    expect(formatConnectedOrchestratorReminder(null)).toBeNull();
   });
 });
 
