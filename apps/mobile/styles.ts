@@ -213,10 +213,6 @@ export const styles = StyleSheet.create({
     borderColor: 'rgba(210, 168, 255, 0.55)',
     backgroundColor: 'rgba(210, 168, 255, 0.12)',
   },
-  prBadgeError: {
-    borderColor: 'rgba(248, 113, 113, 0.55)',
-    backgroundColor: 'rgba(248, 113, 113, 0.12)',
-  },
   prBadgeText: { fontSize: 10, fontWeight: '600', letterSpacing: 0.2 },
   prBadgeTextNew: { color: palette.muted },
   prBadgeTextDraft: { color: '#9cdcfe' },
@@ -224,7 +220,6 @@ export const styles = StyleSheet.create({
   prBadgeTextPending: { color: '#e2b340' },
   prBadgeTextApproved: { color: '#8fd9a8' },
   prBadgeTextMerged: { color: '#d2a8ff' },
-  prBadgeTextError: { color: palette.err },
   glyphRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   projectBlock: { marginTop: 12 },
   worktreeBlock: { marginLeft: 8, marginBottom: 4 },
