@@ -25,6 +25,7 @@ export type PhoneHistoryChat = {
   updatedAt: string;
   where: string;
   agent: string;
+  workspace?: string;
 };
 
 /** Same mark as the desktop sidebar: outline cube over a blue offset plate. */
@@ -210,6 +211,13 @@ export function HistoryRow({
         <View style={styles.titleRow}>
           <AgentKindIcon agent={chat.agent} />
           <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
+          {chat.workspace ? (
+            <View style={styles.historyWorkspace} accessibilityLabel={`Workspace ${chat.workspace}`}>
+              <Text style={styles.historyWorkspaceText} numberOfLines={1}>
+                {chat.workspace}
+              </Text>
+            </View>
+          ) : null}
         </View>
         {chat.preview ? (
           <Text style={styles.preview} numberOfLines={1}>

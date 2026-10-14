@@ -22,7 +22,7 @@ import {
   planHistoryAgePurge,
 } from '@sideboard/history-retention';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
-import { threadDisplayLabel } from '@sideboard/worktree-labels';
+import { threadDisplayLabel, workspaceNameLabel } from '@sideboard/worktree-labels';
 import {
   AGENT_DONE_SOUND_OPTIONS,
   isAgentDoneSound,
@@ -756,7 +756,7 @@ export function SettingsModal({
     return list.filter((t) => {
       const repo = t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
       const hay =
-        `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repo}`.toLowerCase();
+        `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repo} ${workspaceNameLabel(t) ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [archived, deferredHistoryQuery]);
@@ -2364,7 +2364,7 @@ export function SettingsModal({
                     id="history-search"
                     className="settings-history-search"
                     type="search"
-                    placeholder="Filter by title, branch, agent, or project…"
+                    placeholder="Filter by title, branch, workspace, agent, or project…"
                     value={historyQuery}
                     onChange={(e) => setHistoryQuery(e.target.value)}
                     spellCheck={false}
@@ -2381,6 +2381,7 @@ export function SettingsModal({
                       filteredArchived.map((t) => {
                         const repo =
                           t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
+                        const workspace = workspaceNameLabel(t);
                         return (
                           <div key={t.id} className="settings-history-row" role="listitem">
                             <button
@@ -2389,8 +2390,15 @@ export function SettingsModal({
                               onClick={() => onOpenArchived?.(t.id)}
                               title="Open archived chat"
                             >
-                              <span className="settings-history-title">
-                                {threadDisplayLabel(t)}
+                              <span className="settings-history-heading">
+                                <span className="settings-history-title">
+                                  {threadDisplayLabel(t)}
+                                </span>
+                                {workspace ? (
+                                  <span className="settings-history-workspace" title={workspace}>
+                                    {workspace}
+                                  </span>
+                                ) : null}
                               </span>
                               <span className="settings-history-meta">
                                 {repo} · {t.agent} · archived

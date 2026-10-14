@@ -10,6 +10,7 @@ import {
 import {
   agentNicknameFromWorktreePath,
   isWorktreeIdentityTitle,
+  workspaceNameLabel,
   ticketSlugForBranch,
   worktreeAnchorLabel,
   worktreeSlugForTicket,
@@ -256,6 +257,45 @@ describe('agentNicknameFromWorktreePath', () => {
 
   it('returns null when the folder is not a club', () => {
     expect(agentNicknameFromWorktreePath('/wt/feat-replace-spinner')).toBeNull();
+  });
+});
+
+describe('workspaceNameLabel', () => {
+  it('uses the soccer nickname for a club folder', () => {
+    expect(
+      workspaceNameLabel({
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/lens',
+        repoPath: '/Users/me/Projects/sideboard',
+        sourceType: 'branch',
+      }),
+    ).toBe('Lens');
+  });
+
+  it('uses the folder when it is not a club', () => {
+    expect(
+      workspaceNameLabel({
+        worktreePath: '/wt/feat-replace-spinner',
+        repoPath: '/wt/app',
+        sourceType: 'branch',
+      }),
+    ).toBe('feat-replace-spinner');
+  });
+
+  it('omits orchestration and a checkout that is the repo', () => {
+    expect(
+      workspaceNameLabel({
+        worktreePath: '/tmp/global',
+        repoPath: '__global__',
+        sourceType: 'orchestration',
+      }),
+    ).toBeNull();
+    expect(
+      workspaceNameLabel({
+        worktreePath: '/tmp/sideboard',
+        repoPath: '/tmp/sideboard',
+        sourceType: 'branch',
+      }),
+    ).toBeNull();
   });
 });
 

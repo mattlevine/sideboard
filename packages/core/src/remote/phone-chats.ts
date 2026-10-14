@@ -140,6 +140,8 @@ export interface PhoneHistoryChat {
   updatedAt: string;
   where: string;
   agent: string;
+  /** Checkout folder name. Omitted for orchestration and a repo checkout. */
+  workspace?: string;
 }
 
 export interface PhoneHistoryPage {
