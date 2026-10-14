@@ -3,7 +3,7 @@ import {
   type WorktreeListBadgeThread,
 } from '@sideboard/home-board';
 
-/** Review / pending pills on sidebar and Home worktree titles. */
+/** Path-to-merge pills on sidebar and Home worktree titles. */
 export function WorktreePrBadges({
   group,
   viewerLogin,
@@ -21,15 +21,25 @@ export function WorktreePrBadges({
   if (badges.length === 0) return null;
   return (
     <>
-      {badges.map((badge) => (
-        <span
-          key={badge.id}
-          className={`board-badge ${badge.mod}`}
-          title={badge.title}
-        >
-          {badge.label}
-        </span>
-      ))}
+      {badges.flatMap((badge) => {
+        const status = (
+          <span
+            key={badge.id}
+            className={`board-badge ${badge.mod}${badge.conflict ? ' has-conflict' : ''}`}
+            title={badge.title}
+          >
+            {badge.label}
+            {badge.conflict ? <span className="board-badge-conflict" aria-hidden /> : null}
+          </span>
+        );
+        if (!badge.error) return [status];
+        return [
+          status,
+          <span key={`${badge.id}-error`} className="board-badge is-error" title={badge.error.title}>
+            {badge.error.label}
+          </span>,
+        ];
+      })}
     </>
   );
 }

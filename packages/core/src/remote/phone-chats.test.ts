@@ -268,6 +268,8 @@ describe('phone orchestration chats', () => {
       prState: 'OPEN',
       prAuthorLogin: 'matt',
       prLabels: ['eng-review'],
+      prMergeable: 'CONFLICTING',
+      prChecksFailed: true,
     });
     const theirs = createEmptyThread({
       title: 'theirs',
@@ -304,25 +306,37 @@ describe('phone orchestration chats', () => {
     expect(badge(mine.id)).toEqual({
       id: 'pending',
       label: 'pending',
-      title: 'Waiting for review',
+      title: 'Waiting for review · merge conflicts',
+      conflict: true,
+      error: { label: 'failing', title: 'Checks failing' },
     });
     expect(badge(theirs.id)).toEqual({
       id: 'review',
       label: 'review',
       title: "Someone else's PR",
     });
-    expect(badge(draft.id)).toBeUndefined();
+    expect(badge(draft.id)).toEqual({
+      id: 'draft',
+      label: 'draft',
+      title: 'Draft pull request',
+    });
     const mineChat = labeled?.worktrees.flatMap((worktree) => worktree.chats).find((chat) => chat.id === mine.id);
     expect(mineChat).toMatchObject({
       prUrl: 'https://github.com/acme/app/pull/4',
       prNumber: '4',
-      prStatus: 'Needs approval',
+      prStatus: 'Merge conflicts',
     });
-    expect(
-      listPhoneSidebar()
-        .projects.find((row) => row.path === '/tmp/sideboard')
-        ?.worktrees.every((worktree) => worktree.badge == null),
-    ).toBe(true);
+    const unlabeled = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard');
+    const quiet = (id: string) =>
+      unlabeled?.worktrees.find((worktree) => worktree.chats.some((chat) => chat.id === id))?.badge;
+    expect(quiet(mine.id)).toEqual({
+      id: 'error',
+      label: 'failing',
+      title: 'Checks failing · merge conflicts',
+      conflict: true,
+    });
+    expect(quiet(theirs.id)).toBeUndefined();
+    expect(quiet(draft.id)).toBeUndefined();
   });
 
   it('adds an agent onto an existing project worktree', () => {

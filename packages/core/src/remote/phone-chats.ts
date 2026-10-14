@@ -196,17 +196,17 @@ export type PhoneControlRequest =
   | { op: 'media'; chatId: string; path: string };
 
 export interface PhoneWorktreeBadge {
-  id: 'review' | 'pending';
+  id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged' | 'error';
   label: string;
   title: string;
+  conflict?: boolean;
+  error?: { label: string; title: string };
 }
 
 export interface PhoneWorktree {
   label: string;
   chats: PhoneChatSummary[];
-  /** Shared labels for this checkout. Omitted when the workspace has none. */
-  tags?: string[];
-  /** Set only while a pull request on this workspace is in review. */
+  tags?: string[]; // shared labels; omitted when the workspace has none
   badge?: PhoneWorktreeBadge;
 }
 
@@ -561,7 +561,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(badge
-            ? { badge: { id: badge.id, label: badge.label, title: badge.title } }
+            ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}), ...(badge.error ? { error: badge.error } : {}) } }
             : {}),
         };
       }),

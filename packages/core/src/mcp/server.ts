@@ -232,7 +232,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of workspaces (New, Draft, Review, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
+    'Home Kanban of workspaces (New, Draft, Review, Approved, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → approved → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
     {
       query: z
         .string()
@@ -253,10 +253,10 @@ export async function startMcpServer(): Promise<void> {
           'Mine = PRs you authored or local WIP; reviewing = someone else\'s PR. Uses the gh login.',
         ),
       column: z
-        .enum(['new', 'draft', 'review', 'done', 'needs_you'])
+        .enum(['new', 'draft', 'review', 'approved', 'done', 'needs_you'])
         .optional()
         .describe(
-          'Return cards for this column only (totals still include the rest). needs_you is a legacy alias for new.',
+          'Return cards for this column only (totals still include the rest). approved is an open PR GitHub has approved. needs_you is a legacy alias for new.',
         ),
       limit: z
         .number()

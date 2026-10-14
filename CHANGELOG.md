@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.299] - 2026-10-14
+
+### Added
+
+- Home has an Approved column for open pull requests GitHub has approved but not merged, between Review and Merged.
+- The desktop sidebar and the phone show the same status: new, draft, pending, review, approved, and merged.
+- An open pull request with merge conflicts keeps its status pill and shows a red dot on it.
+- Failing checks show a red failing pill. Requested changes show a red changes pill.
+
+### Changed
+
+- The Home board scrolls sideways when five columns do not fit. Cards in a column still scroll vertically.
+
 ## [0.1.298] - 2026-10-14
 
 ### Added

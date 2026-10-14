@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import { AgentKindIcon } from './agent-icons';
 import { agentStatus } from './labels';
 import { palette, styles } from './styles';
@@ -16,7 +16,25 @@ export type PhoneChat = {
   prStatus?: string;
 };
 
-export type PhonePrBadge = { id: 'review' | 'pending'; label: string; title: string };
+export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged' | 'error';
+
+export type PhonePrBadge = {
+  id: PhonePrBadgeId;
+  label: string;
+  title: string;
+  conflict?: boolean;
+  error?: { label: string; title: string };
+};
+
+const PHONE_PR_BADGE_IDS = new Set<PhonePrBadgeId>([
+  'new',
+  'draft',
+  'pending',
+  'review',
+  'approved',
+  'merged',
+  'error',
+]);
 
 export type PhoneHistoryChat = {
   id: string;
@@ -275,26 +293,59 @@ export function TagChip({
   );
 }
 
+const PR_BADGE_TONE: Record<PhonePrBadgeId, { box: ViewStyle; text: TextStyle }> = {
+  new: { box: styles.prBadgeNew, text: styles.prBadgeTextNew },
+  draft: { box: styles.prBadgeDraft, text: styles.prBadgeTextDraft },
+  pending: { box: styles.prBadgePending, text: styles.prBadgeTextPending },
+  review: { box: styles.prBadgeReview, text: styles.prBadgeTextReview },
+  approved: { box: styles.prBadgeApproved, text: styles.prBadgeTextApproved },
+  merged: { box: styles.prBadgeMerged, text: styles.prBadgeTextMerged },
+  error: { box: styles.prBadgeError, text: styles.prBadgeTextError },
+};
+
 export function phonePrBadge(value: unknown): PhonePrBadge | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const badge = value as { id?: unknown; label?: unknown; title?: unknown };
-  if (badge.id !== 'review' && badge.id !== 'pending') return undefined;
-  const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : badge.id;
+  if (typeof badge.id !== 'string' || !PHONE_PR_BADGE_IDS.has(badge.id as PhonePrBadgeId)) {
+    return undefined;
+  }
+  const id = badge.id as PhonePrBadgeId;
+  const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : id;
   const title = typeof badge.title === 'string' && badge.title.trim() ? badge.title.trim() : label;
-  return { id: badge.id, label, title };
+  const conflict = (value as { conflict?: unknown }).conflict === true;
+  const error = phonePrBadgeError((value as { error?: unknown }).error);
+  return {
+    id,
+    label,
+    title,
+    ...(conflict ? { conflict } : {}),
+    ...(error ? { error } : {}),
+  };
+}
+
+function phonePrBadgeError(value: unknown): PhonePrBadge['error'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const row = value as { label?: unknown; title?: unknown };
+  if (typeof row.label !== 'string' || !row.label.trim()) return undefined;
+  const label = row.label.trim();
+  const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : label;
+  return { label, title };
 }
 
 export function PrBadge({ badge }: { badge: PhonePrBadge }) {
-  const pending = badge.id === 'pending';
+  const tone = PR_BADGE_TONE[badge.id];
   return (
-    <View
-      style={[styles.prBadge, pending ? styles.prBadgePending : styles.prBadgeReview]}
-      accessibilityLabel={badge.title}
-    >
-      <Text style={[styles.prBadgeText, pending ? styles.prBadgeTextPending : styles.prBadgeTextReview]}>
-        {badge.label}
-      </Text>
-    </View>
+    <>
+      <View style={[styles.prBadge, tone.box]} accessibilityLabel={badge.title}>
+        <Text style={[styles.prBadgeText, tone.text]}>{badge.label}</Text>
+        {badge.conflict ? <View style={styles.prBadgeConflictDot} /> : null}
+      </View>
+      {badge.error ? (
+        <View style={[styles.prBadge, styles.prBadgeError]} accessibilityLabel={badge.error.title}>
+          <Text style={[styles.prBadgeText, styles.prBadgeTextError]}>{badge.error.label}</Text>
+        </View>
+      ) : null}
+    </>
   );
 }
 
