@@ -755,8 +755,7 @@ export function SettingsModal({
     if (!q) return list;
     return list.filter((t) => {
       const repo = t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
-      const hay =
-        `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repo} ${workspaceNameLabel(t) ?? ''}`.toLowerCase();
+      const hay = `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repo} ${workspaceNameLabel(t) ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
   }, [archived, deferredHistoryQuery]);
@@ -2379,8 +2378,7 @@ export function SettingsModal({
                       </div>
                     ) : (
                       filteredArchived.map((t) => {
-                        const repo =
-                          t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
+                        const repo = t.repoPath.split('/').filter(Boolean).pop() ?? t.repoPath;
                         const workspace = workspaceNameLabel(t);
                         return (
                           <div key={t.id} className="settings-history-row" role="listitem">
@@ -2391,18 +2389,12 @@ export function SettingsModal({
                               title="Open archived chat"
                             >
                               <span className="settings-history-heading">
-                                <span className="settings-history-title">
-                                  {threadDisplayLabel(t)}
-                                </span>
+                                <span className="settings-history-title">{threadDisplayLabel(t)}</span>
                                 {workspace ? (
-                                  <span className="settings-history-workspace" title={workspace}>
-                                    {workspace}
-                                  </span>
+                                  <span className="settings-history-workspace" title={workspace}>{workspace}</span>
                                 ) : null}
                               </span>
-                              <span className="settings-history-meta">
-                                {repo} · {t.agent} · archived
-                              </span>
+                              <span className="settings-history-meta">{repo} · {t.agent} · archived</span>
                             </button>
                             <button
                               type="button"
