@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.300] - 2026-10-14
+
+### Changed
+
+- Failing checks and requested changes use the same red dot as merge conflicts, on the status pill. There is no second badge.
+
 ## [0.1.299] - 2026-10-14
 
 ### Added
