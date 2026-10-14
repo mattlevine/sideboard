@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Dimensions,
   Image,
+  Keyboard,
+  LayoutAnimation,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -328,6 +332,48 @@ export type CreateSelection =
   | { kind: 'pr'; ref: string; title: string }
   | { kind: 'ticket'; ref: string; title: string; url?: string };
 
+/** How much of this window the keyboard covers. A modal's layout frame is not the keyboard's coordinate space. */
+function keyboardOverlap(frame: { height: number; screenY: number } | undefined): number {
+  if (!frame || frame.height <= 0) return 0;
+  const covered = Dimensions.get('window').height - frame.screenY;
+  if (covered <= 0) return 0;
+  return Math.min(frame.height, covered);
+}
+
+function useKeyboardBottomInset(): number {
+  const [inset, setInset] = useState(() => (Platform.OS === 'ios' ? keyboardOverlap(Keyboard.metrics()) : 0));
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const apply = (next: number, duration: number) => {
+      const ms = duration > 10 ? duration : 10;
+      LayoutAnimation.configureNext({
+        duration: ms,
+        update: { duration: ms, type: 'keyboard' },
+      });
+      setInset(next);
+    };
+    const change = Keyboard.addListener('keyboardWillChangeFrame', (event) => {
+      apply(keyboardOverlap(event.endCoordinates), event.duration);
+    });
+    const hide = Keyboard.addListener('keyboardWillHide', (event) => {
+      apply(0, event.duration);
+    });
+    const didShow = Keyboard.addListener('keyboardDidShow', (event) => {
+      setInset(keyboardOverlap(event.endCoordinates));
+    });
+    const didHide = Keyboard.addListener('keyboardDidHide', () => {
+      setInset(0);
+    });
+    return () => {
+      change.remove();
+      hide.remove();
+      didShow.remove();
+      didHide.remove();
+    };
+  }, []);
+  return inset;
+}
+
 export function CreateChatSheet(props: {
   mode: CreateMode;
   sources: PhoneSources | null;
@@ -368,6 +414,7 @@ export function CreateChatSheet(props: {
       : props.mode.kind === 'project'
         ? props.mode.name
         : 'Add agent';
+  const keyboardInset = useKeyboardBottomInset();
   const rows =
     tab === 'prs' ? props.sources?.prs ?? [] : tab === 'branches' ? props.sources?.branches ?? [] : props.sources?.issues ?? [];
   const selectedLabel = cowboy
@@ -379,7 +426,7 @@ export function CreateChatSheet(props: {
         : selection.ref;
   return (
     <Modal visible animationType="slide" onRequestClose={props.onClose}>
-      <View style={styles.createScreen}>
+      <View style={[styles.createScreen, keyboardInset > 0 ? { paddingBottom: keyboardInset } : null]}>
         <View style={styles.createHead}>
           <Pressable onPress={props.onClose} hitSlop={8}>
             <Text style={styles.link}>Close</Text>
@@ -635,7 +682,7 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: palette.bg, fontWeight: '700', fontSize: 16 },
   createScreen: { flex: 1, backgroundColor: palette.bg, paddingTop: 54 },
-  createEmpty: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
+  createEmpty: { flex: 1, minHeight: 0, overflow: 'hidden', justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
   createHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
   createTitle: { flex: 1, textAlign: 'center', color: palette.text, fontSize: 16, fontWeight: '600' },
   link: { color: palette.accent, fontSize: 16 },
