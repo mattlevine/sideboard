@@ -191,14 +191,18 @@ export const styles = StyleSheet.create({
   glyphRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   projectBlock: { marginTop: 12 },
   worktreeBlock: { marginLeft: 8, marginBottom: 4 },
-  worktreeHead: { marginBottom: 2 },
+  worktreeHead: { marginBottom: 8 },
+  // Tags sit under the name. Pin Add agent to the bottom of that stack so the
+  // gap down to the first agent card matches a workspace with no tags.
+  worktreeHeadTagged: { alignItems: 'flex-end' },
+  worktreeIdentity: { flex: 1, minWidth: 0 },
+  worktreeTitle: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 4,
-    marginTop: -8,
-    marginBottom: 8,
+    marginTop: 4,
     marginLeft: 22,
   },
   tagChoices: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 8 },
