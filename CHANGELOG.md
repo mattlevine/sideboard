@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.298] - 2026-10-14
+
+### Added
+
+- An orchestrator can archive a whole workspace or one agent, browse History, and restore either.
+- Agent chats show the orchestrator that opened them.
+- History shows the workspace name beside each archived chat on the desktop and the phone.
+
 ## [0.1.297] - 2026-10-13
 
 ### Changed
