@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import type { PickedFile } from './media';
 import { AgentKindIcon } from './agent-icons';
+import { EmptyChat } from './empty-chat';
 
 const palette = {
   bg: '#121212',
@@ -123,7 +124,7 @@ export function ComposerDock(props: {
         <View style={styles.actions}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chips}>
             <Pressable
-              style={styles.chip}
+              style={[styles.chip, { flexShrink: 1, maxWidth: 120 }]}
               onPress={() => {
                 setMenu(false);
                 props.onNeedModels(props.options.agent);
@@ -131,7 +132,7 @@ export function ComposerDock(props: {
               }}
             >
               <AgentKindIcon agent={props.options.agent} />
-              <Text style={styles.chipText}>{agentLabel(props.options.agent)} · {modelLabel(props.options, props.models)}</Text>
+              <Text style={styles.chipText} numberOfLines={1}>{agentLabel(props.options.agent)} · {modelLabel(props.options, props.models)}</Text>
             </Pressable>
             <Pressable
               style={styles.chip}
@@ -366,17 +367,16 @@ export function CreateChatSheet(props: {
       ? 'New orchestration'
       : props.mode.kind === 'project'
         ? props.mode.name
-        : props.mode.label;
+        : 'Add agent';
   const rows =
     tab === 'prs' ? props.sources?.prs ?? [] : tab === 'branches' ? props.sources?.branches ?? [] : props.sources?.issues ?? [];
-  const selectedLabel =
-    cowboy
-      ? 'on main'
-      : selection.kind === 'default'
-        ? 'Default branch'
-        : selection.kind === 'pr'
-          ? `PR #${selection.ref}`
-          : selection.ref;
+  const selectedLabel = cowboy
+    ? 'on main'
+    : selection.kind === 'default'
+      ? 'Default branch'
+      : selection.kind === 'pr'
+        ? `PR #${selection.ref}`
+        : selection.ref;
   return (
     <Modal visible animationType="slide" onRequestClose={props.onClose}>
       <View style={styles.createScreen}>
@@ -391,13 +391,7 @@ export function CreateChatSheet(props: {
           <View style={styles.sourceBlock}>
             <View style={styles.sourceHead}>
               <Text style={styles.selected} numberOfLines={1}>{selectedLabel}</Text>
-              <Pressable
-                style={[styles.chip, cowboy && styles.chipOn]}
-                onPress={() => {
-                  setCowboy((value) => !value);
-                  setSelection({ kind: 'default' });
-                }}
-              >
+              <Pressable style={[styles.chip, cowboy && styles.chipOn]} onPress={() => { setCowboy((v) => !v); setSelection({ kind: 'default' }); }}>
                 <Text style={styles.chipText}>Cowboy</Text>
               </Pressable>
             </View>
@@ -405,18 +399,15 @@ export function CreateChatSheet(props: {
               <Text style={styles.banner}>Cowboy edits the project folder on the default branch.</Text>
             ) : (
               <>
-                <View style={styles.wrap}>
+                <View style={styles.chips}>
                   {(['prs', 'branches', 'issues'] as const).map((id) => (
                     <Pressable key={id} style={[styles.chip, tab === id && styles.chipOn]} onPress={() => setTab(id)}>
                       <Text style={styles.chipText}>{id === 'prs' ? 'PRs' : id === 'branches' ? 'Branches' : 'Issues'}</Text>
                     </Pressable>
                   ))}
-                  <Pressable style={[styles.chip, selection.kind === 'default' && styles.chipOn]} onPress={() => setSelection({ kind: 'default' })}>
-                    <Text style={styles.chipText}>Default</Text>
-                  </Pressable>
                 </View>
                 <TextInput
-                  style={styles.search}
+                  style={[styles.search, { marginHorizontal: 0 }]}
                   placeholder="Search"
                   placeholderTextColor={palette.muted}
                   value={query}
@@ -425,7 +416,11 @@ export function CreateChatSheet(props: {
                     props.onRequestSources(value.trim());
                   }}
                 />
-                <ScrollView style={styles.sourceList}>
+                <ScrollView style={styles.sourceList} keyboardShouldPersistTaps="handled">
+                  <Pressable style={[styles.menuRow, selection.kind === 'default' && styles.chipOn]} onPress={() => setSelection({ kind: 'default' })}>
+                    <Text style={styles.menuText}>Default branch</Text>
+                    <Text style={styles.banner}>New workspace from the repo default</Text>
+                  </Pressable>
                   {(props.sources?.warnings ?? []).map((warning) => (
                     <Text key={warning} style={styles.warn}>{warning}</Text>
                   ))}
@@ -435,7 +430,7 @@ export function CreateChatSheet(props: {
                     return (
                       <Pressable
                         key={`${kind}:${row.ref}`}
-                        style={styles.menuRow}
+                        style={[styles.menuRow, on && styles.chipOn]}
                         onPress={() =>
                           setSelection(
                             kind === 'ticket'
@@ -445,9 +440,7 @@ export function CreateChatSheet(props: {
                         }
                       >
                         <Text style={styles.menuText} numberOfLines={2}>
-                          {on ? '✓ ' : ''}
-                          {kind === 'pr' ? `#${row.ref} ` : `${row.ref} `}
-                          {row.title}
+                          {kind === 'branch' ? row.title : `${kind === 'pr' ? '#' : ''}${row.ref} ${row.title}`}
                         </Text>
                       </Pressable>
                     );
@@ -458,16 +451,31 @@ export function CreateChatSheet(props: {
               </>
             )}
           </View>
-        ) : null}
+        ) : props.mode.kind === 'worktree' ? (
+          <View style={styles.createEmpty}>
+            <EmptyChat
+              project
+              title="What are you working on?"
+              body="Same files, separate chat."
+            />
+          </View>
+        ) : (
+          <View style={styles.sourceBlock}>
+            <Text style={styles.banner}>Coordinates agents across workspaces.</Text>
+          </View>
+        )}
         <ComposerDock
           draft={props.draft}
           placeholder={
             props.mode.kind === 'orchestration'
               ? 'Coordination goal across threads…'
-              : selection.kind === 'ticket'
-                ? 'Optional — leave blank to resolve the issue'
-                : 'What do you want to work on?'
+              : props.mode.kind === 'worktree'
+                ? 'Ask to make changes, @mention files, run /commands'
+                : selection.kind === 'ticket'
+                  ? 'Optional — leave blank to resolve the issue'
+                  : 'What do you want to work on?'
           }
+          allowEmpty={props.mode.kind !== 'project' || selection.kind === 'ticket'}
           onChangeDraft={props.onChangeDraft}
           onSend={() =>
             props.onSubmit({
@@ -554,10 +562,10 @@ const styles = StyleSheet.create({
   },
   input: { color: palette.text, fontSize: 16, lineHeight: 22, minHeight: 44, maxHeight: 120, padding: 0 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chipScroll: { flex: 1 },
+  chipScroll: { flex: 1, minWidth: 0 },
   chips: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 6 },
   chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1,
+    flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1,
     borderColor: palette.border,
     borderRadius: 999,
     paddingHorizontal: 10,
@@ -587,7 +595,7 @@ const styles = StyleSheet.create({
   sendOff: { opacity: 0.35 },
   sendText: { color: palette.bg, fontSize: 16, fontWeight: '700', marginTop: -1 },
   menu: { borderTopWidth: 1, borderTopColor: palette.border, paddingTop: 4 },
-  menuRow: { paddingVertical: 10, paddingHorizontal: 4 },
+  menuRow: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8 },
   menuText: { color: palette.text, fontSize: 15 },
   fileRow: { gap: 8 },
   fileChip: {
@@ -627,11 +635,12 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: palette.bg, fontWeight: '700', fontSize: 16 },
   createScreen: { flex: 1, backgroundColor: palette.bg, paddingTop: 54 },
+  createEmpty: { flex: 1, justifyContent: 'center', paddingHorizontal: 28, paddingBottom: 24 },
   createHead: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8 },
   createTitle: { flex: 1, textAlign: 'center', color: palette.text, fontSize: 16, fontWeight: '600' },
   link: { color: palette.accent, fontSize: 16 },
   headGap: { width: 48 },
-  sourceBlock: { paddingHorizontal: 16, gap: 8, maxHeight: 280 },
+  sourceBlock: { paddingHorizontal: 16, gap: 8, flex: 1, minHeight: 0 },
   sourceHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   selected: { color: palette.text, fontSize: 15, fontWeight: '600', flex: 1 },
   search: {
@@ -643,7 +652,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginHorizontal: 16,
   },
-  sourceList: { maxHeight: 160 },
+  sourceList: { flex: 1 },
   meta: { color: palette.muted, fontSize: 13, padding: 8 },
   warn: { color: '#f87171', fontSize: 12, paddingHorizontal: 4, paddingBottom: 4 },
 });

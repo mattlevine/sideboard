@@ -191,8 +191,8 @@ export function PhoneAgentsScreen({
                 </Text>
               </View>
               <AddButton
-                label="New worktree"
-                hint={`New worktree in ${project.name}`}
+                label="New workspace"
+                hint={`New workspace in ${project.name}`}
                 busy={pendingAdd === `project:${project.path}`}
                 onPress={() => onOpenCreate({ kind: 'project', repoPath: project.path, name: project.name })}
               />
