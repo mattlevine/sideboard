@@ -1408,19 +1408,7 @@ export function App() {
               fileChanges={fileChanges}
               {...urlPreviewProps}
               {...threadPanelProps}
-              belowTabs={
-                <ConnectedOrchestratorBar
-                  thread={selected}
-                  threads={threads}
-                  archived={archived}
-                  onOpen={(id) => {
-                    setSelectedId(id);
-                    setView('thread');
-                    setMultiSelected(new Set([id]));
-                    void refreshThread(id);
-                  }}
-                />
-              }
+              belowTabs={<ConnectedOrchestratorBar thread={selected} threads={threads} archived={archived} onOpen={openThreadByRef} />}
             />
           );
           })()}

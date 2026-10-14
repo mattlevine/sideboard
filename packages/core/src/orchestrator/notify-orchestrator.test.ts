@@ -101,6 +101,32 @@ describe('notify_orchestrator', () => {
     expect(sends).toHaveLength(1);
   });
 
+  it('walks a forked agent to the orchestration chat', async () => {
+    const { parent, child } = orchParent();
+    const grandchild = createEmptyThread({
+      title: 'Fork',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/z',
+      worktreePath: join(dataDir, 'g'),
+      repoPath: join(dataDir, 'repo'),
+      agent: 'cursor',
+      parentThreadId: child.id,
+    });
+    writeThread(grandchild);
+    const sends: string[] = [];
+    const result = await notifyOrchestrator({
+      child: grandchild,
+      reason: 'blocked',
+      message: 'Need a decision.',
+      send: async (id) => {
+        sends.push(id);
+      },
+    });
+    expect(result).toEqual({ ok: true, parentThreadId: parent.id });
+    expect(sends).toEqual([parent.id]);
+  });
+
   it('skips worktree parents and missing parentThreadId', async () => {
     const worktreeParent = createEmptyThread({
       title: 'Not orch',
