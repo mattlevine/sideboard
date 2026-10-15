@@ -659,11 +659,11 @@ export const claudeAdapter: AgentAdapter = {
         ...BASE_ALLOWED_TOOLS,
         ...SIDEBOARD_MCP_ALLOWED_TOOLS,
         ...brightsyMcpAllowedTools(injectedBrightsyNames),
-      ];
+        ...mcpAllowToolsFromNames(thread.approvedMcpServers ?? [])];
     } else {
       allowedTools = [
         ...BASE_ALLOWED_TOOLS,
-        ...mcpAllowToolsFromNames(Object.keys(userMcpEntries)),
+        ...mcpAllowToolsFromNames([...Object.keys(userMcpEntries), ...(thread.approvedMcpServers ?? [])]),
         ...sideboardWorktreeAllowedTools({
           github: true,
           linear: isLinearConnected(),
@@ -695,10 +695,8 @@ export const claudeAdapter: AgentAdapter = {
         isolateClaudeAiMcp: isOrchestrator || isLocalDevAppDataDir(),
       });
     }
-    // Plain-text `-p` prompt (not --input-format stream-json). Structured stream-json
-    // user messages are merged into the API request where Claude Code already applies
-    // cache_control on system + tools + messages (max 4). stream-json input was the
-    // root cause of "Found 5" even after Sideboard stopped attaching cache_control.
+    // Plain-text `-p` prompt. stream-json input was merged into the API request and
+    // tripped Claude's cache_control limit ("Found 5") after Sideboard stopped adding one.
     const args = [
       '-p',
       ...(useStdin ? [] : [promptText]),
@@ -708,6 +706,7 @@ export const claudeAdapter: AgentAdapter = {
       '--include-partial-messages',
       '--permission-mode',
       mode.claude,
+      ...(mode.claude === 'bypassPermissions' ? ['--dangerously-skip-permissions'] : []),
     ];
     if (systemPrompt) {
       args.push('--append-system-prompt', systemPrompt);

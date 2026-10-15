@@ -11,8 +11,10 @@ export interface AgentPermissionPrompt {
   title: string;
   detail: string;
   path?: string;
-  /** Offer "allow for this session" (directory or Claude's own rule suggestions). */
+  /** Offer a remembered allow (a directory, or every tool on an MCP server). */
   allowSession: boolean;
+  /** Button label when it is not "Allow for this session". */
+  sessionLabel?: string;
   /** Claude asked that a stray keystroke must not approve this. */
   defaultToNo?: boolean;
 }

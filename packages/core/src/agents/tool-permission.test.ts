@@ -84,6 +84,36 @@ describe('askToolPermission', () => {
     ]);
   });
 
+  it('lets a session allow cover the whole MCP server, not one argument list', async () => {
+    const pending = askToolPermission({
+      threadId: 't1',
+      toolName: 'mcp__gmail__search',
+      mcpServer: 'gmail',
+      suppressAlwaysAllow: true,
+      suggestions: [
+        {
+          type: 'addRules',
+          behavior: 'allow',
+          destination: 'session',
+          rules: [{ toolName: 'mcp__gmail__search', ruleContent: '{"q":"today"}' }],
+        },
+      ],
+    });
+    expect(shown[0]?.allowSession).toBe(true);
+    expect(shown[0]?.sessionLabel).toBe('Allow this MCP');
+    answerToolPermission(shown[0]!.id, 'allow_session');
+    const answer = await pending;
+    expect(answer.decisionClassification).toBe('user_permanent');
+    expect(answer.updatedPermissions).toEqual([
+      {
+        type: 'addRules',
+        behavior: 'allow',
+        destination: 'session',
+        rules: [{ toolName: 'mcp__gmail' }, { toolName: 'mcp__gmail__*' }],
+      },
+    ]);
+  });
+
   it('denies prompts still waiting when the turn ends', async () => {
     const pending = askToolPermission({
       threadId: 't1',

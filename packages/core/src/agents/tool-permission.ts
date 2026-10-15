@@ -9,6 +9,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
+import { mcpServerIdForPermission, mcpServerPermissionUpdate } from './claude-mcp.js';
 import type { AgentPermissionPrompt } from '../types/agent-block.js';
 
 export type ToolPermissionDecision = 'allow' | 'deny' | 'allow_session';
@@ -22,6 +23,8 @@ export type ToolPermissionAsk = {
   description?: string;
   displayName?: string;
   suggestions?: unknown;
+  /** Claude MCP server name, when this ask is for one of its tools. */
+  mcpServer?: string;
   suppressAlwaysAllow?: boolean;
   defaultToNo?: boolean;
 };
@@ -38,6 +41,8 @@ type QueueItem = {
   threadId: string;
   prompt: AgentPermissionPrompt;
   suggestions?: unknown;
+  /** Set when "allow for this session" should allow the whole MCP server. */
+  mcpServerId?: string;
   resolve: (answer: ToolPermissionAnswer) => void;
 };
 
@@ -87,6 +92,7 @@ function denied(message: string): ToolPermissionAnswer {
 }
 
 function sessionGrants(item: QueueItem): unknown[] | undefined {
+  if (item.mcpServerId) return [mcpServerPermissionUpdate(item.mcpServerId)];
   if (Array.isArray(item.suggestions) && item.suggestions.length > 0) {
     return item.suggestions;
   }
@@ -153,12 +159,16 @@ export function askToolPermission(ask: ToolPermissionAsk): Promise<ToolPermissio
   const toolName = clean(ask.toolName);
   if (!threadId || !toolName) return Promise.resolve(denied('Missing chat or tool.'));
   const described = describeToolPermission({ ...ask, threadId, toolName });
+  const mcpServerId = mcpServerIdForPermission(toolName, ask.mcpServer) ?? undefined;
   const prompt: AgentPermissionPrompt = {
     id: randomUUID(),
     title: described.title,
     detail: described.detail,
     path: described.path || undefined,
-    allowSession: !ask.suppressAlwaysAllow,
+    // Claude hides "always allow" when the saved rule would be broader than
+    // this call. For MCP that broader rule is what we want: the whole server.
+    allowSession: mcpServerId ? true : !ask.suppressAlwaysAllow,
+    ...(mcpServerId ? { sessionLabel: 'Allow this MCP' } : {}),
     defaultToNo: Boolean(ask.defaultToNo),
   };
   return new Promise((resolve) => {
@@ -167,6 +177,7 @@ export function askToolPermission(ask: ToolPermissionAsk): Promise<ToolPermissio
       threadId,
       prompt,
       suggestions: ask.suggestions,
+      mcpServerId,
       resolve,
     };
     const q = queues.get(threadId) ?? [];

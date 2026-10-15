@@ -11,6 +11,7 @@ export type PhonePermission = {
   detail: string;
   path?: string;
   allowSession: boolean;
+  sessionLabel?: string;
   defaultToNo?: boolean;
 };
 
@@ -78,7 +79,7 @@ export function PhonePermissionBar({
       {denyFirst ? allow : deny}
       {prompt.allowSession ? (
         <Pressable style={styles.option} onPress={() => onDecide(prompt.id, 'allow_session')}>
-          <Text style={styles.optionLabel}>Allow for this session</Text>
+          <Text style={styles.optionLabel}>{prompt.sessionLabel || 'Allow for this session'}</Text>
         </Pressable>
       ) : null}
     </View>
