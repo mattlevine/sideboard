@@ -68,7 +68,7 @@ export function parseFilePathLink(text: string): FilePathLink | null {
   }
   const citation = CITATION_RE.exec(trimmed);
   if (citation) {
-    const path = citation[3]!.trim();
+    const path = citation[3]!.trim().replace(/^\.\//, '');
     if (!path) return null;
     return {
       path,
@@ -79,7 +79,11 @@ export function parseFilePathLink(text: string): FilePathLink | null {
   const range = lineRange(trimmed);
   const stripped = trimmed.replace(/#L\d+(?:-\d+)?$/, '').replace(/\/+$/, '');
   if (!stripped) return null;
-  if (stripped.startsWith('/')) return { path: stripped, ...range };
-  if (PATH_LIKE_RE.test(stripped) && stripped.includes('/')) return { path: stripped, ...range };
+  // Keep the `./` form only long enough to match `./shot.png`. The tab id uses
+  // the path the Mac will send back.
+  const path = stripped.replace(/^\.\//, '');
+  if (!path) return null;
+  if (path.startsWith('/')) return { path, ...range };
+  if (PATH_LIKE_RE.test(stripped) && stripped.includes('/')) return { path, ...range };
   return null;
 }

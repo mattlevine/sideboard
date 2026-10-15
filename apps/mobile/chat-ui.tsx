@@ -13,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { createAllowEmpty } from './account-defaults';
 import type { PickedFile } from './media';
 import { AgentKindIcon } from './agent-icons';
 import { EmptyChat } from './empty-chat';
@@ -522,7 +523,7 @@ export function CreateChatSheet(props: {
                   ? 'Optional — leave blank to resolve the issue'
                   : 'What do you want to work on?'
           }
-          allowEmpty={props.mode.kind !== 'project' || selection.kind === 'ticket'}
+          allowEmpty={createAllowEmpty(props.mode.kind, selection.kind)}
           onChangeDraft={props.onChangeDraft}
           onSend={() =>
             props.onSubmit({
@@ -548,7 +549,6 @@ export function CreateChatSheet(props: {
           onCamera={props.onCamera}
           onPhotos={props.onPhotos}
           onFiles={props.onFiles}
-          allowEmpty={props.mode.kind !== 'orchestration'}
         />
       </View>
     </Modal>
