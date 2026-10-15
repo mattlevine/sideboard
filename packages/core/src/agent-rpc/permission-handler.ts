@@ -1,6 +1,10 @@
 import { clampBlockReason, writeAgentBlock } from '../orchestrator/agent-block.js';
 import { readThread, updateThread } from '../store/thread-store.js';
 import {
+  mcpServerIdForPermission,
+  mcpServerPermissionUpdate,
+} from '../agents/claude-mcp.js';
+import {
   askToolPermission,
   setToolPermissionPublisher,
   type ToolPermissionAsk,
@@ -67,8 +71,29 @@ export const handlePermissionAsk: AgentRpcHandler = async (
     description: str(rec.description).trim() || undefined,
     displayName: str(rec.displayName).trim() || undefined,
     suggestions: rec.suggestions,
+    mcpServer: str(rec.mcpServer).trim() || undefined,
     suppressAlwaysAllow: rec.suppressAlwaysAllow === true,
     defaultToNo: rec.defaultToNo === true,
   };
-  return askToolPermission(ask);
+  const serverId = mcpServerIdForPermission(toolName, ask.mcpServer);
+  if (serverId && readThread(threadId)?.approvedMcpServers?.includes(serverId)) {
+    return {
+      behavior: 'allow',
+      updatedPermissions: [mcpServerPermissionUpdate(serverId)],
+      decisionClassification: 'user_permanent',
+    };
+  }
+  const answer = await askToolPermission(ask);
+  if (
+    serverId &&
+    answer.behavior === 'allow' &&
+    answer.decisionClassification === 'user_permanent'
+  ) {
+    const fresh = readThread(threadId);
+    const prev = fresh?.approvedMcpServers ?? [];
+    if (fresh && !prev.includes(serverId)) {
+      updateThread(threadId, { approvedMcpServers: [...prev, serverId] });
+    }
+  }
+  return answer;
 };

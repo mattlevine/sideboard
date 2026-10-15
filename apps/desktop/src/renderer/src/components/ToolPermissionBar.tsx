@@ -6,6 +6,7 @@ export type ToolPermissionPrompt = {
   detail: string;
   path?: string;
   allowSession: boolean;
+  sessionLabel?: string;
   defaultToNo?: boolean;
 };
 
@@ -88,7 +89,7 @@ export function ToolPermissionBar({ prompt }: { prompt: ToolPermissionPrompt }) 
               disabled={busy}
               onClick={() => answer('allow_session')}
             >
-              Allow for this session
+              {prompt.sessionLabel || 'Allow for this session'}
             </button>
           ) : null}
         </div>

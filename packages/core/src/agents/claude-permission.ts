@@ -1,5 +1,6 @@
 import type { AgentRpcConnect } from '../agent-rpc/metadata.js';
 import { AgentRpcClient } from '../agent-rpc/client.js';
+import { mcpServerIdForPermission, mcpServerPermissionUpdate } from './claude-mcp.js';
 import type { ToolPermissionAnswer } from './tool-permission.js';
 
 export type ClaudePermissionOptions = {
@@ -58,12 +59,23 @@ export async function claudePermissionResult(input: {
   threadId: string;
   toolName: string;
   toolInput: Record<string, unknown>;
+  mcpServer?: string;
   options: ClaudePermissionOptions;
   call?: (method: string, params: unknown) => Promise<unknown>;
   rpc?: AgentRpcConnect;
 }): Promise<ClaudePermissionResult> {
   if (input.permissionMode === 'plan') {
     return deny('Plan mode is on, so this action stays blocked.');
+  }
+  if (input.permissionMode === 'bypassPermissions') {
+    const serverId = mcpServerIdForPermission(input.toolName, input.mcpServer);
+    if (serverId) {
+      return {
+        behavior: 'allow',
+        updatedPermissions: [mcpServerPermissionUpdate(serverId)],
+        decisionClassification: 'user_permanent',
+      };
+    }
   }
   const threadId = input.threadId.trim();
   if (!threadId) return deny('Sideboard could not tell which chat to ask.');
@@ -84,6 +96,7 @@ export async function claudePermissionResult(input: {
       description: input.options.description,
       displayName: input.options.displayName,
       suggestions: input.options.suggestions,
+      ...(input.mcpServer ? { mcpServer: input.mcpServer } : {}),
       suppressAlwaysAllow: input.options.suppressAlwaysAllowRule === true,
       defaultToNo: input.options.defaultToNo === true,
     });

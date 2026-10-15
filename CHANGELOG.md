@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.301] - 2026-10-15
+
+### Fixed
+
+- The phone create composer can send a ticket with no extra message. An orchestration chat still needs a goal.
+- A phone file reply stays on the tab that asked for it when the path is `./`, a hash, `file://`, or an absolute path under the worktree.
+
+### Changed
+
+- Full autonomy approves Claude MCP calls without a prompt.
+- Allowing a Claude MCP prompt allows that whole server for the rest of the chat, not one set of arguments.
+
 ## [0.1.300] - 2026-10-14
 
 ### Changed

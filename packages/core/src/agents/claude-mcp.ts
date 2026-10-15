@@ -40,6 +40,36 @@ export function sanitizeMcpServerName(name: string): string {
 }
 
 /**
+ * Server id Claude uses in `mcp__<server>__<tool>`. The tool name wins over the
+ * config key, which may still contain spaces ("claude.ai Slack").
+ */
+export function mcpServerIdForPermission(toolName: string, serverName?: string): string | null {
+  if (toolName.startsWith('mcp__')) {
+    const rest = toolName.slice('mcp__'.length);
+    const split = rest.indexOf('__');
+    const id = (split === -1 ? rest : rest.slice(0, split)).trim();
+    if (id && id !== '*') return id;
+  }
+  const sanitized = sanitizeMcpServerName((serverName ?? '').trim());
+  return sanitized || null;
+}
+
+/** Session rule that allows every tool on one MCP server, not one argument list. */
+export function mcpServerPermissionUpdate(serverId: string): {
+  type: 'addRules';
+  rules: Array<{ toolName: string }>;
+  behavior: 'allow';
+  destination: 'session';
+} {
+  return {
+    type: 'addRules',
+    behavior: 'allow',
+    destination: 'session',
+    rules: [{ toolName: `mcp__${serverId}` }, { toolName: `mcp__${serverId}__*` }],
+  };
+}
+
+/**
  * Allow-list entries for connected MCP servers.
  * Emit both server-level and tool-wildcard forms (no spaces — `--allowedTools`
  * splits on commas *and* spaces).

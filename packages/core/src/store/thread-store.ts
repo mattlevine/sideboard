@@ -19,6 +19,7 @@ import type {
   ThreadStatus,
 } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
+import { sanitizeMcpServerName } from '../agents/claude-mcp.js';
 import { cursorSdkStoreDir } from '../agents/cursor-store.js';
 import { threadFilePath, threadLockPath, threadsDir } from './paths.js';
 
@@ -39,6 +40,18 @@ export function resolveThreadEffort(
   if (fromField) return fromField;
   if (raw.fast) return 'low';
   return 'high';
+}
+
+function normalizeApprovedMcpServers(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const ids = [
+    ...new Set(
+      raw
+        .map((value) => (typeof value === 'string' ? sanitizeMcpServerName(value.trim()) : ''))
+        .filter(Boolean),
+    ),
+  ];
+  return ids.length > 0 ? ids : undefined;
 }
 
 function normalizeRunScriptRequest(
@@ -69,6 +82,7 @@ export function normalizeThread(raw: Thread): Thread {
     planMode: Boolean(raw.planMode),
     isolateCodexPlugins: raw.isolateCodexPlugins === true ? true : undefined,
     autonomy: raw.autonomy ?? 'default',
+    approvedMcpServers: normalizeApprovedMcpServers(raw.approvedMcpServers),
     lastError: raw.lastError ?? null,
     agentPid: raw.agentPid ?? null,
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],

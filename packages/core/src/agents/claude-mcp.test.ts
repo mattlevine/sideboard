@@ -3,6 +3,8 @@ import {
   mcpAllowTools,
   mcpAllowToolsFromNames,
   mcpAuthWarnings,
+  mcpServerIdForPermission,
+  mcpServerPermissionUpdate,
   parseMcpList,
   sanitizeMcpServerName,
 } from './claude-mcp.js';
@@ -63,5 +65,27 @@ describe('mcpAuthWarnings', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('claude.ai Slack');
     expect(warnings[0]).toContain('claude mcp login');
+  });
+});
+
+describe('mcpServerIdForPermission', () => {
+  it('reads the server from the tool name, not a spaced config key', () => {
+    expect(mcpServerIdForPermission('mcp__claude_ai_Slack__search', 'claude.ai Slack')).toBe(
+      'claude_ai_Slack',
+    );
+    expect(mcpServerIdForPermission('mcp__gmail__list')).toBe('gmail');
+    expect(mcpServerIdForPermission('Edit', 'claude.ai Slack')).toBe('claude_ai_Slack');
+    expect(mcpServerIdForPermission('Edit')).toBeNull();
+  });
+});
+
+describe('mcpServerPermissionUpdate', () => {
+  it('allows the server and every tool, with no argument pattern', () => {
+    expect(mcpServerPermissionUpdate('gmail')).toEqual({
+      type: 'addRules',
+      behavior: 'allow',
+      destination: 'session',
+      rules: [{ toolName: 'mcp__gmail' }, { toolName: 'mcp__gmail__*' }],
+    });
   });
 });

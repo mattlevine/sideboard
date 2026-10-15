@@ -20,6 +20,7 @@ export type PhonePermissionView = {
   detail: string;
   path?: string;
   allowSession: boolean;
+  sessionLabel?: string;
   defaultToNo?: boolean;
 };
 
@@ -60,6 +61,7 @@ export function permissionViewFromBlock(block: {
     detail: typeof prompt.detail === 'string' ? prompt.detail : '',
     ...(prompt.path ? { path: prompt.path } : {}),
     allowSession: prompt.allowSession !== false,
+    ...(prompt.sessionLabel ? { sessionLabel: prompt.sessionLabel } : {}),
     ...(prompt.defaultToNo ? { defaultToNo: true } : {}),
   };
 }
