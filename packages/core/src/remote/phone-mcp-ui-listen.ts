@@ -1,7 +1,7 @@
 import { getMcpUiHost } from '../mcp-ui/host.js';
 import { readPhoneThread, type PhoneControlRequest } from './phone-chats.js';
 import { emitControl, phoneError, type RemoteOutbound } from './phone-live.js';
-import { phoneMcpToolPayload } from './phone-mcp-ui.js';
+import { phoneMcpToolPayload, type PhoneMcpUiRequest } from './phone-mcp-ui.js';
 
 const PHONE_HTML_CAP = 700_000;
 
@@ -9,7 +9,7 @@ const PHONE_HTML_CAP = 700_000;
 export function dispatchPhoneMcpUi(
   cmd: PhoneControlRequest,
   opts: { onOutbound: (msg: RemoteOutbound) => void },
-): boolean {
+): cmd is PhoneMcpUiRequest {
   if (cmd.op !== 'mcp-ui' && cmd.op !== 'mcp-ui-call' && cmd.op !== 'mcp-ui-read') return false;
   const thread = readPhoneThread(cmd.chatId);
   const reqId = cmd.reqId;
