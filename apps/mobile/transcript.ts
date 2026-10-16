@@ -1,6 +1,17 @@
-export type OpenedMessage = { role: 'user' | 'agent'; text: string; streaming?: boolean };
+export type OpenedMessage = {
+  role: 'user' | 'agent';
+  text: string;
+  streaming?: boolean;
+  apps?: Array<{ id: string; tool: string }>;
+};
 
-export type OpenedBubble = { id: string; role: 'user' | 'agent'; text: string; streaming?: boolean };
+export type OpenedBubble = {
+  id: string;
+  role: 'user' | 'agent';
+  text: string;
+  streaming?: boolean;
+  apps?: Array<{ id: string; tool: string }>;
+};
 
 /** Server snapshot for a chat the phone just opened. Replaces any cached bubbles. */
 export function openedTranscript(
@@ -14,6 +25,7 @@ export function openedTranscript(
     role: message.role,
     text: message.text,
     ...(message.streaming ? { streaming: true as const } : {}),
+    ...(message.apps?.length ? { apps: message.apps } : {}),
   }));
   return { bubbles, questions: null, working, activity: '' };
 }
@@ -43,12 +55,21 @@ export function applyStream(
   return { ...current, bubbles, questions: null, working: true as const, activity };
 }
 
-export function finishAgent(bubbles: OpenedBubble[], text: string): OpenedBubble[] {
+export function finishAgent(
+  bubbles: OpenedBubble[],
+  text: string,
+  apps?: OpenedBubble['apps'],
+): OpenedBubble[] {
   const trimmed = text.trim();
   const last = bubbles[bubbles.length - 1];
+  const extra = apps?.length ? { apps } : {};
   if (last?.streaming) {
     if (!trimmed) return bubbles.slice(0, -1);
-    return [...bubbles.slice(0, -1), { ...last, text: trimmed, streaming: false }];
+    return [...bubbles.slice(0, -1), { ...last, text: trimmed, streaming: false, ...extra }];
   }
-  return pushBubble(bubbles, 'agent', trimmed);
+  const next = pushBubble(bubbles, 'agent', trimmed);
+  if (!apps?.length || next === bubbles) return next;
+  const added = next[next.length - 1];
+  if (!added) return next;
+  return [...next.slice(0, -1), { ...added, apps }];
 }

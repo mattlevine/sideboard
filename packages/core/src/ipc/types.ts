@@ -26,6 +26,7 @@ import type {
   ThreadOptionsPatch,
   WorktreeDirtyStat,
 } from '../types/thread.js';
+import type { McpUiView } from '../mcp-ui/meta.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
   AdvancedAppSettings,
@@ -639,6 +640,21 @@ export interface IpcApi {
   getRunLog(threadRef: string, scriptName?: string): Promise<RunLogSnapshot>;
   runSetup(threadRef: string): Promise<{ exitCode: number | null }>;
   openExternal(url: string): Promise<void>;
+  /**
+   * MCP App HTML for a Claude tool (`mcp__server__tool`). Null when that
+   * server has no `ui://` resource. The desktop opens its own MCP connection;
+   * Claude Code only returns the text result.
+   */
+  mcpUiLookup(toolName: string): Promise<McpUiView | null>;
+  mcpUiCallTool(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown>;
+  mcpUiReadResource(server: string, uri: string): Promise<unknown>;
+  /** Sandboxed custom-protocol URL for an MCP App (inline scripts allowed). */
+  publishMcpUiPreview(id: string, html: string, csp: string): Promise<{ url: string }>;
+  clearMcpUiPreview(id: string): Promise<void>;
   /**
    * Publish HTML for the artifact side-column iframe (custom protocol bypasses
    * renderer CSP so inline scripts can run).

@@ -68,6 +68,8 @@ export interface PhoneChatMessage {
   text: string;
   /** Set on the in-progress answer while a turn is still running. */
   streaming?: boolean;
+  /** Finished Claude MCP Apps. The phone fetches HTML with `mcp-ui`. */
+  apps?: Array<{ id: string; tool: string }>;
 }
 
 export { clip, phoneVisibleText };
@@ -193,7 +195,17 @@ export type PhoneControlRequest =
   | PhonePaneRequest
   | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff'; scope?: PhoneChangeScope; commitSha?: string }
   | PhoneOpenArtifact
-  | { op: 'media'; chatId: string; path: string };
+  | { op: 'media'; chatId: string; path: string }
+  | { op: 'mcp-ui'; chatId: string; tool: string; callId: string; reqId: string }
+  | {
+      op: 'mcp-ui-call';
+      chatId: string;
+      reqId: string;
+      server: string;
+      tool: string;
+      args: Record<string, unknown>;
+    }
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; server: string; uri: string };
 
 export interface PhoneWorktreeBadge {
   id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
@@ -240,7 +252,24 @@ export type PhoneControlReply =
   | { op: 'models'; agent: AgentKind; models: PhoneModelRow[] }
   | { op: 'dictated'; id: string; text: string }
   | ({ op: 'options'; chatId: string } & PhoneComposerOptions)
-  | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'assistant'; chatId: string; text: string; apps?: Array<{ id: string; tool: string }> }
+  | {
+      op: 'mcp-ui';
+      chatId: string;
+      reqId: string;
+      view: {
+        server: string;
+        tool: string;
+        html: string;
+        csp: string;
+        uri: string;
+        input: Record<string, unknown>;
+        resultText: string;
+        isError: boolean;
+      } | null;
+    }
+  | { op: 'mcp-ui-call'; chatId: string; reqId: string; result?: unknown; error?: string }
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string }
   | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
   | { op: 'permission'; chatId: string; prompt: PhonePermissionView | null }
@@ -308,6 +337,31 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
   }
   if (op === 'pane') return parsePhonePane(value, chatId);
   if (op === 'open-artifact') return parseOpenArtifact(value, chatId);
+  if (op === 'mcp-ui') {
+    const tool = textField(value, 'tool');
+    const callId = textField(value, 'callId');
+    const reqId = textField(value, 'reqId');
+    if (!tool.startsWith('mcp__') || tool.length > 200 || !callId || !reqId || reqId.length > 40) {
+      return 'invalid';
+    }
+    return { op: 'mcp-ui', chatId, tool, callId, reqId };
+  }
+  if (op === 'mcp-ui-call' || op === 'mcp-ui-read') {
+    const reqId = textField(value, 'reqId');
+    const server = textField(value, 'server');
+    if (!reqId || reqId.length > 40 || !server || server.length > 120) return 'invalid';
+    if (op === 'mcp-ui-read') {
+      const uri = textField(value, 'uri');
+      if (!uri.startsWith('ui://') || uri.length > 500) return 'invalid';
+      return { op, chatId, reqId, server, uri };
+    }
+    const tool = textField(value, 'tool');
+    const args = (value as { args?: unknown }).args;
+    if (!tool || tool.length > 200 || !args || typeof args !== 'object' || Array.isArray(args)) {
+      return 'invalid';
+    }
+    return { op, chatId, reqId, server, tool, args: args as Record<string, unknown> };
+  }
   if (op === 'open-file' || op === 'media') {
     const path = textField(value, 'path');
     if (!path || path.length > 2000) return 'invalid';

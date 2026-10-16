@@ -16,6 +16,7 @@ import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ActivityMark } from './ActivityMark';
 import { ToolDiffPopover } from './ToolDiffPopover';
+import { McpAppFrame } from './McpAppFrame';
 import { isHiddenChatTool, phaseDurationMs, splitTurnPhases } from '../lib/turn-phases';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
@@ -480,6 +481,16 @@ export function AgentMessage({
           )}
         </button>
         {showTail ? <ToolOutputTail text={part.result!} live /> : null}
+        {agent === 'claude' && part.status !== 'running' && part.name.startsWith('mcp__') ? (
+          <McpAppFrame
+            toolCallId={part.id}
+            toolName={part.name}
+            input={part.input}
+            result={part.result}
+            isError={part.status === 'error'}
+            threadId={threadId}
+          />
+        ) : null}
       </div>
     );
   }
