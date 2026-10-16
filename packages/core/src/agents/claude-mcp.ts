@@ -40,6 +40,23 @@ export function sanitizeMcpServerName(name: string): string {
 }
 
 /**
+ * Claude.ai directory connectors ("claude.ai Notion") use tool names
+ * `mcp__claude_ai_<Display>__<tool>`. Desktop's "Always allow" is this server.
+ */
+export function isClaudeAiConnectorMcp(
+  toolName: string,
+  serverName?: string,
+  serverSource?: string,
+): boolean {
+  if (!toolName.startsWith('mcp__')) return false;
+  if (serverSource === 'claudeai') return true;
+  if (serverName && /^claude\.ai\b/i.test(serverName.trim())) return true;
+  if (/^mcp__claude_ai_/i.test(toolName)) return true;
+  const id = mcpServerIdForPermission(toolName, serverName);
+  return id != null && id.startsWith('claude_ai_');
+}
+
+/**
  * Server id Claude uses in `mcp__<server>__<tool>`. The tool name wins over the
  * config key, which may still contain spaces ("claude.ai Slack").
  */

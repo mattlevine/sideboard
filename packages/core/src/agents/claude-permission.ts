@@ -1,6 +1,10 @@
 import type { AgentRpcConnect } from '../agent-rpc/metadata.js';
 import { AgentRpcClient } from '../agent-rpc/client.js';
-import { mcpServerIdForPermission, mcpServerPermissionUpdate } from './claude-mcp.js';
+import {
+  isClaudeAiConnectorMcp,
+  mcpServerIdForPermission,
+  mcpServerPermissionUpdate,
+} from './claude-mcp.js';
 import type { ToolPermissionAnswer } from './tool-permission.js';
 
 export type ClaudePermissionOptions = {
@@ -12,6 +16,15 @@ export type ClaudePermissionOptions = {
   displayName?: string;
   suppressAlwaysAllowRule?: boolean;
   defaultToNo?: boolean;
+  /**
+   * Set when Claude already decided this ask is not a plain "tool needs
+   * permission" — an ask rule, a safety check, or the connector ceiling
+   * "Ask each time" ("Your organization requires approval for this tool").
+   */
+  decisionReason?: string;
+  decisionReasonType?: string;
+  matchedAskRule?: { source: string; toolName: string; ruleContent?: string };
+  requiresUserInteraction?: boolean;
 };
 
 export type ClaudePermissionResult =
@@ -50,6 +63,31 @@ function fromAnswer(raw: unknown): ClaudePermissionResult {
   return deny(message);
 }
 
+function allowMcpServer(serverId: string): ClaudePermissionResult {
+  return {
+    behavior: 'allow',
+    updatedPermissions: [mcpServerPermissionUpdate(serverId)],
+    decisionClassification: 'user_permanent',
+  };
+}
+
+/**
+ * Directory connector with tool policy "Always allow". Claude still asks, but
+ * the ask has no decision reason. "Ask each time" and user ask-rules do.
+ */
+function claudeAiConnectorAlreadyAllowed(input: {
+  toolName: string;
+  mcpServer?: string;
+  mcpServerSource?: string;
+  options: ClaudePermissionOptions;
+}): boolean {
+  if (input.options.requiresUserInteraction === true) return false;
+  if (input.options.matchedAskRule) return false;
+  if (input.options.decisionReasonType) return false;
+  if (input.options.decisionReason?.trim()) return false;
+  return isClaudeAiConnectorMcp(input.toolName, input.mcpServer, input.mcpServerSource);
+}
+
 /**
  * Surface a Claude SDK permission ask in Sideboard.
  * Plan mode stays read-only. A missing chat id denies instead of hanging.
@@ -60,6 +98,8 @@ export async function claudePermissionResult(input: {
   toolName: string;
   toolInput: Record<string, unknown>;
   mcpServer?: string;
+  /** Claude control-request `mcp_server.source`. Directory connectors are `claudeai`. */
+  mcpServerSource?: string;
   options: ClaudePermissionOptions;
   call?: (method: string, params: unknown) => Promise<unknown>;
   rpc?: AgentRpcConnect;
@@ -69,13 +109,16 @@ export async function claudePermissionResult(input: {
   }
   if (input.permissionMode === 'bypassPermissions') {
     const serverId = mcpServerIdForPermission(input.toolName, input.mcpServer);
-    if (serverId) {
-      return {
-        behavior: 'allow',
-        updatedPermissions: [mcpServerPermissionUpdate(serverId)],
-        decisionClassification: 'user_permanent',
-      };
-    }
+    if (serverId) return allowMcpServer(serverId);
+  }
+  // Desktop "Always allow" on a claude.ai connector is tool policy `allow`.
+  // Claude Code only turns `permission_policy: always_allow` into an allow
+  // rule for http/sse servers, so directory connectors still call canUseTool
+  // with no decision reason. "Ask each time" sets the ceiling to `ask` and
+  // arrives with a decision reason, which we still show.
+  if (claudeAiConnectorAlreadyAllowed(input)) {
+    const serverId = mcpServerIdForPermission(input.toolName, input.mcpServer);
+    if (serverId) return allowMcpServer(serverId);
   }
   const threadId = input.threadId.trim();
   if (!threadId) return deny('Sideboard could not tell which chat to ask.');
