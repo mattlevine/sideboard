@@ -97,6 +97,10 @@ async function main(): Promise<void> {
         displayName?: string;
         suppressAlwaysAllowRule?: boolean;
         defaultToNo?: boolean;
+        decisionReason?: string;
+        decisionReasonType?: string;
+        matchedAskRule?: { source: string; toolName: string; ruleContent?: string };
+        requiresUserInteraction?: boolean;
         mcpServer?: { name: string; source: string };
       },
     ) =>
@@ -106,6 +110,7 @@ async function main(): Promise<void> {
         toolName,
         toolInput,
         mcpServer: toolOpts.mcpServer?.name,
+        mcpServerSource: toolOpts.mcpServer?.source,
         options: toolOpts,
         rpc: req.agentRpc,
       });
