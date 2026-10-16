@@ -1,5 +1,6 @@
-import { ipcMain, protocol } from 'electron';
-import { mcpUiContentSecurityPolicy } from '@sideboard-ai/core';
+import { app, ipcMain, protocol } from 'electron';
+import { closeMcpUiHost, mcpUiContentSecurityPolicy } from '@sideboard-ai/core';
+import { registerMcpUiIpc } from './mcp-ui-ipc';
 import {
   ARTIFACT_PREVIEW_SCHEME,
   artifactPreviewUrl,
@@ -44,6 +45,8 @@ export function registerArtifactPreviewScheme(): void {
 
 /** Register protocol handler + IPC after app is ready. */
 export function bindArtifactPreviewProtocol(): void {
+  registerMcpUiIpc();
+  app.once('will-quit', () => closeMcpUiHost());
   protocol.handle(ARTIFACT_PREVIEW_SCHEME, (request) => {
     const id = parseArtifactPreviewId(request.url);
     const html = id ? htmlById.get(id) : undefined;

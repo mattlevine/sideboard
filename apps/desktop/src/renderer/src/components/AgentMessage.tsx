@@ -16,7 +16,7 @@ import { FloatingMenu } from './FloatingMenu';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ActivityMark } from './ActivityMark';
 import { ToolDiffPopover } from './ToolDiffPopover';
-import { McpAppFrame } from './McpAppFrame';
+import { ToolRowFooter } from './McpAppFrame';
 import { isHiddenChatTool, phaseDurationMs, splitTurnPhases } from '../lib/turn-phases';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
@@ -267,28 +267,6 @@ function useLongRunningShellIds(parts: MessagePart[], delayMs = SHELL_TAIL_AFTER
   return longRunning;
 }
 
-function ToolOutputTail({ text, live }: { text: string; live: boolean }) {
-  const preRef = useRef<HTMLPreElement>(null);
-  const pinToEnd = useRef(true);
-  useEffect(() => {
-    const el = preRef.current;
-    if (!el || !pinToEnd.current) return;
-    el.scrollTop = el.scrollHeight;
-  }, [text]);
-  return (
-    <pre
-      ref={preRef}
-      className={`turn-tool-tail${live ? ' live' : ''}`}
-      onScroll={(e) => {
-        const el = e.currentTarget;
-        pinToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
-      }}
-    >
-      {text.length <= 12000 ? text : `…${text.slice(-12000)}`}
-    </pre>
-  );
-}
-
 function groupTranscript(parts: MessagePart[]): {
   top: MessagePart[];
   children: Map<string, MessagePart[]>;
@@ -480,17 +458,7 @@ export function AgentMessage({
             </span>
           )}
         </button>
-        {showTail ? <ToolOutputTail text={part.result!} live /> : null}
-        {agent === 'claude' && part.status !== 'running' && part.name.startsWith('mcp__') ? (
-          <McpAppFrame
-            toolCallId={part.id}
-            toolName={part.name}
-            input={part.input}
-            result={part.result}
-            isError={part.status === 'error'}
-            threadId={threadId}
-          />
-        ) : null}
+        <ToolRowFooter showTail={showTail} result={part.result} agent={agent} part={part} threadId={threadId} />
       </div>
     );
   }

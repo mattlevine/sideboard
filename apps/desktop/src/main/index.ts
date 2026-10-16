@@ -24,7 +24,6 @@ import {
   bindArtifactPreviewProtocol,
   registerArtifactPreviewScheme,
 } from './artifact-preview';
-import { registerMcpUiIpc } from './mcp-ui-ipc';
 import { bindUpdaterEvents, checkForUpdatesManual, setupApplicationMenu } from './app-menu';
 import { setupTextContextMenu } from './text-context-menu';
 import { askMicrophoneAccess, setupMicrophonePermissions } from './microphone-access';
@@ -180,7 +179,6 @@ import {
   fireSchedule,
   armSchedules,
   answerToolPermission,
-  closeMcpUiHost,
   hasEnabledSchedules,
   updateAdvancedSettings,
   updateAppEnvironment,
@@ -1961,7 +1959,6 @@ app.whenReady().then(async () => {
   startDesktopHost();
   applyDockIcon();
   bindArtifactPreviewProtocol();
-  registerMcpUiIpc();
   setupMicrophonePermissions();
   registerIpc();
   setupNotifications();
@@ -2025,7 +2022,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
-  closeMcpUiHost();
   try {
     // Detached run/setup scripts outlive Electron unless we kill them here.
     orch.stopAllRunScripts();

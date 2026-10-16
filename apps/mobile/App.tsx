@@ -33,7 +33,6 @@ import { PhoneCodeRefChips } from './phone-file-select';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
-import { deliverPhoneMcpUi, PhoneMcpApps } from './phone-mcp-app';
 import { PhoneAsks, PhonePermissionBar, type PhonePermission } from './phone-prompts';
 import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
@@ -63,18 +62,12 @@ import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
 import { composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
-import { applyStream, finishAgent, openedTranscript, pushBubble, settleBubbles } from './transcript';
+import { applyStream, deliverPhoneMcpUi, finishAgent, openedTranscript, PhoneMcpApps, pushBubble, settleBubbles, type PhoneMcpUiControl } from './transcript';
 import { paintedFindStrings } from './find-surface';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
-type Bubble = {
-  id: string;
-  role: 'user' | 'agent';
-  text: string;
-  streaming?: boolean;
-  apps?: Array<{ id: string; tool: string }>;
-};
+type Bubble = { id: string; role: 'user' | 'agent'; text: string; streaming?: boolean; apps?: Array<{ id: string; tool: string }> };
 type Desktop = SavedDesktop & { online: boolean | null; expired: boolean };
 type Transcript = {
   bubbles: Bubble[];
@@ -100,20 +93,13 @@ type PhoneControl =
   | {
       op: 'opened';
       chat: PhoneChat;
-      messages: Array<{
-        role: 'user' | 'agent';
-        text: string;
-        streaming?: boolean;
-        apps?: Array<{ id: string; tool: string }>;
-      }>;
+      messages: Array<{ role: 'user' | 'agent'; text: string; streaming?: boolean; apps?: Array<{ id: string; tool: string }> }>;
       place?: PhonePlace;
       options?: ComposerOptions;
       permission?: PhonePermission | null;
     }
   | { op: 'assistant'; chatId: string; text: string; apps?: Array<{ id: string; tool: string }> }
-  | { op: 'mcp-ui'; chatId: string; reqId: string; view?: unknown }
-  | { op: 'mcp-ui-call'; chatId: string; reqId: string; result?: unknown; error?: string }
-  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string }
+  | PhoneMcpUiControl
   | { op: 'stream'; chatId: string; text: string; activity?: string }
   | { op: 'ask'; chatId: string; text: string; questions: AskQuestion[] }
   | { op: 'permission'; chatId: string; prompt: PhonePermission | null }
@@ -539,11 +525,7 @@ export default function App() {
         return {
           ...prev,
           [chatId]: {
-            bubbles: finishAgent(
-              current.bubbles,
-              control.text,
-              control.op === 'assistant' ? control.apps : undefined,
-            ),
+            bubbles: finishAgent(current.bubbles, control.text, control.op === 'assistant' ? control.apps : undefined),
             questions: control.op === 'ask' ? control.questions : null,
             working: false,
             activity: '',
@@ -1648,13 +1630,7 @@ export default function App() {
                       findQuery={findOpen ? findQuery : ''}
                       findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
                     />
-                    {bubble.apps?.length && activeChatId ? (
-                      <PhoneMcpApps
-                        apps={bubble.apps}
-                        chatId={activeChatId}
-                        send={(payload) => link?.send(phoneCommand(payload))}
-                      />
-                    ) : null}
+                    {bubble.apps?.length && activeChatId ? <PhoneMcpApps apps={bubble.apps} chatId={activeChatId} send={(payload) => link?.send(phoneCommand(payload))} /> : null}
                   </Pressable>
                 )}
               </View>

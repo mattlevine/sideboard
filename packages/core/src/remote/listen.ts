@@ -2,9 +2,8 @@ import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
 import { buildCodeRefAttachment } from '../composer/code-ref.js';
 import { stageBuffersAsAttachments } from '../composer/stage-files.js';
-import { getMcpUiHost } from '../mcp-ui/host.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
-import { phoneMcpToolPayload } from './phone-mcp-ui.js';
+import { dispatchPhoneMcpUi } from './phone-mcp-ui-listen.js';
 import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { visibleAssistantText } from '../agents/message-parts.js';
@@ -333,61 +332,7 @@ function handlePhoneControl(
     });
     return;
   }
-  if (cmd.op === 'mcp-ui' || cmd.op === 'mcp-ui-call' || cmd.op === 'mcp-ui-read') {
-    const thread = readPhoneThread(cmd.chatId);
-    const reqId = cmd.reqId;
-    const chatId = cmd.chatId;
-    if (!thread || thread.agent !== 'claude') {
-      if (cmd.op === 'mcp-ui') emitControl(opts, { op: 'mcp-ui', chatId, reqId, view: null });
-      else emitControl(opts, { op: cmd.op, chatId, reqId, error: 'This chat is not using Claude.' });
-      return;
-    }
-    if (cmd.op === 'mcp-ui-call') {
-      void getMcpUiHost()
-        .callTool(cmd.server, cmd.tool, cmd.args)
-        .then((result) => emitControl(opts, { op: 'mcp-ui-call', chatId, reqId, result }))
-        .catch((err: unknown) =>
-          emitControl(opts, { op: 'mcp-ui-call', chatId, reqId, error: phoneError(err) }),
-        );
-      return;
-    }
-    if (cmd.op === 'mcp-ui-read') {
-      void getMcpUiHost()
-        .readResource(cmd.server, cmd.uri)
-        .then((result) => emitControl(opts, { op: 'mcp-ui-read', chatId, reqId, result }))
-        .catch((err: unknown) =>
-          emitControl(opts, { op: 'mcp-ui-read', chatId, reqId, error: phoneError(err) }),
-        );
-      return;
-    }
-    const agentMessage = [...thread.messages].reverse().find((message) => message.role === 'agent');
-    const payload = phoneMcpToolPayload(agentMessage?.parts, cmd.tool, cmd.callId);
-    void getMcpUiHost()
-      .viewForClaudeTool(cmd.tool)
-      .then((view) => {
-        if (!view || view.html.length > 700_000) {
-          emitControl(opts, { op: 'mcp-ui', chatId, reqId, view: null });
-          return;
-        }
-        emitControl(opts, {
-          op: 'mcp-ui',
-          chatId,
-          reqId,
-          view: {
-            server: view.server,
-            tool: view.tool,
-            html: view.html,
-            csp: view.csp,
-            uri: view.uri,
-            input: payload?.input ?? {},
-            resultText: payload?.resultText ?? '',
-            isError: payload?.isError ?? false,
-          },
-        });
-      })
-      .catch((err: unknown) => emitControl(opts, { op: 'error', chatId, message: phoneError(err) }));
-    return;
-  }
+  if (dispatchPhoneMcpUi(cmd, opts)) return;
   if (cmd.op === 'open-file') {
     const thread = readPhoneThread(cmd.chatId);
     const relative = thread ? phoneWorktreeRelative(thread.worktreePath, cmd.path) : null;

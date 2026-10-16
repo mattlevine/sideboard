@@ -3,6 +3,12 @@ import type { Thread } from '../types/thread.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import { phoneArtifactText } from './phone-artifact.js';
 import { phoneMcpApps, type PhoneMcpAppRef } from './phone-mcp-ui.js';
+export {
+  parsePhoneMcpUi,
+  type PhoneMcpAppsField,
+  type PhoneMcpUiReply,
+  type PhoneMcpUiRequest,
+} from './phone-mcp-ui.js';
 import { phoneStreamFrame } from './phone-stream.js';
 
 export interface PhoneTranscriptMessage {

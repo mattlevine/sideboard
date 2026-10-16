@@ -1,3 +1,5 @@
+export { deliverPhoneMcpUi, PhoneMcpApps, type PhoneMcpUiControl } from './phone-mcp-app';
+
 export type OpenedMessage = {
   role: 'user' | 'agent';
   text: string;

@@ -4,6 +4,11 @@ import WebView from 'react-native-webview';
 
 export type PhoneMcpAppRef = { id: string; tool: string };
 
+export type PhoneMcpUiControl =
+  | { op: 'mcp-ui'; chatId: string; reqId: string; view?: unknown }
+  | { op: 'mcp-ui-call'; chatId: string; reqId: string; result?: unknown; error?: string }
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string };
+
 type McpView = {
   server: string;
   tool: string;

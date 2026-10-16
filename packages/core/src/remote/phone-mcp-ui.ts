@@ -20,6 +20,70 @@ export function phoneMcpApps(
   return out;
 }
 
+/** Optional `apps` on a phone transcript row. */
+export type PhoneMcpAppsField = { apps?: PhoneMcpAppRef[] };
+
+export type PhoneMcpUiRequest =
+  | { op: 'mcp-ui'; chatId: string; tool: string; callId: string; reqId: string }
+  | {
+      op: 'mcp-ui-call';
+      chatId: string;
+      reqId: string;
+      server: string;
+      tool: string;
+      args: Record<string, unknown>;
+    }
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; server: string; uri: string };
+
+export interface PhoneMcpUiView {
+  server: string;
+  tool: string;
+  html: string;
+  csp: string;
+  uri: string;
+  input: Record<string, unknown>;
+  resultText: string;
+  isError: boolean;
+}
+
+export type PhoneMcpUiReply =
+  | { op: 'mcp-ui'; chatId: string; reqId: string; view: PhoneMcpUiView | null }
+  | { op: 'mcp-ui-call'; chatId: string; reqId: string; result?: unknown; error?: string }
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string };
+
+function controlText(value: object, key: string): string {
+  const raw = (value as Record<string, unknown>)[key];
+  return typeof raw === 'string' ? raw.trim() : '';
+}
+
+/** Parse a phone MCP App command. `invalid` when the op matches but the body does not. */
+export function parsePhoneMcpUi(value: object, op: string, chatId: string): PhoneMcpUiRequest | 'invalid' {
+  if (op === 'mcp-ui') {
+    const tool = controlText(value, 'tool');
+    const callId = controlText(value, 'callId');
+    const reqId = controlText(value, 'reqId');
+    if (!tool.startsWith('mcp__') || tool.length > 200 || !callId || !reqId || reqId.length > 40) {
+      return 'invalid';
+    }
+    return { op: 'mcp-ui', chatId, tool, callId, reqId };
+  }
+  if (op !== 'mcp-ui-call' && op !== 'mcp-ui-read') return 'invalid';
+  const reqId = controlText(value, 'reqId');
+  const server = controlText(value, 'server');
+  if (!reqId || reqId.length > 40 || !server || server.length > 120) return 'invalid';
+  if (op === 'mcp-ui-read') {
+    const uri = controlText(value, 'uri');
+    if (!uri.startsWith('ui://') || uri.length > 500) return 'invalid';
+    return { op, chatId, reqId, server, uri };
+  }
+  const tool = controlText(value, 'tool');
+  const args = (value as { args?: unknown }).args;
+  if (!tool || tool.length > 200 || !args || typeof args !== 'object' || Array.isArray(args)) {
+    return 'invalid';
+  }
+  return { op, chatId, reqId, server, tool, args: args as Record<string, unknown> };
+}
+
 export function phoneMcpToolPayload(
   parts: MessagePart[] | undefined,
   tool: string,

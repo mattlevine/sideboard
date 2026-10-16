@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { AgentKind, MessagePart } from '@sideboard-ai/core';
 import {
   agentTextToCallToolResult,
   embeddedMcpUiFromText,
@@ -13,6 +14,62 @@ import {
   toolResultNotification,
   type McpUiView,
 } from '@sideboard/mcp-ui';
+
+type ToolPart = Extract<MessagePart, { type: 'tool' }>;
+
+function ToolOutputTail({ text, live }: { text: string; live: boolean }) {
+  const preRef = useRef<HTMLPreElement>(null);
+  const pinToEnd = useRef(true);
+  useEffect(() => {
+    const el = preRef.current;
+    if (!el || !pinToEnd.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [text]);
+  return (
+    <pre
+      ref={preRef}
+      className={`turn-tool-tail${live ? ' live' : ''}`}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        pinToEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+      }}
+    >
+      {text.length <= 12000 ? text : `…${text.slice(-12000)}`}
+    </pre>
+  );
+}
+
+export function ToolRowFooter({
+  showTail,
+  result,
+  agent,
+  part,
+  threadId,
+}: {
+  showTail: boolean;
+  result?: string;
+  agent?: AgentKind;
+  part: ToolPart;
+  threadId?: string;
+}) {
+  const app = agent === 'claude' && part.status !== 'running' && part.name.startsWith('mcp__');
+  if (!showTail && !app) return null;
+  return (
+    <>
+      {showTail && result ? <ToolOutputTail text={result} live /> : null}
+      {app ? (
+        <McpAppFrame
+          toolCallId={part.id}
+          toolName={part.name}
+          input={part.input}
+          result={part.result}
+          isError={part.status === 'error'}
+          threadId={threadId}
+        />
+      ) : null}
+    </>
+  );
+}
 
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT = 720;
