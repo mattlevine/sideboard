@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.302] - 2026-10-15
+
+### Fixed
+
+- A second agent on a workspace stays listed in the left sidebar while the orchestration chat is still open.
+
 ## [0.1.301] - 2026-10-15
 
 ### Fixed
