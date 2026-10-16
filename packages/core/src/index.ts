@@ -315,6 +315,9 @@ export {
   isInjectedOrchMcpName,
   userMcpNamesToDisable,
 } from './agents/orch-mcp-isolation.js';
+export { closeMcpUiHost, getMcpUiHost } from './mcp-ui/host.js';
+export type { McpUiView } from './mcp-ui/meta.js';
+export { mcpUiContentSecurityPolicy } from './mcp-ui/meta.js';
 export {
   listSlackWorkspaces,
   connectSlackToken,

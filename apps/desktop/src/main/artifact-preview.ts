@@ -1,7 +1,10 @@
-import { ipcMain, protocol } from 'electron';
+import { app, ipcMain, protocol } from 'electron';
+import { closeMcpUiHost, mcpUiContentSecurityPolicy } from '@sideboard-ai/core';
+import { registerMcpUiIpc } from './mcp-ui-ipc';
 import {
   ARTIFACT_PREVIEW_SCHEME,
   artifactPreviewUrl,
+  mcpUiPreviewUrl,
   missingArtifactPreviewHtml,
   parseArtifactPreviewId,
   prepareArtifactPreviewHtml,
@@ -17,7 +20,9 @@ export {
 
 const htmlById = new Map<string, string>();
 const revById = new Map<string, number>();
+const cspById = new Map<string, string>();
 const MAX_HTML_CHARS = 5_000_000;
+const MCP_UI_ID = /^mcpui-[a-f0-9]{8}$/;
 
 /**
  * Must run before app.ready — lets artifact iframes load outside the renderer CSP
@@ -40,9 +45,25 @@ export function registerArtifactPreviewScheme(): void {
 
 /** Register protocol handler + IPC after app is ready. */
 export function bindArtifactPreviewProtocol(): void {
+  registerMcpUiIpc();
+  app.once('will-quit', () => closeMcpUiHost());
   protocol.handle(ARTIFACT_PREVIEW_SCHEME, (request) => {
     const id = parseArtifactPreviewId(request.url);
     const html = id ? htmlById.get(id) : undefined;
+    if (id?.startsWith('mcpui-')) {
+      if (!html) {
+        return new Response(missingArtifactPreviewHtml(), {
+          status: 404,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        });
+      }
+      return new Response(html, {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'content-security-policy': cspById.get(id) || mcpUiContentSecurityPolicy(),
+        },
+      });
+    }
     if (!html) {
       return new Response(missingArtifactPreviewHtml(), {
         status: 404,
@@ -81,6 +102,28 @@ export function bindArtifactPreviewProtocol(): void {
       const key = id.trim();
       htmlById.delete(key);
       revById.delete(key);
+      cspById.delete(key);
     }
+  });
+
+  ipcMain.handle('mcpUiPreview:publish', (_e, id: unknown, html: unknown, csp: unknown) => {
+    if (typeof id !== 'string' || !MCP_UI_ID.test(id)) {
+      throw new Error('invalid mcp-ui id');
+    }
+    if (typeof html !== 'string') throw new Error('invalid mcp-ui html');
+    if (html.length > MAX_HTML_CHARS) throw new Error('mcp-ui app too large');
+    const policy = typeof csp === 'string' && csp.trim() ? csp : mcpUiContentSecurityPolicy();
+    htmlById.set(id, html);
+    cspById.set(id, policy);
+    const rev = (revById.get(id) ?? 0) + 1;
+    revById.set(id, rev);
+    return { url: mcpUiPreviewUrl(id, rev) };
+  });
+
+  ipcMain.handle('mcpUiPreview:clear', (_e, id: unknown) => {
+    if (typeof id !== 'string' || !MCP_UI_ID.test(id)) return;
+    htmlById.delete(id);
+    cspById.delete(id);
+    revById.delete(id);
   });
 }

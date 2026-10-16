@@ -43,7 +43,7 @@ import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-default
 import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
 import type { PhonePermissionView } from './phone-permission.js';
-import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
+import { clip, listPhoneMessages, parsePhoneMcpUi, phoneVisibleText, type PhoneMcpAppsField, type PhoneMcpUiReply, type PhoneMcpUiRequest } from './phone-transcript.js';
 
 /** Phone control rides in prompt text. The leading NUL keeps a person from typing it. */
 export const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
@@ -63,7 +63,7 @@ export interface PhoneChatSummary {
   prStatus?: string;
 }
 
-export interface PhoneChatMessage {
+export interface PhoneChatMessage extends PhoneMcpAppsField {
   role: 'user' | 'agent';
   text: string;
   /** Set on the in-progress answer while a turn is still running. */
@@ -193,7 +193,7 @@ export type PhoneControlRequest =
   | PhonePaneRequest
   | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff'; scope?: PhoneChangeScope; commitSha?: string }
   | PhoneOpenArtifact
-  | { op: 'media'; chatId: string; path: string };
+  | { op: 'media'; chatId: string; path: string } | PhoneMcpUiRequest;
 
 export interface PhoneWorktreeBadge {
   id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
@@ -240,7 +240,7 @@ export type PhoneControlReply =
   | { op: 'models'; agent: AgentKind; models: PhoneModelRow[] }
   | { op: 'dictated'; id: string; text: string }
   | ({ op: 'options'; chatId: string } & PhoneComposerOptions)
-  | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'assistant'; chatId: string; text: string; apps?: Array<{ id: string; tool: string }> } | PhoneMcpUiReply
   | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
   | { op: 'permission'; chatId: string; prompt: PhonePermissionView | null }
@@ -307,7 +307,7 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     return { op: 'git', chatId, action: action as PhoneHeaderGitAction };
   }
   if (op === 'pane') return parsePhonePane(value, chatId);
-  if (op === 'open-artifact') return parseOpenArtifact(value, chatId);
+  if (op === 'open-artifact') return parseOpenArtifact(value, chatId); if (op === 'mcp-ui' || op === 'mcp-ui-call' || op === 'mcp-ui-read') return parsePhoneMcpUi(value, op, chatId);
   if (op === 'open-file' || op === 'media') {
     const path = textField(value, 'path');
     if (!path || path.length > 2000) return 'invalid';

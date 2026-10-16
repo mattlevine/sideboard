@@ -12,10 +12,19 @@ export function artifactPreviewUrl(id: string, rev = 0): string {
   return `${ARTIFACT_PREVIEW_SCHEME}://preview/${encodeURIComponent(id)}?v=${rev}`;
 }
 
+/**
+ * Unique origin per app (`sideboard-artifact://mcpui-<hash>/`) so one app
+ * cannot read another. Hostname is the storage key.
+ */
+export function mcpUiPreviewUrl(frameId: string, rev = 0): string {
+  return `${ARTIFACT_PREVIEW_SCHEME}://${frameId}/app.html?v=${rev}`;
+}
+
 /** Parse `sideboard-artifact://preview/<id>?v=` from a protocol request URL. */
 export function parseArtifactPreviewId(requestUrl: string): string {
   try {
     const url = new URL(requestUrl);
+    if (url.hostname.startsWith('mcpui-')) return url.hostname;
     let id = decodeURIComponent((url.pathname || '').replace(/^\//, ''));
     if (!id && url.hostname && url.hostname !== 'preview') {
       id = decodeURIComponent(url.hostname);

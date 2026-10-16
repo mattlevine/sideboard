@@ -3673,6 +3673,14 @@ mark.chat-search-hit.chat-search-current {
   min-width: 0;
 }
 
+.mcp-app-frame {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
 .turn-tool-tail {
   margin: 0;
   width: 100%;

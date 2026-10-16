@@ -290,6 +290,12 @@ const api: IpcApi = {
   publishArtifactPreview: (id, html) =>
     ipcRenderer.invoke('artifactPreview:publish', id, html),
   clearArtifactPreview: (id) => ipcRenderer.invoke('artifactPreview:clear', id),
+  mcpUiLookup: (toolName) => ipcRenderer.invoke('mcpUi:lookup', toolName),
+  mcpUiCallTool: (server, tool, args) => ipcRenderer.invoke('mcpUi:callTool', server, tool, args),
+  mcpUiReadResource: (server, uri) => ipcRenderer.invoke('mcpUi:readResource', server, uri),
+  publishMcpUiPreview: (id, html, csp) =>
+    ipcRenderer.invoke('mcpUiPreview:publish', id, html, csp),
+  clearMcpUiPreview: (id) => ipcRenderer.invoke('mcpUiPreview:clear', id),
   urlPreview: {
     show: (opts) => ipcRenderer.invoke('urlPreview:show', opts),
     setBounds: (bounds) => ipcRenderer.invoke('urlPreview:setBounds', bounds),

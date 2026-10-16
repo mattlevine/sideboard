@@ -3,6 +3,7 @@ import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
 import { buildCodeRefAttachment } from '../composer/code-ref.js';
 import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
+import { dispatchPhoneMcpUi } from './phone-mcp-ui-listen.js';
 import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { visibleAssistantText } from '../agents/message-parts.js';
@@ -331,6 +332,7 @@ function handlePhoneControl(
     });
     return;
   }
+  if (dispatchPhoneMcpUi(cmd, opts)) return;
   if (cmd.op === 'open-file') {
     const thread = readPhoneThread(cmd.chatId);
     const relative = thread ? phoneWorktreeRelative(thread.worktreePath, cmd.path) : null;

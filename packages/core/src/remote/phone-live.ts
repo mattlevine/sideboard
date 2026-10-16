@@ -7,6 +7,7 @@ import { readTurnLiveParts } from '../store/turn-live.js';
 import type { RemoteAskQuestion } from './protocol.js';
 import { encodePhoneControl, readPhoneThread, type PhoneControlReply } from './phone-chats.js';
 import { phoneArtifactText } from './phone-artifact.js';
+import { phoneMcpApps } from './phone-mcp-ui.js';
 import {
   PHONE_STREAM_FLUSH_MS,
   phoneStreamFlushNow,
@@ -176,10 +177,12 @@ export function emitChatTurn(
       detail ? `Sideboard failed: ${detail}` : 'Sideboard failed before producing a result.',
   });
   const agent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+  const apps = phoneMcpApps(thread.agent, agent?.parts);
   emitControl(opts, {
     op: 'assistant',
     chatId,
     text: phoneArtifactText(reply.trim(), agent?.parts),
+    ...(apps.length ? { apps } : {}),
   });
 }
 

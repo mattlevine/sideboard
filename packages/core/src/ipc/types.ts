@@ -26,6 +26,7 @@ import type {
   ThreadOptionsPatch,
   WorktreeDirtyStat,
 } from '../types/thread.js';
+import type { McpUiIpc } from './mcp-ui-api.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
   AdvancedAppSettings,
@@ -81,7 +82,7 @@ import type { WorktreeOpener, WorktreeOpenerId } from './worktree-opener.js';
 export type { WorktreeOpener, WorktreeOpenerId };
 
 /** Shared typed surface for Electron preload ↔ renderer (and docs). */
-export interface IpcApi {
+export interface IpcApi extends McpUiIpc {
   detectAgents(): Promise<AgentStatus[]>;
   /** Install recipe + docs for Settings → Agents. */
   getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;

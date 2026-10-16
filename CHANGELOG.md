@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.303] - 2026-10-16
+
+### Added
+
+- Claude MCP Apps render under the tool result in the desktop chat and on the phone. The app can call tools, open links, and send a follow-up into the chat.
+
 ## [0.1.302] - 2026-10-15
 
 ### Fixed

@@ -2,12 +2,21 @@ import { isJobContinuePrompt } from '../mcp/wait-for-job.js';
 import type { Thread } from '../types/thread.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import { phoneArtifactText } from './phone-artifact.js';
+import { phoneMcpApps, type PhoneMcpAppRef } from './phone-mcp-ui.js';
+export {
+  parsePhoneMcpUi,
+  type PhoneMcpAppsField,
+  type PhoneMcpUiReply,
+  type PhoneMcpUiRequest,
+} from './phone-mcp-ui.js';
 import { phoneStreamFrame } from './phone-stream.js';
 
 export interface PhoneTranscriptMessage {
   role: 'user' | 'agent';
   text: string;
   streaming?: boolean;
+  /** Finished Claude MCP tools the phone can render. */
+  apps?: PhoneMcpAppRef[];
 }
 
 const PHONE_USER_PREFIX = 'Phone\n\n';
@@ -66,7 +75,8 @@ export function listPhoneMessages(thread: Thread): PhoneTranscriptMessage[] {
     const text =
       message.role === 'agent' ? phoneArtifactText(visible, message.parts, MESSAGE_LIMIT) : clip(visible, MESSAGE_LIMIT);
     if (!text) continue;
-    out.push({ role: message.role, text });
+    const apps = message.role === 'agent' ? phoneMcpApps(thread.agent, message.parts) : [];
+    out.push({ role: message.role, text, ...(apps.length ? { apps } : {}) });
   }
   const live = withLiveTail(thread, out);
   for (const prompt of thread.queue) {
