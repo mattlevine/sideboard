@@ -12,7 +12,7 @@
 <meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261004-2">
+<link rel="stylesheet" href="/styles.css?v=20261010-1">
 </head>
 <body>
 <header class="nav">
@@ -32,7 +32,7 @@
 <h1>Remote integrations</h1>
 <article>
 <p>Desktop Settings splits connections by job. The phone app is remote control. Linear and AbleTime are issue tracking. Vercel, Supabase, PostHog, and Sentry are optional project services. GitHub git auth is its own panel.</p>
-<table><thead><tr>
+<div class="table-scroll"><table><thead><tr>
 <th>Panel</th>
 <th>What</th>
 </tr></thead><tbody>
@@ -56,7 +56,7 @@
 <td><strong>Settings → Connectors</strong></td>
 <td>Vercel, Supabase, PostHog, Sentry tokens; <strong>Install CLI</strong> when <code>vercel</code> / <code>supabase</code> / <code>sentry-cli</code> is missing</td>
 </tr>
-</tbody></table>
+</tbody></table></div>
 <p>Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (<code>vercel</code>, <code>supabase</code>, <code>sentry-cli</code>). PostHog is the <code>posthog_api</code> tool (the key is not copied onto the agent). Write CLI dumps to <code>.context/cli/</code> (not <code>.context/attachments/</code>) and read a slice. Do not add vendor MCPs.</p>
 <h2>Phone</h2>
 <p>The phone app is remote control for the <strong>local</strong> orchestrator. Agents, worktrees, and repos stay on this Mac. Message text goes through a relay at <code>/remote</code>. The default is <code>relay.sideboard.cloud</code>. To run your own, see <a href="/docs/relay/">Run your own relay</a> — that service is the relay only, not this website. The Mac must stay awake — enable <strong>Settings → Advanced → Caffeinate while the phone remote is connected</strong>, or <code>set_caffeinate</code> from the orchestration chat.</p>

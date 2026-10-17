@@ -457,10 +457,14 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 }
 .origin-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 56px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 40px;
   align-items: start;
 }
+.origin-grid > div { max-width: 720px }
+.compare-scroll, .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch }
+.table-scroll { margin: 0 0 22px }
+.table-scroll table { margin: 0 }
 .compare {
   width: 100%;
   border-collapse: collapse;
@@ -480,7 +484,7 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   font-weight: 650;
 }
 .compare td:last-child, .compare th:last-child { color: var(--text); font-weight: 550 }
-.compare td:nth-child(2) { color: var(--faint) }
+.compare td:nth-child(n+2):not(:last-child) { color: var(--faint) }
 
 .reach {
   display: grid;
@@ -637,6 +641,6 @@ article th { color: var(--text); background: var(--card) }
   .phone-band { padding: 36px 24px }
   .nav-inner { gap: 12px 16px }
   .nav-links { gap: 14px }
-  .origin-grid { overflow-x: auto }
-  .compare { min-width: 560px }
+  .compare { min-width: 720px }
+  article table { min-width: 640px }
 }

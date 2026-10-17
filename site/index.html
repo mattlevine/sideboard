@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sideboard — orchestrate a fleet of coding agents on your Mac</title>
-<meta name="description" content="Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.">
+<meta name="description" content="Mission control for Claude Code, Codex, OpenCode, and Cursor. Start agents from tickets in isolated worktrees, review the code and everything else they built, land PRs — run by an orchestrator agent, on a schedule, from your phone. Local-first, Apache-2.0.">
 <meta property="og:title" content="Sideboard — orchestrate a fleet of coding agents on your Mac">
-<meta property="og:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
+<meta property="og:description" content="The control plane for your coding agents: tickets → worktrees → reviewed PRs, orchestrated by an agent, on a schedule, from your phone. On this Mac, not a rented cloud.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.sideboard.cloud/">
 <meta property="og:image" content="https://www.sideboard.cloud/board.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261004-2">
+<link rel="stylesheet" href="/styles.css?v=20261010-1">
 </head>
 <body>
 <header class="nav">
@@ -32,7 +32,7 @@
 <section class="hero wrap">
   <span class="eyebrow">Local-first · Apache-2.0 · Bring your own subscriptions</span>
   <h1>Orchestrate a fleet of coding agents on your Mac.</h1>
-  <p class="lede">Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.</p>
+  <p class="lede">Mission control for the coding agents you already pay for. Start Claude Code, Codex, OpenCode, or Cursor from a ticket, each in its own git worktree. Review the code and everything else they built. Land the PR. An orchestrator agent runs the loop — on a schedule if you want — and your phone reaches it.</p>
   <div class="cta-row">
     <a class="btn btn-primary btn-lg" href="https://download.sideboard.cloud/Sideboard-latest-arm64.dmg">
       <svg class="btn-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -43,14 +43,14 @@
       GitHub
     </a>
   </div>
-  <p class="fine">Apple Silicon · auto-updating · CLI and MCP run without the app</p>
+  <p class="fine">Apple Silicon · auto-updating · CLI and MCP run without the app · agents run as you, on this machine</p>
 </section>
 
 <figure class="shot">
   <div class="shot-frame">
-    <img src="desktop.png?v=2" width="2706" height="1781" alt="Sideboard desktop — the worktree chat with the agent thread, structure column, and the git repo on the far right">
+    <img src="board.png" width="2662" height="1736" alt="Sideboard global board — every worktree as a card across New, Draft, Review, and Merged, with live agent output">
   </div>
-  <figcaption class="shot-cap">One worktree chat: the agent thread in the middle, artifacts and schema tabs beside it, the git repo on the far right.</figcaption>
+  <figcaption class="shot-cap">The board is the home screen: every worktree as a card from New to Merged, with live agent output and the PR state.</figcaption>
 </figure>
 
 <section class="agents wrap">
@@ -64,24 +64,40 @@
 </section>
 
 <section id="product" class="section wrap">
-  <h2>Your fleet, agentified.</h2>
-  <p class="sub">Worktrees are the shared primitive. Sideboard is the layer above them: a board you can see, an orchestrator an agent can drive, and remotes so you are not trapped in one window.</p>
+  <h2>From the ticket to the pull request.</h2>
+  <p class="sub">Each ticket gets its own git worktree and its own agent. You see the fleet on one board, review what the agent produced, and land the PR. An orchestrator can run that loop, on a schedule, from your phone.</p>
   <div class="tabs" role="tablist" aria-label="Product surfaces">
-    <button type="button" class="is-on" data-tab="board" role="tab" aria-selected="true">Board</button>
-    <button type="button" data-tab="orchestrate" role="tab" aria-selected="false">Orchestration</button>
-    <button type="button" data-tab="phone" role="tab" aria-selected="false">Phone</button>
-    <button type="button" data-tab="anywhere" role="tab" aria-selected="false">CLI &amp; MCP</button>
-    <button type="button" data-tab="worktree" role="tab" aria-selected="false">Worktree</button>
+    <button type="button" class="is-on" data-tab="tickets" role="tab" aria-selected="true">Tickets</button>
+    <button type="button" data-tab="review" role="tab" aria-selected="false">Review</button>
+    <button type="button" data-tab="orchestrate" role="tab" aria-selected="false">Orchestrator</button>
+    <button type="button" data-tab="schedule" role="tab" aria-selected="false">Schedules</button>
+    <button type="button" data-tab="remote" role="tab" aria-selected="false">Phone, CLI &amp; MCP</button>
   </div>
-  <div class="panel" data-panel="board">
+  <div class="panel" data-panel="tickets">
     <div class="panel-grid">
       <div>
-        <span class="kicker">Kanban</span>
-        <h3>See the whole fleet at a glance</h3>
-        <p>Status, live output, and fan-out across every thread. One agent per worktree, all of them on one board instead of eight terminal tabs. Columns follow the work: New, Draft, Review, Merged.</p>
+        <span class="kicker">In</span>
+        <h3>Start from the ticket, not a blank prompt</h3>
+        <p>Create a worktree from a Linear, GitHub, or AbleTime issue, a branch, or a PR. The agent gets the ticket, the repo, and the services your project uses — Vercel, Supabase, PostHog, Sentry — through official CLIs with tokens that stay in the Mac vault. Several chats can share one worktree when a ticket needs more than one agent.</p>
+      </div>
+      <div class="mock mock-chat" aria-hidden="true">
+        <div class="mock-row"><b>ENG-412</b> retry backoff on webhook delivery</div>
+        <div class="mock-row dim">create_workspace → thread/eng-412 · claude</div>
+        <div class="mock-row">vercel env pull · supabase db diff</div>
+        <div class="mock-row dim">ask_git → commit and push</div>
+        <div class="mock-row ok">✓ draft PR #418 · Review column</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel" data-panel="review" hidden>
+    <div class="panel-grid">
+      <div>
+        <span class="kicker">Out</span>
+        <h3>Review the diff, the pages, and the data</h3>
+        <p>A worktree chat puts the agent thread, the git repo (Files, Changes, CI, Review), and a structure column side by side. The agent can open an HTML artifact, render a JSON Schema as a table or form you can edit, or show a file manager — so the content, data, and documents it produced get reviewed next to the code, before you land.</p>
       </div>
       <div class="shot-frame">
-        <img src="board.png" width="2662" height="1736" alt="Sideboard global board — every worktree as a card across New, Draft, Review, and Merged">
+        <img src="desktop.png?v=2" width="2706" height="1781" alt="Sideboard worktree chat — the agent thread in the middle, artifact and schema tabs beside it, the git repo on the far right">
       </div>
     </div>
   </div>
@@ -89,8 +105,8 @@
     <div class="panel-grid">
       <div>
         <span class="kicker">MCP</span>
-        <h3>An agent that can reason about the other threads</h3>
-        <p>The orchestrator is an agent too. It can list threads, wait on turns, read diffs, fork worktrees, schedule jobs, and open panes in the desktop. Mechanical control stays on the CLI and costs zero tokens. MCP is for judgment across the fleet.</p>
+        <h3>An orchestrator that is itself an agent</h3>
+        <p>It can list threads, wait on a turn, read a diff, fork a worktree, ask a worktree to commit or open a PR, and open a pane in the desktop. Mechanical control — list, send, diff, land — stays on the CLI at zero tokens. MCP is for judgment across the fleet. <code>land</code> and <code>purge</code> stay human-only.</p>
       </div>
       <div class="mock mock-chat" aria-hidden="true">
         <div class="mock-row"><b>orchestrator</b> list_threads · 6 active</div>
@@ -101,12 +117,27 @@
       </div>
     </div>
   </div>
-  <div class="panel" data-panel="phone" hidden>
+  <div class="panel" data-panel="schedule" hidden>
+    <div class="panel-grid">
+      <div>
+        <span class="kicker">Cron</span>
+        <h3>Run the loop while you are not looking</h3>
+        <p>Local jobs send a prompt to a chat at a time, on an interval, or on a cron — triage open PRs every hour, a morning standup, a nightly smoke run. Jobs fire on this Mac, and Sideboard keeps it awake while schedules are enabled. Agents can create schedules too.</p>
+      </div>
+      <pre style="margin:0;padding:26px;border-radius:16px;background:#0e0f11;border:1px solid var(--line);color:#dfe5ea;font-size:14px;line-height:1.85;overflow-x:auto">sideboard schedule add --prompt "Triage open PRs" --every 1h
+sideboard schedule add --prompt "Morning standup" \
+  --cron "0 9 * * *" --tz America/Los_Angeles
+sideboard schedule add --prompt "Smoke the release" \
+  --at 2026-10-12T18:00:00-07:00 --thread &lt;id&gt;
+sideboard schedule ls</pre>
+    </div>
+  </div>
+  <div class="panel" data-panel="remote" hidden>
     <div class="panel-grid">
       <div>
         <span class="kicker">Remote</span>
-        <h3>Your phone, to this Mac</h3>
-        <p>Pair the Sideboard phone app from Settings → Remote. It lists every Mac you have paired and you choose which desktop to open. Agents, repos, and VPN-only APIs stay on that machine.</p>
+        <h3>Your phone, the CLI, or any MCP client</h3>
+        <p>Pair the phone from Settings → Remote and pick which Mac to open; message text goes through the relay, agents and repos stay here. Register the MCP with Claude, Codex, OpenCode, or Cursor and that agent sees the fleet from outside Sideboard. <code>attach</code> drops you into the same session in the native CLI. <code>adopt</code> brings existing worktrees in.</p>
       </div>
       <div class="mock mock-phone" aria-hidden="true">
         <div class="msg you">Work</div>
@@ -115,107 +146,15 @@
       </div>
     </div>
   </div>
-  <div class="panel" data-panel="anywhere" hidden>
-    <div class="panel-grid">
-      <div>
-        <span class="kicker">Other systems</span>
-        <h3>Drive it from the CLI, MCP, or a native harness</h3>
-        <p>The desktop is one surface. Register the MCP with Claude, Codex, OpenCode, or Cursor and that agent can see the fleet from outside Sideboard. <code>attach</code> drops you into the same session in the native CLI. <code>adopt</code> brings existing worktrees in.</p>
-      </div>
-      <pre style="margin:0;padding:26px;border-radius:16px;background:#0e0f11;border:1px solid var(--line);color:#dfe5ea;font-size:14px;line-height:1.85;overflow-x:auto">sideboard detect
-sideboard new --from branch:main --agent claude
-sideboard send &lt;thread&gt; "add a README note"
-sideboard diff &lt;thread&gt;
-sideboard attach &lt;thread&gt;
-sideboard land &lt;thread&gt;</pre>
-    </div>
-  </div>
-  <div class="panel" data-panel="worktree" hidden>
-    <div class="panel-grid">
-      <div>
-        <span class="kicker">Desktop</span>
-        <h3>Code in the worktree, data right next to it</h3>
-        <p>A worktree chat is repo, agent, and structured data in one view. Artifacts, a JSON Schema rendered as table or form, and the git repo on the far right — without bolting on a CMS.</p>
-      </div>
-      <div class="mock mock-worktree" aria-hidden="true">
-        <div class="mock-col"><span class="mock-col-h">Chat</span><i></i><i></i><i></i></div>
-        <div class="mock-col"><span class="mock-col-h">Structure</span><i class="hot"></i><i></i></div>
-        <div class="mock-col"><span class="mock-col-h">Repo</span><i></i><i></i><i></i></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="origin">
-  <div class="wrap origin-grid">
-    <div>
-      <span class="kicker">Why it exists</span>
-      <h2>Started as a local port. Kept the rest on this machine.</h2>
-      <p class="sub">When Conductor moved the interesting part of a worktree board into a paid cloud, Sideboard began as an open port of the local loop. Then came the pieces that still belong on this Mac: an orchestration tier, a kanban of the fleet, a phone app so you can reach it from somewhere else, and CLI / MCP so other systems can drive it — without moving the repo off the network you already sit on.</p>
-      <p class="sub"><a href="https://www.conductor.build/">Conductor</a> is the polished Mac board (and a $50/mo cloud). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE — terminals, browser, mobile. Sideboard is the local orchestration layer both of those leave on the table.</p>
-      <a class="btn btn-ghost" href="/docs/compare/" style="margin-top:22px">Peer-by-peer compare</a>
-    </div>
-    <table class="compare">
-      <thead>
-        <tr>
-          <th>Job</th>
-          <th>Typical tools</th>
-          <th>Sideboard</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Run N agents in isolated worktrees</td>
-          <td>Conductor, Orca, IDE agents</td>
-          <td>Yes — on this Mac</td>
-        </tr>
-        <tr>
-          <td>Orchestrate the fleet, agent-visible</td>
-          <td>Human board, or a cloud API</td>
-          <td>MCP + global board, local</td>
-        </tr>
-        <tr>
-          <td>Stay on the corporate VPN</td>
-          <td>Cloud sandboxes leave it</td>
-          <td>Agents run as you, here</td>
-        </tr>
-        <tr>
-          <td>Reach it from other systems</td>
-          <td>Product app, or cloud MCP</td>
-          <td>CLI, MCP, phone to this Mac</td>
-        </tr>
-        <tr>
-          <td>Reach it from your phone</td>
-          <td>Cloud app or shared workspace</td>
-          <td>Pair the phone, pick the Mac</td>
-        </tr>
-        <tr>
-          <td>Keep going when you step away</td>
-          <td>Always-on sandbox</td>
-          <td>Phone + opt-in caffeinate</td>
-        </tr>
-        <tr>
-          <td>Drop into the native CLI</td>
-          <td>Weak, or one-way</td>
-          <td><code>attach</code> keeps the session</td>
-        </tr>
-        <tr>
-          <td>Bring existing worktrees in</td>
-          <td>Stuck, or start over</td>
-          <td><code>adopt</code> + Conductor import</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
 </section>
 
 <section class="section wrap">
-  <h2>Accessible from other systems.</h2>
-  <p class="sub">The Mac is the runtime. Everything else is a remote. Register MCP once and any of your agents can see the fleet. The phone app is how you get in when you are away from the desk. The CLI is how you script it.</p>
+  <h2>The Mac is the runtime. Everything else is a remote.</h2>
+  <p class="sub">Agents run as you, on this machine — inside the corporate VPN, with the git login and internal APIs you already have. Register MCP once and any of your agents can see the fleet. The phone is how you get in when you are away from the desk. The CLI is how you script it.</p>
   <div class="reach">
     <div class="card">
       <h3>CLI</h3>
-      <p>List, send, diff, land — zero tokens. <code>sideboard detect</code> reports the harnesses on your PATH.</p>
+      <p>List, send, diff, land — zero tokens. <code>sideboard detect</code> reports the harnesses on your PATH. <code>sideboard schedule add</code> queues the next run.</p>
     </div>
     <div class="card">
       <h3>MCP</h3>
@@ -230,7 +169,7 @@ sideboard land &lt;thread&gt;</pre>
 
 <section class="wrap">
   <div class="phone-band">
-    <h2>The phone is remote control, not a cloud workspace.</h2>
+    <h2>Your phone, to this Mac.</h2>
     <p>Pair it from Settings → Remote. Name each Mac. The phone lists those desktops and you pick which one to open. What stays here: agents, worktrees, repos, and secrets — including anything only reachable on the VPN. What leaves: message text, through the relay.</p>
     <p style="margin-top:22px;font-size:14px">The machine has to stay awake — Settings → Advanced → Caffeinate while the phone remote is connected. <a href="/docs/remote/">Pair a phone →</a></p>
   </div>
@@ -240,12 +179,8 @@ sideboard land &lt;thread&gt;</pre>
   <h2>Questions</h2>
   <div class="faq-list">
     <details open>
-      <summary>How is this different from Conductor?</summary>
-      <p>Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, CLI. Use Conductor if you want their finished workspace UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on.</p>
-    </details>
-    <details>
-      <summary>How is this different from Orca?</summary>
-      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (phone, CLI, MCP) so you can reach this Mac.</p>
+      <summary>Where do the agents run?</summary>
+      <p>On this Mac, as you. Repos, secrets, and anything on your VPN stay here. The phone sends message text through the relay; the relay does not host worktrees.</p>
     </details>
     <details>
       <summary>Do I pay Sideboard for models?</summary>
@@ -253,7 +188,7 @@ sideboard land &lt;thread&gt;</pre>
     </details>
     <details>
       <summary>Does it keep running if I close the laptop?</summary>
-      <p>No — that is the cloud-sandbox trade. The phone and scheduled jobs reach this Mac only while it is awake. Opt in to caffeinate from Settings → Advanced (or from an orchestration chat) when you step away. If you need always-on off-VPN compute, Conductor Cloud and similar sandboxes are the fit.</p>
+      <p>The phone and scheduled jobs reach this Mac while it is awake. Opt in to caffeinate from Settings → Advanced, or from an orchestration chat, when you step away.</p>
     </details>
     <details>
       <summary>Can I use it without the desktop app?</summary>
@@ -264,18 +199,18 @@ sideboard land &lt;thread&gt;</pre>
 
 <section class="wrap split-fit">
   <div class="card">
-    <h3>It fits if…</h3>
-    <p>You already run several local CLI agents on a Mac — especially one on a corporate VPN — and you want an orchestrator you can see, an agent can drive, and a phone app, MCP, or the CLI can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.</p>
+    <h3>Who it’s for</h3>
+    <p>You run Claude Code, Codex, OpenCode, or Cursor on a Mac — especially one on a corporate VPN — and you want tickets in, a board of the fleet, a review of what the agents built, and PRs out. On a schedule. From your phone.</p>
   </div>
   <div class="card">
-    <h3>Use something else if…</h3>
-    <p>You want a polished local board and will never touch CLI or MCP (<a href="https://www.conductor.build/">Conductor</a> free), you want always-on cloud workspaces, you want a full agent IDE (<a href="https://www.onorca.dev/">Orca</a>), you live in an IDE-native agents window, or you are on Windows or Linux.</p>
+    <h3>What stays here</h3>
+    <p>Agents, worktrees, repos, and secrets. Apple Silicon. Apache-2.0. Bring the subscriptions you already pay for. The desktop is the board; the CLI and MCP run without it.</p>
   </div>
 </section>
 
 <section class="wrap">
   <div class="end-cta">
-    <h2>Put the orchestration tier on your own machine.</h2>
+    <h2>Run the loop on your own machine.</h2>
     <div class="cta-row">
       <a class="btn btn-primary btn-lg" href="https://download.sideboard.cloud/Sideboard-latest-arm64.dmg">Download for Mac</a>
       <a class="btn btn-ghost btn-lg" href="/docs/">Read the docs</a>
