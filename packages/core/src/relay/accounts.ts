@@ -77,7 +77,7 @@ function normalizeEmail(email: string | null | undefined): string | null {
 }
 
 /**
- * Longest mount point that contains `dir`. `/data` on a Fly volume is durable.
+ * Longest mount point that contains `dir`. `/data` on a volume is durable.
  * A directory on the root filesystem is wiped by the next image deploy.
  */
 export function longestMountPoint(dir: string, mounts: string): string {
@@ -106,7 +106,7 @@ export function assertRelayAccountsDurable(filePath: string): void {
   const point = longestMountPoint(dir, mounts);
   if (point === '/') {
     throw new Error(
-      `Relay accounts at ${filePath} are on the machine root filesystem. Mount a Fly volume so sign-ins survive deploys.`,
+      `Relay accounts at ${filePath} are on the machine root filesystem. Mount a volume there so sign-ins survive restarts.`,
     );
   }
 }

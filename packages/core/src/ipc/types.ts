@@ -183,7 +183,7 @@ export interface IpcApi extends McpUiIpc {
     slackAppToken?: string | null;
     slackListenEnabled?: boolean | null;
     slackDeviceId?: string | null;
-    slackDeviceLabel?: string | null;
+    slackDeviceLabel?: string | null; remoteRelayUrl?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
     abletimeAccessToken?: string | null;

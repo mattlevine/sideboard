@@ -9,7 +9,7 @@ pnpm 9 workspace (`packages/*`, `apps/*`). Node ≥ 20. Public packages share on
 | `packages/core` | `@sideboard-ai/core` | Orchestration, worktrees, store, MCP, phone remote, git |
 | `packages/cli` | `@sideboard-ai/cli` | `sideboard` / `side` CLI (`sideboard mcp` / `sideboard-mcp`) |
 | `apps/desktop` | `@sideboard-ai/desktop` | Electron board (depends on core via `workspace:*`). **Apple Silicon (arm64) only** — electron-builder dmg+zip; no Intel/x64. |
-| `apps/relay` | `@sideboard-ai/relay` | Hosted Fly relay (phone remote, static `site/`, legacy Slack) |
+| `apps/relay` | `@sideboard-ai/relay` | Phone relay. Sideboard’s Fly app also serves `site/` when `SIDEBOARD_SITE_ROOT` is set. `Dockerfile.relay` is the relay only. |
 
 CLI and MCP run **without** the desktop. Prefer fixing core + CLI first.
 
