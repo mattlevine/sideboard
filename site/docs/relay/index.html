@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run your own relay — Sideboard</title>
+<meta name="description" content="Deploy the phone relay yourself and point the Mac and the phone at it. The service is the relay only, not the website.">
+<meta property="og:title" content="Run your own relay — Sideboard">
+<meta property="og:description" content="Deploy the phone relay yourself and point the Mac and the phone at it. The service is the relay only, not the website.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.sideboard.cloud/docs/relay/">
+<meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.png">
+<link rel="stylesheet" href="/styles.css?v=20261004-2">
+</head>
+<body>
+<header class="nav">
+<div class="nav-inner">
+<a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
+<nav class="nav-links">
+<a href="/docs/">Docs</a>
+<a href="/docs/compare/">Compare</a>
+<a href="/docs/remote/">Phone</a>
+<a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
+</nav>
+<a class="btn btn-primary btn-sm" href="https://download.sideboard.cloud/Sideboard-latest-arm64.dmg">Download for Mac</a>
+</div>
+</header>
+<div class="page">
+<p style="margin:0 0 8px"><a class="back" href="/docs/">← Docs</a></p>
+<h1>Run your own relay</h1>
+<article>
+<p>The phone app talks to the Mac through a relay. Message text is the only thing that crosses it. Agents, repos, and secrets stay on the Mac.</p>
+<p>Sideboard hosts a relay at <code>wss://relay.sideboard.cloud/remote</code>. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website.</p>
+<h2>What you need</h2>
+<ul>
+<li>A host with a public HTTPS name. Phones connect with <code>wss://</code>.</li>
+<li>A GitHub OAuth App that you control. The relay holds the client secret.</li>
+<li>One machine. The account database and the live sockets belong to that process.</li>
+<li>A disk volume for the account file.</li>
+</ul>
+<h2>GitHub OAuth App</h2>
+<p>In GitHub: Settings → Developer settings → OAuth Apps → New OAuth App.</p>
+<table><thead><tr>
+<th>Field</th>
+<th>Value</th>
+</tr></thead><tbody>
+<tr>
+<td>Homepage URL</td>
+<td><code>https://relay.example.com</code></td>
+</tr>
+<tr>
+<td>Authorization callback URL</td>
+<td><code>https://relay.example.com/remote/oauth/callback</code></td>
+</tr>
+</tbody></table>
+<p>Use your relay’s public origin. Copy the client id and generate a client secret. Keep them on the relay. Do not put them in the desktop app or the phone.</p>
+<h2>Run</h2>
+<p>From a checkout of the Sideboard repo:</p>
+<pre>export SIDEBOARD_RELAY_PUBLIC_ORIGIN=https://relay.example.com
+export SIDEBOARD_RELAY_GITHUB_CLIENT_ID=your-client-id
+export SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=your-client-secret
+docker compose -f apps/relay/docker-compose.yml up --build -d</pre>
+<p>The image is <code>apps/relay/Dockerfile.relay</code>. It does not include the website. Compose publishes port 8080 and stores accounts on a volume at <code>/data</code>.</p>
+<p><code>SIDEBOARD_RELAY_PUBLIC_ORIGIN</code> is the public <code>https://</code> origin with no path. Put TLS in front of port 8080. With Caddy:</p>
+<pre>relay.example.com {
+  reverse_proxy 127.0.0.1:8080
+}</pre>
+<p>Open <code>https://relay.example.com/health</code>. You should see JSON with <code>"service": "sideboard-relay"</code>. <code>/</code> on this host is that same JSON.</p>
+<p>Run one copy. A second machine will not see the sockets or the accounts on the first.</p>
+<h2>Use it</h2>
+<p>On each Mac, open <strong>Settings → Remote → Relay</strong> and paste:</p>
+<pre>wss://relay.example.com/remote</pre>
+<p>Save. Sideboard signs this Mac out of the previous relay. <strong>Sign in with GitHub</strong>, name the Mac, then <strong>Show pairing code</strong>.</p>
+<p>On the phone, open <strong>Pair a Mac</strong>, set <strong>Relay</strong> to that same address, and enter the code. The phone remembers it.</p>
+<p>Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch.</p>
+<p>See <a href="/docs/remote/">Phone</a> for pairing, and <a href="/support/">Support</a> for product questions.</p>
+</article>
+</div>
+<footer class="foot">
+<div class="foot-inner">
+<a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.cloud</a>
+<nav>
+<a href="/docs/">Docs</a>
+<a href="/docs/compare/">Compare</a>
+<a href="/docs/remote/">Phone</a>
+<a href="/privacy/">Privacy</a>
+<a href="/support/">Support</a>
+<a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>
+</nav>
+<span class="muted">Apache-2.0</span>
+</div>
+</footer>
+</body>
+</html>

@@ -366,11 +366,17 @@ export {
   formatRemotePrompt,
   isRemoteStopCommand,
 } from './remote/listen.js';
-export { remoteRelayUrl, BAKED_REMOTE_RELAY_URL, REMOTE_RELAY_PATH } from './remote/protocol.js';
+export {
+  remoteRelayUrl,
+  normalizeRemoteRelayUrl,
+  BAKED_REMOTE_RELAY_URL,
+  REMOTE_RELAY_PATH,
+} from './remote/protocol.js';
 export type { RemoteServerMessage, RemoteAskQuestion } from './remote/protocol.js';
 export {
   disconnectRemoteAccount,
   isRemoteAccountLoginCancelled,
+  remoteAccountHttpOrigin,
   startRemoteAccountLogin,
 } from './relay/account-login.js';
 export type { RelayAccountProvider, RemoteAccountSession } from './relay/account-login.js';

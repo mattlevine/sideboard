@@ -1101,7 +1101,7 @@ function registerIpc(): void {
         stopSlackListenDaemon();
         syncSlackListenDaemon();
       }
-      if ('slackDeviceId' in next) {
+      if ('slackDeviceId' in next || 'remoteRelayUrl' in next) {
         restartRemoteHost();
       } else if ('slackDeviceLabel' in next) {
         refreshRemoteDeviceLabel();

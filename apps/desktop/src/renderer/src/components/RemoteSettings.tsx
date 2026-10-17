@@ -35,6 +35,7 @@ export function RemoteSettings({
 }) {
   const [remote, setRemote] = useState<RemoteHostStatus | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
+  const [relayDraft, setRelayDraft] = useState(settings.integrations.remoteRelayUrl ?? '');
   const [signingIn, setSigningIn] = useState<'github' | 'out' | null>(null);
   const [pairing, setPairing] = useState(false);
   const signedIn = Boolean(settings.integrations.hasRemoteAccount);
@@ -46,6 +47,10 @@ export function RemoteSettings({
   useEffect(() => {
     setLabelDraft((prev) => settings.integrations.slackDeviceLabel?.trim() || prev);
   }, [settings.integrations.slackDeviceLabel]);
+
+  useEffect(() => {
+    setRelayDraft(settings.integrations.remoteRelayUrl ?? '');
+  }, [settings.integrations.remoteRelayUrl]);
 
   useEffect(() => {
     const api = window.sideboard.getRemoteStatus;
@@ -67,6 +72,23 @@ export function RemoteSettings({
       });
       applySettings(next);
       setLabelDraft(next.integrations.slackDeviceLabel?.trim() || '');
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveRelay() {
+    setBusy(true);
+    setError(null);
+    try {
+      const raw = relayDraft.trim();
+      const next = await window.sideboard.updateIntegrationsSettings({
+        remoteRelayUrl: raw || null,
+      });
+      applySettings(next);
+      setRelayDraft(next.integrations.remoteRelayUrl ?? '');
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -115,6 +137,32 @@ export function RemoteSettings({
         Sign in with GitHub, the git host, so this Mac can register on the relay. Other git
         hosts can be added later.
       </p>
+
+      <div className="settings-section settings-section-card">
+        <div className="settings-section-title">Relay</div>
+        <p className="settings-hint">
+          Message text goes through this address. Leave it blank to use Sideboard’s relay.
+          To run your own, deploy the relay service (not the website) and paste the same{' '}
+          <code>wss://…/remote</code> address here and in the phone app. Saving a different
+          relay signs this Mac out.
+        </p>
+        <div className="settings-key-row" style={{ marginTop: 12 }}>
+          <input
+            type="text"
+            value={relayDraft}
+            onChange={(e) => setRelayDraft(e.target.value)}
+            placeholder="wss://relay.sideboard.cloud/remote"
+            spellCheck={false}
+          />
+          <button
+            type="button"
+            disabled={busy || relayDraft.trim() === (settings.integrations.remoteRelayUrl?.trim() || '')}
+            onClick={() => void saveRelay()}
+          >
+            Save relay
+          </button>
+        </div>
+      </div>
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Relay account</div>

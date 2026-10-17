@@ -8,8 +8,44 @@ export const REMOTE_PONG_TIMEOUT_MS = 15_000;
 
 export const BAKED_REMOTE_RELAY_URL = `wss://relay.sideboard.cloud${REMOTE_RELAY_PATH}`;
 
-export function remoteRelayUrl(): string {
-  return process.env.SIDEBOARD_REMOTE_RELAY_URL?.trim() || BAKED_REMOTE_RELAY_URL;
+/**
+ * `wss://host/remote`, or `ws://` for a local relay.
+ * `https://host` and a host with no path become that WebSocket URL.
+ * Returns null when the value is not a relay address.
+ */
+export function normalizeRemoteRelayUrl(raw: string): string | null {
+  let text = raw.trim();
+  if (!text) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = `wss://${text}`;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol === 'https:') url.protocol = 'wss:';
+  else if (url.protocol === 'http:') url.protocol = 'ws:';
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') return null;
+  if (url.username || url.password) return null;
+  const path = url.pathname.replace(/\/+$/, '') || '/';
+  if (path !== '/' && path !== REMOTE_RELAY_PATH) return null;
+  url.pathname = REMOTE_RELAY_PATH;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+/**
+ * Relay the phone and this Mac share.
+ * A saved Settings URL wins. Otherwise `SIDEBOARD_REMOTE_RELAY_URL`, then
+ * Sideboard’s hosted relay.
+ */
+export function remoteRelayUrl(configured?: string | null): string {
+  const fromSettings = configured?.trim() ? normalizeRemoteRelayUrl(configured) : null;
+  if (fromSettings) return fromSettings;
+  const fromEnv = process.env.SIDEBOARD_REMOTE_RELAY_URL?.trim();
+  if (fromEnv) return normalizeRemoteRelayUrl(fromEnv) || BAKED_REMOTE_RELAY_URL;
+  return BAKED_REMOTE_RELAY_URL;
 }
 
 export interface RemoteAskOption {

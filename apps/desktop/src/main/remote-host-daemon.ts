@@ -3,6 +3,7 @@ import {
   ensureRemoteHostCredentials,
   isRemoteAccountLoginCancelled,
   loadAppSettings,
+  remoteAccountHttpOrigin,
   remoteRelayUrl,
   runRemoteHost,
   startRemoteAccountLogin,
@@ -96,6 +97,10 @@ export function stopRemoteHost(): void {
   onActivity();
 }
 
+function activeRelayUrl(): string {
+  return remoteRelayUrl(loadAppSettings().integrations.remoteRelayUrl);
+}
+
 export function startRemoteHost(): void {
   if (remoteAbort) return;
   const creds = ensureRemoteHostCredentials();
@@ -106,7 +111,7 @@ export function startRemoteHost(): void {
   remoteLastLog = 'Starting phone remote…';
   onActivity();
   const handle = runRemoteHost({
-    url: remoteRelayUrl(),
+    url: activeRelayUrl(),
     deviceId: creds.deviceId,
     deviceLabel: creds.deviceLabel,
     hostSecret: creds.hostSecret,
@@ -183,6 +188,7 @@ export async function signInRemoteAccount(
     const session = await startRemoteAccountLogin({
       provider,
       openUrl,
+      origin: remoteAccountHttpOrigin(activeRelayUrl()),
       signal: ac.signal,
     });
     const saved = updateIntegrationsSettings({
@@ -203,7 +209,10 @@ export async function signOutRemoteAccount(): Promise<PublicAppSettings> {
   const token = loadAppSettings().integrations.remoteAccountToken;
   if (token) {
     try {
-      await disconnectRemoteAccount({ accountToken: token });
+      await disconnectRemoteAccount({
+        accountToken: token,
+        origin: remoteAccountHttpOrigin(activeRelayUrl()),
+      });
     } catch {
       // The local credential still has to go, even if the relay is unreachable.
     }

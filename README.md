@@ -371,21 +371,21 @@ The Sideboard phone app is the remote surface for the **same local orchestrator*
                                           Global orchestrator → worktrees
 ```
 
-**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** message text, via `relay.sideboard.cloud`. The relay does not host worktrees.
+**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** message text, via a relay. The default is `relay.sideboard.cloud`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
 
 Keep the desktop app running. The phone cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
 
 ### Pair
 
-1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Name this Mac if you want.
+1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Set **Relay** if this Mac should use a relay you run. Name this Mac if you want.
 2. **Show pairing code.**
-3. In the phone app, enter that code. The next messages open a Global chat titled Phone.
+3. In the phone app, set **Relay** to the same address, then enter that code. The next messages open a Global chat titled Phone.
 
 A phone can pair with more than one Mac. Name each one in **Settings → Remote** (Work, Personal). The phone lists those desktops and you choose which one to open. Pairing again adds another Mac. Messages go only to the desktop you picked.
 
 Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user`, the phone shows the options.
 
-Override the relay with `SIDEBOARD_REMOTE_RELAY_URL` (default `wss://relay.sideboard.cloud/remote`).
+**Settings → Remote → Relay** is the address both this Mac and the phone use (`wss://host/remote`). Leave it blank for Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.cloud/remote`). Steps to deploy the relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
 
 The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts Metro and opens the iOS Simulator when that app is installed. If Simulator.app is missing, Metro stays up and Expo Go opens on a simulator that is already booted. Pair from **Settings → Remote**.
 

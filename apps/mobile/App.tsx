@@ -26,6 +26,7 @@ import {
   type PhoneSources,
 } from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
+import { useSavedRelayUrl } from './use-saved-relay-url';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
 import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
@@ -178,7 +179,7 @@ function decodePhoneReply(text: string): PhoneControl | null {
 }
 
 export default function App() {
-  const [url, setUrl] = useState(DEFAULT_URL);
+  const relay = useSavedRelayUrl(DEFAULT_URL);
   const [code, setCode] = useState('');
   const [desktops, setDesktops] = useState<Desktop[]>([]);
   const [screen, setScreen] = useState<Screen>('loading');
@@ -256,7 +257,6 @@ export default function App() {
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
   const accountDefaultsRef = useRef<PhoneAccountDefaults | null>(null);
-  const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
   const screenRef = useRef(screen);
   const historyQueryRef = useRef('');
@@ -282,11 +282,10 @@ export default function App() {
   activeIdRef.current = activeId;
   activeChatIdRef.current = activeChatId;
   projectsRef.current = projects;
-  urlRef.current = url;
   screenRef.current = screen;
   if (!linkRef.current) {
     linkRef.current = createRelayLink({
-      url: () => urlRef.current.trim() || DEFAULT_URL,
+      url: () => relay.socketUrl(),
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
       onOpen: () => (errorRef.current === RELAY_UNREACHABLE ? setError(null) : undefined),
@@ -1166,6 +1165,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!relay.loaded) return;
     let cancelled = false;
     void loadDesktops().then((saved) => {
       if (cancelled) return;
@@ -1182,7 +1182,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [relay.loaded]);
 
   const ordered = useMemo(() => {
     const rank = (desktop: Desktop) => (desktop.online ? 0 : desktop.expired ? 2 : 1);
@@ -1324,7 +1324,7 @@ export default function App() {
             )}
             <Text style={styles.title}>Pair a Mac</Text>
             <Text style={styles.hint}>
-              On the Mac, open Sideboard → Settings → Remote, name it, then show a pairing code.
+              On the Mac, open Sideboard → Settings → Remote, set the same relay, name it, then show a pairing code.
             </Text>
           </View>
           <View style={styles.form}>
@@ -1343,8 +1343,8 @@ export default function App() {
               style={styles.input}
               autoCapitalize="none"
               autoCorrect={false}
-              value={url}
-              onChangeText={setUrl}
+              value={relay.url}
+              onChangeText={relay.setUrl}
             />
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <Pressable

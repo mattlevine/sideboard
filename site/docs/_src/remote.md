@@ -7,14 +7,14 @@ Desktop Settings splits connections by job. The phone app is remote control. Lin
 | **Settings → Agents** | Default agent / model / effort, default orchestrator agent / model / effort, then harness setup |
 | **Settings → Git** | `gh` / SSH / PAT for this Mac and worktree agents |
 | **Settings → Issues** | Issue source, Linear, AbleTime |
-| **Settings → Remote** | Relay account (GitHub, the git host), this Mac’s name, phone pairing code |
+| **Settings → Remote** | Relay address, relay account (GitHub, the git host), this Mac’s name, phone pairing code |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
 Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is the `posthog_api` tool (the key is not copied onto the agent). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
 
 ## Phone
 
-The phone app is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac. Message text goes through `relay.sideboard.cloud` at `/remote`. The Mac must stay awake — enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from the orchestration chat.
+The phone app is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac. Message text goes through a relay at `/remote`. The default is `relay.sideboard.cloud`. To run your own, see [Run your own relay](/docs/relay/) — that service is the relay only, not this website. The Mac must stay awake — enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from the orchestration chat.
 
 **Settings → Remote** signs this Mac in with its git host (GitHub today), then shows **Show pairing code**. Settings → Git is where this Mac’s `gh`, SSH, or PAT credentials live. Enter the code in the Sideboard phone app. The phone lists every Mac it has paired, using the name from Settings → Remote, and you choose which desktop to open. Replies stream while the agent writes, with the desktop’s markdown, code colors, and diagrams. The open workspace has Chat, All files, Changes, Checks, and Review. Opening a file from Changes shows the same unified diff as the desktop. Files you open stay on a row underneath. All files filters the worktree, and selecting text in a file adds that range to the chat. Tapping a file path or an artifact opens it on the phone. Send `stop` to cancel a turn. `ask_user` options show up as buttons.
 
