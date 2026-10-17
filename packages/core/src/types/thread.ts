@@ -129,7 +129,7 @@ export interface Thread {
   /** MCP servers this chat may call without another prompt (`gmail` in `mcp__gmail__search`). */
   approvedMcpServers?: string[];
   sourceIsFork: boolean;
-  status: ThreadStatus; agentBlock?: import('./agent-block.js').AgentBlock | null;
+  status: ThreadStatus; agentBlock?: import('./agent-block.js').AgentBlock | null; dismissedQuestionSignature?: string | null;
   queue: string[];
   parentThreadId: string | null;
   /** Port of the default/primary run script (legacy + sidebar). */

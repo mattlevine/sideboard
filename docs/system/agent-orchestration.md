@@ -31,7 +31,7 @@ Herdr marks `blocked` only when an agent is waiting on a person (approval, quest
 | `plan` | Plan mode and the turn called `present_plan` or ExitPlanMode |
 | `reported` | the agent called `notify_orchestrator` with a reason |
 
-`Thread.agentBlock.reason` is the short why. The sidebar and board highlight that agent until the next user message starts a turn. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
+`Thread.agentBlock.reason` is the short why. The sidebar and board highlight that agent until the next user message starts a turn. An `ask_user` highlight also drops when that question is no longer active in its chat — the user skipped it, or sent their own message instead of answering. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
 
 A2A also has `rejected` and `auth-required`. No Sideboard source yet — do not invent them.
 

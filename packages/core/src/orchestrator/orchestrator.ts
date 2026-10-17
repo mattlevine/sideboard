@@ -117,7 +117,7 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
-import { clearAgentBlock, settleAgentBlock } from './agent-block.js';
+import { clearAgentBlock, dismissAskUserQuestion, settleAgentBlock } from './agent-block.js';
 import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
@@ -3585,7 +3585,7 @@ export class Orchestrator {
     if (!next) throw new Error('Title cannot be empty');
     return updateThread(thread.id, { title: next, userSetTitle: true });
   }
-
+  dismissAskUser(threadRef: string, signature: string): Thread { const thread = this.requireThread(threadRef); dismissAskUserQuestion(thread.id, signature); return this.requireThread(thread.id); }
   setWorkspaceTags(threadRef: string, tags: string[]): Thread { return applyWorkspaceTags(threadRef, tags, 'replace'); }
 
   async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {

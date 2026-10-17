@@ -308,7 +308,7 @@ export interface IpcApi extends McpUiIpc {
   forkChatTab(input: ForkChatTabInput): Promise<Thread>;
   forkThreadWorktree(input: ForkThreadWorktreeInput): Promise<Thread>;
   renameThread(threadRef: string, title: string): Promise<Thread>;
-  /** Replace the tags on every live chat in this workspace. */
+  dismissAskUser(threadRef: string, signature: string): Promise<Thread>;
   setWorkspaceTags(threadRef: string, tags: string[]): Promise<Thread>;
   setAttachments(threadRef: string, attachments: ThreadAttachment[]): Promise<Thread>;
   /**

@@ -1443,9 +1443,8 @@ function registerIpc(): void {
     if (source) await orch.reconcile(source.repoPath, { light: true });
     return orch.forkThreadWorktree(input);
   });
-  ipcMain.handle('renameThread', (_e, ref: string, title: string) =>
-    orch.renameThread(ref, title),
-  );
+  ipcMain.handle('renameThread', (_e, ref: string, title: string) => orch.renameThread(ref, title));
+  ipcMain.handle('dismissAskUser', (_e, ref: string, signature: string) => orch.dismissAskUser(ref, signature));
   ipcMain.handle('setWorkspaceTags', (_e, ref: string, tags: string[]) => orch.setWorkspaceTags(ref, tags));
   ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
     orch.setAttachments(ref, attachments),
