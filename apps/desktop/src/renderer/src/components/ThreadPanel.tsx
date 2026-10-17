@@ -1146,6 +1146,7 @@ export function ThreadPanel({
   }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser]);
 
   useEffect(() => {
+    explicitAskSkip.current = null;
     setDismissedPlanQuestionsId(null);
     setPendingUser(null);
     setPendingInTranscript(false);
@@ -1490,13 +1491,28 @@ export function ThreadPanel({
   /** Steer skips the composer queue and lands in the transcript immediately. */
   const steeringFollowUp = followUpBehavior === 'steer' && followUpBusy;
 
+  const explicitAskSkip = useRef<string | null>(null);
   function skipAskUser(signature: string) {
+    explicitAskSkip.current = signature;
     setDismissedPlanQuestionsId(signature);
     void window.sideboard.dismissAskUser(thread.id, signature).then(() => onRefresh());
   }
+  useEffect(() => {
+    const skip = explicitAskSkip.current;
+    const saved = thread.dismissedQuestionSignature;
+    if (skip && saved && skip === saved) explicitAskSkip.current = `seen:${saved}`;
+    if (explicitAskSkip.current?.startsWith('seen:') && !saved) {
+      explicitAskSkip.current = null;
+      setDismissedPlanQuestionsId(null);
+      return;
+    }
+    if (explicitAskSkip.current || saved) return;
+    if (pendingUser || pendingFollowUps.length > 0 || thread.queue.length > 0) return;
+    setDismissedPlanQuestionsId((cur) => (cur == null ? cur : null));
+  }, [pendingFollowUps.length, pendingUser, thread.dismissedQuestionSignature, thread.queue.length]);
 
   function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
-    if (pendingPlanQuestions) skipAskUser(pendingPlanQuestions.signature);
+    if (pendingPlanQuestions) setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
     const queueing = followUpBusy && !steeringFollowUp;
     if (queueing) {
       setPendingFollowUps((prev) => [
@@ -2849,7 +2865,6 @@ export function ThreadPanel({
                   if (!sendGate.tryBegin()) return;
                   try {
                     if (!(await confirmSendDespiteClaudeUsage())) return;
-                    setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
                     setBusy(true);
                     beginPendingSend(message);
                     try {
