@@ -3585,14 +3585,7 @@ export class Orchestrator {
     if (!next) throw new Error('Title cannot be empty');
     return updateThread(thread.id, { title: next, userSetTitle: true });
   }
-
-  /** Drop the sidebar ask highlight once that question is no longer active. */
-  dismissAskUser(threadRef: string, signature: string): Thread {
-    const thread = this.requireThread(threadRef);
-    dismissAskUserQuestion(thread.id, signature);
-    return this.requireThread(thread.id);
-  }
-
+  dismissAskUser(threadRef: string, signature: string): Thread { const thread = this.requireThread(threadRef); dismissAskUserQuestion(thread.id, signature); return this.requireThread(thread.id); }
   setWorkspaceTags(threadRef: string, tags: string[]): Thread { return applyWorkspaceTags(threadRef, tags, 'replace'); }
 
   async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {
