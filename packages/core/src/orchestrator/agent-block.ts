@@ -1,5 +1,11 @@
 import { denyPendingToolPermissions } from '../agents/tool-permission.js';
-import { extractPendingPlanQuestions, isAskUserToolName } from '../plan/ask-user.js';
+import { isDismissedAskUserBlock } from '../board/agent-block-view.js';
+import {
+  extractPendingPlanQuestions,
+  isAskUserToolName,
+  parsePlanQuestionsInput,
+  planQuestionsSignature,
+} from '../plan/ask-user.js';
 import { extractPresentedPlan, isPresentPlanToolName } from '../plan/plan-present.js';
 import { readThread, updateThread } from '../store/thread-store.js';
 import type { AgentBlock, AgentBlockSource } from '../types/agent-block.js';
@@ -48,7 +54,10 @@ export function decisionBlockFromParts(
     const reason = pending
       ? formatAskUserNotifyMessage(pending.questions)
       : 'Waiting for an answer in that chat.';
-    return makeAgentBlock('ask_user', reason, at);
+    return {
+      ...makeAgentBlock('ask_user', reason, at),
+      ...(pending ? { questionSignature: pending.signature } : {}),
+    };
   }
   if (!planMode || last?.type !== 'tool') return null;
   const exited = /exitplanmode/i.test(last.name ?? '');
@@ -68,18 +77,24 @@ export function decisionBlockFromParts(
  * Turn-end block. Errors clear it. A successful or stopped turn keeps a
  * decision in the transcript, or a block stamped earlier in this turn
  * when that tool never showed up in the transcript. A later top-level tool
- * means an ask_user / plan stamp is stale. Reported blocks stay until the
- * next user message.
+ * means an ask_user / plan stamp is stale. A skipped question stays down.
+ * Reported blocks stay until the next user message.
  */
 export function agentBlockAfterTurn(input: {
   existing: AgentBlock | null | undefined;
   parts: MessagePart[] | undefined;
   planMode: boolean;
   failed: boolean;
+  dismissedQuestionSignature?: string | null;
 }): AgentBlock | null {
   if (input.failed) return null;
   const decision = decisionBlockFromParts(input.parts, input.planMode);
-  if (decision) return decision;
+  if (decision) {
+    if (isDismissedAskUserBlock(decision, input.dismissedQuestionSignature)) {
+      return input.existing?.source === 'reported' ? input.existing : null;
+    }
+    return decision;
+  }
   if (
     input.existing &&
     input.existing.source !== 'reported' &&
@@ -87,13 +102,33 @@ export function agentBlockAfterTurn(input: {
   ) {
     return null;
   }
+  if (isDismissedAskUserBlock(input.existing, input.dismissedQuestionSignature)) return null;
   return input.existing ?? null;
 }
 
 export function clearAgentBlock(threadId: string): void {
   const thread = readThread(threadId);
-  if (!thread?.agentBlock) return;
-  updateThread(threadId, { agentBlock: null });
+  if (!thread?.agentBlock && !thread?.dismissedQuestionSignature) return;
+  updateThread(threadId, { agentBlock: null, dismissedQuestionSignature: null });
+}
+
+/**
+ * The question UI for this signature is no longer active (skipped, or the
+ * user sent their own message instead). Drop the sidebar / board ask
+ * highlight so it does not stick around after they choose not to answer.
+ * Plan, permission, and reported highlights stay.
+ */
+export function dismissAskUserQuestion(threadId: string, signature: string): void {
+  const thread = readThread(threadId);
+  if (!thread || thread.status === 'archived') return;
+  const sig = signature.trim();
+  if (!sig) return;
+  const clearBlock = thread.agentBlock?.source === 'ask_user';
+  if (thread.dismissedQuestionSignature === sig && !clearBlock) return;
+  updateThread(threadId, {
+    dismissedQuestionSignature: sig,
+    ...(clearBlock ? { agentBlock: null } : {}),
+  });
 }
 
 export function writeAgentBlock(threadId: string, block: AgentBlock): void {
@@ -115,6 +150,7 @@ export function settleAgentBlock(
     parts,
     planMode: Boolean(thread.planMode),
     failed,
+    dismissedQuestionSignature: thread.dismissedQuestionSignature,
   });
   const prev = thread.agentBlock ?? null;
   if (prev === next) return;
@@ -123,7 +159,8 @@ export function settleAgentBlock(
     next &&
     prev.source === next.source &&
     prev.reason === next.reason &&
-    prev.at === next.at
+    prev.at === next.at &&
+    prev.questionSignature === next.questionSignature
   ) {
     return;
   }
@@ -150,8 +187,13 @@ export function stampAskUserBlock(
   questions: Array<{ question?: string }>,
 ): string {
   const asked = formatAskUserNotifyMessage(questions);
+  const parsed = parsePlanQuestionsInput({ questions });
+  const block = makeAgentBlock('ask_user', asked);
   try {
-    writeAgentBlock(resolveCaller().id, makeAgentBlock('ask_user', asked));
+    writeAgentBlock(
+      resolveCaller().id,
+      parsed.length ? { ...block, questionSignature: planQuestionsSignature(parsed) } : block,
+    );
   } catch {
     /* no thread — picker still returns */
   }

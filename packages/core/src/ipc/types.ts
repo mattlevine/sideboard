@@ -308,6 +308,11 @@ export interface IpcApi extends McpUiIpc {
   forkChatTab(input: ForkChatTabInput): Promise<Thread>;
   forkThreadWorktree(input: ForkThreadWorktreeInput): Promise<Thread>;
   renameThread(threadRef: string, title: string): Promise<Thread>;
+  /**
+   * The chat hid this ask_user question (skipped, or the user typed their
+   * own message). Clear the sidebar / board highlight for it.
+   */
+  dismissAskUser(threadRef: string, signature: string): Promise<Thread>;
   /** Replace the tags on every live chat in this workspace. */
   setWorkspaceTags(threadRef: string, tags: string[]): Promise<Thread>;
   setAttachments(threadRef: string, attachments: ThreadAttachment[]): Promise<Thread>;

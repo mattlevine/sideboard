@@ -866,7 +866,8 @@ export function ThreadPanel({
 
   const showPlanQuestions =
     Boolean(pendingPlanQuestions) &&
-    pendingPlanQuestions!.signature !== dismissedPlanQuestionsId;
+    pendingPlanQuestions!.signature !== dismissedPlanQuestionsId &&
+    pendingPlanQuestions!.signature !== thread.dismissedQuestionSignature;
   const toolPermission = toolPermissionFromThread(thread);
 
   const planAwaitingApproval = useMemo(
@@ -1489,10 +1490,13 @@ export function ThreadPanel({
   /** Steer skips the composer queue and lands in the transcript immediately. */
   const steeringFollowUp = followUpBehavior === 'steer' && followUpBusy;
 
+  function skipAskUser(signature: string) {
+    setDismissedPlanQuestionsId(signature);
+    void window.sideboard.dismissAskUser(thread.id, signature).then(() => onRefresh());
+  }
+
   function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
-    if (pendingPlanQuestions) {
-      setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
-    }
+    if (pendingPlanQuestions) skipAskUser(pendingPlanQuestions.signature);
     const queueing = followUpBusy && !steeringFollowUp;
     if (queueing) {
       setPendingFollowUps((prev) => [
@@ -2839,7 +2843,7 @@ export function ThreadPanel({
             <PlanQuestionsPanel
               pending={pendingPlanQuestions}
               busy={busy}
-              onDismiss={() => setDismissedPlanQuestionsId(pendingPlanQuestions.signature)}
+              onDismiss={() => skipAskUser(pendingPlanQuestions.signature)}
               onSubmit={(message) => {
                 void (async () => {
                   if (!sendGate.tryBegin()) return;
