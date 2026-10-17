@@ -89,6 +89,16 @@ The Action starts when the **`v*` tag is pushed** (or moved) to origin. Do not s
 
 Human at a real terminal: `pnpm release patch mac` is still fine for the Electron half; they still publish npm themselves unless they asked otherwise.
 
+## Phone (when they asked for a phone release)
+
+The iOS app is `apps/mobile` (Expo). A desktop `v*` tag does not build it. After the release commit is the tree you want in the binary, start one production build and let EAS submit it to App Store Connect. Detach it (`/long-running`); a cloud build plus submit takes longer than a turn.
+
+```bash
+node scripts/detached-job.cjs start eas-ios -- bash -lc 'cd apps/mobile && npx eas-cli build --platform ios --profile production --non-interactive --auto-submit --wait'
+```
+
+Run that from the repo root so the job id is visible to `wait_for_job`. `eas.json` `production` auto-increments the iOS build number (`appVersionSource: remote`) and submits with App Store Connect app `6820766038`. Do not start a second build for the same cut. `eas whoami` must already be `matthewklevine`.
+
 ## `@cursor/sdk` (user-installed)
 
 Sideboard does not pack `@cursor/sdk`. Users install it with Settings → Agents → Cursor → Install (`npm i -g @cursor/sdk`) so agents can update it without a new Sideboard build.
