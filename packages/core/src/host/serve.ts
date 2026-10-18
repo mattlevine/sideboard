@@ -148,12 +148,22 @@ export async function startHeadlessHost(opts?: {
     releaseDesktopHost();
   };
 
+  if (opts?.signal) await bindAbort(opts.signal, stop);
+
+  return { ok: true, lanUrls, stop };
+}
+
+/** Run stop now when the signal already fired. A late abort listener never replays it. */
+async function bindAbort(signal: AbortSignal, stop: () => Promise<void>): Promise<void> {
+  if (signal.aborted) {
+    await stop();
+    return;
+  }
   const onAbort = () => {
     void stop();
   };
-  opts?.signal?.addEventListener('abort', onAbort, { once: true });
-
-  return { ok: true, lanUrls, stop };
+  signal.addEventListener('abort', onAbort, { once: true });
+  if (signal.aborted) await stop();
 }
 
 function flatInterfaces(): NetworkInterfaceInfo[] {

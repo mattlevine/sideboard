@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { desktopHostPidPath } from '../store/desktop-host.js';
-import { headlessHostBlockedReason, lanRelayUrls } from './serve.js';
+import { isThisProcessDesktopHost } from '../store/desktop-host.js';
+import { headlessHostBlockedReason, lanRelayUrls, startHeadlessHost } from './serve.js';
 
 describe('headless host', () => {
   let dataDir: string | undefined;
@@ -31,5 +32,15 @@ describe('headless host', () => {
     process.env.SIDEBOARD_APP_DATA = dataDir;
     writeFileSync(desktopHostPidPath(), `${process.ppid}\n`);
     expect(headlessHostBlockedReason()).toMatch(/already hosting/);
+  });
+
+  it('releases the host when stop was already requested', async () => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-serve-'));
+    process.env.SIDEBOARD_APP_DATA = dataDir;
+    const ac = new AbortController();
+    ac.abort();
+    const host = await startHeadlessHost({ signal: ac.signal });
+    expect(host.ok).toBe(true);
+    expect(isThisProcessDesktopHost()).toBe(false);
   });
 });
