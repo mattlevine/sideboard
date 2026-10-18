@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { listPrs } from '../git/worktree.js';
+import { gitHostForRepo } from '../providers/resolve-git-host.js';
 import { listIssues } from '../integrations/issues.js';
 import { appDataDir } from '../store/paths.js';
 import { listBoardPins, replaceBoardPins } from './board-pins.js';
@@ -188,7 +188,7 @@ export async function loadHomeBoardInputs(
   try {
     const settled = await Promise.allSettled(
       paths.map(async (path) => {
-        const list = await listPrs(path);
+        const list = await (await gitHostForRepo(path)).listPullRequests(path);
         return list.map((pr) => ({ ...pr, repoPath: path }));
       }),
     );

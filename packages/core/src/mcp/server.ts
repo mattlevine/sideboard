@@ -6,12 +6,11 @@ import { basename } from 'node:path';
 import { getOrchestrator, resolveOrchChildFollowUp } from '../orchestrator/orchestrator.js';
 import { needsCoordinatorAction } from '../orchestrator/task-state.js';
 import {
-  listBranches,
-  listPrs,
   resolveGithubRepoSlug,
   canonicalizeRepoPath,
   resolveRepoRoot,
 } from '../git/worktree.js';
+import { gitHostForRepo } from '../providers/resolve-git-host.js';
 import { listIssues } from '../integrations/issues.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
@@ -1458,7 +1457,7 @@ export async function startMcpServer(): Promise<void> {
     },
     async ({ repoPath, unmergedOnly }) => {
       const root = await resolveRepoRoot(repoPath);
-      const branches = await listBranches(root, {
+      const branches = await (await gitHostForRepo(root)).listBranches(root, {
         unmergedOnly: unmergedOnly !== false,
       });
       return {
@@ -1520,7 +1519,7 @@ export async function startMcpServer(): Promise<void> {
         limit: page + 1,
         reviewLabel: resolveProjectReviewLabel(loadAppSettings(), root),
       });
-      const prs = await listPrs(root, resolved);
+      const prs = await (await gitHostForRepo(root)).listPullRequests(root, resolved);
       const windowed = applyIssueListWindow(prs, page);
       return mcpJson(
         formatMcpPrList({

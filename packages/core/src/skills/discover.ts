@@ -8,6 +8,13 @@ import {
   LONG_RUNNING_SKILL_DESCRIPTION,
   LONG_RUNNING_SKILL_NAME,
 } from './bundled/long-running.js';
+import {
+  BUNDLED_WORK_SOURCES_PATH,
+  WORK_SOURCES_SKILL_BODY,
+  WORK_SOURCES_SKILL_COMMAND,
+  WORK_SOURCES_SKILL_DESCRIPTION,
+  WORK_SOURCES_SKILL_NAME,
+} from './bundled/work-sources.js';
 
 export interface SkillInfo {
   id: string;
@@ -30,11 +37,20 @@ function bundledSkills(): SkillInfo[] {
       path: BUNDLED_LONG_RUNNING_PATH,
       source: 'bundled',
     },
+    {
+      id: BUNDLED_WORK_SOURCES_PATH,
+      name: WORK_SOURCES_SKILL_NAME,
+      command: WORK_SOURCES_SKILL_COMMAND,
+      description: WORK_SOURCES_SKILL_DESCRIPTION.slice(0, 240),
+      path: BUNDLED_WORK_SOURCES_PATH,
+      source: 'bundled',
+    },
   ];
 }
 
 function bundledSkillBody(id: string): string | null {
   if (id === LONG_RUNNING_SKILL_COMMAND) return LONG_RUNNING_SKILL_BODY;
+  if (id === WORK_SOURCES_SKILL_COMMAND) return WORK_SOURCES_SKILL_BODY;
   return null;
 }
 
@@ -164,8 +180,8 @@ function scanClaudePluginSkills(pluginsRoot: string, out: SkillInfo[]): void {
  * product skills (`bundled`). Workspace skills win when command names collide.
  * New repo skills should be written to `.claude/skills` so Claude Code and
  * `attach` load them without Sideboard. `.sideboard/skills` is still scanned
- * (legacy) but native agents do not see it. `/long-running` is always present
- * (bundled) unless a workspace/user/cli skill overrides it.
+ * (legacy) but native agents do not see it. `/long-running` and `/work-sources`
+ * are always present (bundled) unless a workspace/user/cli skill overrides them.
  */
 export function discoverSkills(worktreePath: string): SkillInfo[] {
   const home = homedir();

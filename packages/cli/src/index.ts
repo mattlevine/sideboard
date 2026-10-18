@@ -6,8 +6,7 @@ import {
   detectAgents,
   followUpBehavior,
   getOrchestrator,
-  listBranches,
-  listPrs,
+  gitHostForRepo,
   listIssues,
   listLinearIssues,
   resolveRepoRoot,
@@ -988,7 +987,9 @@ async function main(): Promise<void> {
     .option('--all', 'include branches already merged into the default branch')
     .action(async (opts) => {
       const repo = await resolveRepoRoot(opts.repo);
-      const branches = await listBranches(repo, { unmergedOnly: !opts.all });
+      const branches = await (await gitHostForRepo(repo)).listBranches(repo, {
+        unmergedOnly: !opts.all,
+      });
       for (const b of branches) {
         console.log(`${b.current ? '*' : ' '} ${b.name}${b.remote ? ' (remote)' : ''}`);
       }
@@ -1010,7 +1011,7 @@ async function main(): Promise<void> {
     .option('--limit <n>', 'max rows', '200')
     .action(async (opts) => {
       const repo = await resolveRepoRoot(opts.repo);
-      const prs = await listPrs(repo, {
+      const prs = await (await gitHostForRepo(repo)).listPullRequests(repo, {
         queue: opts.queue,
         state: opts.state,
         labels: opts.label,

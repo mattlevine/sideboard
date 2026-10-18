@@ -70,6 +70,19 @@ export * from './integrations/abletime.js';
 export * from './integrations/abletime-mcp.js';
 export * from './integrations/abletime-oauth.js';
 export * from './integrations/issues.js';
+export {
+  gitHostForRepo,
+  gitHostForRemote,
+  issueProvider,
+  listWorkSources,
+} from './providers/work-sources.js';
+export type {
+  GitHostId,
+  GitHostProvider,
+  IssueProvider,
+  WorkSources,
+  ListWorkSourcesOptions,
+} from './providers/work-sources.js';
 export * from './integrations/optional-services.js';
 export * from './integrations/optional-cli.js';
 export { setHttpFetchImpl, formatFetchError, httpFetch } from './http/fetch.js';
@@ -98,6 +111,10 @@ export {
   BUNDLED_LONG_RUNNING_PATH,
   LONG_RUNNING_SKILL_COMMAND,
 } from './skills/bundled/long-running.js';
+export {
+  BUNDLED_WORK_SOURCES_PATH,
+  WORK_SOURCES_SKILL_COMMAND,
+} from './skills/bundled/work-sources.js';
 export * from './composer/expand.js';
 export * from './composer/diff-comment.js';
 export * from './composer/code-ref.js';

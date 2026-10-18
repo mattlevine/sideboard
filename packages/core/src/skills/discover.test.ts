@@ -27,6 +27,11 @@ describe('discoverSkills', () => {
     expect(longRunning?.path).toBe(BUNDLED_LONG_RUNNING_PATH);
     expect(readSkillBody(longRunning!.path)).toMatch(/Detach/);
     expect(readSkillBody(longRunning!.path)).toMatch(/present_artifact/);
+    const workSources = skills.find((s) => s.command === 'work-sources');
+    expect(workSources?.source).toBe('bundled');
+    expect(readSkillBody(workSources!.path)).toMatch(/list_branches/);
+    expect(readSkillBody(workSources!.path)).toMatch(/list_issues/);
+    expect(readSkillBody(workSources!.path)).toMatch(/origin/);
   });
 
   it('lets a workspace long-running skill win over the bundled copy', () => {

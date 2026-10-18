@@ -252,6 +252,7 @@ export function formatIssueToolsDirective(opts: {
   if (!opts.linear && !opts.abletime && !github) return null;
   const lines = [
     'Issue tracking (Settings → Issues / Git — already signed in):',
+    '- Branches, pull requests, and issues for pickers are provider methods: `list_branches` and `list_prs` call the git host for that repo\'s origin (GitHub is registered); `list_issues` calls the active issue provider (Linear, AbleTime, or GitHub). `/work-sources` is that contract. Linear and AbleTime do not list branches or pull requests. An origin that matches no host still lists local branches.',
     '- Use Sideboard `linear_*` / `github_*` / `abletime_*` tools. Do not call Claude Linear MCP, vendor GitHub MCP, or any other vendor issue MCP — those need a separate login and hang. If a vendor namespace shows needsAuth, ignore it and keep going with Sideboard tools.',
   ];
   if (opts.linear) {

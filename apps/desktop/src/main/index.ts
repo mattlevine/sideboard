@@ -99,7 +99,7 @@ import {
   getAgentSetupInfo,
   getOrchestrator,
   installAgent,
-  listBranches,
+  gitHostForRepo,
   listBrightsyChatTargets,
   listCursorModels,
   listCodexModels,
@@ -109,7 +109,6 @@ import {
   switchBrightsyAccount,
   connectBrightsyTeam,
   disconnectBrightsyTeam,
-  listPrs,
   listLinearIssues,
   listIssues,
   type ListIssuesOptions,
@@ -1404,13 +1403,18 @@ function registerIpc(): void {
   });
   ipcMain.handle(
     'listBranches',
-    async (_e, path: string, opts?: { unmergedOnly?: boolean }) =>
-      listBranches(await resolveRepoRoot(path), opts),
+    async (_e, path: string, opts?: { unmergedOnly?: boolean }) => {
+      const root = await resolveRepoRoot(path);
+      return (await gitHostForRepo(root)).listBranches(root, opts);
+    },
   );
   ipcMain.handle('switchThreadBranch', (_e, ref: string, branch: string) =>
     orch.switchThreadBranch(ref, branch),
   );
-  ipcMain.handle('listPrs', async (_e, path: string) => listPrs(await resolveRepoRoot(path)));
+  ipcMain.handle('listPrs', async (_e, path: string) => {
+    const root = await resolveRepoRoot(path);
+    return (await gitHostForRepo(root)).listPullRequests(root);
+  });
   ipcMain.handle('listLinearIssues', (_e, agent: AgentKind, path: string) =>
     listLinearIssues(agent, path),
   );

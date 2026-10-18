@@ -233,6 +233,8 @@ describe('formatIssueToolsDirective', () => {
     expect(text).not.toMatch(/ask_user \(Post this review/);
     expect(text).toMatch(/reviewing a PR or ticket/);
     expect(text).toMatch(/work through the feedback/);
+    expect(text).toMatch(/list_branches/);
+    expect(text).toMatch(/\/work-sources/);
   });
 });
 

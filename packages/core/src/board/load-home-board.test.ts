@@ -9,7 +9,9 @@ const { listIssues, listPrs } = vi.hoisted(() => ({
 }));
 
 vi.mock('../integrations/issues.js', () => ({ listIssues }));
-vi.mock('../git/worktree.js', () => ({ listPrs }));
+vi.mock('../providers/resolve-git-host.js', () => ({
+  gitHostForRepo: async () => ({ listPullRequests: listPrs }),
+}));
 
 import {
   clearHomeBoardCache,

@@ -10,7 +10,7 @@ import {
   listGitHubProjects,
   updateGitHubIssue,
 } from '../integrations/github-issues.js';
-import { listGitHubIssues } from '../integrations/issues.js';
+import { githubHostForRepo } from '../providers/resolve-git-host.js';
 import { parseIssueSince } from '../integrations/issue-since.js';
 import {
   clampMcpIssueLimit,
@@ -77,7 +77,7 @@ export function registerGithubIssueTools(server: McpServer): void {
         const cwd = await resolveRepoRoot((repoPath ?? '').trim() || process.cwd());
         const page = clampMcpIssueLimit(limit);
         const since = updatedSince ? parseIssueSince(updatedSince) : undefined;
-        const issues = await listGitHubIssues(cwd, {
+        const issues = await (await githubHostForRepo(cwd)).listIssues(cwd, {
           query,
           assignee: assignee || (query ? 'all' : 'me'),
           limit: page + 1,
