@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { listEnabledClaudePluginMcpServers } from './claude-plugins.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
@@ -120,14 +121,23 @@ export function listUserClaudeMcpNames(home = homedir()): string[] {
 }
 
 /**
- * User MCP entries from ~/.claude.json, minus Sideboard/Brightsy (those are
- * injected). Worktree `--strict-mcp-config` only loads what we write, so these
- * must be copied into the temp config or the tools never appear.
+ * User MCP entries for a worktree Claude turn: enabled Claude Code plugin
+ * servers, then ~/.claude.json (minus Sideboard/Brightsy, which are injected).
+ * A user entry wins on the same name. `--strict-mcp-config` only loads what we
+ * write, so plugin `.mcp.json` servers have to be copied in or their tools
+ * and MCP Apps never appear. Orchestrators pass `{}` instead.
  */
 export function listUserClaudeMcpServerEntries(
   home = homedir(),
+  projectDirs?: string[],
 ): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
+  for (const [name, entry] of Object.entries(
+    listEnabledClaudePluginMcpServers({ home, projectDirs }),
+  )) {
+    if (!name || isInjectedOrchMcpName(name)) continue;
+    out[name] = entry;
+  }
   for (const [rawName, value] of Object.entries(userClaudeMcpConfigObject(home))) {
     const name = rawName.trim();
     if (!name || isInjectedOrchMcpName(name)) continue;

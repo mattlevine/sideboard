@@ -3,10 +3,11 @@ import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { palette } from './styles';
 
 /** Same marks as the desktop sidebar: project tile, worktree status glyph. */
-export type WorktreeIconKind = 'running' | 'queued' | 'error' | 'archived' | 'idle';
+export type WorktreeIconKind = 'running' | 'blocked' | 'queued' | 'error' | 'archived' | 'idle';
 
 const LABEL: Record<WorktreeIconKind, string> = {
   running: 'Running',
+  blocked: 'Needs you',
   queued: 'Queued',
   error: 'Error',
   archived: 'Archived',
@@ -14,9 +15,12 @@ const LABEL: Record<WorktreeIconKind, string> = {
 };
 
 /** Busiest chat wins, matching the desktop rule that a running agent beats idle. */
-export function worktreeStatusKind(chats: { status: string }[]): WorktreeIconKind {
+export function worktreeStatusKind(
+  chats: { status: string; needsYou?: boolean }[],
+): WorktreeIconKind {
   const statuses = chats.map((chat) => chat.status);
   if (statuses.includes('running')) return 'running';
+  if (chats.some((chat) => chat.needsYou)) return 'blocked';
   if (statuses.includes('queued')) return 'queued';
   if (statuses.some((status) => status === 'error' || status === 'broken')) return 'error';
   if (statuses.length > 0 && statuses.every((status) => status === 'archived')) return 'archived';
@@ -59,6 +63,7 @@ export function WorktreeStatusIcon({ kind }: { kind: WorktreeIconKind }) {
   return (
     <View accessibilityRole="image" accessibilityLabel={LABEL[kind]} style={styles.slot}>
       {kind === 'running' ? <RunningMark /> : null}
+      {kind === 'blocked' ? <View style={[styles.ring, styles.ringBlocked]} /> : null}
       {kind === 'queued' ? <QueuedMark /> : null}
       {kind === 'error' ? <ErrorMark /> : null}
       {kind === 'archived' ? <ArchivedMark /> : null}
@@ -161,6 +166,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   ringIdle: { borderColor: palette.muted },
+  ringBlocked: { borderColor: palette.warn, backgroundColor: palette.warn },
   ringRun: { borderColor: palette.warn, borderTopColor: 'transparent' },
   ringQueue: { borderColor: palette.warn },
   clockHour: {

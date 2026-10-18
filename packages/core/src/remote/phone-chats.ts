@@ -61,6 +61,9 @@ export interface PhoneChatSummary {
   prUrl?: string;
   prNumber?: string;
   prStatus?: string;
+  /** Set when this agent is waiting on a person (permission, ask, or a reported block). */
+  needsYou?: boolean;
+  blockedReason?: string;
 }
 
 export interface PhoneChatMessage extends PhoneMcpAppsField {
@@ -501,6 +504,9 @@ function summarize(thread: Thread): PhoneChatSummary {
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
+    ...(thread.agentBlock
+      ? { needsYou: true as const, blockedReason: thread.agentBlock.reason }
+      : {}),
   };
 }
 

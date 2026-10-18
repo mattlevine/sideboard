@@ -1,13 +1,15 @@
 import {
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   realpathSync,
+  symlinkSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { execa, type ResultPromise } from 'execa';
 import { createInterface } from 'node:readline';
 import {
@@ -168,7 +170,63 @@ export function copyConfiguredFiles(repoPath: string, worktreePath: string): str
     copyFileSync(src, dest);
     copied.push(rel);
   }
+  linkSharedDirectories(repoPath, worktreePath);
   return copied;
+}
+
+/**
+ * Opt-in symlink of gitignored directories (usually `node_modules`) from the
+ * primary checkout. The per-worktree package cache stays the default.
+ */
+export function linkSharedDirectories(repoPath: string, worktreePath: string): string[] {
+  const dirs = loadRepoSettings(repoPath)?.sharedDirectories ?? [];
+  if (!dirs.length || samePath(repoPath, worktreePath)) return [];
+  const linked: string[] = [];
+  for (const rel of dirs) {
+    if (!isSafeRelativeDir(rel)) continue;
+    if (!isGitignored(repoPath, rel)) continue;
+    const src = join(repoPath, rel);
+    let srcStat;
+    try {
+      srcStat = lstatSync(src);
+    } catch {
+      continue;
+    }
+    if (!srcStat.isDirectory()) continue;
+    const dest = join(worktreePath, rel);
+    if (existsSync(dest)) continue;
+    mkdirSync(dirname(dest), { recursive: true });
+    try {
+      symlinkSync(src, dest);
+    } catch {
+      continue;
+    }
+    linked.push(rel);
+  }
+  return linked;
+}
+
+function samePath(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return resolve(a) === resolve(b);
+  }
+}
+
+function isSafeRelativeDir(rel: string): boolean {
+  if (!rel || isAbsolute(rel)) return false;
+  const parts = rel.split(/[\\/]/).filter(Boolean);
+  return parts.length > 0 && parts.every((part) => part !== '.' && part !== '..');
+}
+
+function isGitignored(repoPath: string, rel: string): boolean {
+  try {
+    execFileSync('git', ['-C', repoPath, 'check-ignore', '-q', '--', rel], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -169,6 +169,7 @@ export const styles = StyleSheet.create({
   dotRun: { backgroundColor: palette.accent },
   dotErr: { backgroundColor: palette.err },
   preview: { color: palette.muted, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  previewNeed: { color: palette.warn },
   projectName: { flex: 1, color: palette.text, fontSize: 16, fontWeight: '600' },
   worktreeName: { flexShrink: 1, color: palette.secondary, fontSize: 13 },
   prBadge: {

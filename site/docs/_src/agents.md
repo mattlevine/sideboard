@@ -24,4 +24,6 @@ Mechanical control (list, send, diff, land) stays on the Sideboard CLI — zero 
 
 Connect the Sideboard MCP from each harness so an agent can drive the board. Typical stdio command: `sideboard mcp` (or `npx -y sideboard-mcp`). Packaged Sideboard.app writes the absolute Node + bundled MCP path on launch.
 
+A Claude worktree turn also loads MCP servers from plugins enabled for that checkout (`enabledPlugins` in `~/.claude/settings.json`, then the project’s `.claude/settings.json`, then `.claude/settings.local.json`). A server already in `~/.claude.json` wins on the same name. Orchestration turns stay on the injected Sideboard server. Plugin UIs render in the MCP App frame on the desktop and the phone.
+
 See [Remote integrations](/docs/remote/) for Settings → Agents vs Git / Issues / Remote / Connectors.

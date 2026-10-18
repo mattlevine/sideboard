@@ -19,9 +19,10 @@ export function dispatchPhoneMcpUi(
     else emitControl(opts, { op: cmd.op, chatId, reqId, error: 'This chat is not using Claude.' });
     return true;
   }
+  const projectDirs = [thread.repoPath, thread.worktreePath];
   if (cmd.op === 'mcp-ui-call') {
     void getMcpUiHost()
-      .callTool(cmd.server, cmd.tool, cmd.args)
+      .callTool(cmd.server, cmd.tool, cmd.args, projectDirs)
       .then((result) => emitControl(opts, { op: 'mcp-ui-call', chatId, reqId, result }))
       .catch((err: unknown) =>
         emitControl(opts, { op: 'mcp-ui-call', chatId, reqId, error: phoneError(err) }),
@@ -30,7 +31,7 @@ export function dispatchPhoneMcpUi(
   }
   if (cmd.op === 'mcp-ui-read') {
     void getMcpUiHost()
-      .readResource(cmd.server, cmd.uri)
+      .readResource(cmd.server, cmd.uri, projectDirs)
       .then((result) => emitControl(opts, { op: 'mcp-ui-read', chatId, reqId, result }))
       .catch((err: unknown) =>
         emitControl(opts, { op: 'mcp-ui-read', chatId, reqId, error: phoneError(err) }),
@@ -40,7 +41,7 @@ export function dispatchPhoneMcpUi(
   const agentMessage = [...thread.messages].reverse().find((message) => message.role === 'agent');
   const payload = phoneMcpToolPayload(agentMessage?.parts, cmd.tool, cmd.callId);
   void getMcpUiHost()
-    .viewForClaudeTool(cmd.tool)
+    .viewForClaudeTool(cmd.tool, projectDirs)
     .then((view) => {
       if (!view || view.html.length > PHONE_HTML_CAP) {
         emitControl(opts, { op: 'mcp-ui', chatId, reqId, view: null });

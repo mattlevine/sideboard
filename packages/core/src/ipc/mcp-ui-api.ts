@@ -7,9 +7,14 @@ export interface McpUiIpc {
    * server has no `ui://` resource. The desktop opens its own MCP connection;
    * Claude Code only returns the text result.
    */
-  mcpUiLookup(toolName: string): Promise<McpUiView | null>;
-  mcpUiCallTool(server: string, tool: string, args: Record<string, unknown>): Promise<unknown>;
-  mcpUiReadResource(server: string, uri: string): Promise<unknown>;
+  mcpUiLookup(toolName: string, threadId?: string): Promise<McpUiView | null>;
+  mcpUiCallTool(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+    threadId?: string,
+  ): Promise<unknown>;
+  mcpUiReadResource(server: string, uri: string, threadId?: string): Promise<unknown>;
   /** Sandboxed custom-protocol URL for an MCP App (inline scripts allowed). */
   publishMcpUiPreview(id: string, html: string, csp: string): Promise<{ url: string }>;
   clearMcpUiPreview(id: string): Promise<void>;
