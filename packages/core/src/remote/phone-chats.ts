@@ -504,9 +504,7 @@ function summarize(thread: Thread): PhoneChatSummary {
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
-    ...(thread.agentBlock
-      ? { needsYou: true as const, blockedReason: thread.agentBlock.reason }
-      : {}),
+    ...(thread.agentBlock ? { needsYou: true as const, blockedReason: thread.agentBlock.reason } : {}),
   };
 }
 
@@ -518,8 +516,7 @@ function previewOf(thread: Thread): string {
 }
 
 function repoName(repoPath: string): string {
-  const parts = repoPath.replace(/\/$/, '').split('/');
-  return parts[parts.length - 1] || repoPath;
+  return repoPath.replace(/\/$/, '').split('/').pop() || repoPath;
 }
 
 function isProjectPath(path: string): boolean {
@@ -589,21 +586,18 @@ function matchPhoneThread(chatId: string): Thread | null {
 }
 
 function visiblePhoneThread(thread: Thread): boolean {
-  if (isGlobalThread(thread)) return true;
-  return isProjectPath(thread.repoPath);
+  return isGlobalThread(thread) || isProjectPath(thread.repoPath);
 }
 
 /** Full id or `sideboard://chat/` prefix, including archived chats. */
 export function findPhoneChat(chatId: string): Thread | null {
   const thread = matchPhoneThread(chatId);
-  if (!thread || !visiblePhoneThread(thread)) return null;
-  return thread;
+  return thread && visiblePhoneThread(thread) ? thread : null;
 }
 
 export function readPhoneThread(chatId: string): Thread | null {
   const thread = findPhoneChat(chatId);
-  if (!thread || thread.status === 'archived') return null;
-  return thread;
+  return thread && thread.status !== 'archived' ? thread : null;
 }
 
 export function phoneComposerOptions(thread: Thread): PhoneComposerOptions {
