@@ -39,7 +39,9 @@ import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
 import { keepPaneOnOpenedChat, PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
-import { createRelayLink, RELAY_UNREACHABLE, type RelayLink } from './relay-link';
+import { createSealedRelayLink, lookupSealMaterial } from './phone-seal';
+import { RELAY_UNREACHABLE, type RelayLink } from './relay-link';
+import { parsePairingBlob, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
 import { AgentKindIcon } from './agent-icons';
 import { SearchGlyph } from './sidebar-icons';
 import {
@@ -130,7 +132,6 @@ type PhoneControl =
     });
 
 const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
-/** Must match PHONE_CONTROL_PREFIX in packages/core. Rides inside prompt text. */
 const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 type ServerMessage =
@@ -159,7 +160,7 @@ function parseServer(raw: string): ServerMessage | null {
 
 function persist(desktops: Desktop[]) {
   void saveDesktops(
-    desktops.map(({ deviceId, deviceLabel, sessionToken }) => ({ deviceId, deviceLabel, sessionToken })),
+    desktops.map(({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken }) => ({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken })),
   );
 }
 
@@ -276,6 +277,7 @@ export default function App() {
   const attachedRef = useRef(false);
   const checkingHostsRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
+  const sealMaterialRef = useRef<SealMaterial | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
   desktopsRef.current = desktops;
@@ -284,7 +286,8 @@ export default function App() {
   projectsRef.current = projects;
   screenRef.current = screen;
   if (!linkRef.current) {
-    linkRef.current = createRelayLink({
+    linkRef.current = createSealedRelayLink({
+      material: () => lookupSealMaterial(sealMaterialRef.current, desktopsRef.current, activeIdRef.current, pendingTokenRef.current),
       url: () => relay.socketUrl(),
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
@@ -343,9 +346,11 @@ export default function App() {
 
   function remember(desktop: Desktop) {
     setDesktops((prev) => {
+      const prior = prev.find((row) => row.deviceId === desktop.deviceId);
+      const saved = { ...desktop, hostPublicKey: desktop.hostPublicKey || prior?.hostPublicKey || '', phoneToken: desktop.phoneToken || prior?.phoneToken || '' };
       const next = [
         ...prev.filter((row) => row.deviceId !== desktop.deviceId && row.sessionToken !== desktop.sessionToken),
-        desktop,
+        saved,
       ];
       persist(next);
       return next;
@@ -691,13 +696,8 @@ export default function App() {
       return;
     }
     if (msg.type === 'paired') {
-      const desktop: Desktop = {
-        deviceId: msg.deviceId,
-        deviceLabel: msg.deviceLabel,
-        sessionToken: msg.sessionToken,
-        online: true,
-        expired: false,
-      };
+      const pinned = sealMaterialRef.current;
+      const desktop: Desktop = { deviceId: msg.deviceId, deviceLabel: msg.deviceLabel, sessionToken: msg.sessionToken, hostPublicKey: pinned?.hostPublicKey ?? '', phoneToken: pinned?.phoneToken ?? '', online: true, expired: false };
       remember(desktop);
       setActiveId(desktop.deviceId);
       pendingTokenRef.current = desktop.sessionToken;
@@ -1323,17 +1323,15 @@ export default function App() {
               <Brand />
             )}
             <Text style={styles.title}>Pair a Mac</Text>
-            <Text style={styles.hint}>
-              On the Mac, open Sideboard → Settings → Remote, set the same relay, name it, then show a pairing code.
-            </Text>
+            <Text style={styles.hint}>Paste the pairing line from Settings → Remote on the Mac.</Text>
           </View>
           <View style={styles.form}>
-            <Text style={styles.label}>Pairing code</Text>
+            <Text style={styles.label}>Pairing line</Text>
             <TextInput
-              style={[styles.input, styles.codeInput]}
-              autoCapitalize="characters"
+              style={styles.input}
+              autoCapitalize="none"
               autoCorrect={false}
-              placeholder="CODE"
+              placeholder="sb1…"
               placeholderTextColor={palette.muted}
               value={code}
               onChangeText={setCode}
@@ -1350,11 +1348,15 @@ export default function App() {
             <Pressable
               style={[styles.primary, !code.trim() && styles.primaryDisabled]}
               onPress={() => {
-                const next = code.trim().toUpperCase();
-                if (!next) return;
+                const next = parsePairingBlob(code);
+                if (!next) {
+                  setError('Paste the pairing line from the Mac.');
+                  return;
+                }
+                sealMaterialRef.current = { hostPublicKey: next.hostPublicKey, phoneToken: next.phoneToken };
                 setError(null);
                 pendingTokenRef.current = null;
-                link.send({ type: 'pair', code: next });
+                link.send({ type: 'pair', code: next.code });
               }}
             >
               <Text style={styles.primaryText}>Pair</Text>

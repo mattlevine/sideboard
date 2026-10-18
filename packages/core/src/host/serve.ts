@@ -7,7 +7,7 @@ import {
   isThisProcessDesktopHost,
   releaseDesktopHost,
 } from '../store/desktop-host.js';
-import { ensureRemoteHostCredentials } from '../store/device-identity.js';
+import { ensureRemoteHostCredentials, saveRemotePhoneToken } from '../store/device-identity.js';
 import { hasEnabledSchedules } from '../store/schedules.js';
 import { armSchedules } from '../orchestrator/schedule-runner.js';
 import { runRemoteHost } from '../remote/client.js';
@@ -116,6 +116,9 @@ export async function startHeadlessHost(opts?: {
     deviceId: creds.deviceId,
     deviceLabel: creds.deviceLabel,
     hostSecret: creds.hostSecret,
+    hostPrivateKey: creds.hostPrivateKey,
+    phoneToken: creds.phoneToken,
+    onPhoneToken: saveRemotePhoneToken,
     ...(accountToken ? { accountToken } : {}),
     signal: ac.signal,
     onStatus: (status) => {

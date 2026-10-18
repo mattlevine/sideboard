@@ -373,7 +373,7 @@ The Sideboard phone app is the remote surface for the **same local orchestrator*
                                           Global orchestrator → worktrees
 ```
 
-**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** message text, via a relay. The default is `relay.sideboard.cloud`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
+**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** a routing token so the relay can find this Mac. Message text is encrypted between the phone and this Mac; the relay forwards ciphertext. The default relay is `relay.sideboard.cloud`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
 
 The phone reaches this Mac while Sideboard.app is open, or while `sideboard serve` owns the host after you quit the window. It cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
 

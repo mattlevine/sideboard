@@ -1,6 +1,7 @@
 import {
   disconnectRemoteAccount,
   ensureRemoteHostCredentials,
+  saveRemotePhoneToken,
   isRemoteAccountLoginCancelled,
   loadAppSettings,
   remoteAccountHttpOrigin,
@@ -115,6 +116,9 @@ export function startRemoteHost(): void {
     deviceId: creds.deviceId,
     deviceLabel: creds.deviceLabel,
     hostSecret: creds.hostSecret,
+    hostPrivateKey: creds.hostPrivateKey,
+    phoneToken: creds.phoneToken,
+    onPhoneToken: saveRemotePhoneToken,
     accountToken: loadAppSettings().integrations.remoteAccountToken,
     signal: ac.signal,
     onPairingCode: (code) => {

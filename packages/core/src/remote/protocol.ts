@@ -71,6 +71,9 @@ export type RemoteHostMessage =
   | { type: 'host_pair' }
   | { type: 'assistant'; text: string }
   | { type: 'ask_user'; text: string; questions: RemoteAskQuestion[] }
+  | { type: 'e2ee_ready'; v: 1; desktopPublicKey: string; clientNonce: string; desktopNonce: string }
+  | { type: 'e2ee'; frame: string }
+  | { type: 'e2ee_fail' }
   | { type: 'ping' };
 
 export interface RemoteHostSummary {
@@ -87,6 +90,8 @@ export type RemotePhoneMessage =
   | { type: 'list_hosts'; sessionTokens: string[] }
   | { type: 'prompt'; text: string }
   | { type: 'stop' }
+  | { type: 'e2ee_hello'; v: 1; clientPublicKey: string; clientNonce: string }
+  | { type: 'e2ee'; frame: string }
   | { type: 'ping' };
 
 export type RemoteClientMessage = RemoteHostMessage | RemotePhoneMessage;
@@ -107,6 +112,9 @@ export type RemoteServerMessage =
     }
   | { type: 'assistant'; text: string }
   | { type: 'ask_user'; text: string; questions: RemoteAskQuestion[] }
+  | { type: 'e2ee_hello'; v: 1; clientPublicKey: string; clientNonce: string }
+  | { type: 'e2ee_ready'; v: 1; desktopPublicKey: string; clientNonce: string; desktopNonce: string }
+  | { type: 'e2ee'; frame: string }
   | { type: 'hosts'; hosts: RemoteHostSummary[] }
   | { type: 'host_offline' }
   | { type: 'error'; message: string }
@@ -149,6 +157,7 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
   const msg = parsed as { type?: unknown };
   if (msg.type === 'ping') return { type: 'ping' };
   if (msg.type === 'host_pair') return { type: 'host_pair' };
+  if (msg.type === 'e2ee_fail') return { type: 'e2ee_fail' };
   if (msg.type === 'stop') return { type: 'stop' };
   if (msg.type === 'host_register') {
     const deviceId = str((parsed as { deviceId?: unknown }).deviceId);
@@ -188,6 +197,8 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
     if (!text) return null;
     return { type: 'prompt', text };
   }
+  const encrypted = parseEncrypted(parsed);
+  if (encrypted) return encrypted;
   if (msg.type === 'assistant') {
     return { type: 'assistant', text: str((parsed as { text?: unknown }).text) };
   }
@@ -275,6 +286,33 @@ export function parseRemoteServerMessage(raw: string): RemoteServerMessage | nul
   if (type === 'error') {
     const message = str((parsed as { message?: unknown }).message) || 'remote error';
     return { type: 'error', message };
+  }
+  return parseEncrypted(parsed);
+}
+
+function parseEncrypted(parsed: unknown): Extract<
+  RemoteClientMessage,
+  { type: 'e2ee' | 'e2ee_hello' | 'e2ee_ready' }
+> | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const type = (parsed as { type?: unknown }).type;
+  if (type === 'e2ee') {
+    const frame = str((parsed as { frame?: unknown }).frame);
+    if (!frame) return null;
+    return { type: 'e2ee', frame };
+  }
+  if (type === 'e2ee_hello') {
+    const clientPublicKey = str((parsed as { clientPublicKey?: unknown }).clientPublicKey);
+    const clientNonce = str((parsed as { clientNonce?: unknown }).clientNonce);
+    if ((parsed as { v?: unknown }).v !== 1 || !clientPublicKey || !clientNonce) return null;
+    return { type: 'e2ee_hello', v: 1, clientPublicKey, clientNonce };
+  }
+  if (type === 'e2ee_ready') {
+    const desktopPublicKey = str((parsed as { desktopPublicKey?: unknown }).desktopPublicKey);
+    const clientNonce = str((parsed as { clientNonce?: unknown }).clientNonce);
+    const desktopNonce = str((parsed as { desktopNonce?: unknown }).desktopNonce);
+    if ((parsed as { v?: unknown }).v !== 1 || !desktopPublicKey || !clientNonce || !desktopNonce) return null;
+    return { type: 'e2ee_ready', v: 1, desktopPublicKey, clientNonce, desktopNonce };
   }
   return null;
 }
