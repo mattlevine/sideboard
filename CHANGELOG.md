@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.305] - 2026-10-18
+
+### Added
+
+- Settings → Remote shows the phone pairing secret as a QR code. The phone app scans it. Paste stays available when the camera cannot.
+
 ## [0.1.304] - 2026-10-18
 
 ### Added

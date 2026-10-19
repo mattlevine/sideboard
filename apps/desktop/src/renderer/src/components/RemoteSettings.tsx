@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PublicAppSettings, RemoteHostStatus } from '@sideboard-ai/core';
+import { PairingQr } from './PairingQr';
 
 /** Electron IPC prefixes the main-process message and drops `error.cause`. */
 function errorText(err: unknown): string {
@@ -230,15 +231,19 @@ export function RemoteSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Pair a phone</div>
         <p className="settings-hint">
-          Paste this line into the phone. It pins this Mac and expires in 10 minutes.
+          Scan this code with the Sideboard phone app. It pins this Mac and expires in 10 minutes.
         </p>
         {remote?.pairingCode ? (
-          <input
-            readOnly
-            value={remote.pairingCode}
-            onFocus={(event) => event.currentTarget.select()}
-            style={{ width: '100%', marginTop: 8 }}
-          />
+          <>
+            <PairingQr value={remote.pairingCode} />
+            <p className="settings-hint">Paste this line if you can’t scan.</p>
+            <input
+              readOnly
+              value={remote.pairingCode}
+              onFocus={(event) => event.currentTarget.select()}
+              style={{ width: '100%' }}
+            />
+          </>
         ) : null}
         <button
           type="button"
@@ -257,7 +262,7 @@ export function RemoteSettings({
               .finally(() => setPairing(false));
           }}
         >
-          {pairing ? 'Getting line…' : 'Show pairing line'}
+          {pairing ? 'Getting code…' : 'Show pairing code'}
         </button>
       </div>
     </div>

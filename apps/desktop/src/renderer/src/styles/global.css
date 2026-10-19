@@ -12581,6 +12581,17 @@ body:has(.update-banner) .team-toast-stack {
   line-height: 1.4;
 }
 
+.pairing-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin-top: 4px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+  box-sizing: content-box;
+}
+
 .settings-env-table {
   display: flex;
   flex-direction: column;

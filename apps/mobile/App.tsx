@@ -42,6 +42,7 @@ import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
 import { createSealedRelayLink, lookupSealMaterial } from './phone-seal';
 import { RELAY_UNREACHABLE, type RelayLink } from './relay-link';
 import { parsePairingBlob, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
+import { PairMacScreen } from './pair-mac';
 import { AgentKindIcon } from './agent-icons';
 import { SearchGlyph } from './sidebar-icons';
 import {
@@ -780,6 +781,17 @@ export default function App() {
     }
   };
 
+  function submitPairing(raw: string): boolean {
+    const next = parsePairingBlob(raw);
+    if (!next) return false;
+    sealMaterialRef.current = { hostPublicKey: next.hostPublicKey, phoneToken: next.phoneToken };
+    setError(null);
+    setCode(raw.trim());
+    pendingTokenRef.current = null;
+    link.send({ type: 'pair', code: next.code });
+    return true;
+  }
+
   function showDesktops() {
     link.cancelResume();
     setError(null);
@@ -1308,62 +1320,18 @@ export default function App() {
 
   if (screen === 'pair') {
     return (
-      <KeyboardAvoidingView
-        style={styles.screen}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <SafeAreaView style={styles.screen}>
-          <StatusBar style="light" />
-          <View style={styles.header}>
-            {desktops.length > 0 ? (
-              <Pressable onPress={showDesktops}>
-                <Text style={styles.link}>Desktops</Text>
-              </Pressable>
-            ) : (
-              <Brand />
-            )}
-            <Text style={styles.title}>Pair a Mac</Text>
-            <Text style={styles.hint}>Paste the pairing line from Settings → Remote on the Mac.</Text>
-          </View>
-          <View style={styles.form}>
-            <Text style={styles.label}>Pairing line</Text>
-            <TextInput
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="sb1…"
-              placeholderTextColor={palette.muted}
-              value={code}
-              onChangeText={setCode}
-            />
-            <Text style={styles.label}>Relay</Text>
-            <TextInput
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={relay.url}
-              onChangeText={relay.setUrl}
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable
-              style={[styles.primary, !code.trim() && styles.primaryDisabled]}
-              onPress={() => {
-                const next = parsePairingBlob(code);
-                if (!next) {
-                  setError('Paste the pairing line from the Mac.');
-                  return;
-                }
-                sealMaterialRef.current = { hostPublicKey: next.hostPublicKey, phoneToken: next.phoneToken };
-                setError(null);
-                pendingTokenRef.current = null;
-                link.send({ type: 'pair', code: next.code });
-              }}
-            >
-              <Text style={styles.primaryText}>Pair</Text>
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+      <PairMacScreen
+        hasDesktops={desktops.length > 0}
+        onDesktops={showDesktops}
+        code={code}
+        onChangeCode={setCode}
+        relayUrl={relay.url}
+        onChangeRelay={relay.setUrl}
+        error={error}
+        onSubmit={submitPairing}
+        onPasteInvalid={() => setError('Paste the pairing line from the Mac.')}
+        onClearError={() => setError(null)}
+      />
     );
   }
 
