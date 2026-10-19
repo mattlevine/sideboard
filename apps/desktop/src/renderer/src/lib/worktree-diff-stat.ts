@@ -13,8 +13,20 @@ const CREATE_DEFER_MS = 1_500;
 
 const CLEAN: WorktreeDirtyStat = { additions: 0, deletions: 0, dirty: false };
 
-function skipDirtyStat(worktreePath: string): boolean {
-  return !worktreePath || worktreePath === GLOBAL_WORKSPACE_ID;
+/**
+ * Global chats store `__global__` on `repoPath` and a synthetic cwd on
+ * `worktreePath`. The sidebar glyph skips those so it does not poll
+ * `getWorktreeDirtyStat` (that call rejects in the main process).
+ */
+export function shouldSkipWorktreeDirtyStat(
+  worktreePath: string,
+  repoPath?: string | null,
+): boolean {
+  return (
+    !worktreePath ||
+    worktreePath === GLOBAL_WORKSPACE_ID ||
+    repoPath === GLOBAL_WORKSPACE_ID
+  );
 }
 
 /**
@@ -29,8 +41,9 @@ export function useWorktreeDirtyStat(
   threadId: string,
   worktreePath: string,
   status: string,
+  repoPath?: string | null,
 ): { stat: WorktreeDirtyStat | null; loaded: boolean } {
-  const skip = skipDirtyStat(worktreePath);
+  const skip = shouldSkipWorktreeDirtyStat(worktreePath, repoPath);
   const [stat, setStat] = useState<WorktreeDirtyStat | null>(skip ? CLEAN : null);
   const [loaded, setLoaded] = useState(skip);
   const fetchGen = useRef(0);
@@ -40,7 +53,7 @@ export function useWorktreeDirtyStat(
 
   useEffect(() => {
     prevStatus.current = null;
-    if (skipDirtyStat(worktreePath)) {
+    if (shouldSkipWorktreeDirtyStat(worktreePath, repoPath)) {
       setStat(CLEAN);
       setLoaded(true);
       return;
@@ -74,10 +87,10 @@ export function useWorktreeDirtyStat(
       window.clearTimeout(first);
       window.clearInterval(interval);
     };
-  }, [threadId, worktreePath]);
+  }, [threadId, worktreePath, repoPath]);
 
   useEffect(() => {
-    if (skipDirtyStat(worktreePath)) return;
+    if (shouldSkipWorktreeDirtyStat(worktreePath, repoPath)) return;
     const prev = prevStatus.current;
     prevStatus.current = status;
     // First paint already loaded via the id/path effect — only refetch after
@@ -104,7 +117,7 @@ export function useWorktreeDirtyStat(
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [status, threadId, worktreePath]);
+  }, [status, threadId, worktreePath, repoPath]);
 
   return { stat, loaded };
 }

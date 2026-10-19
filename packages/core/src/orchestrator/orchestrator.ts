@@ -3057,7 +3057,12 @@ export class Orchestrator {
 
   async worktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat> {
     const thread = this.requireThread(threadRef);
-    this.assertNotGlobal(thread, 'Diff');
+    // Glyph poll, not an explicit diff. Global chats have no git worktree;
+    // throwing here rejects the IPC handler and the main process logs it
+    // on every sidebar refresh.
+    if (isGlobalThread(thread)) {
+      return { additions: 0, deletions: 0, dirty: false };
+    }
     return getWorktreeDirtyStat(thread.worktreePath);
   }
 

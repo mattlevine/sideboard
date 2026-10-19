@@ -110,6 +110,7 @@ export function WorktreeSidebarRow({
     primary.id,
     primary.worktreePath,
     primary.status,
+    primary.repoPath,
   );
 
   function clearTimer(ref: { current: number | null }) {

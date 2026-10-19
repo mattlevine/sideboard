@@ -361,6 +361,7 @@ function WorktreeCard({
     primary.id,
     primary.worktreePath,
     primary.status,
+    primary.repoPath,
   );
 
   const dirty = loaded && Boolean(stat?.dirty);
