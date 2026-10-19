@@ -387,8 +387,8 @@ A chat waiting on a permission, an ask, or a reported block shows **Needs you** 
 ### Pair
 
 1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Set **Relay** if this Mac should use a relay you run. Name this Mac if you want.
-2. **Show pairing code.**
-3. In the phone app, set **Relay** to the same address, then enter that code. The next messages open a Global chat titled Phone.
+2. **Show pairing line.**
+3. In the phone app, set **Relay** to the same address, then paste that line. The next messages open a Global chat titled Phone.
 
 A phone can pair with more than one Mac. Name each one in **Settings → Remote** (Work, Personal). The phone lists those desktops and you choose which one to open. Pairing again adds another Mac. Messages go only to the desktop you picked.
 

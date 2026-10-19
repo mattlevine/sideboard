@@ -31,7 +31,7 @@
 <p style="margin:0 0 8px"><a class="back" href="/docs/">← Docs</a></p>
 <h1>Run your own relay</h1>
 <article>
-<p>The phone app talks to the Mac through a relay. Message text is the only thing that crosses it. Agents, repos, and secrets stay on the Mac.</p>
+<p>The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.</p>
 <p>Sideboard hosts a relay at <code>wss://relay.sideboard.cloud/remote</code>. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website.</p>
 <h2>What you need</h2>
 <ul>
@@ -72,7 +72,7 @@ docker compose -f apps/relay/docker-compose.yml up --build -d</pre>
 <h2>Use it</h2>
 <p>On each Mac, open <strong>Settings → Remote → Relay</strong> and paste:</p>
 <pre>wss://relay.example.com/remote</pre>
-<p>Save. Sideboard signs this Mac out of the previous relay. <strong>Sign in with GitHub</strong>, name the Mac, then <strong>Show pairing code</strong>.</p>
+<p>Save. Sideboard signs this Mac out of the previous relay. <strong>Sign in with GitHub</strong>, name the Mac, then <strong>Show pairing line</strong>.</p>
 <p>On the phone, open <strong>Pair a Mac</strong>, set <strong>Relay</strong> to that same address, and enter the code. The phone remembers it.</p>
 <p>Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch.</p>
 <p>See <a href="/docs/remote/">Phone</a> for pairing, and <a href="/support/">Support</a> for product questions.</p>

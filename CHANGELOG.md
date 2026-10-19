@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.304] - 2026-10-18
+
+### Added
+
+- `sideboard serve` keeps schedules and the phone relay running after the desktop window quits. `--lan` prints a same-network relay URL for the phone.
+- A worktree Claude turn loads tools from enabled plugin MCP configs. A server in `~/.claude.json` with the same name still wins.
+- The phone list shows **Needs you** and the reason when a chat is blocked. The workspace mark turns amber when a chat is waiting and nothing in that workspace is running.
+- A repo can symlink gitignored directories from the primary checkout with `[worktree] shared_directories`.
+
+### Changed
+
+- Phone sessions are encrypted between the phone and this Mac. Pairing pins this Mac’s public key. The relay and a LAN socket forward ciphertext. Phones that were already paired have to pair again.
+
+### Fixed
+
+- `sideboard serve` exits when Sideboard.app already owns the host, and after you stop the process.
+
 ## [0.1.303] - 2026-10-16
 
 ### Added

@@ -1,6 +1,6 @@
 # Self-hosted phone relay
 
-The phone app talks to the Mac through a relay. Message text is the only thing that crosses it. Agents, repos, and secrets stay on the Mac.
+The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.
 
 Sideboard hosts a relay at `wss://relay.sideboard.cloud/remote`. This page is how to run your own and point the desktop and the phone at it.
 
@@ -59,7 +59,7 @@ On each Mac, open **Settings → Remote → Relay**. Paste:
 wss://relay.example.com/remote
 ```
 
-Save. Sideboard signs this Mac out of whichever relay it was using. **Sign in with GitHub** (your OAuth App, not a git token), name the Mac, then **Show pairing code**.
+Save. Sideboard signs this Mac out of whichever relay it was using. **Sign in with GitHub** (your OAuth App, not a git token), name the Mac, then **Show pairing line**.
 
 On the phone, open **Pair a Mac** and set **Relay** to that same `wss://` address, then enter the code. The phone remembers the address.
 
