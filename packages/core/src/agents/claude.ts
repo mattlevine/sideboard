@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { run } from '../git/run.js';
 import {
   claudeChromeEnabled,
@@ -652,7 +653,7 @@ export const claudeAdapter: AgentAdapter = {
     // servers (not sideboard/brightsy) into it so Gmail/etc. still work, and
     // only auto-approve names we actually wrote. Coordinators stay injected-only
     // so HTTP connectors cannot hang the first find-work turn.
-    const userMcpEntries = isOrchestrator ? {} : listUserClaudeMcpServerEntries();
+    const userMcpEntries = isOrchestrator ? {} : listUserClaudeMcpServerEntries(homedir(), [thread.repoPath, thread.worktreePath]);
     let allowedTools: string[];
     if (isOrchestrator) {
       allowedTools = [

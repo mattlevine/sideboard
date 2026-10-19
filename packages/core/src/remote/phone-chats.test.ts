@@ -239,6 +239,12 @@ describe('phone orchestration chats', () => {
     const project = sidebar.projects.find((row) => row.path === '/tmp/sideboard');
     expect(project?.worktrees[0]?.chats.map((chat) => chat.id)).toEqual([thread.id]);
     expect(project?.worktrees[0]?.chats[0]?.agent).toBe('claude');
+    updateThread(thread.id, {
+      agentBlock: { reason: 'Allow the edit?', source: 'permission', at: '2026-10-17T00:00:00.000Z' },
+    });
+    expect(
+      listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.chats[0],
+    ).toMatchObject({ needsYou: true, blockedReason: 'Allow the edit?' });
     updateThread(thread.id, { tags: ['phone-sync'] });
     expect(listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.tags).toEqual([
       'phone-sync',

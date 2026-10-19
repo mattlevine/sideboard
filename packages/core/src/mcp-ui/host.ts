@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { isInjectedOrchMcpName, listUserClaudeMcpServerEntries } from '../agents/orch-mcp-isolation.js';
 import {
   htmlFromResourceContent,
@@ -24,13 +25,13 @@ export class McpUiHost {
 
   constructor(
     private readonly opts: {
-      entries: () => Record<string, Record<string, unknown>>;
+      entries: (projectDirs?: string[]) => Record<string, Record<string, unknown>>;
       openSession?: (launch: McpServerLaunch) => Promise<McpUiSession>;
     },
   ) {}
 
-  async viewForClaudeTool(toolName: string): Promise<McpUiView | null> {
-    const entries = this.userEntries();
+  async viewForClaudeTool(toolName: string, projectDirs?: string[]): Promise<McpUiView | null> {
+    const entries = this.userEntries(projectDirs);
     const match = matchClaudeMcpTool(toolName, Object.keys(entries));
     if (!match) return null;
     const launch = parseMcpServerLaunch(entries[match.server] ?? {});
@@ -62,14 +63,19 @@ export class McpUiHost {
     }
   }
 
-  async callTool(server: string, tool: string, args: Record<string, unknown>): Promise<unknown> {
-    const session = await this.sessionForName(server);
+  async callTool(
+    server: string,
+    tool: string,
+    args: Record<string, unknown>,
+    projectDirs?: string[],
+  ): Promise<unknown> {
+    const session = await this.sessionForName(server, projectDirs);
     if (!session) throw new Error(`MCP server ${server} is not available`);
     return session.callTool(tool, args);
   }
 
-  async readResource(server: string, uri: string): Promise<unknown> {
-    const session = await this.sessionForName(server);
+  async readResource(server: string, uri: string, projectDirs?: string[]): Promise<unknown> {
+    const session = await this.sessionForName(server, projectDirs);
     if (!session) throw new Error(`MCP server ${server} is not available`);
     const resource = await session.readResource(uri);
     if (!resource) throw new Error(`Resource ${uri} was empty`);
@@ -94,17 +100,20 @@ export class McpUiHost {
     );
   }
 
-  private userEntries(): Record<string, Record<string, unknown>> {
+  private userEntries(projectDirs?: string[]): Record<string, Record<string, unknown>> {
     const out: Record<string, Record<string, unknown>> = {};
-    for (const [name, entry] of Object.entries(this.opts.entries())) {
+    for (const [name, entry] of Object.entries(this.opts.entries(projectDirs))) {
       if (!name.trim() || isInjectedOrchMcpName(name) || !entry) continue;
       out[name] = entry;
     }
     return out;
   }
 
-  private async sessionForName(server: string): Promise<McpUiSession | null> {
-    const entry = this.userEntries()[server];
+  private async sessionForName(
+    server: string,
+    projectDirs?: string[],
+  ): Promise<McpUiSession | null> {
+    const entry = this.userEntries(projectDirs)[server];
     if (!entry) return null;
     const launch = parseMcpServerLaunch(entry);
     if (!launch) return null;
@@ -142,7 +151,9 @@ let singleton: McpUiHost | undefined;
 
 export function getMcpUiHost(): McpUiHost {
   if (!singleton) {
-    singleton = new McpUiHost({ entries: () => listUserClaudeMcpServerEntries() });
+    singleton = new McpUiHost({
+      entries: (projectDirs) => listUserClaudeMcpServerEntries(homedir(), projectDirs),
+    });
   }
   return singleton;
 }

@@ -230,12 +230,15 @@ export function RemoteSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Pair a phone</div>
         <p className="settings-hint">
-          Open the Sideboard app on your phone and enter this code. It expires in 10 minutes.
+          Paste this line into the phone. It pins this Mac and expires in 10 minutes.
         </p>
         {remote?.pairingCode ? (
-          <p className="settings-status-text" style={{ fontSize: 28, letterSpacing: 4 }}>
-            {remote.pairingCode}
-          </p>
+          <input
+            readOnly
+            value={remote.pairingCode}
+            onFocus={(event) => event.currentTarget.select()}
+            style={{ width: '100%', marginTop: 8 }}
+          />
         ) : null}
         <button
           type="button"
@@ -254,7 +257,7 @@ export function RemoteSettings({
               .finally(() => setPairing(false));
           }}
         >
-          {pairing ? 'Getting code…' : 'Show pairing code'}
+          {pairing ? 'Getting line…' : 'Show pairing line'}
         </button>
       </div>
     </div>

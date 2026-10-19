@@ -292,9 +292,11 @@ const api: IpcApi = {
   publishArtifactPreview: (id, html) =>
     ipcRenderer.invoke('artifactPreview:publish', id, html),
   clearArtifactPreview: (id) => ipcRenderer.invoke('artifactPreview:clear', id),
-  mcpUiLookup: (toolName) => ipcRenderer.invoke('mcpUi:lookup', toolName),
-  mcpUiCallTool: (server, tool, args) => ipcRenderer.invoke('mcpUi:callTool', server, tool, args),
-  mcpUiReadResource: (server, uri) => ipcRenderer.invoke('mcpUi:readResource', server, uri),
+  mcpUiLookup: (toolName, threadId) => ipcRenderer.invoke('mcpUi:lookup', toolName, threadId),
+  mcpUiCallTool: (server, tool, args, threadId) =>
+    ipcRenderer.invoke('mcpUi:callTool', server, tool, args, threadId),
+  mcpUiReadResource: (server, uri, threadId) =>
+    ipcRenderer.invoke('mcpUi:readResource', server, uri, threadId),
   publishMcpUiPreview: (id, html, csp) =>
     ipcRenderer.invoke('mcpUiPreview:publish', id, html, csp),
   clearMcpUiPreview: (id) => ipcRenderer.invoke('mcpUiPreview:clear', id),

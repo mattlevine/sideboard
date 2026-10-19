@@ -1204,6 +1204,9 @@ function persistSplit(settings: AppSettings): void {
     vault[key] = integrations[key];
     delete integrations[key];
   }
+  const previous = loadSecretVault();
+  if (previous.remoteHostPrivateKey) vault.remoteHostPrivateKey = previous.remoteHostPrivateKey;
+  if (previous.remotePhoneToken) vault.remotePhoneToken = previous.remotePhoneToken;
   writePrivateFile(
     appSettingsPath(),
     `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,

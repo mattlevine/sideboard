@@ -14,6 +14,8 @@ export type PhoneChat = {
   prUrl?: string;
   prNumber?: string;
   prStatus?: string;
+  needsYou?: boolean;
+  blockedReason?: string;
 };
 
 export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
@@ -177,6 +179,7 @@ export function ChatRow({
   onOpen: () => void;
   onArchive: () => void;
 }) {
+  const needsYou = Boolean(chat.needsYou && chat.blockedReason);
   return (
     <View style={styles.row}>
       <Pressable style={styles.rowMain} onPress={onOpen}>
@@ -184,19 +187,23 @@ export function ChatRow({
           <AgentKindIcon agent={chat.agent || ''} />
           <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
         </View>
-        <Text style={styles.preview} numberOfLines={1}>{chat.preview || 'No messages yet'}</Text>
+        <Text style={[styles.preview, needsYou ? styles.previewNeed : null]} numberOfLines={2}>
+          {needsYou ? chat.blockedReason : chat.preview || 'No messages yet'}
+        </Text>
         <View style={styles.statusRow}>
           <View
             style={[
               styles.dot,
-              chat.status === 'running' || chat.status === 'queued'
-                ? styles.dotRun
-                : chat.status === 'error' || chat.status === 'broken'
-                  ? styles.dotErr
-                  : styles.dotOff,
+              needsYou
+                ? styles.dotWarn
+                : chat.status === 'running' || chat.status === 'queued'
+                  ? styles.dotRun
+                  : chat.status === 'error' || chat.status === 'broken'
+                    ? styles.dotErr
+                    : styles.dotOff,
             ]}
           />
-          <Text style={styles.status}>{agentStatus(chat.status)}</Text>
+          <Text style={styles.status}>{needsYou ? 'Needs you' : agentStatus(chat.status)}</Text>
         </View>
       </Pressable>
       <Pressable

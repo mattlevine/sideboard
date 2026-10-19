@@ -10,6 +10,10 @@ export interface SettingsSecretVault {
   slackClientSecret?: string;
   slackAppToken?: string;
   remoteHostSecret?: string;
+  /** X25519 seed for phone session encryption. Not sent to the relay. */
+  remoteHostPrivateKey?: string;
+  /** Token the paired phone proves inside the encrypted handshake. */
+  remotePhoneToken?: string;
   remoteAccountToken?: string;
   githubPat?: string;
   abletimeAccessToken?: string;
@@ -57,6 +61,12 @@ function normalizeVault(raw: SettingsSecretVault): SettingsSecretVault {
   }
   if (typeof raw.remoteHostSecret === 'string' && raw.remoteHostSecret.trim()) {
     out.remoteHostSecret = raw.remoteHostSecret.trim();
+  }
+  if (typeof raw.remoteHostPrivateKey === 'string' && raw.remoteHostPrivateKey.trim()) {
+    out.remoteHostPrivateKey = raw.remoteHostPrivateKey.trim();
+  }
+  if (typeof raw.remotePhoneToken === 'string' && raw.remotePhoneToken.trim()) {
+    out.remotePhoneToken = raw.remotePhoneToken.trim();
   }
   if (typeof raw.remoteAccountToken === 'string' && raw.remoteAccountToken.trim()) {
     out.remoteAccountToken = raw.remoteAccountToken.trim();

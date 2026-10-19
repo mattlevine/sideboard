@@ -93,7 +93,7 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
     if (!toolName.startsWith('mcp__')) return;
     const frameId = mcpUiFrameId(toolCallId);
     let cancelled = false;
-    void loadView(toolName, result)
+    void loadView(toolName, result, threadId)
       .then(async (view) => {
         if (cancelled || !view) return;
         viewRef.current = view;
@@ -147,8 +147,8 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
           }
           const pending =
             effect.type === 'call-tool'
-              ? window.sideboard.mcpUiCallTool(server, effect.name, effect.args)
-              : window.sideboard.mcpUiReadResource(server, effect.uri);
+              ? window.sideboard.mcpUiCallTool(server, effect.name, effect.args, threadId)
+              : window.sideboard.mcpUiReadResource(server, effect.uri, threadId);
           void pending.then(
             (value) => post(rpcResult(effect.id, value)),
             (err) => post(rpcError(effect.id, err instanceof Error ? err.message : 'Request failed')),
@@ -160,7 +160,7 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
             if (effect.messageId) post(legacyResponse(effect.messageId, undefined, { message: 'MCP server is not connected' }));
             continue;
           }
-          void window.sideboard.mcpUiCallTool(server, effect.name, effect.args).then(
+          void window.sideboard.mcpUiCallTool(server, effect.name, effect.args, threadId).then(
             (value) => {
               if (effect.messageId) post(legacyResponse(effect.messageId, value));
             },
@@ -194,8 +194,12 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
   );
 }
 
-async function loadView(toolName: string, result: string | undefined): Promise<McpUiView | null> {
-  const remote = await window.sideboard.mcpUiLookup(toolName);
+async function loadView(
+  toolName: string,
+  result: string | undefined,
+  threadId?: string,
+): Promise<McpUiView | null> {
+  const remote = await window.sideboard.mcpUiLookup(toolName, threadId);
   if (remote) return remote;
   const embedded = embeddedMcpUiFromText(result);
   if (!embedded) return null;

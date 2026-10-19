@@ -106,7 +106,7 @@
       <div>
         <span class="kicker">Remote</span>
         <h3>Your phone, to this Mac</h3>
-        <p>Pair the Sideboard phone app from Settings → Remote. It lists every Mac you have paired and you choose which desktop to open. Agents, repos, and VPN-only APIs stay on that machine.</p>
+        <p>Pair the Sideboard phone app from Settings → Remote. It lists every Mac you have paired and you choose which desktop to open. Quit the window and leave <code>sideboard serve</code> running if you still want the phone and schedules. Agents, repos, and VPN-only APIs stay on that machine. A chat that is waiting on you shows Needs you.</p>
       </div>
       <div class="mock mock-phone" aria-hidden="true">
         <div class="msg you">Work</div>
@@ -231,7 +231,7 @@ sideboard land &lt;thread&gt;</pre>
 <section class="wrap">
   <div class="phone-band">
     <h2>The phone is remote control, not a cloud workspace.</h2>
-    <p>Pair it from Settings → Remote. Name each Mac. The phone lists those desktops and you pick which one to open. What stays here: agents, worktrees, repos, and secrets — including anything only reachable on the VPN. What leaves: message text, through the relay.</p>
+    <p>Pair it from Settings → Remote. Name each Mac. The phone lists those desktops and you pick which one to open. What stays here: agents, worktrees, repos, and secrets — including anything only reachable on the VPN. What leaves: a routing token and ciphertext. The relay cannot read the prompt.</p>
     <p style="margin-top:22px;font-size:14px">The machine has to stay awake — Settings → Advanced → Caffeinate while the phone remote is connected. <a href="/docs/remote/">Pair a phone →</a></p>
   </div>
 </section>

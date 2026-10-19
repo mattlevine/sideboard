@@ -235,6 +235,8 @@ claude mcp add sideboard -- sideboard mcp
 
 Confirm with `/mcp` inside a Claude session, or `claude mcp list`.
 
+A Claude worktree turn also loads MCP servers from plugins that are enabled for that checkout (`enabledPlugins` in `~/.claude/settings.json`, then the project’s `.claude/settings.json`, then `.claude/settings.local.json`). A server already in `~/.claude.json` wins on the same name. Orchestration turns stay on the injected Sideboard server. Plugin UIs render in the MCP App frame on the desktop and the phone.
+
 ### Connect Cursor
 
 Add a project or global MCP entry (Cursor → Settings → MCP, or `.cursor/mcp.json`):
@@ -371,15 +373,22 @@ The Sideboard phone app is the remote surface for the **same local orchestrator*
                                           Global orchestrator → worktrees
 ```
 
-**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** message text, via a relay. The default is `relay.sideboard.cloud`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
+**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** a routing token so the relay can find this Mac. Message text is encrypted between the phone and this Mac; the relay forwards ciphertext. The default relay is `relay.sideboard.cloud`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
 
-Keep the desktop app running. The phone cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
+The phone reaches this Mac while Sideboard.app is open, or while `sideboard serve` owns the host after you quit the window. It cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
+
+```bash
+sideboard serve          # schedules + phone relay; exits if the app is already the host
+sideboard serve --lan    # also print ws://<lan-ip>:<port>/remote for the phone's Relay field
+```
+
+A chat waiting on a permission, an ask, or a reported block shows **Needs you** and the reason on the phone list. The workspace mark turns amber when nothing in that workspace is still running.
 
 ### Pair
 
 1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Set **Relay** if this Mac should use a relay you run. Name this Mac if you want.
-2. **Show pairing code.**
-3. In the phone app, set **Relay** to the same address, then enter that code. The next messages open a Global chat titled Phone.
+2. **Show pairing line.**
+3. In the phone app, set **Relay** to the same address, then paste that line. The next messages open a Global chat titled Phone.
 
 A phone can pair with more than one Mac. Name each one in **Settings → Remote** (Work, Personal). The phone lists those desktops and you choose which one to open. Pairing again adds another Mac. Messages go only to the desktop you picked.
 
@@ -406,7 +415,7 @@ Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supa
 
 ## Scheduled orchestration
 
-Local jobs that send a prompt to an existing chat (Global or worktree), or start a new Global chat. Sideboard.app must be running on this Mac; a sleeping machine skips until wake. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled** (you can turn it off anytime). Orchestration chats can also call `set_caffeinate`.
+Local jobs that send a prompt to an existing chat (Global or worktree), or start a new Global chat. Sideboard.app or `sideboard serve` must be the host on this Mac; a sleeping machine skips until wake. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled** (you can turn it off anytime). Orchestration chats can also call `set_caffeinate`.
 
 **Settings → Schedules**, MCP (`list_schedules` / `create_schedule` / `run_schedule` — orchestration and worktree agents), or:
 
@@ -465,6 +474,11 @@ Override per repo in `.sideboard/settings.toml`:
 ```toml
 [worktrees]
 # root = "~/sideboard/workspaces/my-repo"
+
+[worktree]
+# Symlink a gitignored directory from the primary checkout. Skipped unless it
+# exists there and is gitignored. The per-worktree package cache stays the default.
+shared_directories = ["node_modules"]
 
 [scripts]
 setup = "pnpm install"

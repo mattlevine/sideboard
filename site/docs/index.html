@@ -127,7 +127,7 @@ args = ["mcp"]</pre>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Remote</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">The phone app remote-controls this Mac. Sign in with GitHub, name it, show a pairing code, then pick that desktop in the app.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">The phone app remote-controls this Mac. Sign in with GitHub, name it, show a pairing line, then pick that desktop in the app.</p>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">Connectors</h4>
@@ -158,7 +158,7 @@ args = ["mcp"]</pre>
 
 <section id="schedules" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
 <h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Scheduled orchestration</h2>
-<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:680px;margin:0 0 24px">Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app must be running. A sleeping Mac skips until wake.</p>
+<p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:680px;margin:0 0 24px">Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app or <code style="color:#8cc8f5">sideboard serve</code> must be the host. A sleeping Mac skips until wake.</p>
 <pre style="margin:0 0 20px;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard schedule ls
 sideboard schedule add --prompt "Triage open PRs" --every 1h --thread &lt;id&gt;
 sideboard schedule add --prompt "Morning standup" --cron "0 9 * * *" --tz America/Los_Angeles
@@ -187,7 +187,7 @@ sideboard schedule run &lt;id&gt;</pre>
 </a>
 <a href="/docs/remote/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Phone</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings → Remote. Sign in with GitHub, name this Mac, show a pairing code, and pick that desktop in the phone app.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Settings → Remote. Sign in with GitHub, name this Mac, show a pairing line, and pick that desktop in the phone app.</p>
 </a>
 <a href="/docs/agents/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
 <h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Agents</h4>
@@ -218,7 +218,7 @@ sideboard schedule run &lt;id&gt;</pre>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:24px">
 <div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Worktrees</h3>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Checkouts live outside the repo at <code style="font-size:13.5px;color:#8cc8f5">~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override the root in settings. Opt-in cowboy (Settings → Advanced, then New chat → ⋯) works in the project folder on the default branch instead.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Checkouts live outside the repo at <code style="font-size:13.5px;color:#8cc8f5">~/sideboard/workspaces/&lt;repo-slug&gt;/&lt;team&gt;/</code>. Override the root in settings. Opt-in cowboy (Settings → Advanced, then New chat → ⋯) works in the project folder on the default branch instead. <code style="font-size:13.5px;color:#8cc8f5">[worktree] shared_directories</code> can symlink a gitignored directory (typically <code style="font-size:13.5px;color:#8cc8f5">node_modules</code>) from the primary checkout. The per-worktree package cache stays the default.</p>
 </div>
 <div style="padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h3 style="font-weight:700;font-size:19px;margin:0 0 8px">Setup</h3>
@@ -233,7 +233,10 @@ sideboard schedule run &lt;id&gt;</pre>
 <p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Put recurring guides in <code style="font-size:13.5px;color:#8cc8f5">.claude/skills/&lt;name&gt;/SKILL.md</code>, not <code style="font-size:13.5px;color:#8cc8f5">.sideboard/skills</code>, so Claude Code and <code style="font-size:13.5px;color:#8cc8f5">attach</code> load them without Sideboard. <code style="font-size:13.5px;color:#8cc8f5">/long-running</code> is a Sideboard product skill — every worktree agent gets detach-and-wait without copying that file.</p>
 </div>
 </div>
-<pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">[scripts]
+<pre style="margin:0;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">[worktree]
+shared_directories = ["node_modules"]
+
+[scripts]
 setup = "pnpm install"
 
 [scripts.run.dev]
