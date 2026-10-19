@@ -55,9 +55,9 @@ On each Mac, open **Settings → Remote → Relay** and paste:
 wss://relay.example.com/remote
 ```
 
-Save. Sideboard signs this Mac out of the previous relay. **Sign in with GitHub**, name the Mac, then **Show pairing line**.
+Save. Sideboard signs this Mac out of the previous relay. **Sign in with GitHub**, name the Mac, then **Show pairing code**.
 
-On the phone, open **Pair a Mac**, set **Relay** to that same address, and enter the code. The phone remembers it.
+On the phone, open **Pair a Mac**, set **Relay** to that same address, and scan the QR code. The phone remembers it. Paste the line under the code if you can’t scan.
 
 Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch.
 

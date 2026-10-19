@@ -13,7 +13,7 @@
       "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Sideboard uses the camera to attach a photo to a message.",
+        "NSCameraUsageDescription": "Sideboard uses the camera to scan a pairing code and to attach a photo to a message.",
         "NSPhotoLibraryUsageDescription": "Sideboard uses your photos to attach a picture to a message.",
         "NSMicrophoneUsageDescription": "Sideboard uses the microphone to dictate a message."
       }
@@ -38,7 +38,14 @@
         "expo-image-picker",
         {
           "photosPermission": "Sideboard uses your photos to attach a picture to a message.",
-          "cameraPermission": "Sideboard uses the camera to attach a photo to a message."
+          "cameraPermission": "Sideboard uses the camera to scan a pairing code and to attach a photo to a message."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Sideboard uses the camera to scan a pairing code and to attach a photo to a message.",
+          "recordAudioAndroid": false
         }
       ]
     ],

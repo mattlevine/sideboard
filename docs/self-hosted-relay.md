@@ -59,9 +59,9 @@ On each Mac, open **Settings → Remote → Relay**. Paste:
 wss://relay.example.com/remote
 ```
 
-Save. Sideboard signs this Mac out of whichever relay it was using. **Sign in with GitHub** (your OAuth App, not a git token), name the Mac, then **Show pairing line**.
+Save. Sideboard signs this Mac out of whichever relay it was using. **Sign in with GitHub** (your OAuth App, not a git token), name the Mac, then **Show pairing code**.
 
-On the phone, open **Pair a Mac** and set **Relay** to that same `wss://` address, then enter the code. The phone remembers the address.
+On the phone, open **Pair a Mac** and set **Relay** to that same `wss://` address, then scan the QR code. The phone remembers the address. Paste the line under the code if you can’t scan.
 
 `https://relay.example.com` and `https://relay.example.com/remote` are accepted and stored as the `wss://` URL.
 
