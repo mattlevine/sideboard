@@ -9,10 +9,10 @@
 <meta property="og:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://www.sideboard.cloud/">
-<meta property="og:image" content="https://www.sideboard.cloud/board.png">
+<meta property="og:image" content="https://www.sideboard.cloud/board.png?v=3">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261004-2">
+<link rel="stylesheet" href="/styles.css?v=20261019-3">
 </head>
 <body>
 <header class="nav">
@@ -48,10 +48,43 @@
 
 <figure class="shot">
   <div class="shot-frame">
-    <img src="desktop.png?v=2" width="2706" height="1781" alt="Sideboard desktop — the worktree chat with the agent thread, structure column, and the git repo on the far right">
+    <div class="shot-swap">
+      <img class="shot-a" src="desktop.png?v=2" width="2706" height="1781" alt="Sideboard desktop — the worktree chat with the agent thread, structure column, and the git repo on the far right">
+      <img class="shot-b" src="board.png?v=3" width="2718" height="1676" alt="Sideboard board — workspaces across New, Draft, Review, Approved, and Merged, with more than one agent on a checkout">
+    </div>
   </div>
-  <figcaption class="shot-cap">One worktree chat: the agent thread in the middle, artifacts and schema tabs beside it, the git repo on the far right.</figcaption>
+  <figcaption class="shot-cap shot-swap-caps">
+    <span>One worktree chat: the agent thread in the middle, artifacts and schema tabs beside it, the git repo on the far right.</span>
+    <span>The fleet on one board. A workspace can hold several agents. Columns follow the work: New, Draft, Review, Approved, Merged.</span>
+  </figcaption>
 </figure>
+
+<section class="section phone-features wrap">
+  <h2>Your phone, to your Mac.</h2>
+  <p class="sub">Pair from Settings → Remote, then pick a desktop. The phone reaches the agents already running there: the thread, the diff, and the question when one needs you.</p>
+  <div class="phone-row">
+    <figure>
+      <img src="phone/desktops.png?v=7" width="1206" height="2622" alt="Sideboard on iPhone: Choose a desktop, with the paired Mac online and Pair another Mac">
+      <figcaption><strong>Desktops</strong> Pick the Mac you paired.</figcaption>
+    </figure>
+    <figure>
+      <img src="phone/fleet.png?v=7" width="1206" height="2622" alt="Phone needs you at the top, then sideboard agents: phone-pairing in draft, fleet-status merged, api-auth pending">
+      <figcaption><strong>Fleet</strong> Needs you sits at the top.</figcaption>
+    </figure>
+    <figure>
+      <img src="phone/chat.png?v=7" width="1206" height="2622" alt="api-auth chat with Claude, including the reconnect code in the thread">
+      <figcaption><strong>Chat</strong> Code in the thread.</figcaption>
+    </figure>
+    <figure>
+      <img src="phone/diff.png?v=7" width="1206" height="2622" alt="api-auth Changes tab showing the relay-link.ts diff">
+      <figcaption><strong>Changes</strong> The diff, file by file.</figcaption>
+    </figure>
+    <figure>
+      <img src="phone/ask.png?v=7" width="1206" height="2622" alt="Orchestration chat asking whether to ship the reconnect fix, with Patch and rerun CI and Leave it red">
+      <figcaption><strong>Needs you</strong> Answer without the laptop.</figcaption>
+    </figure>
+  </div>
+</section>
 
 <section class="agents wrap">
   <p>Works with the agents you already pay for</p>
@@ -78,10 +111,10 @@
       <div>
         <span class="kicker">Kanban</span>
         <h3>See the whole fleet at a glance</h3>
-        <p>Status, live output, and fan-out across every thread. One agent per worktree, all of them on one board instead of eight terminal tabs. Columns follow the work: New, Draft, Review, Merged.</p>
+        <p>Status, live output, and fan-out across every thread. More than one agent can share a workspace, and every workspace sits on one board. Columns follow the work: New, Draft, Review, Approved, Merged.</p>
       </div>
       <div class="shot-frame">
-        <img src="board.png" width="2662" height="1736" alt="Sideboard global board — every worktree as a card across New, Draft, Review, and Merged">
+        <img src="board.png?v=3" width="2718" height="1676" alt="Sideboard global board — workspaces across New, Draft, Review, Approved, and Merged, with more than one agent on a checkout">
       </div>
     </div>
   </div>
@@ -105,13 +138,12 @@
     <div class="panel-grid">
       <div>
         <span class="kicker">Remote</span>
-        <h3>Your phone, to this Mac</h3>
+        <h3>Your phone, to your Mac</h3>
         <p>Pair the Sideboard phone app from Settings → Remote. It lists every Mac you have paired and you choose which desktop to open. Quit the window and leave <code>sideboard serve</code> running if you still want the phone and schedules. Agents, repos, and VPN-only APIs stay on that machine. A chat that is waiting on you shows Needs you.</p>
       </div>
-      <div class="mock mock-phone" aria-hidden="true">
-        <div class="msg you">Work</div>
-        <div class="msg you">check the failing CI</div>
-        <div class="msg bot">CI is red on api-auth. Want me to look?</div>
+      <div class="phone-pair">
+        <img src="phone/chat.png?v=7" width="1206" height="2622" alt="Phone chat on api-auth, with the reconnect patch in the thread">
+        <img src="phone/ask.png?v=7" width="1206" height="2622" alt="Needs you on the phone: ship the reconnect fix, or leave the branch as it is">
       </div>
     </div>
   </div>
