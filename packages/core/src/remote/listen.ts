@@ -41,6 +41,7 @@ import {
   type PhoneDraft,
   type PhoneOpened,
 } from './phone-chats.js';
+import { republishPendingAsk } from './phone-pending-ask.js';
 import { listPhoneSources } from './phone-sources.js';
 import {
   REMOTE_STOPPED_REPLY,
@@ -90,7 +91,9 @@ function publishOpenedChat(
   emitOpened(opts, opened);
   if (opened.chat.status === 'running' || opened.chat.status === 'queued') {
     deliverPhoneTurn(opts, opened.chat.id);
+    return;
   }
+  republishPendingAsk(opts, opened.chat.id);
 }
 
 function applyPhoneOptions(chatId: string, draft: PhoneDraft): void {
