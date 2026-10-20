@@ -3057,7 +3057,7 @@ export class Orchestrator {
 
   async worktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat> {
     const thread = this.requireThread(threadRef);
-    this.assertNotGlobal(thread, 'Diff');
+    if (isGlobalThread(thread)) return { additions: 0, deletions: 0, dirty: false };
     return getWorktreeDirtyStat(thread.worktreePath);
   }
 
