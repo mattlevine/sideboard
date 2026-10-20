@@ -201,6 +201,32 @@ export function formatWorktreeReminder(): string {
   return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Schedules: create_schedule (at / every / cron; chatId=self for this chat). set_workspace_tags updates labels on this workspace (omit ref).';
 }
 
+/**
+ * Every Claude worktree turn that is not Plan mode.
+ *
+ * Claude Code's default `worktree.bgIsolation` is `worktree`: a second
+ * write-capable agent in this checkout is blocked, and the tool text tells
+ * the parent to re-spawn with `isolation: "worktree"` (or to set
+ * `bgIsolation: none`). Models stop and ask the user. The parent should
+ * partition the files and continue. Do not forbid `ask_user` in general —
+ * only asking whether to isolate. Cursor, Codex, and OpenCode subagents
+ * share this checkout (no isolation worktree / `bgIsolation` block), and
+ * Brightsy has no nested writer, so they do not get this reminder.
+ */
+export function formatClaudeSubagentReminder(): string {
+  return 'Claude subagents: if Task/Agent workers will edit files, write a short plan in this chat and continue in the same turn. Do not ask the user whether to isolate, and do not set worktree.bgIsolation to none. One writer may edit this workspace. Every other writer is an Agent with isolation "worktree" and a disjoint file list (read-only explore agents may overlap). While those agents run, leave their files alone. Merge each returned branch into this workspace, then remove the temporary worktree. You stay in this cwd. If Claude says another write-capable agent is in this directory, or that writes to the shared checkout are blocked, re-spawn that agent with isolation "worktree" or make the edit yourself.';
+}
+
+/** Claude worktree turns only. Null in Plan mode, for orchestrators, and for every other agent. */
+export function claudeSubagentTurnReminder(
+  thread: Pick<Thread, 'agent' | 'planMode' | 'sourceType' | 'repoPath'>,
+): string | null {
+  if (thread.agent !== 'claude' || thread.planMode || isOrchestratorThread(thread)) {
+    return null;
+  }
+  return formatClaudeSubagentReminder();
+}
+
 const PR_GOAL_RE =
   /greptile|\bci\b.*\b(green|pass)|checks?\s+(pass|green)|until\s+.*\b(pass|green|merge|clean)|\bfix ci\b|watch[- ]fix[- ]push/i;
 
