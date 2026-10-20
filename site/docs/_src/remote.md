@@ -20,4 +20,4 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 Product questions: [Support](/support/).
 
-See [Agents](/docs/agents/) and [Compare](/docs/compare/).
+See [Agents](/docs/agents/).
