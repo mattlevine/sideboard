@@ -13,6 +13,8 @@ import {
   formatUiReminder,
   formatIssueToolsDirective,
   formatIssueToolsReminder,
+  formatClaudeSubagentReminder,
+  claudeSubagentTurnReminder,
   formatWorktreeDirective,
   formatConnectedOrchestratorReminder,
   formatWorktreeReminder,
@@ -279,6 +281,46 @@ describe('formatConnectedOrchestratorReminder', () => {
 
   it('is empty when there is no orchestrator', () => {
     expect(formatConnectedOrchestratorReminder(null)).toBeNull();
+  });
+});
+
+describe('formatClaudeSubagentReminder', () => {
+  it('tells the parent to partition writers and continue', () => {
+    const text = formatClaudeSubagentReminder();
+    expect(text).toMatch(/write a short plan/i);
+    expect(text).toMatch(/isolation "worktree"/);
+    expect(text).toMatch(/disjoint file list/);
+    expect(text).toMatch(/whether to isolate/);
+    expect(text).not.toMatch(/call ask_user/);
+    expect(text).toMatch(/bgIsolation to none/);
+    expect(text).toMatch(/Merge each returned branch/);
+    expect(text).toMatch(/You stay in this cwd/);
+  });
+});
+
+describe('claudeSubagentTurnReminder', () => {
+  const worktree = {
+    agent: 'claude' as const,
+    planMode: false,
+    sourceType: 'branch' as const,
+    repoPath: '/tmp/repo',
+  };
+
+  it('is set for a Claude worktree turn', () => {
+    expect(claudeSubagentTurnReminder(worktree)).toMatch(/whether to isolate/);
+  });
+
+  it('is omitted in Plan mode and for orchestrators', () => {
+    expect(claudeSubagentTurnReminder({ ...worktree, planMode: true })).toBeNull();
+    expect(
+      claudeSubagentTurnReminder({ ...worktree, sourceType: 'orchestration' }),
+    ).toBeNull();
+  });
+
+  it('is omitted for agents that share this checkout', () => {
+    for (const agent of ['cursor', 'codex', 'opencode', 'brightsy'] as const) {
+      expect(claudeSubagentTurnReminder({ ...worktree, agent })).toBeNull();
+    }
   });
 });
 

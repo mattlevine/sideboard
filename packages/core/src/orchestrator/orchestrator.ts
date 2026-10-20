@@ -227,7 +227,7 @@ import {
   formatPrGateDirective,
   formatRenameBranchDirective,
   formatUiReminder,
-  connectedOrchestratorTurnReminder,
+  connectedOrchestratorTurnReminder, claudeSubagentTurnReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
   issueTicketFromThread,
@@ -1568,7 +1568,7 @@ export class Orchestrator {
     // (Claude appends; other CLIs prepend them only on resumed turns).
     const turnReminders =
       [
-        worktreeReminder,
+        worktreeReminder, claudeSubagentTurnReminder(thread),
         connectedOrchestratorTurnReminder(thread, (id) => readThread(id)),
         optionalServicesReminder,
         issueToolsReminder,
