@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.306] - 2026-10-19
+
+### Fixed
+
+- Opening a phone chat that is still waiting on a question shows the choices again, without a second copy of the question.
+- The global board no longer logs a dirty-stat error for the coordinator workspace.
+
 ## [0.1.305] - 2026-10-18
 
 ### Added
