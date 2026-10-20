@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.307] - 2026-10-20
+
+### Added
+
+- Claude worktree turns partition parallel writers and continue: one writer in the checkout, every other writer on an isolation worktree, then merge back. The reminder does not ask whether to isolate. Plan mode skips it. Other agents do not get it.
+
 ## [0.1.306] - 2026-10-19
 
 ### Fixed
