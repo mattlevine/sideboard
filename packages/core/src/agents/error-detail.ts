@@ -1,14 +1,9 @@
-import {
-  looksLikeCursorStreamCutOff,
-  looksLikeCursorStreamIdleAfterTools,
-} from './cursor-stream-cutoff.js';
+import { looksLikeCursorStreamFailure } from './cursor-stream-cutoff.js';
 
 export {
   CURSOR_STREAM_CUTOFF_CONTINUE_LIMIT,
   cursorStreamCutOffContinueLimit,
   looksLikeCursorStreamCutOff,
-  looksLikeCursorStreamIdleAfterTools,
-  formatCursorStreamIdleAfterToolsError,
   nextCrashContinueCount,
 } from './cursor-stream-cutoff.js';
 
@@ -364,8 +359,7 @@ export function looksLikeRetryableRunnerCrash(text: string): boolean {
   if (looksLikeInvalidAgentSession(text)) return false;
   if (looksLikeV8Oom(text)) return false;
   if (looksLikeHugeToolResultDump(text)) return true;
-  if (looksLikeCursorStreamCutOff(text)) return true;
-  if (looksLikeCursorStreamIdleAfterTools(text)) return true;
+  if (looksLikeCursorStreamFailure(text)) return true;
   if (looksLikeBrightsyEmptyCompletion(text)) return true;
   const lower = text.trim().toLowerCase();
   if (/cannot find (?:package|module)|err_module_not_found/.test(lower)) return false;
@@ -479,11 +473,7 @@ export function humanizeAgentFailDetail(detail: string): string {
   if (/corrupt local agent checkpoint|missing root blob|truncated crash dump/.test(lower)) {
     return `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;
   }
-  if (
-    /connection stalled/.test(lower) ||
-    looksLikeCursorStreamCutOff(raw) ||
-    looksLikeCursorStreamIdleAfterTools(raw)
-  ) {
+  if (/connection stalled/.test(lower) || looksLikeCursorStreamFailure(raw)) {
     return /retry the turn/i.test(raw)
       ? raw
       : `${raw} — retry the turn (Sideboard will start a fresh Cursor session).`;

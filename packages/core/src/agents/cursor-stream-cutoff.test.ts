@@ -6,6 +6,7 @@ import {
   formatCursorStreamIdleAfterToolsError,
   isCursorIdleAfterCompletedTool,
   looksLikeCursorStreamCutOff,
+  looksLikeCursorStreamFailure,
   looksLikeCursorStreamIdleAfterTools,
   nextCrashContinueCount,
   noteCursorAgentEvent,
@@ -15,6 +16,7 @@ describe('cursor-stream-cutoff', () => {
   it('does not treat idle-after-tools as an HTTP/2 cutoff', () => {
     const detail = 'Cursor run failed: Cursor stopped responding after a tool call (Grok 4.7)';
     expect(looksLikeCursorStreamIdleAfterTools(detail)).toBe(true);
+    expect(looksLikeCursorStreamFailure(detail)).toBe(true);
     expect(looksLikeCursorStreamCutOff(detail)).toBe(false);
     expect(nextCrashContinueCount(detail, 0)).toBe(1);
     expect(nextCrashContinueCount(detail, 1)).toBeNull();

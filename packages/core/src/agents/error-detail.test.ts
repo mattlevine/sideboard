@@ -12,7 +12,6 @@ import {
   looksLikeInvalidAgentSession,
   looksLikeBrightsyEmptyCompletion,
   looksLikeCursorStreamCutOff,
-  looksLikeCursorStreamIdleAfterTools,
   looksLikeRetryableRunnerCrash,
   looksLikeV8Oom,
   looksLikeCodexMcpError,
@@ -207,11 +206,6 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(looksLikeCursorStreamCutOff('[unavailable] Error')).toBe(true);
     expect(
       looksLikeRetryableRunnerCrash(
-        'Cursor run failed: Cursor stopped responding after a tool call (Grok 4.7)',
-      ),
-    ).toBe(true);
-    expect(
-      looksLikeCursorStreamIdleAfterTools(
         'Cursor run failed: Cursor stopped responding after a tool call (Grok 4.7)',
       ),
     ).toBe(true);

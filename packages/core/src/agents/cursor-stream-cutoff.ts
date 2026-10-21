@@ -24,6 +24,11 @@ export function looksLikeCursorStreamIdleAfterTools(text: string): boolean {
   return CURSOR_STREAM_IDLE_AFTER_TOOLS.test(text.trim());
 }
 
+/** HTTP/2 cutoff or idle after a tool — retryable, not a user Stop. */
+export function looksLikeCursorStreamFailure(text: string): boolean {
+  return looksLikeCursorStreamCutOff(text) || looksLikeCursorStreamIdleAfterTools(text);
+}
+
 /** Non-null when this failure may auto-resume more than once. */
 export function cursorStreamCutOffContinueLimit(detail: string): number | null {
   if (looksLikeCursorStreamCutOff(detail) || /connection stalled/i.test(detail)) {
