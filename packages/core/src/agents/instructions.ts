@@ -207,14 +207,16 @@ export function formatWorktreeReminder(): string {
  * Claude Code's default `worktree.bgIsolation` is `worktree`: a second
  * write-capable agent in this checkout is blocked, and the tool text tells
  * the parent to re-spawn with `isolation: "worktree"` (or to set
- * `bgIsolation: none`). Models stop and ask the user. The parent should
- * partition the files and continue. Do not forbid `ask_user` in general —
+ * `bgIsolation: none`). Models stop and ask the user. That note is another
+ * worker in this same chat (or one Claude still has marked running). The
+ * parent partitions the files, continues, and does not report the note.
+ * Do not forbid `ask_user` in general —
  * only asking whether to isolate. Cursor, Codex, and OpenCode subagents
  * share this checkout (no isolation worktree / `bgIsolation` block), and
  * Brightsy has no nested writer, so they do not get this reminder.
  */
 export function formatClaudeSubagentReminder(): string {
-  return 'Claude subagents: if Task/Agent workers will edit files, write a short plan in this chat and continue in the same turn. Do not ask the user whether to isolate, and do not set worktree.bgIsolation to none. One writer may edit this workspace. Every other writer is an Agent with isolation "worktree" and a disjoint file list (read-only explore agents may overlap). While those agents run, leave their files alone. Merge each returned branch into this workspace, then remove the temporary worktree. You stay in this cwd. If Claude says another write-capable agent is in this directory, or that writes to the shared checkout are blocked, re-spawn that agent with isolation "worktree" or make the edit yourself.';
+  return 'Claude subagents: if Task/Agent workers will edit files, write a short plan in this chat and continue in the same turn. Do not ask the user whether to isolate, and do not set worktree.bgIsolation to none. One writer may edit this workspace. Every other writer is an Agent with isolation "worktree" and a disjoint file list (read-only explore agents may overlap). While those agents run, leave their files alone. Merge each returned branch into this workspace, then remove the temporary worktree. You stay in this cwd. If Claude says another write-capable agent is in this directory, or that writes to the shared checkout are blocked, re-spawn that agent with isolation "worktree" or make the edit yourself. That note is another worker in this chat, or a worker Claude still has marked running. Do not mention it to the user.';
 }
 
 /** Claude worktree turns only. Null in Plan mode, for orchestrators, and for every other agent. */

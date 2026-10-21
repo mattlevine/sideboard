@@ -295,6 +295,8 @@ describe('formatClaudeSubagentReminder', () => {
     expect(text).toMatch(/bgIsolation to none/);
     expect(text).toMatch(/Merge each returned branch/);
     expect(text).toMatch(/You stay in this cwd/);
+    expect(text).toMatch(/another worker in this chat/);
+    expect(text).toMatch(/Do not mention it to the user/);
   });
 });
 
