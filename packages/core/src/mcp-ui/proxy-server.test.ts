@@ -3,6 +3,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
+  ListResourcesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -22,7 +25,7 @@ describe('mcp-ui proxy', () => {
     const [proxyClient, proxyServer] = InMemoryTransport.createLinkedPair();
     const origin = new Server(
       { name: 'scholar', version: '0.0.0' },
-      { capabilities: { tools: {}, resources: {} } },
+      { capabilities: { tools: {}, resources: {}, prompts: {} } },
     );
     origin.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
@@ -46,6 +49,17 @@ describe('mcp-ui proxy', () => {
     origin.setRequestHandler(ReadResourceRequestSchema, async () => ({
       contents: [{ uri: 'ui://card', mimeType: 'text/html;profile=mcp-app', text: '<p>card</p>' }],
     }));
+    origin.setRequestHandler(ListResourcesRequestSchema, async () => ({
+      resources: [{ uri: 'ui://card', name: 'card', mimeType: 'text/html;profile=mcp-app' }],
+    }));
+    origin.setRequestHandler(ListPromptsRequestSchema, async () => ({
+      prompts: [{ name: 'quiz', description: 'Quiz' }],
+    }));
+    origin.setRequestHandler(GetPromptRequestSchema, async (request) => ({
+      messages: [
+        { role: 'user' as const, content: { type: 'text' as const, text: request.params.name } },
+      ],
+    }));
     await origin.connect(upstreamServer);
     const session = await openMcpUiSessionFromTransport(upstreamClient);
     const proxy = createMcpUiProxyServer('scholar', session);
@@ -64,5 +78,11 @@ describe('mcp-ui proxy', () => {
     await expect(client.callTool({ name: 'rate_card', arguments: {} })).rejects.toThrow(/not available to the model/);
     const called = await client.callTool({ name: 'show_card', arguments: {} });
     expect(called).toMatchObject({ content: [{ type: 'text', text: 'show_card' }] });
+    const resources = await client.listResources();
+    expect(resources.resources.map((item) => item.uri)).toEqual(['ui://card']);
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts.map((item) => item.name)).toEqual(['quiz']);
+    const prompt = await client.getPrompt({ name: 'quiz' });
+    expect(prompt).toMatchObject({ messages: [{ content: { text: 'quiz' } }] });
   });
 });

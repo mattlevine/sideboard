@@ -104,4 +104,47 @@ describe('McpUiHost', () => {
       await client.close();
     }
   });
+
+  it('scopes loopback proxy URLs to each worktree so later chats do not clobber lookups', async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = new Server(
+      { name: 'onlyA', version: '0.0.0' },
+      { capabilities: { tools: {}, resources: {} } },
+    );
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
+      tools: [
+        {
+          name: 'roll',
+          inputSchema: { type: 'object' as const, properties: {} },
+        },
+      ],
+    }));
+    await server.connect(serverTransport);
+
+    const host = new McpUiHost({
+      entries: (dirs): Record<string, Record<string, unknown>> => {
+        if (dirs?.[0] !== '/wt-a') return {};
+        return { onlyA: { command: 'onlyA' } };
+      },
+      openSession: () => openMcpUiSessionFromTransport(clientTransport),
+    });
+    hosts.push(host);
+
+    const first = await host.proxyEntries({ onlyA: { command: 'onlyA' } }, ['/wt-a']);
+    const firstUrl = String(first.onlyA?.url ?? '');
+    expect(firstUrl).toMatch(/\/s\/onlyA\/d\/[a-f0-9]{16}$/);
+    await host.proxyEntries({}, ['/wt-b']);
+
+    const transport = new StreamableHTTPClientTransport(new URL(firstUrl), {
+      requestInit: { headers: (first.onlyA?.headers as Record<string, string>) ?? {} },
+    });
+    const client = new Client({ name: 'claude', version: '0.0.0' });
+    await client.connect(transport);
+    try {
+      const listed = await client.listTools();
+      expect(listed.tools.map((tool) => tool.name)).toEqual(['roll']);
+    } finally {
+      await client.close();
+    }
+  });
 });

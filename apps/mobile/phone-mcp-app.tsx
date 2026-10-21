@@ -37,6 +37,8 @@ function ask(send: (payload: object) => void, payload: { reqId: string; [key: st
   return askPhoneMcp(send, payload).then((reply) => reply as Reply | null);
 }
 
+const TEARDOWN_MS = 250;
+
 export function PhoneMcpApps({
   apps,
   chatId,
@@ -46,10 +48,29 @@ export function PhoneMcpApps({
   chatId: string;
   send: (payload: object) => void;
 }) {
+  const [held, setHeld] = useState(apps);
+  useEffect(() => {
+    const live = new Set(apps.map((app) => app.id));
+    setHeld((prev) => {
+      const next = [...apps];
+      for (const app of prev) {
+        if (!live.has(app.id) && !next.some((item) => item.id === app.id)) next.push(app);
+      }
+      return next;
+    });
+    const timer = setTimeout(() => setHeld(apps), TEARDOWN_MS);
+    return () => clearTimeout(timer);
+  }, [apps]);
   return (
     <View>
-      {apps.map((app) => (
-        <PhoneMcpApp key={app.id} app={app} chatId={chatId} send={send} />
+      {held.map((app) => (
+        <PhoneMcpApp
+          key={app.id}
+          app={app}
+          chatId={chatId}
+          send={send}
+          tearingDown={!apps.some((item) => item.id === app.id)}
+        />
       ))}
     </View>
   );
@@ -59,10 +80,12 @@ function PhoneMcpApp({
   app,
   chatId,
   send,
+  tearingDown,
 }: {
   app: PhoneMcpAppRef;
   chatId: string;
   send: (payload: object) => void;
+  tearingDown: boolean;
 }) {
   const webRef = useRef<WebView>(null);
   const [html, setHtml] = useState<string | null>(null);
@@ -72,6 +95,12 @@ function PhoneMcpApp({
   sendRef.current = send;
 
   useEffect(() => {
+    if (tearingDown) {
+      webRef.current?.postMessage(
+        JSON.stringify({ kind: 'teardown', id: `td-${app.id}`, reason: 'unmount' }),
+      );
+      return;
+    }
     const reqId = nextPhoneMcpReqId();
     let cancel = false;
     void ask((payload) => sendRef.current(payload), {
@@ -91,7 +120,7 @@ function PhoneMcpApp({
         JSON.stringify({ kind: 'teardown', id: `td-${app.id}`, reason: 'unmount' }),
       );
     };
-  }, [app.id, app.tool, chatId]);
+  }, [app.id, app.tool, chatId, tearingDown]);
 
   if (!html) return null;
   return (

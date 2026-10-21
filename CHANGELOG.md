@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - MCP App CSP matches SEP-1865 defaults (`connect-src 'none'`, no `unsafe-eval`) and keeps wildcard resource origins.
 - Phone MCP Apps no longer run same-origin with the WebView shell, send `ui/resource-teardown` on unmount, and can `resources/read` the same URIs as desktop.
+- MCP App unmount cancels a pending preview clear on remount, and the phone keeps the WebView until teardown is delivered.
+- Claude's MCP proxy forwards resources and prompts, and scopes loopback URLs per worktree so concurrent chats keep their own project dirs.
 
 ## [0.1.311] - 2026-10-21
 

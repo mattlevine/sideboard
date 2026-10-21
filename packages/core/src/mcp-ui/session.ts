@@ -24,6 +24,10 @@ export type McpUiToolInfo = {
 
 export type McpUiSession = {
   listTools(): Promise<McpUiToolInfo[]>;
+  listResources(): Promise<{ resources: unknown[] }>;
+  listResourceTemplates(): Promise<{ resourceTemplates: unknown[] }>;
+  listPrompts(): Promise<{ prompts: unknown[] }>;
+  getPrompt(name: string, args?: Record<string, string>): Promise<unknown>;
   readResource(uri: string): Promise<{
     uri: string;
     mimeType?: string;
@@ -34,6 +38,14 @@ export type McpUiSession = {
   callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
   close(): Promise<void>;
 };
+
+async function orEmpty<T>(run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch {
+    return fallback;
+  }
+}
 
 const UI_CAPABILITIES = {
   extensions: {
@@ -67,6 +79,24 @@ export async function openMcpUiSessionFromTransport(transport: Transport): Promi
           ...(cspFromMeta(meta) ? { csp: cspFromMeta(meta) } : {}),
         };
       });
+    },
+    listResources: () =>
+      orEmpty(
+        () => client.listResources(undefined, { timeout: REQUEST_TIMEOUT_MS }),
+        { resources: [] },
+      ),
+    listResourceTemplates: () =>
+      orEmpty(
+        () => client.listResourceTemplates(undefined, { timeout: REQUEST_TIMEOUT_MS }),
+        { resourceTemplates: [] },
+      ),
+    listPrompts: () =>
+      orEmpty(
+        () => client.listPrompts(undefined, { timeout: REQUEST_TIMEOUT_MS }),
+        { prompts: [] },
+      ),
+    getPrompt(name, args) {
+      return client.getPrompt({ name, arguments: args }, { timeout: REQUEST_TIMEOUT_MS });
     },
     async readResource(uri: string) {
       const result = await client.readResource({ uri }, { timeout: REQUEST_TIMEOUT_MS });

@@ -1,7 +1,10 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
   ListResourcesRequestSchema,
+  ListResourceTemplatesRequestSchema,
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -12,7 +15,7 @@ import { toolVisibleTo } from './visibility.js';
 export function createMcpUiProxyServer(name: string, session: McpUiSession): Server {
   const server = new Server(
     { name: `sideboard-ui-proxy-${name}`, version: '1.0.0' },
-    { capabilities: { tools: {}, resources: {} } },
+    { capabilities: { tools: {}, resources: {}, prompts: {} } },
   );
   attachMcpUiProxyHandlers(server, session);
   return server;
@@ -48,7 +51,16 @@ export function attachMcpUiProxyHandlers(server: Server, session: McpUiSession):
       ],
     };
   });
-  server.setRequestHandler(ListResourcesRequestSchema, async () => ({ resources: [] }));
+  server.setRequestHandler(ListResourcesRequestSchema, async () => session.listResources());
+  server.setRequestHandler(ListResourceTemplatesRequestSchema, async () =>
+    session.listResourceTemplates(),
+  );
+  server.setRequestHandler(ListPromptsRequestSchema, async () => session.listPrompts());
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    return (await session.getPrompt(request.params.name, request.params.arguments)) as {
+      [key: string]: unknown;
+    };
+  });
 }
 
 function listedTool(tool: McpUiToolInfo) {

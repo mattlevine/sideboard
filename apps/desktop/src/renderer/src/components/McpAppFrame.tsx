@@ -89,10 +89,15 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
   const [url, setUrl] = useState<string | null>(null);
   const [height, setHeight] = useState(280);
   const viewRef = useRef<McpUiView | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!toolName.startsWith('mcp__')) return;
     const frameId = mcpUiFrameId(toolCallId);
+    if (clearTimerRef.current != null) {
+      window.clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = undefined;
+    }
     let cancelled = false;
     void loadView(toolName, result, threadId)
       .then(async (view) => {
@@ -108,7 +113,8 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
         resourceTeardownRequest(`td-${frameId}`, 'unmount'),
         '*',
       );
-      window.setTimeout(() => {
+      clearTimerRef.current = window.setTimeout(() => {
+        clearTimerRef.current = undefined;
         void window.sideboard.clearMcpUiPreview(frameId);
       }, 250);
     };

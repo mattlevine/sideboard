@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { isInjectedOrchMcpName, listUserClaudeMcpServerEntries } from '../agents/orch-mcp-isolation.js';
 import {
@@ -23,7 +24,7 @@ export class McpUiHost {
   private sessions = new Map<string, Promise<McpUiSession>>();
   private toolLists = new Map<string, { at: number; key: string; tools: McpUiToolInfo[] }>();
   private proxy: Promise<McpUiProxyListen> | undefined;
-  private proxyProjectDirs: string[] | undefined;
+  private proxyDirs = new Map<string, string[] | undefined>();
 
   constructor(
     private readonly opts: {
@@ -75,14 +76,15 @@ export class McpUiHost {
   ): Promise<Record<string, Record<string, unknown>>> {
     const names = Object.keys(entries).filter((name) => name.trim());
     if (names.length === 0) return {};
-    this.proxyProjectDirs = projectDirs;
+    const dirsKey = dirsKeyFor(projectDirs);
+    this.proxyDirs.set(dirsKey, projectDirs);
     try {
       const listen = await this.ensureProxy();
       const out: Record<string, Record<string, unknown>> = {};
       for (const name of names) {
         out[name] = {
           type: 'http',
-          url: listen.urlFor(name),
+          url: listen.urlFor(name, dirsKey),
           headers: listen.headers,
         };
       }
@@ -134,6 +136,7 @@ export class McpUiHost {
     const proxy = this.proxy;
     this.sessions.clear();
     this.toolLists.clear();
+    this.proxyDirs.clear();
     this.proxy = undefined;
     await Promise.all([
       ...pending.map((session) => session.then((open) => open.close()).catch(() => undefined)),
@@ -144,7 +147,10 @@ export class McpUiHost {
   private ensureProxy(): Promise<McpUiProxyListen> {
     if (this.proxy) return this.proxy;
     this.proxy = listenMcpUiProxy({
-      sessionFor: (server) => this.sessionForName(server, this.proxyProjectDirs),
+      sessionFor: (server, dirsKey) => {
+        if (dirsKey && !this.proxyDirs.has(dirsKey)) return Promise.resolve(null);
+        return this.sessionForName(server, this.proxyDirs.get(dirsKey));
+      },
     }).catch((err) => {
       this.proxy = undefined;
       throw err;
@@ -224,4 +230,9 @@ export function closeMcpUiHost(): void {
   const host = singleton;
   singleton = undefined;
   if (host) void host.closeAll();
+}
+
+function dirsKeyFor(projectDirs?: string[]): string {
+  if (!projectDirs?.length) return '';
+  return createHash('sha256').update(projectDirs.join('\0')).digest('hex').slice(0, 16);
 }
