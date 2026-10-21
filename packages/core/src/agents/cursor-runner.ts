@@ -38,6 +38,12 @@ import {
   retryOnceOnRetryableCursorError,
   withCursorLocalHangGuards,
 } from './cursor-session.js';
+import {
+  createCursorStreamToolProgress,
+  formatCursorStreamIdleAfterToolsError,
+  isCursorIdleAfterCompletedTool,
+  noteCursorAgentEvent,
+} from './cursor-stream-cutoff.js';
 import { formatUnknownDetail } from './error-detail.js';
 import { slicedReadCustomToolConfig } from './sliced-file-read.js';
 import { sideboardCursorRpcTools } from '../agent-rpc/cursor-tools.js';
@@ -318,25 +324,31 @@ async function main(): Promise<number> {
     }
 
     let lastUsageRunId: string | undefined;
+    const toolProgress = createCursorStreamToolProgress();
     const run = await sendPrompt(agent, prompt, {
       onDelta: ({ update }) => {
         bump();
         for (const event of cursorDeltaToEvents(update as never)) {
+          noteCursorAgentEvent(toolProgress, event);
           stream.push(event);
         }
       },
     });
     liveRun = run;
     let streamIdle = false;
+    let streamIdleAfterTools = false;
     try {
       for await (const msg of iterateUntilIdle(
         run.stream(),
         CURSOR_STREAM_IDLE_MS,
         () => {
           streamIdle = true;
+          streamIdleAfterTools = isCursorIdleAfterCompletedTool(toolProgress);
           emit({
             type: 'stderr',
-            data: 'Cursor stream idle — finishing the turn (SDK stream did not close)',
+            data: streamIdleAfterTools
+              ? `Cursor run failed: ${formatCursorStreamIdleAfterToolsError(req.model)}`
+              : 'Cursor stream idle — finishing the turn (SDK stream did not close)',
           });
           void cancelLiveRun();
         },
@@ -348,6 +360,7 @@ async function main(): Promise<number> {
           lastUsageRunId = sdkMsg.run_id.trim();
         }
         for (const event of cursorSdkMessageToEvents(msg as never)) {
+          noteCursorAgentEvent(toolProgress, event);
           stream.push(event);
         }
       }
@@ -361,6 +374,9 @@ async function main(): Promise<number> {
             }),
           ])
         : await run.wait();
+      if (streamIdleAfterTools) {
+        return 2;
+      }
       if (result.status === 'error') {
         const detail = formatUnknownDetail(result.error);
         if (isAgentBusyError(detail)) {

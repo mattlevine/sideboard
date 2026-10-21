@@ -37,6 +37,11 @@ export interface RepoSettings {
   runScripts: RunScript[];
   /** Optional override for worktree root (supports ~) */
   worktreesRoot?: string;
+  /**
+   * Gitignored directories symlinked from the primary checkout into each
+   * new worktree (for example `node_modules`). Off unless a repo opts in.
+   */
+  sharedDirectories?: string[];
   editor?: string;
   /** Conductor-compatible agent prompt overrides from `[prompts]`. */
   prompts?: {
@@ -58,6 +63,7 @@ interface ParsedSettings {
   fileIncludeGlobs?: string[];
   runScripts: RunScript[];
   worktreesRoot?: string;
+  sharedDirectories?: string[];
   editor?: string;
   prompts?: RepoSettings['prompts'];
 }
@@ -105,6 +111,11 @@ function parseSettingsFile(
   if (Array.isArray(copySection?.paths)) {
     filesToCopy.push(...copySection.paths.map(String));
   }
+
+  const worktree = data.worktree as { shared_directories?: unknown } | undefined;
+  const sharedDirectories = Array.isArray(worktree?.shared_directories)
+    ? worktree.shared_directories.map(String).map((item) => item.trim()).filter(Boolean)
+    : [];
 
   const fileIncludeGlobs: string[] = [];
   if (Array.isArray(data.file_include_globs)) {
@@ -190,6 +201,7 @@ function parseSettingsFile(
     fileIncludeGlobs: fileIncludeGlobs.length ? fileIncludeGlobs : undefined,
     runScripts,
     worktreesRoot,
+    sharedDirectories: sharedDirectories.length ? sharedDirectories : undefined,
     editor,
     prompts: hasPrompts ? prompts : undefined,
   };
@@ -236,6 +248,7 @@ function mergeSettings(
     fileIncludeGlobs: overlay.fileIncludeGlobs ?? base.fileIncludeGlobs,
     runScripts: mergeRunScripts(base.runScripts, overlay.runScripts),
     worktreesRoot: overlay.worktreesRoot ?? base.worktreesRoot,
+    sharedDirectories: overlay.sharedDirectories ?? base.sharedDirectories,
     editor: overlay.editor ?? base.editor,
     prompts: hasPrompts ? prompts : undefined,
   };

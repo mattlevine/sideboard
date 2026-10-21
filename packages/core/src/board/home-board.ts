@@ -8,6 +8,15 @@ import {
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
 import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
+import { isApprovedOpenPr, isMergedPrState, isOpenPrState } from './pr-state.js';
+import {
+  DEFAULT_BOARD_OWNERSHIP,
+  classifyWorktreeOwnership,
+  loginsInclude,
+  worktreeMatchesOwnership,
+  type BoardOwnershipFilter,
+  type WorktreeOwnership,
+} from './worktree-ownership.js';
 import type { IssueInfo, MessagePart, PrInfo, Thread, ThreadMessage } from '../types/thread.js';
 
 /** Keep in sync with store/global-workspace GLOBAL_WORKSPACE_ID (avoid importing that file — Node). */
@@ -34,12 +43,14 @@ export type BoardColumnId =
   | 'new'
   | 'draft'
   | 'review'
+  | 'approved'
   | 'done';
 
 export const BOARD_COLUMN_DEFS: { id: BoardColumnId; title: string }[] = [
   { id: 'new', title: 'New' },
   { id: 'draft', title: 'Draft' },
   { id: 'review', title: 'Review' },
+  { id: 'approved', title: 'Approved' },
   { id: 'done', title: 'Merged' },
 ];
 
@@ -112,33 +123,19 @@ export type HomeBoardLoaded = HomeBoardRemoteData & {
   pins: BoardPin[];
 };
 
-export function isOpenPrState(
-  prUrl: string | null | undefined,
-  prState: string | null | undefined,
-): boolean {
-  if (!prUrl?.trim()) return false;
-  const state = (prState ?? 'OPEN').trim().toUpperCase();
-  return state !== 'MERGED' && state !== 'CLOSED';
-}
-
-export function isMergedPrState(
-  prUrl: string | null | undefined,
-  prState: string | null | undefined,
-): boolean {
-  if (!prUrl?.trim()) return false;
-  return (prState ?? '').trim().toUpperCase() === 'MERGED';
-}
+export { isMergedPrState, isOpenPrState };
 
 /**
  * Derived Home column. Path is PR state — not archive or live agent activity.
  * Archived chats leave the board (Settings → History). Queued/running stay on
  * the card (status icon) and the fleet bar.
- * Priority: merged PR → open (ready-for-review) PR → draft PR → no PR.
+ * Priority: merged → approved (open, not a draft) → open PR → draft PR → no PR.
  */
 export function classifyThreadColumn(
-  thread: Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft'>,
+  thread: Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft' | 'prReviewDecision'>,
 ): BoardColumnId {
   if (isMergedPrState(thread.prUrl, thread.prState)) return 'done';
+  if (isApprovedOpenPr(thread)) return 'approved';
   if (isOpenPrState(thread.prUrl, thread.prState)) {
     return thread.prIsDraft ? 'draft' : 'review';
   }
@@ -240,77 +237,21 @@ export function groupHomeBoardWorktrees<
     .sort((a, b) => compareWorktreeGroups(a, b, sort, labelOf));
 }
 
-/**
- * Mine = PRs you authored, or local WIP with no PR.
- * Reviewing = someone else's PR (author known and not you), a create-from-PR
- * checkout, or a PR that requested your review.
- * Viewer login comes from `gh` (`getGitHubStatus().login`) — not a setting.
- */
-export type WorktreeOwnership = 'mine' | 'reviewing';
+export {
+  DEFAULT_BOARD_OWNERSHIP,
+  classifyWorktreeOwnership,
+  loginsInclude,
+  worktreeMatchesOwnership,
+  type BoardOwnershipFilter,
+  type WorktreeOwnership,
+};
 
-/** Board / sidebar filter. Default `all` shows every worktree. */
-export type BoardOwnershipFilter = 'all' | WorktreeOwnership;
-
-export const DEFAULT_BOARD_OWNERSHIP: BoardOwnershipFilter = 'all';
-
-function normalizeViewerLogin(login: string | null | undefined): string {
-  return (login ?? '').trim().toLowerCase();
-}
-
-export function loginsInclude(
-  logins: string[] | null | undefined,
-  viewerLogin: string,
-): boolean {
-  const me = normalizeViewerLogin(viewerLogin);
-  if (!me) return false;
-  return (logins ?? []).some((login) => normalizeViewerLogin(login) === me);
-}
-
-export function classifyWorktreeOwnership(
-  group: Array<
-    Pick<Thread, 'prUrl' | 'prAuthorLogin' | 'prReviewerLogins' | 'sourceType'>
-  >,
-  viewerLogin = '',
-): WorktreeOwnership {
-  const me = normalizeViewerLogin(viewerLogin);
-  if (
-    group.some((t) => {
-      const author = normalizeViewerLogin(t.prAuthorLogin);
-      return Boolean(author && me && author === me);
-    })
-  ) {
-    return 'mine';
-  }
-
-  const reviewing = group.some((t) => {
-    const author = normalizeViewerLogin(t.prAuthorLogin);
-    if (author && me && author !== me) return true;
-    // Create-from-PR is reviewing only after we know the viewer — an empty
-    // login would otherwise badge every PR checkout as reviewing and hide it
-    // from a persisted Mine filter until `gh api user` returns.
-    if (t.sourceType === 'pr' && me && (!author || author !== me)) return true;
-    if (me && loginsInclude(t.prReviewerLogins, me)) return true;
-    return false;
-  });
-  return reviewing ? 'reviewing' : 'mine';
-}
-
-export function worktreeMatchesOwnership(
-  group: Array<
-    Pick<Thread, 'prUrl' | 'prAuthorLogin' | 'prReviewerLogins' | 'sourceType'>
-  >,
-  filter: BoardOwnershipFilter,
-  viewerLogin = '',
-): boolean {
-  if (filter === 'all') return true;
-  return classifyWorktreeOwnership(group, viewerLogin) === filter;
-}
-
-/** Column for a worktree: merged → Merged, open non-draft → Review, draft → Draft. */
+/** Column for a worktree: merged → Merged, approved open PR → Approved, other open PR → Review, draft → Draft. */
 export function classifyWorktreeColumn(
-  group: Array<Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft'>>,
+  group: Array<Pick<Thread, 'prUrl' | 'prState' | 'prIsDraft' | 'prReviewDecision'>>,
 ): BoardColumnId {
   if (group.some((t) => isMergedPrState(t.prUrl, t.prState))) return 'done';
+  if (group.some((t) => isApprovedOpenPr(t))) return 'approved';
   if (group.some((t) => isOpenPrState(t.prUrl, t.prState) && !t.prIsDraft)) {
     return 'review';
   }
@@ -320,131 +261,22 @@ export function classifyWorktreeColumn(
   return 'new';
 }
 
-export type WorktreeListBadgeId = 'review' | 'pending';
+export {
+  classifyWorktreeListBadges,
+  reviewLabelForRepo,
+  type WorktreeListBadge,
+  type WorktreeListBadgeId,
+  type WorktreeListBadgeThread,
+} from './worktree-list-badges.js';
 
-export type WorktreeListBadge = {
-  id: WorktreeListBadgeId;
-  label: string;
-  title: string;
-  mod: string;
-};
-
-export type WorktreeListBadgeThread = Pick<
-  Thread,
-  | 'prUrl'
-  | 'prState'
-  | 'prIsDraft'
-  | 'prAuthorLogin'
-  | 'prReviewerLogins'
-  | 'sourceType'
-  | 'cowboy'
-  | 'prLabels'
->;
-
-function labelsInclude(
-  labels: string[] | null | undefined,
-  name: string,
-): boolean {
-  const want = name.trim().toLowerCase();
-  if (!want) return false;
-  return (labels ?? []).some((label) => label.trim().toLowerCase() === want);
-}
-
-/**
- * Ready-for-review GitHub label for a repo from Settings → Projects
- * (`reviewLabel`), matching exact or descendant worktree paths.
- */
-export function reviewLabelForRepo(
-  labelsByRepo: Record<string, string> | null | undefined,
-  repoPath: string,
-): string {
-  const want = repoPath.trim().replace(/\/+$/, '');
-  if (!want || !labelsByRepo) return '';
-  const direct = labelsByRepo[want]?.trim();
-  if (direct) return direct;
-  let best = '';
-  let bestLen = 0;
-  for (const [key, label] of Object.entries(labelsByRepo)) {
-    const stored = key.trim().replace(/\/+$/, '');
-    const value = label.trim();
-    if (!stored || !value) continue;
-    if (stored === want || want.startsWith(`${stored}/`)) {
-      if (stored.length > bestLen) {
-        best = value;
-        bestLen = stored.length;
-      }
-    }
-  }
-  return best;
-}
-
-function groupPrLabels(group: Array<Pick<Thread, 'prLabels'>>): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const thread of group) {
-    for (const label of thread.prLabels ?? []) {
-      const key = label.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      out.push(label.trim());
-    }
-  }
-  return out;
-}
-
-/**
- * Sidebar / board badges only while a PR is in review — same as the old
- * "review" pill, plus "pending" for yours. Cowboy worktrees keep the
- * separate cowboy badge. Drafts of yours, merged, and closed stay unbadged.
- *
- * Yours is in review when the project ready-for-review label (Settings →
- * Projects) is on the PR; if that label is unset, a published (non-draft)
- * PR counts. Someone else's open PR is always "review", including drafts.
- */
-export function classifyWorktreeListBadges(
-  group: WorktreeListBadgeThread[],
-  viewerLogin = '',
-  reviewLabel = '',
-): WorktreeListBadge[] {
-  if (group.length === 0 || group.some((t) => t.cowboy)) return [];
-
-  const open = group.filter((t) => isOpenPrState(t.prUrl, t.prState));
-  if (open.length === 0) return [];
-
-  const ownership = classifyWorktreeOwnership(group, viewerLogin);
-  if (ownership === 'reviewing') {
-    return [
-      {
-        id: 'review',
-        label: 'review',
-        title: "Someone else's PR",
-        mod: 'is-review',
-      },
-    ];
-  }
-
-  // Without a viewer login we cannot tell mine vs reviewing, so skip
-  // pending — an empty login would badge someone else's published PR as yours.
-  if (!normalizeViewerLogin(viewerLogin)) return [];
-
-  const draft = open.some((t) => t.prIsDraft);
-  const readyLabel = reviewLabel.trim();
-  const inReview = readyLabel
-    ? labelsInclude(groupPrLabels(group), readyLabel)
-    : !draft;
-  if (!inReview) return [];
-
-  return [
-    {
-      id: 'pending',
-      label: 'pending',
-      title: 'Waiting for review',
-      mod: 'is-pending',
-    },
-  ];
-}
-
-export { visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus } from './agent-block-view.js';
+export {
+  sidebarParentSelectId,
+  sidebarQuestionThreadId,
+  sidebarRowAgentBlock,
+  visibleAgentBlock,
+  worktreeAgentBlock,
+  worktreeBoardStatus,
+} from './agent-block-view.js';
 
 function normalizeIssueKey(value: string): string {
   return value.trim().toLowerCase().replace(/^#/, '');
@@ -1180,6 +1012,7 @@ function emptyColumns(): Record<BoardColumnId, HomeBoardCard[]> {
     new: [],
     draft: [],
     review: [],
+    approved: [],
     done: [],
   };
 }
@@ -1192,6 +1025,7 @@ function emptyHidden(): Record<BoardColumnId, number> {
     new: 0,
     draft: 0,
     review: 0,
+    approved: 0,
     done: 0,
   };
 }
@@ -1298,6 +1132,7 @@ export function assembleHomeBoard(input: {
     new: 0,
     draft: 0,
     review: 0,
+    approved: 0,
     done: 0,
     tickets: 0,
     prs: 0,
@@ -1311,6 +1146,7 @@ export function assembleHomeBoard(input: {
     new: [],
     draft: [],
     review: [],
+    approved: [],
     done: [],
   };
   for (const group of groupHomeBoardWorktrees(live)) {
@@ -1351,7 +1187,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. blockedReason means an agent on that card is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Approved (approved, not merged) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. blockedReason means an agent on that card is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

@@ -1,6 +1,8 @@
 # Deploy (marketing site + relay)
 
-The static site in `site/` is not a separate host. It ships inside the Sideboard relay (`apps/relay`): phone remote, public site, and legacy Slack. One deploy updates all three. The Fly app id is `sideboard-slack-relay` because Fly cannot rename apps; that id is not a Slack-only service. Do not create a second app named `sideboard-relay`.
+The static site in `site/` is not a separate host. It ships inside Sideboard’s own relay (`apps/relay`): phone remote, public site, and legacy Slack. One deploy updates all three. The Fly app id is `sideboard-slack-relay` because Fly cannot rename apps; that id is not a Slack-only service. Do not create a second app named `sideboard-relay`.
+
+Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted-relay.md) and `apps/relay/Dockerfile.relay`. That image is the relay only. It does not contain `site/`, and the process serves the website only when `SIDEBOARD_SITE_ROOT` is set (this Fly app sets it).
 
 | Host | Serves |
 |------|--------|

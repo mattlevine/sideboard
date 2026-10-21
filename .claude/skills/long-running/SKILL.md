@@ -4,7 +4,8 @@ description: >-
   Detach and wait on any long worktree job (pack, notarize, full test, deploy)
   so a new chat turn does not SIGTERM it, and the human does not have to poll.
   Use when a command may run more than ~30s, or the user mentions wait / status
-  / aborted builds.
+  / aborted builds. Do not use for a server that should stay up (a local site
+  preview). Stop that job instead of waiting.
 ---
 
 # Long-running jobs
@@ -14,6 +15,8 @@ Sideboard ships this method to **every** worktree agent (`/long-running` is a pr
 A Sideboard or Cursor **worktree turn** SIGTERMs the agent shell (and its process group) when the user sends another message or the turn is interrupted. `block_until_ms: 0` is not enough — the child stays in that group.
 
 Do **not** ask the human to check back. Detach, then **wait** in 45s slices (same idea as MCP `wait_for_turn`) until `stillRunning` is false. Do not end the turn after starting a job — a native CLI Task or bash notify does **not** resume a Sideboard chat (Claude, Cursor, Codex, OpenCode).
+
+A process that is supposed to stay up is not this skill. Do not `start` a static file server, preview server, or anything else that never exits (`python -m http.server`, a dev server). `stillRunning` stays true, and the orchestrator will not let the turn end. To show the local marketing page, open `site/index.html` (side column or a browser). If a stay-up server is already a detached job, `stop` that id and continue. Do not loop `wait` on it.
 
 ## Tool
 

@@ -123,14 +123,13 @@ export interface Thread {
    */
   isolateCodexPlugins?: boolean;
   sessionId: string | null;
-  /**
-   * Pinned Claude/Codex managed account for this chat. `null` = system
-   * default (`~/.claude` / `~/.codex`). Omitted until the first spawn pins it.
-   */
+  /** Pinned Claude/Codex account. `null` = system default. Omitted until the first spawn pins it. */
   accountId?: string | null;
   autonomy: Autonomy;
+  /** MCP servers this chat may call without another prompt (`gmail` in `mcp__gmail__search`). */
+  approvedMcpServers?: string[];
   sourceIsFork: boolean;
-  status: ThreadStatus; agentBlock?: import('./agent-block.js').AgentBlock | null;
+  status: ThreadStatus; agentBlock?: import('./agent-block.js').AgentBlock | null; dismissedQuestionSignature?: string | null;
   queue: string[];
   parentThreadId: string | null;
   /** Port of the default/primary run script (legacy + sidebar). */

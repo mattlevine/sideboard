@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import { AgentKindIcon } from './agent-icons';
 import { agentStatus } from './labels';
 import { palette, styles } from './styles';
@@ -14,9 +14,28 @@ export type PhoneChat = {
   prUrl?: string;
   prNumber?: string;
   prStatus?: string;
+  needsYou?: boolean;
+  blockedReason?: string;
 };
 
-export type PhonePrBadge = { id: 'review' | 'pending'; label: string; title: string };
+export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
+
+export type PhonePrBadge = {
+  id: PhonePrBadgeId;
+  label: string;
+  title: string;
+  /** Red dot: merge conflicts, failing checks, or changes requested. */
+  conflict?: boolean;
+};
+
+const PHONE_PR_BADGE_IDS = new Set<PhonePrBadgeId>([
+  'new',
+  'draft',
+  'pending',
+  'review',
+  'approved',
+  'merged',
+]);
 
 export type PhoneHistoryChat = {
   id: string;
@@ -25,6 +44,7 @@ export type PhoneHistoryChat = {
   updatedAt: string;
   where: string;
   agent: string;
+  workspace?: string;
 };
 
 /** Same mark as the desktop sidebar: outline cube over a blue offset plate. */
@@ -159,6 +179,7 @@ export function ChatRow({
   onOpen: () => void;
   onArchive: () => void;
 }) {
+  const needsYou = Boolean(chat.needsYou && chat.blockedReason);
   return (
     <View style={styles.row}>
       <Pressable style={styles.rowMain} onPress={onOpen}>
@@ -166,19 +187,23 @@ export function ChatRow({
           <AgentKindIcon agent={chat.agent || ''} />
           <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
         </View>
-        <Text style={styles.preview} numberOfLines={1}>{chat.preview || 'No messages yet'}</Text>
+        <Text style={[styles.preview, needsYou ? styles.previewNeed : null]} numberOfLines={2}>
+          {needsYou ? chat.blockedReason : chat.preview || 'No messages yet'}
+        </Text>
         <View style={styles.statusRow}>
           <View
             style={[
               styles.dot,
-              chat.status === 'running' || chat.status === 'queued'
-                ? styles.dotRun
-                : chat.status === 'error' || chat.status === 'broken'
-                  ? styles.dotErr
-                  : styles.dotOff,
+              needsYou
+                ? styles.dotWarn
+                : chat.status === 'running' || chat.status === 'queued'
+                  ? styles.dotRun
+                  : chat.status === 'error' || chat.status === 'broken'
+                    ? styles.dotErr
+                    : styles.dotOff,
             ]}
           />
-          <Text style={styles.status}>{agentStatus(chat.status)}</Text>
+          <Text style={styles.status}>{needsYou ? 'Needs you' : agentStatus(chat.status)}</Text>
         </View>
       </Pressable>
       <Pressable
@@ -210,6 +235,13 @@ export function HistoryRow({
         <View style={styles.titleRow}>
           <AgentKindIcon agent={chat.agent} />
           <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
+          {chat.workspace ? (
+            <View style={styles.historyWorkspace} accessibilityLabel={`Workspace ${chat.workspace}`}>
+              <Text style={styles.historyWorkspaceText} numberOfLines={1}>
+                {chat.workspace}
+              </Text>
+            </View>
+          ) : null}
         </View>
         {chat.preview ? (
           <Text style={styles.preview} numberOfLines={1}>
@@ -267,25 +299,39 @@ export function TagChip({
   );
 }
 
+const PR_BADGE_TONE: Record<PhonePrBadgeId, { box: ViewStyle; text: TextStyle }> = {
+  new: { box: styles.prBadgeNew, text: styles.prBadgeTextNew },
+  draft: { box: styles.prBadgeDraft, text: styles.prBadgeTextDraft },
+  pending: { box: styles.prBadgePending, text: styles.prBadgeTextPending },
+  review: { box: styles.prBadgeReview, text: styles.prBadgeTextReview },
+  approved: { box: styles.prBadgeApproved, text: styles.prBadgeTextApproved },
+  merged: { box: styles.prBadgeMerged, text: styles.prBadgeTextMerged },
+};
+
 export function phonePrBadge(value: unknown): PhonePrBadge | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const badge = value as { id?: unknown; label?: unknown; title?: unknown };
-  if (badge.id !== 'review' && badge.id !== 'pending') return undefined;
-  const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : badge.id;
+  if (typeof badge.id !== 'string' || !PHONE_PR_BADGE_IDS.has(badge.id as PhonePrBadgeId)) {
+    return undefined;
+  }
+  const id = badge.id as PhonePrBadgeId;
+  const label = typeof badge.label === 'string' && badge.label.trim() ? badge.label.trim() : id;
   const title = typeof badge.title === 'string' && badge.title.trim() ? badge.title.trim() : label;
-  return { id: badge.id, label, title };
+  const conflict = (value as { conflict?: unknown }).conflict === true;
+  return {
+    id,
+    label,
+    title,
+    ...(conflict ? { conflict } : {}),
+  };
 }
 
 export function PrBadge({ badge }: { badge: PhonePrBadge }) {
-  const pending = badge.id === 'pending';
+  const tone = PR_BADGE_TONE[badge.id];
   return (
-    <View
-      style={[styles.prBadge, pending ? styles.prBadgePending : styles.prBadgeReview]}
-      accessibilityLabel={badge.title}
-    >
-      <Text style={[styles.prBadgeText, pending ? styles.prBadgeTextPending : styles.prBadgeTextReview]}>
-        {badge.label}
-      </Text>
+    <View style={[styles.prBadge, tone.box]} accessibilityLabel={badge.title}>
+      <Text style={[styles.prBadgeText, tone.text]}>{badge.label}</Text>
+      {badge.conflict ? <View style={styles.prBadgeConflictDot} /> : null}
     </View>
   );
 }

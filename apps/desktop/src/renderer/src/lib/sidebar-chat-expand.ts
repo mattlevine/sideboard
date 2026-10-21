@@ -1,4 +1,9 @@
-/** Nested chats open only while this worktree is selected and has more than one. */
+/**
+ * A workspace with two or more agents stays open so a second agent spawned
+ * from orchestration is listed without opening that workspace. A single chat
+ * stays on the parent row. A single orchestration agent nests only while
+ * Orchestration is selected. The selected row can still collapse its list.
+ */
 export const SIDEBAR_NEST_MIN_CHATS = 2;
 
 export function resolveSidebarChatExpanded(opts: {
@@ -9,8 +14,10 @@ export function resolveSidebarChatExpanded(opts: {
   minChats?: number;
 }): boolean {
   const min = opts.minChats ?? SIDEBAR_NEST_MIN_CHATS;
-  if (opts.chatCount < min || !opts.selected) return false;
-  return !opts.collapsedWhileSelected;
+  if (opts.chatCount < min) return false;
+  if (opts.selected && opts.collapsedWhileSelected) return false;
+  if (opts.chatCount >= SIDEBAR_NEST_MIN_CHATS) return true;
+  return opts.selected;
 }
 
 /**

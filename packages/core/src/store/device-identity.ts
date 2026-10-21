@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
+import { generateHostSecretKey } from '../remote/phone-e2ee.js';
 import {
   loadAppSettings,
   updateIntegrationsSettings,
   type AppSettings,
 } from './app-settings.js';
+import { loadSecretVault, saveSecretVault } from './secret-vault.js';
 
 /**
  * Stable per-Mac identity on the relay so Personal and Work can both
@@ -34,15 +36,35 @@ export function ensureSlackDeviceIdentity(
   return { deviceId, deviceLabel };
 }
 
-/** Mac identity plus the secret the phone relay uses to recognize this machine. */
+/** Mac identity plus the secrets the phone relay and the phone session use. */
 export function ensureRemoteHostCredentials(
   settings: AppSettings = loadAppSettings(),
-): { deviceId: string; deviceLabel: string; hostSecret: string } {
+): {
+  deviceId: string;
+  deviceLabel: string;
+  hostSecret: string;
+  hostPrivateKey: string;
+  phoneToken: string | null;
+} {
   const device = ensureSlackDeviceIdentity(settings);
   let hostSecret = loadAppSettings().integrations.remoteHostSecret?.trim() ?? '';
   if (!hostSecret) {
     hostSecret = randomUUID();
     updateIntegrationsSettings({ remoteHostSecret: hostSecret });
   }
-  return { ...device, hostSecret };
+  const vault = loadSecretVault();
+  let hostPrivateKey = vault.remoteHostPrivateKey?.trim() ?? '';
+  if (!hostPrivateKey) {
+    hostPrivateKey = generateHostSecretKey();
+    saveSecretVault({ ...loadSecretVault(), remoteHostPrivateKey: hostPrivateKey });
+  }
+  const phoneToken = loadSecretVault().remotePhoneToken?.trim() || null;
+  return { ...device, hostSecret, hostPrivateKey, phoneToken };
+}
+
+/** Remember the phone token after an encrypted handshake. A new pairing replaces it. */
+export function saveRemotePhoneToken(token: string): void {
+  const next = token.trim();
+  if (!next) return;
+  saveSecretVault({ ...loadSecretVault(), remotePhoneToken: next });
 }

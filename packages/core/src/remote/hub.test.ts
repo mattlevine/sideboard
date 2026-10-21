@@ -298,4 +298,38 @@ describe('RemoteHub', () => {
     third.handleClientMessage(stale, JSON.stringify({ type: 'resume', sessionToken: token }));
     expect(last(stale)).toEqual({ type: 'error', message: 'phone session expired — pair again' });
   });
+
+  it('forwards encrypted frames and does not accept them before pairing', () => {
+    const hub = new RemoteHub();
+    const mac = fakeSocket();
+    const phone = fakeSocket();
+    const stranger = fakeSocket();
+    register(hub, mac, 'mac-1', 'Work');
+    hub.handleClientMessage(stranger, JSON.stringify({ type: 'e2ee', frame: 'ciphertext' }));
+    expect(last(stranger)).toEqual({ type: 'error', message: 'pair this phone first' });
+    hub.handleClientMessage(phone, JSON.stringify({ type: 'pair', code: pairingCode(hub, mac) }));
+    hub.handleClientMessage(
+      phone,
+      JSON.stringify({
+        type: 'e2ee_hello',
+        v: 1,
+        clientPublicKey: 'phone-key',
+        clientNonce: 'phone-nonce',
+      }),
+    );
+    expect(last(mac)).toMatchObject({ type: 'e2ee_hello', clientPublicKey: 'phone-key' });
+    hub.handleClientMessage(
+      mac,
+      JSON.stringify({
+        type: 'e2ee_ready',
+        v: 1,
+        desktopPublicKey: 'mac-key',
+        clientNonce: 'phone-nonce',
+        desktopNonce: 'mac-nonce',
+      }),
+    );
+    expect(last(phone)).toMatchObject({ type: 'e2ee_ready', desktopPublicKey: 'mac-key' });
+    hub.handleClientMessage(phone, JSON.stringify({ type: 'e2ee', frame: 'ciphertext' }));
+    expect(last(mac)).toEqual({ type: 'e2ee', frame: 'ciphertext' });
+  });
 });

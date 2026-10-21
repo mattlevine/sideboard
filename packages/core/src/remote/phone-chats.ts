@@ -43,7 +43,7 @@ import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-default
 import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
 import type { PhonePermissionView } from './phone-permission.js';
-import { clip, listPhoneMessages, phoneVisibleText } from './phone-transcript.js';
+import { clip, listPhoneMessages, parsePhoneMcpUi, phoneVisibleText, type PhoneMcpAppsField, type PhoneMcpUiReply, type PhoneMcpUiRequest } from './phone-transcript.js';
 
 /** Phone control rides in prompt text. The leading NUL keeps a person from typing it. */
 export const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
@@ -61,9 +61,12 @@ export interface PhoneChatSummary {
   prUrl?: string;
   prNumber?: string;
   prStatus?: string;
+  /** Set when this agent is waiting on a person (permission, ask, or a reported block). */
+  needsYou?: boolean;
+  blockedReason?: string;
 }
 
-export interface PhoneChatMessage {
+export interface PhoneChatMessage extends PhoneMcpAppsField {
   role: 'user' | 'agent';
   text: string;
   /** Set on the in-progress answer while a turn is still running. */
@@ -132,14 +135,14 @@ const MAX_PHONE_FILE_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3);
 const MAX_PHONE_FILES_CHARS = Math.ceil((20 * 1024 * 1024 * 4) / 3);
 const MAX_DICTATION_CHARS = Math.ceil((12 * 1024 * 1024 * 4) / 3);
 
-/** Archived chat as Settings → History shows it: where it lived, and which agent. */
+/** Archived chat as Settings → History shows it: where it lived, which agent, and the checkout name. */
 export interface PhoneHistoryChat {
   id: string;
   title: string;
   preview: string;
   updatedAt: string;
   where: string;
-  agent: string;
+  agent: string; workspace?: string;
 }
 
 export interface PhoneHistoryPage {
@@ -193,20 +196,20 @@ export type PhoneControlRequest =
   | PhonePaneRequest
   | { op: 'open-file'; chatId: string; path: string; startLine?: number; endLine?: number; view?: 'diff'; scope?: PhoneChangeScope; commitSha?: string }
   | PhoneOpenArtifact
-  | { op: 'media'; chatId: string; path: string };
+  | { op: 'media'; chatId: string; path: string } | PhoneMcpUiRequest;
 
 export interface PhoneWorktreeBadge {
-  id: 'review' | 'pending';
+  id: 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
   label: string;
   title: string;
+  /** Red dot: merge conflicts, failing checks, or changes requested. */
+  conflict?: boolean;
 }
 
 export interface PhoneWorktree {
   label: string;
   chats: PhoneChatSummary[];
-  /** Shared labels for this checkout. Omitted when the workspace has none. */
-  tags?: string[];
-  /** Set only while a pull request on this workspace is in review. */
+  tags?: string[]; // shared labels; omitted when the workspace has none
   badge?: PhoneWorktreeBadge;
 }
 
@@ -240,7 +243,7 @@ export type PhoneControlReply =
   | { op: 'models'; agent: AgentKind; models: PhoneModelRow[] }
   | { op: 'dictated'; id: string; text: string }
   | ({ op: 'options'; chatId: string } & PhoneComposerOptions)
-  | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'assistant'; chatId: string; text: string; apps?: Array<{ id: string; tool: string }> } | PhoneMcpUiReply
   | { op: 'stream'; chatId: string; text: string; activity: string }
   | { op: 'ask'; chatId: string; text: string; questions: RemoteAskQuestion[] }
   | { op: 'permission'; chatId: string; prompt: PhonePermissionView | null }
@@ -307,7 +310,7 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     return { op: 'git', chatId, action: action as PhoneHeaderGitAction };
   }
   if (op === 'pane') return parsePhonePane(value, chatId);
-  if (op === 'open-artifact') return parseOpenArtifact(value, chatId);
+  if (op === 'open-artifact') return parseOpenArtifact(value, chatId); if (op === 'mcp-ui' || op === 'mcp-ui-call' || op === 'mcp-ui-read') return parsePhoneMcpUi(value, op, chatId);
   if (op === 'open-file' || op === 'media') {
     const path = textField(value, 'path');
     if (!path || path.length > 2000) return 'invalid';
@@ -501,6 +504,7 @@ function summarize(thread: Thread): PhoneChatSummary {
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
+    ...(thread.agentBlock ? { needsYou: true as const, blockedReason: thread.agentBlock.reason } : {}),
   };
 }
 
@@ -512,8 +516,7 @@ function previewOf(thread: Thread): string {
 }
 
 function repoName(repoPath: string): string {
-  const parts = repoPath.replace(/\/$/, '').split('/');
-  return parts[parts.length - 1] || repoPath;
+  return repoPath.replace(/\/$/, '').split('/').pop() || repoPath;
 }
 
 function isProjectPath(path: string): boolean {
@@ -561,7 +564,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(badge
-            ? { badge: { id: badge.id, label: badge.label, title: badge.title } }
+            ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}) } }
             : {}),
         };
       }),
@@ -583,21 +586,18 @@ function matchPhoneThread(chatId: string): Thread | null {
 }
 
 function visiblePhoneThread(thread: Thread): boolean {
-  if (isGlobalThread(thread)) return true;
-  return isProjectPath(thread.repoPath);
+  return isGlobalThread(thread) || isProjectPath(thread.repoPath);
 }
 
 /** Full id or `sideboard://chat/` prefix, including archived chats. */
 export function findPhoneChat(chatId: string): Thread | null {
   const thread = matchPhoneThread(chatId);
-  if (!thread || !visiblePhoneThread(thread)) return null;
-  return thread;
+  return thread && visiblePhoneThread(thread) ? thread : null;
 }
 
 export function readPhoneThread(chatId: string): Thread | null {
   const thread = findPhoneChat(chatId);
-  if (!thread || thread.status === 'archived') return null;
-  return thread;
+  return thread && thread.status !== 'archived' ? thread : null;
 }
 
 export function phoneComposerOptions(thread: Thread): PhoneComposerOptions {

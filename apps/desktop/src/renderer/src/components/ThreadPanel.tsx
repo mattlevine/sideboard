@@ -19,11 +19,7 @@ import type {
   WorktreeOpenerId,
 } from '@sideboard-ai/core';
 import { resolveUsageOnLimit } from '@sideboard/usage-on-limit';
-import {
-  extractPendingPlanQuestions,
-  formatPlanQuestionsForChat,
-  latestPendingPlanQuestions,
-} from '@sideboard/plan-ask-user';
+import { latestPendingPlanQuestions } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
@@ -87,7 +83,11 @@ import { isRoutineStopNote, isSetupLastError } from '../lib/pane-progress';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
 import { ThinkingEffortChip } from './ThinkingEffortChip';
-import { PlanQuestionsPanel } from './PlanQuestionsPanel';
+import {
+  PlanQuestionsChatBrief,
+  PlanQuestionsOrphanBrief,
+  PlanQuestionsPanel,
+} from './PlanQuestionsPanel';
 import { ToolPermissionBar, toolPermissionFromThread } from './ToolPermissionBar';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { PlanReadyBar } from './PlanReadyBar';
@@ -525,22 +525,10 @@ const ChatTranscript = memo(function ChatTranscript({
                   }
                   hideAnswer={hidePlanProse}
                 />
-                {showPlanQuestions &&
-                  pendingPlanQuestions &&
-                  extractPendingPlanQuestions(m.parts)?.signature ===
-                    pendingPlanQuestions.signature && (
-                    <div
-                      className="plan-questions-chat-brief"
-                      data-chat-text=""
-                      key={pendingPlanQuestions.signature}
-                    >
-                      <MarkdownMessage
-                        text={formatPlanQuestionsForChat(
-                          pendingPlanQuestions.questions,
-                        )}
-                      />
-                    </div>
-                  )}
+                <PlanQuestionsChatBrief
+                  pending={showPlanQuestions ? pendingPlanQuestions : null}
+                  parts={m.parts}
+                />
               </>
             ) : m.role === 'summary' ? (
               <AgentMessage
@@ -673,24 +661,17 @@ const ChatTranscript = memo(function ChatTranscript({
               </div>
             </>
           )}
-          {showPlanQuestions &&
-            pendingPlanQuestions &&
-            extractPendingPlanQuestions(liveParts)?.signature ===
-              pendingPlanQuestions.signature && (
-              <div
-                className="plan-questions-chat-brief"
-                data-chat-text=""
-                key={pendingPlanQuestions.signature}
-              >
-                <MarkdownMessage
-                  text={formatPlanQuestionsForChat(
-                    pendingPlanQuestions.questions,
-                  )}
-                />
-              </div>
-            )}
+          <PlanQuestionsChatBrief
+            pending={showPlanQuestions ? pendingPlanQuestions : null}
+            parts={liveParts}
+          />
         </div>
       )}
+      <PlanQuestionsOrphanBrief
+        pending={showPlanQuestions ? pendingPlanQuestions : null}
+        messages={messages}
+        liveParts={liveParts}
+      />
     </>
   );
 });
@@ -860,13 +841,22 @@ export function ThreadPanel({
         messages: thread.messages,
         liveParts,
         userReplied: Boolean(pendingUser),
+        agentBlock: thread.agentBlock,
+        dismissedQuestionSignature: thread.dismissedQuestionSignature,
       }),
-    [liveParts, thread.messages, pendingUser],
+    [
+      liveParts,
+      thread.messages,
+      pendingUser,
+      thread.agentBlock,
+      thread.dismissedQuestionSignature,
+    ],
   );
 
   const showPlanQuestions =
     Boolean(pendingPlanQuestions) &&
-    pendingPlanQuestions!.signature !== dismissedPlanQuestionsId;
+    pendingPlanQuestions!.signature !== dismissedPlanQuestionsId &&
+    pendingPlanQuestions!.signature !== thread.dismissedQuestionSignature;
   const toolPermission = toolPermissionFromThread(thread);
 
   const planAwaitingApproval = useMemo(
@@ -1145,6 +1135,7 @@ export function ThreadPanel({
   }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser]);
 
   useEffect(() => {
+    explicitAskSkip.current = null;
     setDismissedPlanQuestionsId(null);
     setPendingUser(null);
     setPendingInTranscript(false);
@@ -1489,10 +1480,28 @@ export function ThreadPanel({
   /** Steer skips the composer queue and lands in the transcript immediately. */
   const steeringFollowUp = followUpBehavior === 'steer' && followUpBusy;
 
-  function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
-    if (pendingPlanQuestions) {
-      setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
+  const explicitAskSkip = useRef<string | null>(null);
+  function skipAskUser(signature: string) {
+    explicitAskSkip.current = signature;
+    setDismissedPlanQuestionsId(signature);
+    void window.sideboard.dismissAskUser(thread.id, signature).then(() => onRefresh());
+  }
+  useEffect(() => {
+    const skip = explicitAskSkip.current;
+    const saved = thread.dismissedQuestionSignature;
+    if (skip && saved && skip === saved) explicitAskSkip.current = `seen:${saved}`;
+    if (explicitAskSkip.current?.startsWith('seen:') && !saved) {
+      explicitAskSkip.current = null;
+      setDismissedPlanQuestionsId(null);
+      return;
     }
+    if (explicitAskSkip.current || saved) return;
+    if (pendingUser || pendingFollowUps.length > 0 || thread.queue.length > 0) return;
+    setDismissedPlanQuestionsId((cur) => (cur == null ? cur : null));
+  }, [pendingFollowUps.length, pendingUser, thread.dismissedQuestionSignature, thread.queue.length]);
+
+  function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
+    if (pendingPlanQuestions) setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
     const queueing = followUpBusy && !steeringFollowUp;
     if (queueing) {
       setPendingFollowUps((prev) => [
@@ -2839,13 +2848,12 @@ export function ThreadPanel({
             <PlanQuestionsPanel
               pending={pendingPlanQuestions}
               busy={busy}
-              onDismiss={() => setDismissedPlanQuestionsId(pendingPlanQuestions.signature)}
+              onDismiss={() => skipAskUser(pendingPlanQuestions.signature)}
               onSubmit={(message) => {
                 void (async () => {
                   if (!sendGate.tryBegin()) return;
                   try {
                     if (!(await confirmSendDespiteClaudeUsage())) return;
-                    setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
                     setBusy(true);
                     beginPendingSend(message);
                     try {

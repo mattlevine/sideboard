@@ -1,12 +1,13 @@
 import type { AgentEvent, MessagePart } from '../types/thread.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { outboundReplyFromTurn } from '../orchestrator/outbound-turn-reply.js';
-import { extractPendingPlanQuestions } from '../plan/ask-user.js';
+import { latestPendingPlanQuestions } from '../plan/ask-user.js';
 import { readThread } from '../store/thread-store.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import type { RemoteAskQuestion } from './protocol.js';
 import { encodePhoneControl, readPhoneThread, type PhoneControlReply } from './phone-chats.js';
 import { phoneArtifactText } from './phone-artifact.js';
+import { phoneMcpApps } from './phone-mcp-ui.js';
 import {
   PHONE_STREAM_FLUSH_MS,
   phoneStreamFlushNow,
@@ -151,10 +152,17 @@ export function emitChatTurn(
     return;
   }
   const result = getOrchestrator().getTurnResult(thread.id);
-  const pending = extractPendingPlanQuestions(
-    [...thread.messages].reverse().find((m) => m.role === 'agent')?.parts,
-  );
-  if (result.taskState === 'input-required' && pending) {
+  const pending = latestPendingPlanQuestions({
+    messages: thread.messages,
+    agentBlock: thread.agentBlock,
+    dismissedQuestionSignature: thread.dismissedQuestionSignature,
+  });
+  if (
+    pending &&
+    result.taskState !== 'failed' &&
+    result.taskState !== 'canceled' &&
+    (result.taskState === 'input-required' || thread.agentBlock?.source === 'ask_user')
+  ) {
     emitControl(opts, {
       op: 'ask',
       chatId,
@@ -176,10 +184,12 @@ export function emitChatTurn(
       detail ? `Sideboard failed: ${detail}` : 'Sideboard failed before producing a result.',
   });
   const agent = [...thread.messages].reverse().find((m) => m.role === 'agent');
+  const apps = phoneMcpApps(thread.agent, agent?.parts);
   emitControl(opts, {
     op: 'assistant',
     chatId,
     text: phoneArtifactText(reply.trim(), agent?.parts),
+    ...(apps.length ? { apps } : {}),
   });
 }
 

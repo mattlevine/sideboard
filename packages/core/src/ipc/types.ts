@@ -26,6 +26,7 @@ import type {
   ThreadOptionsPatch,
   WorktreeDirtyStat,
 } from '../types/thread.js';
+import type { McpUiIpc } from './mcp-ui-api.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
   AdvancedAppSettings,
@@ -81,7 +82,7 @@ import type { WorktreeOpener, WorktreeOpenerId } from './worktree-opener.js';
 export type { WorktreeOpener, WorktreeOpenerId };
 
 /** Shared typed surface for Electron preload ↔ renderer (and docs). */
-export interface IpcApi {
+export interface IpcApi extends McpUiIpc {
   detectAgents(): Promise<AgentStatus[]>;
   /** Install recipe + docs for Settings → Agents. */
   getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;
@@ -182,7 +183,7 @@ export interface IpcApi {
     slackAppToken?: string | null;
     slackListenEnabled?: boolean | null;
     slackDeviceId?: string | null;
-    slackDeviceLabel?: string | null;
+    slackDeviceLabel?: string | null; remoteRelayUrl?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
     abletimeAccessToken?: string | null;
@@ -307,7 +308,7 @@ export interface IpcApi {
   forkChatTab(input: ForkChatTabInput): Promise<Thread>;
   forkThreadWorktree(input: ForkThreadWorktreeInput): Promise<Thread>;
   renameThread(threadRef: string, title: string): Promise<Thread>;
-  /** Replace the tags on every live chat in this workspace. */
+  dismissAskUser(threadRef: string, signature: string): Promise<Thread>;
   setWorkspaceTags(threadRef: string, tags: string[]): Promise<Thread>;
   setAttachments(threadRef: string, attachments: ThreadAttachment[]): Promise<Thread>;
   /**

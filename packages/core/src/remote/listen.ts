@@ -3,6 +3,7 @@ import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
 import { buildCodeRefAttachment } from '../composer/code-ref.js';
 import { stageBuffersAsAttachments } from '../composer/stage-files.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
+import { dispatchPhoneMcpUi } from './phone-mcp-ui-listen.js';
 import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { visibleAssistantText } from '../agents/message-parts.js';
@@ -40,6 +41,7 @@ import {
   type PhoneDraft,
   type PhoneOpened,
 } from './phone-chats.js';
+import { republishPendingAsk } from './phone-pending-ask.js';
 import { listPhoneSources } from './phone-sources.js';
 import {
   REMOTE_STOPPED_REPLY,
@@ -89,7 +91,9 @@ function publishOpenedChat(
   emitOpened(opts, opened);
   if (opened.chat.status === 'running' || opened.chat.status === 'queued') {
     deliverPhoneTurn(opts, opened.chat.id);
+    return;
   }
+  republishPendingAsk(opts, opened.chat.id);
 }
 
 function applyPhoneOptions(chatId: string, draft: PhoneDraft): void {
@@ -331,6 +335,7 @@ function handlePhoneControl(
     });
     return;
   }
+  if (dispatchPhoneMcpUi(cmd, opts)) return;
   if (cmd.op === 'open-file') {
     const thread = readPhoneThread(cmd.chatId);
     const relative = thread ? phoneWorktreeRelative(thread.worktreePath, cmd.path) : null;

@@ -13,7 +13,10 @@ import {
   formatUiReminder,
   formatIssueToolsDirective,
   formatIssueToolsReminder,
+  formatClaudeSubagentReminder,
+  claudeSubagentTurnReminder,
   formatWorktreeDirective,
+  formatConnectedOrchestratorReminder,
   formatWorktreeReminder,
   issueTicketFromThread,
   mentionsPrGoal,
@@ -249,6 +252,77 @@ describe('formatIssueToolsReminder', () => {
     expect(text).toMatch(/#4/);
     expect(text).toMatch(/do not ask_user after it/);
     expect(text).toMatch(/type next steps/);
+  });
+});
+
+describe('formatConnectedOrchestratorReminder', () => {
+  it('names the orchestration chat this agent is connected to', () => {
+    const text = formatConnectedOrchestratorReminder({
+      id: 'orch-1',
+      title: 'Fleet',
+      status: 'idle',
+      agent: 'claude',
+    });
+    expect(text).toContain('Connected orchestrator: "Fleet"');
+    expect(text).toContain('sideboard://chat/orch-1');
+    expect(text).toContain('notify_orchestrator');
+    expect(text).not.toMatch(/archived/);
+  });
+
+  it('says when that orchestrator is archived', () => {
+    const text = formatConnectedOrchestratorReminder({
+      id: 'orch-1',
+      title: 'Fleet',
+      status: 'archived',
+      agent: 'cursor',
+    });
+    expect(text).toMatch(/archived/);
+  });
+
+  it('is empty when there is no orchestrator', () => {
+    expect(formatConnectedOrchestratorReminder(null)).toBeNull();
+  });
+});
+
+describe('formatClaudeSubagentReminder', () => {
+  it('tells the parent to partition writers and continue', () => {
+    const text = formatClaudeSubagentReminder();
+    expect(text).toMatch(/write a short plan/i);
+    expect(text).toMatch(/isolation "worktree"/);
+    expect(text).toMatch(/disjoint file list/);
+    expect(text).toMatch(/whether to isolate/);
+    expect(text).not.toMatch(/call ask_user/);
+    expect(text).toMatch(/bgIsolation to none/);
+    expect(text).toMatch(/Merge each returned branch/);
+    expect(text).toMatch(/You stay in this cwd/);
+    expect(text).toMatch(/another worker in this chat/);
+    expect(text).toMatch(/Do not mention it to the user/);
+  });
+});
+
+describe('claudeSubagentTurnReminder', () => {
+  const worktree = {
+    agent: 'claude' as const,
+    planMode: false,
+    sourceType: 'branch' as const,
+    repoPath: '/tmp/repo',
+  };
+
+  it('is set for a Claude worktree turn', () => {
+    expect(claudeSubagentTurnReminder(worktree)).toMatch(/whether to isolate/);
+  });
+
+  it('is omitted in Plan mode and for orchestrators', () => {
+    expect(claudeSubagentTurnReminder({ ...worktree, planMode: true })).toBeNull();
+    expect(
+      claudeSubagentTurnReminder({ ...worktree, sourceType: 'orchestration' }),
+    ).toBeNull();
+  });
+
+  it('is omitted for agents that share this checkout', () => {
+    for (const agent of ['cursor', 'codex', 'opencode', 'brightsy'] as const) {
+      expect(claudeSubagentTurnReminder({ ...worktree, agent })).toBeNull();
+    }
   });
 });
 

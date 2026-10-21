@@ -1,6 +1,7 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Thread } from '@sideboard-ai/core';
-import { isGlobalThread } from '../lib/global-workspace';
+import { connectedOrchestrator } from '../lib/connected-orchestrator';
+import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
 import { ThreadPanel } from './ThreadPanel';
 
 interface Props {
@@ -30,6 +31,80 @@ interface Props {
   prPageOpen?: boolean;
   onSelectPrPage?: () => void;
   onClosePrPage?: () => void;
+}
+
+/**
+ * On an agent chat: the orchestration chat that lists this agent, with a
+ * jump back. Hidden when this chat was not opened by an orchestrator.
+ */
+export function ConnectedOrchestratorBar({
+  thread,
+  threads,
+  archived,
+  onOpen,
+}: {
+  thread: Thread;
+  threads: Thread[];
+  archived: Thread[];
+  onOpen: (id: string) => void;
+}) {
+  const inMemory = useMemo(() => {
+    const byId = new Map<string, Thread>();
+    for (const row of threads) byId.set(row.id, row);
+    for (const row of archived) if (!byId.has(row.id)) byId.set(row.id, row);
+    return connectedOrchestrator(thread, (id) => byId.get(id) ?? null);
+  }, [thread, threads, archived]);
+
+  const [fetched, setFetched] = useState<Thread | null>(null);
+
+  useEffect(() => {
+    setFetched(null);
+    if (inMemory || isOrchestratorThread(thread) || !thread.parentThreadId?.trim()) return;
+    let cancelled = false;
+    const byId = new Map<string, Thread>();
+    for (const row of threads) byId.set(row.id, row);
+    for (const row of archived) if (!byId.has(row.id)) byId.set(row.id, row);
+    void (async () => {
+      let currentId: string | null = thread.parentThreadId;
+      const seen = new Set<string>([thread.id]);
+      for (let hop = 0; hop < 6 && currentId && !seen.has(currentId); hop++) {
+        seen.add(currentId);
+        const row =
+          byId.get(currentId) ??
+          (await window.sideboard.getThreadSlim(currentId).catch(() => null));
+        if (!row || cancelled) return;
+        byId.set(row.id, row);
+        if (isOrchestratorThread(row)) {
+          if (!cancelled) setFetched(row);
+          return;
+        }
+        currentId = row.parentThreadId;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inMemory, thread, threads, archived]);
+
+  const parent = inMemory ?? fetched;
+  if (!parent) return null;
+  const title = parent.title?.trim() || 'Orchestration';
+  const archivedParent = parent.status === 'archived';
+  return (
+    <div className="child-list">
+      <span className="thread-meta">Orchestrator</span>
+      <button
+        type="button"
+        className="child-chip"
+        title={archivedParent ? `${title} (archived)` : `Open ${title}`}
+        onClick={() => onOpen(parent.id)}
+      >
+        <span className={`dot ${parent.status}`} />
+        {title}
+        {archivedParent ? <span className="thread-meta">archived</span> : null}
+      </button>
+    </div>
+  );
 }
 
 function countStatus(threads: Thread[], status: Thread['status']): number {

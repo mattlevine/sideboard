@@ -40,6 +40,53 @@ export function sanitizeMcpServerName(name: string): string {
 }
 
 /**
+ * Claude.ai directory connectors ("claude.ai Notion") use tool names
+ * `mcp__claude_ai_<Display>__<tool>`. Desktop's "Always allow" is this server.
+ */
+export function isClaudeAiConnectorMcp(
+  toolName: string,
+  serverName?: string,
+  serverSource?: string,
+): boolean {
+  if (!toolName.startsWith('mcp__')) return false;
+  if (serverSource === 'claudeai') return true;
+  if (serverName && /^claude\.ai\b/i.test(serverName.trim())) return true;
+  if (/^mcp__claude_ai_/i.test(toolName)) return true;
+  const id = mcpServerIdForPermission(toolName, serverName);
+  return id != null && id.startsWith('claude_ai_');
+}
+
+/**
+ * Server id Claude uses in `mcp__<server>__<tool>`. The tool name wins over the
+ * config key, which may still contain spaces ("claude.ai Slack").
+ */
+export function mcpServerIdForPermission(toolName: string, serverName?: string): string | null {
+  if (toolName.startsWith('mcp__')) {
+    const rest = toolName.slice('mcp__'.length);
+    const split = rest.indexOf('__');
+    const id = (split === -1 ? rest : rest.slice(0, split)).trim();
+    if (id && id !== '*') return id;
+  }
+  const sanitized = sanitizeMcpServerName((serverName ?? '').trim());
+  return sanitized || null;
+}
+
+/** Session rule that allows every tool on one MCP server, not one argument list. */
+export function mcpServerPermissionUpdate(serverId: string): {
+  type: 'addRules';
+  rules: Array<{ toolName: string }>;
+  behavior: 'allow';
+  destination: 'session';
+} {
+  return {
+    type: 'addRules',
+    behavior: 'allow',
+    destination: 'session',
+    rules: [{ toolName: `mcp__${serverId}` }, { toolName: `mcp__${serverId}__*` }],
+  };
+}
+
+/**
  * Allow-list entries for connected MCP servers.
  * Emit both server-level and tool-wildcard forms (no spaces — `--allowedTools`
  * splits on commas *and* spaces).

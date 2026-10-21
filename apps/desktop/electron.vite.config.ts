@@ -124,6 +124,7 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/remote/phone-artifact.ts',
         ),
+        '@sideboard/mcp-ui': resolve(__dirname, '../../packages/core/src/mcp-ui/client.ts'),
 
       },
     },

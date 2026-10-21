@@ -1,0 +1,35 @@
+# Phone relay only. This file does not serve the Sideboard website.
+# From the repo root, with the three variables set:
+#   docker compose -f apps/relay/docker-compose.yml up --build -d
+services:
+  relay:
+    build:
+      context: ../..
+      dockerfile: apps/relay/Dockerfile.relay
+    ports:
+      - "8080:8080"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      SIDEBOARD_RELAY_PUBLIC_ORIGIN: ${SIDEBOARD_RELAY_PUBLIC_ORIGIN}
+      SIDEBOARD_RELAY_GITHUB_CLIENT_ID: ${SIDEBOARD_RELAY_GITHUB_CLIENT_ID}
+      SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET: ${SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET}
+      SIDEBOARD_RELAY_ACCOUNTS_PATH: /data/relay-accounts.sqlite
+    volumes:
+      - relay-accounts:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  relay-accounts:

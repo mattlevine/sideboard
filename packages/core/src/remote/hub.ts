@@ -154,7 +154,38 @@ export class RemoteHub {
     }
     if (msg.type === 'assistant' || msg.type === 'ask_user') {
       this.fromHost(socket, msg);
+      return;
     }
+    if (msg.type === 'e2ee_hello' || msg.type === 'e2ee_ready' || msg.type === 'e2ee' || msg.type === 'e2ee_fail') {
+      this.relayE2EE(socket, msg);
+    }
+  }
+
+  /** Forward an encrypted frame. The hub does not read it. */
+  private relayE2EE(
+    socket: RemoteSocket,
+    msg: Extract<RemoteClientMessage, { type: 'e2ee_hello' | 'e2ee_ready' | 'e2ee' | 'e2ee_fail' }>,
+  ): void {
+    const bound = this.bySocket.get(socket);
+    const host = bound ? this.hosts.get(bound.deviceId) : null;
+    if (!bound || !host) {
+      send(socket, { type: 'error', message: 'pair this phone first' });
+      return;
+    }
+    if (bound.role === 'phone') {
+      if (host.phone !== socket || msg.type === 'e2ee_ready' || msg.type === 'e2ee_fail') {
+        send(socket, { type: 'error', message: 'pair this phone first' });
+        return;
+      }
+      send(host.socket, msg);
+      return;
+    }
+    if (host.socket !== socket || !host.phone || msg.type === 'e2ee_hello') return;
+    if (msg.type === 'e2ee_fail') {
+      send(host.phone, { type: 'error', message: 'phone session expired — pair again' });
+      return;
+    }
+    send(host.phone, msg);
   }
 
   private registerHost(

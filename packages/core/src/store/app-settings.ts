@@ -14,6 +14,7 @@ import {
   normalizeProfileNotes,
   resolveViewerProfile,
 } from './account-profile.js';
+import { normalizeRemoteRelayUrl, remoteRelayUrl } from '../remote/protocol.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault, type SettingsSecretVault } from './secret-vault.js';
@@ -234,6 +235,11 @@ export interface IntegrationsSettings {
   remoteAccountToken?: string;
   /** Email label for the signed-in relay account. */
   remoteAccountEmail?: string;
+  /**
+   * Phone relay WebSocket URL (`wss://host/remote`). Empty uses
+   * {@link remoteRelayUrl} (env, then Sideboard’s hosted relay).
+   */
+  remoteRelayUrl?: string;
   /**
    * How agents and Sideboard git helpers authenticate GitHub.
    * Omitted = {@link getGithubGitAuthMode} default (`auto`).
@@ -766,6 +772,10 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
     const email = source.remoteAccountEmail.trim().toLowerCase();
     if (email) out.remoteAccountEmail = email;
   }
+  if (typeof source.remoteRelayUrl === 'string') {
+    const url = normalizeRemoteRelayUrl(source.remoteRelayUrl);
+    if (url) out.remoteRelayUrl = url;
+  }
   if (
     typeof source.githubGitAuthMode === 'string' &&
     GIT_AUTH_MODES.has(source.githubGitAuthMode as GithubGitAuthMode)
@@ -1194,6 +1204,9 @@ function persistSplit(settings: AppSettings): void {
     vault[key] = integrations[key];
     delete integrations[key];
   }
+  const previous = loadSecretVault();
+  if (previous.remoteHostPrivateKey) vault.remoteHostPrivateKey = previous.remoteHostPrivateKey;
+  if (previous.remotePhoneToken) vault.remotePhoneToken = previous.remotePhoneToken;
   writePrivateFile(
     appSettingsPath(),
     `${JSON.stringify({ ...settings, environment: {}, integrations }, null, 2)}\n`,
@@ -1380,6 +1393,7 @@ export function updateIntegrationsSettings(
     remoteHostSecret?: string | null;
     remoteAccountToken?: string | null;
     remoteAccountEmail?: string | null;
+    remoteRelayUrl?: string | null;
     githubGitAuthMode?: GithubGitAuthMode | null;
     githubPat?: string | null;
     abletimeAccessToken?: string | null;
@@ -1488,6 +1502,25 @@ export function updateIntegrationsSettings(
       delete integrations.remoteAccountEmail;
     } else {
       integrations.remoteAccountEmail = patch.remoteAccountEmail.trim().toLowerCase();
+    }
+  }
+  if ('remoteRelayUrl' in patch) {
+    const previous = remoteRelayUrl(integrations.remoteRelayUrl);
+    if (patch.remoteRelayUrl == null || patch.remoteRelayUrl.trim() === '') {
+      delete integrations.remoteRelayUrl;
+    } else {
+      const url = normalizeRemoteRelayUrl(patch.remoteRelayUrl);
+      if (!url) {
+        throw new Error(
+          'Relay URL must be a WebSocket address, for example wss://relay.example.com/remote.',
+        );
+      }
+      integrations.remoteRelayUrl = url;
+    }
+    const next = remoteRelayUrl(integrations.remoteRelayUrl);
+    if (new URL(previous).origin !== new URL(next).origin) {
+      delete integrations.remoteAccountToken;
+      delete integrations.remoteAccountEmail;
     }
   }
   if ('githubGitAuthMode' in patch) {

@@ -26,6 +26,7 @@ import {
   type PhoneSources,
 } from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
+import { useSavedRelayUrl } from './use-saved-relay-url';
 import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
 import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
@@ -38,7 +39,10 @@ import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
 import { keepPaneOnOpenedChat, PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
-import { createRelayLink, RELAY_UNREACHABLE, type RelayLink } from './relay-link';
+import { createSealedRelayLink, lookupSealMaterial } from './phone-seal';
+import { RELAY_UNREACHABLE, type RelayLink } from './relay-link';
+import { parsePairingBlob, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
+import { PairMacScreen } from './pair-mac';
 import { AgentKindIcon } from './agent-icons';
 import { SearchGlyph } from './sidebar-icons';
 import {
@@ -62,12 +66,13 @@ import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
 import { composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
-import { applyStream, finishAgent, openedTranscript, pushBubble, settleBubbles } from './transcript';
+import { deliverPhoneMcpUi, PhoneMcpApps, type PhoneMcpUiControl } from './phone-mcp-app';
+import { applyPhoneTurn, applyStream, openedTranscript, phoneAskIsLive, phoneTurnPatch, pushBubble, settleBubbles } from './transcript';
 import { paintedFindStrings } from './find-surface';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
-type Bubble = { id: string; role: 'user' | 'agent'; text: string; streaming?: boolean };
+type Bubble = { id: string; role: 'user' | 'agent'; text: string; streaming?: boolean; apps?: Array<{ id: string; tool: string }> };
 type Desktop = SavedDesktop & { online: boolean | null; expired: boolean };
 type Transcript = {
   bubbles: Bubble[];
@@ -93,12 +98,13 @@ type PhoneControl =
   | {
       op: 'opened';
       chat: PhoneChat;
-      messages: Array<{ role: 'user' | 'agent'; text: string; streaming?: boolean }>;
+      messages: Array<{ role: 'user' | 'agent'; text: string; streaming?: boolean; apps?: Array<{ id: string; tool: string }> }>;
       place?: PhonePlace;
       options?: ComposerOptions;
       permission?: PhonePermission | null;
     }
-  | { op: 'assistant'; chatId: string; text: string }
+  | { op: 'assistant'; chatId: string; text: string; apps?: Array<{ id: string; tool: string }> }
+  | PhoneMcpUiControl
   | { op: 'stream'; chatId: string; text: string; activity?: string }
   | { op: 'ask'; chatId: string; text: string; questions: AskQuestion[] }
   | { op: 'permission'; chatId: string; prompt: PhonePermission | null }
@@ -128,7 +134,6 @@ type PhoneControl =
     });
 
 const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
-/** Must match PHONE_CONTROL_PREFIX in packages/core. Rides inside prompt text. */
 const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 type ServerMessage =
@@ -157,7 +162,7 @@ function parseServer(raw: string): ServerMessage | null {
 
 function persist(desktops: Desktop[]) {
   void saveDesktops(
-    desktops.map(({ deviceId, deviceLabel, sessionToken }) => ({ deviceId, deviceLabel, sessionToken })),
+    desktops.map(({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken }) => ({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken })),
   );
 }
 
@@ -177,7 +182,7 @@ function decodePhoneReply(text: string): PhoneControl | null {
 }
 
 export default function App() {
-  const [url, setUrl] = useState(DEFAULT_URL);
+  const relay = useSavedRelayUrl(DEFAULT_URL);
   const [code, setCode] = useState('');
   const [desktops, setDesktops] = useState<Desktop[]>([]);
   const [screen, setScreen] = useState<Screen>('loading');
@@ -255,7 +260,6 @@ export default function App() {
   const requestedImagesRef = useRef(new Set<string>());
   const projectsRef = useRef(projects);
   const accountDefaultsRef = useRef<PhoneAccountDefaults | null>(null);
-  const urlRef = useRef(url);
   const pendingTokenRef = useRef<string | null>(null);
   const screenRef = useRef(screen);
   const historyQueryRef = useRef('');
@@ -275,17 +279,18 @@ export default function App() {
   const attachedRef = useRef(false);
   const checkingHostsRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
+  const sealMaterialRef = useRef<SealMaterial | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
   desktopsRef.current = desktops;
   activeIdRef.current = activeId;
   activeChatIdRef.current = activeChatId;
   projectsRef.current = projects;
-  urlRef.current = url;
   screenRef.current = screen;
   if (!linkRef.current) {
-    linkRef.current = createRelayLink({
-      url: () => urlRef.current.trim() || DEFAULT_URL,
+    linkRef.current = createSealedRelayLink({
+      material: () => lookupSealMaterial(sealMaterialRef.current, desktopsRef.current, activeIdRef.current, pendingTokenRef.current),
+      url: () => relay.socketUrl(),
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
       onOpen: () => (errorRef.current === RELAY_UNREACHABLE ? setError(null) : undefined),
@@ -343,9 +348,11 @@ export default function App() {
 
   function remember(desktop: Desktop) {
     setDesktops((prev) => {
+      const prior = prev.find((row) => row.deviceId === desktop.deviceId);
+      const saved = { ...desktop, hostPublicKey: desktop.hostPublicKey || prior?.hostPublicKey || '', phoneToken: desktop.phoneToken || prior?.phoneToken || '' };
       const next = [
         ...prev.filter((row) => row.deviceId !== desktop.deviceId && row.sessionToken !== desktop.sessionToken),
-        desktop,
+        saved,
       ];
       persist(next);
       return next;
@@ -403,6 +410,7 @@ export default function App() {
   }
 
   function applyControl(control: PhoneControl) {
+    if (deliverPhoneMcpUi(control)) return;
     if (control.op === 'permission' && control.chatId) {
       setPermissionByChat((prev) => ({ ...prev, [control.chatId]: control.prompt ?? null }));
       return;
@@ -518,23 +526,34 @@ export default function App() {
     }
     if ((control.op === 'assistant' || control.op === 'ask') && control.chatId) {
       const chatId = control.chatId;
+      let live = false;
       setTranscripts((prev) => {
         const current = prev[chatId] ?? EMPTY;
+        live = phoneAskIsLive(current);
         return {
           ...prev,
-          [chatId]: {
-            bubbles: finishAgent(current.bubbles, control.text),
+          [chatId]: applyPhoneTurn(current, {
+            op: control.op,
+            text: control.text,
+            apps: control.op === 'assistant' ? control.apps : undefined,
             questions: control.op === 'ask' ? control.questions : null,
-            working: false,
-            activity: '',
-          },
+          }),
         };
       });
-      patchChat(chatId, {
-        status: 'idle',
-        preview: control.text.replace(/\s+/g, ' ').trim().slice(0, 90),
-        updatedAt: new Date().toISOString(),
-      });
+      const patch = phoneTurnPatch(control.op, control.text, { live });
+      if (!patch.refreshQuestionsOnly) {
+        patchChat(chatId, {
+          status: 'idle',
+          ...(patch.preview ? { preview: patch.preview } : {}),
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        mapChats((row) =>
+          row.id === chatId && phoneAskIsLive(row)
+            ? { ...row, status: 'idle', updatedAt: new Date().toISOString() }
+            : row,
+        );
+      }
       return;
     }
     if (control.op === 'stopped' && control.chatId) {
@@ -690,13 +709,8 @@ export default function App() {
       return;
     }
     if (msg.type === 'paired') {
-      const desktop: Desktop = {
-        deviceId: msg.deviceId,
-        deviceLabel: msg.deviceLabel,
-        sessionToken: msg.sessionToken,
-        online: true,
-        expired: false,
-      };
+      const pinned = sealMaterialRef.current;
+      const desktop: Desktop = { deviceId: msg.deviceId, deviceLabel: msg.deviceLabel, sessionToken: msg.sessionToken, hostPublicKey: pinned?.hostPublicKey ?? '', phoneToken: pinned?.phoneToken ?? '', online: true, expired: false };
       remember(desktop);
       setActiveId(desktop.deviceId);
       pendingTokenRef.current = desktop.sessionToken;
@@ -778,6 +792,17 @@ export default function App() {
       setError(msg.message);
     }
   };
+
+  function submitPairing(raw: string): boolean {
+    const next = parsePairingBlob(raw);
+    if (!next) return false;
+    sealMaterialRef.current = { hostPublicKey: next.hostPublicKey, phoneToken: next.phoneToken };
+    setError(null);
+    setCode(raw.trim());
+    pendingTokenRef.current = null;
+    link.send({ type: 'pair', code: next.code });
+    return true;
+  }
 
   function showDesktops() {
     link.cancelResume();
@@ -1164,6 +1189,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!relay.loaded) return;
     let cancelled = false;
     void loadDesktops().then((saved) => {
       if (cancelled) return;
@@ -1180,7 +1206,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [relay.loaded]);
 
   const ordered = useMemo(() => {
     const rank = (desktop: Desktop) => (desktop.online ? 0 : desktop.expired ? 2 : 1);
@@ -1306,60 +1332,18 @@ export default function App() {
 
   if (screen === 'pair') {
     return (
-      <KeyboardAvoidingView
-        style={styles.screen}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <SafeAreaView style={styles.screen}>
-          <StatusBar style="light" />
-          <View style={styles.header}>
-            {desktops.length > 0 ? (
-              <Pressable onPress={showDesktops}>
-                <Text style={styles.link}>Desktops</Text>
-              </Pressable>
-            ) : (
-              <Brand />
-            )}
-            <Text style={styles.title}>Pair a Mac</Text>
-            <Text style={styles.hint}>
-              On the Mac, open Sideboard → Settings → Remote, name it, then show a pairing code.
-            </Text>
-          </View>
-          <View style={styles.form}>
-            <Text style={styles.label}>Pairing code</Text>
-            <TextInput
-              style={[styles.input, styles.codeInput]}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              placeholder="CODE"
-              placeholderTextColor={palette.muted}
-              value={code}
-              onChangeText={setCode}
-            />
-            <Text style={styles.label}>Relay</Text>
-            <TextInput
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={url}
-              onChangeText={setUrl}
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Pressable
-              style={[styles.primary, !code.trim() && styles.primaryDisabled]}
-              onPress={() => {
-                const next = code.trim().toUpperCase();
-                if (!next) return;
-                setError(null);
-                pendingTokenRef.current = null;
-                link.send({ type: 'pair', code: next });
-              }}
-            >
-              <Text style={styles.primaryText}>Pair</Text>
-            </Pressable>
-          </View>
-        </SafeAreaView>
-      </KeyboardAvoidingView>
+      <PairMacScreen
+        hasDesktops={desktops.length > 0}
+        onDesktops={showDesktops}
+        code={code}
+        onChangeCode={setCode}
+        relayUrl={relay.url}
+        onChangeRelay={relay.setUrl}
+        error={error}
+        onSubmit={submitPairing}
+        onPasteInvalid={() => setError('Paste the pairing line from the Mac.')}
+        onClearError={() => setError(null)}
+      />
     );
   }
 
@@ -1442,7 +1426,7 @@ export default function App() {
             style={styles.input}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="Filter by title, project, or agent"
+            placeholder="Filter by title, workspace, project, or agent"
             placeholderTextColor={palette.muted}
             value={historyQuery}
             onChangeText={onHistoryQuery}
@@ -1628,6 +1612,7 @@ export default function App() {
                       findQuery={findOpen ? findQuery : ''}
                       findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
                     />
+                    {bubble.apps?.length && activeChatId ? <PhoneMcpApps apps={bubble.apps} chatId={activeChatId} send={(payload) => link?.send(phoneCommand(payload))} /> : null}
                   </Pressable>
                 )}
               </View>

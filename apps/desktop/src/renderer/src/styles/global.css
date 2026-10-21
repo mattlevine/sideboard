@@ -2630,14 +2630,12 @@ button.workspace-tag.is-selected:hover:not(:disabled) {
   flex-shrink: 0;
 }
 
-/* Pending / review share the title with hover actions and the hover card.
+/* Status pills share the title with hover actions and the hover card.
    Drop them while that chrome is up so the name truncates beside the buttons. */
-.thread-item.worktree-parent:is(:hover, .has-hover-card) .board-badge.is-pending,
-.thread-item.worktree-parent:is(:hover, .has-hover-card) .board-badge.is-review,
+.thread-item.worktree-parent:is(:hover, .has-hover-card) .thread-title .board-badge,
 .thread-item.worktree-parent:has(.worktree-row-actions:is(.is-open, :focus-within))
-  .board-badge.is-pending,
-.thread-item.worktree-parent:has(.worktree-row-actions:is(.is-open, :focus-within))
-  .board-badge.is-review {
+  .thread-title
+  .board-badge {
   display: none;
 }
 
@@ -3673,6 +3671,14 @@ mark.chat-search-hit.chat-search-current {
   gap: 6px;
   width: 100%;
   min-width: 0;
+}
+
+.mcp-app-frame {
+  width: 100%;
+  min-height: 120px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
 }
 
 .turn-tool-tail {
@@ -11120,6 +11126,18 @@ body:has(.update-banner) .team-toast-stack {
   white-space: nowrap;
 }
 
+.board-badge.is-new {
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.board-badge.is-draft {
+  border-style: dashed;
+  border-color: rgba(117, 190, 255, 0.55);
+  background: rgba(117, 190, 255, 0.1);
+  color: #9cdcfe;
+}
+
 .board-badge.is-review {
   border-color: color-mix(in srgb, var(--warn) 45%, var(--border));
   background: color-mix(in srgb, var(--warn) 16%, var(--bg));
@@ -11130,6 +11148,34 @@ body:has(.update-banner) .team-toast-stack {
   border-color: rgba(210, 153, 34, 0.5);
   background: rgba(210, 153, 34, 0.12);
   color: #e2b340;
+}
+
+.board-badge.is-approved {
+  border-color: rgba(111, 207, 151, 0.55);
+  background: rgba(111, 207, 151, 0.12);
+  color: #8fd9a8;
+}
+
+.board-badge.is-merged {
+  border-color: rgba(210, 168, 255, 0.55);
+  background: rgba(210, 168, 255, 0.12);
+  color: #d2a8ff;
+}
+
+.board-badge.has-conflict {
+  position: relative;
+}
+
+.board-badge-conflict {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--err);
+  box-shadow: 0 0 0 1.5px var(--bg);
+  pointer-events: none;
 }
 
 .board-row .thread-title {
@@ -11226,18 +11272,20 @@ body:has(.update-banner) .team-toast-stack {
 }
 
 .board-kanban {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
   align-items: stretch;
   gap: 12px;
   min-height: 0;
   min-width: 0;
   flex: 1;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }
 
 .board-column {
-  min-width: 0;
+  flex: 1 0 200px;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -11269,6 +11317,7 @@ body:has(.update-banner) .team-toast-stack {
 
 .board-column-cards {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 8px;
   padding: 10px;
@@ -12532,6 +12581,17 @@ body:has(.update-banner) .team-toast-stack {
   line-height: 1.4;
 }
 
+.pairing-qr {
+  display: block;
+  width: 220px;
+  height: 220px;
+  margin-top: 4px;
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+  box-sizing: content-box;
+}
+
 .settings-env-table {
   display: flex;
   flex-direction: column;
@@ -12840,13 +12900,37 @@ body:has(.update-banner) .team-toast-stack {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.settings-history-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .settings-history-title {
   font-size: 13px;
   font-weight: 550;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  min-width: 0;
+}
+
+.settings-history-workspace {
+  flex-shrink: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
 }
 
 .settings-history-meta {

@@ -9,6 +9,7 @@ import {
   ARTIFACT_PREVIEW_BOOT_BG,
   artifactPreviewUrl,
   injectArtifactPreviewBoot,
+  mcpUiPreviewUrl,
   missingArtifactPreviewHtml,
   parseArtifactPreviewId,
   prepareArtifactPreviewHtml,
@@ -37,6 +38,7 @@ describe('artifact preview page', () => {
   it('parses the artifact id from the custom-protocol URL', () => {
     expect(parseArtifactPreviewId(artifactPreviewUrl('tool-a1', 4))).toBe('tool-a1');
     expect(parseArtifactPreviewId('sideboard-artifact://preview/fence-0?v=1&t=9')).toBe('fence-0');
+    expect(parseArtifactPreviewId(mcpUiPreviewUrl('mcpui-ab12cd34', 2))).toBe('mcpui-ab12cd34');
   });
 
   it('serves a dark missing page that pings the parent instead of white 404 copy', () => {

@@ -15,7 +15,6 @@ import {
 import { listIssues } from '../integrations/issues.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { listModelsForAgent } from '../agents/list-models.js';
-import { mcpArchiveBlockedReason } from './archive-guard.js';
 import { sideboardMcpProfile, SIDEBOARD_THREAD_ID_ENV, shouldRegisterMcpWaitForTurn, worktreeMcpToolNames } from './profile.js';
 import {
   PRESENT_PLAN_REQUIRES_PLAN_MODE,
@@ -25,6 +24,7 @@ import {
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
+import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { applyWorkspaceTags, workspaceTagTargetRef } from '../threads/workspace-tags.js';
 import { createOrchChildThread } from './create-orch-child.js';
 import { agentBlockFields, chatBlockedSuffix, stampAskUserBlock, stampNotifyBlock, stampPlanBlock } from '../orchestrator/agent-block.js';
@@ -72,6 +72,7 @@ import {
   resolveViewerProfile,
   resolveViewerProfileForRepo,
 } from '../store/app-settings.js';
+import { registerArchiveTools } from './archive-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
 import { presentArtifactResult } from '../agent-rpc/handlers.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
@@ -205,10 +206,10 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_chats',
-    'List chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, blocked: when an agent is waiting on a person, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat.',
+    'List live chats across all projects (one summary line each — token-frugal). Includes parent id, last message preview, blocked: when an agent is waiting on a person, and live progress so you can see workspace children. Each line ends with sideboard://chat/<id> — use that URL in markdown links so the UI can open the chat. Archived workspaces and agents are list_archive, not this list.',
     {},
     async () => {
-      const threads = orch.getThreads(true);
+      const threads = orch.getThreads();
       const lines = threads.map((t) => {
         const repo =
           t.repoPath === GLOBAL_WORKSPACE_ID
@@ -231,7 +232,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of workspaces (New, Draft, Review, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → merged. Archive removes the card to Settings → History. Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
+    'Home Kanban of workspaces (New, Draft, Review, Approved, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → approved → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
     {
       query: z
         .string()
@@ -252,10 +253,10 @@ export async function startMcpServer(): Promise<void> {
           'Mine = PRs you authored or local WIP; reviewing = someone else\'s PR. Uses the gh login.',
         ),
       column: z
-        .enum(['new', 'draft', 'review', 'done', 'needs_you'])
+        .enum(['new', 'draft', 'review', 'approved', 'done', 'needs_you'])
         .optional()
         .describe(
-          'Return cards for this column only (totals still include the rest). needs_you is a legacy alias for new.',
+          'Return cards for this column only (totals still include the rest). approved is an open PR GitHub has approved. needs_you is a legacy alias for new.',
         ),
       limit: z
         .number()
@@ -742,6 +743,31 @@ export async function startMcpServer(): Promise<void> {
 
   if (worktreeProfile) {
     server.tool(
+      'get_orchestrator',
+      'The orchestration chat this agent is connected to — the parent that lists this workspace among its agents. Returns id, title, status, agent, and a sideboard://chat link. connected is false when this chat was not opened by an orchestrator. notify_orchestrator wakes that chat. You cannot list or steer its other agents from here.',
+      {},
+      async () => {
+        try {
+          const child = resolveNotifyCallerThread();
+          const parent = connectedOrchestrator(child, (id) => orch.getThread(id));
+          if (!parent) return mcpJson({ connected: false, orchestrator: null });
+          return mcpJson({
+            connected: true,
+            orchestrator: {
+              id: parent.id,
+              title: parent.title,
+              status: parent.status,
+              agent: parent.agent,
+              link: `sideboard://chat/${parent.id}`,
+            },
+          });
+        } catch (err) {
+          const text = err instanceof Error ? err.message : String(err);
+          return { content: [{ type: 'text', text }], isError: true };
+        }
+      },
+    );
+    server.tool(
       'notify_orchestrator',
       'Wake the parent Global orchestrator with a short status so it does not have to poll wait_for_turn. Use when you are blocked and the parent may have moved on (missing access, waiting on something the coordinator must handle). The message is shown on the sidebar and board until the next user message in this chat. ask_user already notifies for input-required — do not call this for the same question. Information only: never a git command. Do not use this to steer other worktrees.',
       {
@@ -1159,51 +1185,7 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
-  server.tool(
-    'archive_chat',
-    'Archive a thread (stops agent/dev, runs archive script, removes worktree when last chat tab). Coordinators commit, push, and open PRs by asking the worktree agent (ask_git). Merge only when the user explicitly asked.',
-    { ref: z.string() },
-    async ({ ref }) => {
-      const t = orch.getThread(ref);
-      if (!t) {
-        return {
-          content: [{ type: 'text', text: `Chat not found: ${ref}` }],
-          isError: true,
-        };
-      }
-      const blocked = mcpArchiveBlockedReason(t);
-      if (blocked) {
-        return {
-          content: [{ type: 'text', text: blocked }],
-          isError: true,
-        };
-      }
-      const archived = await orch.archive(ref);
-      return mcpJson({
-        id: archived.id,
-        status: archived.status,
-      });
-    },
-  );
-
-  server.tool(
-    'restore_chat',
-    'Restore an archived thread (recreates worktree from branch when needed)',
-    { ref: z.string() },
-    async ({ ref }) => {
-      try {
-        const restored = await orch.restore(ref);
-        return mcpJson({
-          id: restored.id,
-          status: restored.status,
-          worktreePath: restored.worktreePath,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { content: [{ type: 'text', text: message }], isError: true };
-      }
-    },
-  );
+  registerArchiveTools(server, orch);
 
   server.tool(
     'get_diff',

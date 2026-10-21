@@ -8,8 +8,44 @@ export const REMOTE_PONG_TIMEOUT_MS = 15_000;
 
 export const BAKED_REMOTE_RELAY_URL = `wss://relay.sideboard.cloud${REMOTE_RELAY_PATH}`;
 
-export function remoteRelayUrl(): string {
-  return process.env.SIDEBOARD_REMOTE_RELAY_URL?.trim() || BAKED_REMOTE_RELAY_URL;
+/**
+ * `wss://host/remote`, or `ws://` for a local relay.
+ * `https://host` and a host with no path become that WebSocket URL.
+ * Returns null when the value is not a relay address.
+ */
+export function normalizeRemoteRelayUrl(raw: string): string | null {
+  let text = raw.trim();
+  if (!text) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(text)) text = `wss://${text}`;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return null;
+  }
+  if (url.protocol === 'https:') url.protocol = 'wss:';
+  else if (url.protocol === 'http:') url.protocol = 'ws:';
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') return null;
+  if (url.username || url.password) return null;
+  const path = url.pathname.replace(/\/+$/, '') || '/';
+  if (path !== '/' && path !== REMOTE_RELAY_PATH) return null;
+  url.pathname = REMOTE_RELAY_PATH;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+/**
+ * Relay the phone and this Mac share.
+ * A saved Settings URL wins. Otherwise `SIDEBOARD_REMOTE_RELAY_URL`, then
+ * Sideboard’s hosted relay.
+ */
+export function remoteRelayUrl(configured?: string | null): string {
+  const fromSettings = configured?.trim() ? normalizeRemoteRelayUrl(configured) : null;
+  if (fromSettings) return fromSettings;
+  const fromEnv = process.env.SIDEBOARD_REMOTE_RELAY_URL?.trim();
+  if (fromEnv) return normalizeRemoteRelayUrl(fromEnv) || BAKED_REMOTE_RELAY_URL;
+  return BAKED_REMOTE_RELAY_URL;
 }
 
 export interface RemoteAskOption {
@@ -35,6 +71,9 @@ export type RemoteHostMessage =
   | { type: 'host_pair' }
   | { type: 'assistant'; text: string }
   | { type: 'ask_user'; text: string; questions: RemoteAskQuestion[] }
+  | { type: 'e2ee_ready'; v: 1; desktopPublicKey: string; clientNonce: string; desktopNonce: string }
+  | { type: 'e2ee'; frame: string }
+  | { type: 'e2ee_fail' }
   | { type: 'ping' };
 
 export interface RemoteHostSummary {
@@ -51,6 +90,8 @@ export type RemotePhoneMessage =
   | { type: 'list_hosts'; sessionTokens: string[] }
   | { type: 'prompt'; text: string }
   | { type: 'stop' }
+  | { type: 'e2ee_hello'; v: 1; clientPublicKey: string; clientNonce: string }
+  | { type: 'e2ee'; frame: string }
   | { type: 'ping' };
 
 export type RemoteClientMessage = RemoteHostMessage | RemotePhoneMessage;
@@ -71,6 +112,9 @@ export type RemoteServerMessage =
     }
   | { type: 'assistant'; text: string }
   | { type: 'ask_user'; text: string; questions: RemoteAskQuestion[] }
+  | { type: 'e2ee_hello'; v: 1; clientPublicKey: string; clientNonce: string }
+  | { type: 'e2ee_ready'; v: 1; desktopPublicKey: string; clientNonce: string; desktopNonce: string }
+  | { type: 'e2ee'; frame: string }
   | { type: 'hosts'; hosts: RemoteHostSummary[] }
   | { type: 'host_offline' }
   | { type: 'error'; message: string }
@@ -113,6 +157,7 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
   const msg = parsed as { type?: unknown };
   if (msg.type === 'ping') return { type: 'ping' };
   if (msg.type === 'host_pair') return { type: 'host_pair' };
+  if (msg.type === 'e2ee_fail') return { type: 'e2ee_fail' };
   if (msg.type === 'stop') return { type: 'stop' };
   if (msg.type === 'host_register') {
     const deviceId = str((parsed as { deviceId?: unknown }).deviceId);
@@ -152,6 +197,8 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
     if (!text) return null;
     return { type: 'prompt', text };
   }
+  const encrypted = parseEncrypted(parsed);
+  if (encrypted) return encrypted;
   if (msg.type === 'assistant') {
     return { type: 'assistant', text: str((parsed as { text?: unknown }).text) };
   }
@@ -239,6 +286,33 @@ export function parseRemoteServerMessage(raw: string): RemoteServerMessage | nul
   if (type === 'error') {
     const message = str((parsed as { message?: unknown }).message) || 'remote error';
     return { type: 'error', message };
+  }
+  return parseEncrypted(parsed);
+}
+
+function parseEncrypted(parsed: unknown): Extract<
+  RemoteClientMessage,
+  { type: 'e2ee' | 'e2ee_hello' | 'e2ee_ready' }
+> | null {
+  if (!parsed || typeof parsed !== 'object') return null;
+  const type = (parsed as { type?: unknown }).type;
+  if (type === 'e2ee') {
+    const frame = str((parsed as { frame?: unknown }).frame);
+    if (!frame) return null;
+    return { type: 'e2ee', frame };
+  }
+  if (type === 'e2ee_hello') {
+    const clientPublicKey = str((parsed as { clientPublicKey?: unknown }).clientPublicKey);
+    const clientNonce = str((parsed as { clientNonce?: unknown }).clientNonce);
+    if ((parsed as { v?: unknown }).v !== 1 || !clientPublicKey || !clientNonce) return null;
+    return { type: 'e2ee_hello', v: 1, clientPublicKey, clientNonce };
+  }
+  if (type === 'e2ee_ready') {
+    const desktopPublicKey = str((parsed as { desktopPublicKey?: unknown }).desktopPublicKey);
+    const clientNonce = str((parsed as { clientNonce?: unknown }).clientNonce);
+    const desktopNonce = str((parsed as { desktopNonce?: unknown }).desktopNonce);
+    if ((parsed as { v?: unknown }).v !== 1 || !desktopPublicKey || !clientNonce || !desktopNonce) return null;
+    return { type: 'e2ee_ready', v: 1, desktopPublicKey, clientNonce, desktopNonce };
   }
   return null;
 }

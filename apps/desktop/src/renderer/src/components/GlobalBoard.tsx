@@ -17,6 +17,7 @@ import {
   groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
+  sidebarQuestionThreadId,
   visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus,
   worktreeMatchesOwnership,
   reviewLabelForRepo,
@@ -138,15 +139,13 @@ export function GlobalBoard({
   );
 
   const byColumn = useMemo(() => {
-    const map: Record<'new' | 'draft' | 'review' | 'done', Thread[][]> = {
-      new: [],
-      draft: [],
-      review: [],
-      done: [],
+    const map = {
+      new: [] as Thread[][], draft: [] as Thread[][], review: [] as Thread[][],
+      approved: [] as Thread[][], done: [] as Thread[][],
     };
     for (const group of worktrees) {
       const col = classifyWorktreeColumn(group);
-      if (col === 'new' || col === 'draft' || col === 'review' || col === 'done') {
+      if (col === 'new' || col === 'draft' || col === 'review' || col === 'approved' || col === 'done') {
         map[col].push(group);
       }
     }
@@ -363,12 +362,13 @@ function WorktreeCard({
     primary.id,
     primary.worktreePath,
     primary.status,
+    primary.repoPath,
   );
 
   const dirty = loaded && Boolean(stat?.dirty);
 
   function openWorktree() {
-    if (!archiving) onOpenThread(primary.id);
+    if (!archiving) onOpenThread(sidebarQuestionThreadId(group, primary.id));
   }
 
   return (

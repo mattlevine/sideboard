@@ -117,7 +117,7 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
-import { clearAgentBlock, settleAgentBlock } from './agent-block.js';
+import { clearAgentBlock, dismissAskUserQuestion, settleAgentBlock } from './agent-block.js';
 import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
@@ -143,6 +143,7 @@ import {
   threadsSharingWorktree,
 } from '../threads/chat-tabs.js';
 import { enqueueByKey } from '../util/enqueue-by-key.js';
+import { archiveWorkspaceAgents, restoreWorkspaceAgents } from './workspace-archive.js';
 import { createLineCoalescer } from '../util/line-coalescer.js';
 import { git } from '../git/run.js';
 import { withRepoGitLock } from '../git/repo-git-lock.js';
@@ -226,6 +227,7 @@ import {
   formatPrGateDirective,
   formatRenameBranchDirective,
   formatUiReminder,
+  connectedOrchestratorTurnReminder, claudeSubagentTurnReminder,
   formatWorktreeDirective,
   formatWorktreeReminder,
   issueTicketFromThread,
@@ -1566,7 +1568,8 @@ export class Orchestrator {
     // (Claude appends; other CLIs prepend them only on resumed turns).
     const turnReminders =
       [
-        worktreeReminder,
+        worktreeReminder, claudeSubagentTurnReminder(thread),
+        connectedOrchestratorTurnReminder(thread, (id) => readThread(id)),
         optionalServicesReminder,
         issueToolsReminder,
         reviewWriteGateReminder,
@@ -3054,7 +3057,7 @@ export class Orchestrator {
 
   async worktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat> {
     const thread = this.requireThread(threadRef);
-    this.assertNotGlobal(thread, 'Diff');
+    if (isGlobalThread(thread)) return { additions: 0, deletions: 0, dirty: false };
     return getWorktreeDirtyStat(thread.worktreePath);
   }
 
@@ -3582,7 +3585,7 @@ export class Orchestrator {
     if (!next) throw new Error('Title cannot be empty');
     return updateThread(thread.id, { title: next, userSetTitle: true });
   }
-
+  dismissAskUser(threadRef: string, signature: string): Thread { const thread = this.requireThread(threadRef); dismissAskUserQuestion(thread.id, signature); return this.requireThread(thread.id); }
   setWorkspaceTags(threadRef: string, tags: string[]): Thread { return applyWorkspaceTags(threadRef, tags, 'replace'); }
 
   async switchThreadBranch(threadRef: string, branchName: string): Promise<Thread> {
@@ -3637,18 +3640,15 @@ export class Orchestrator {
     return threadsSharingWorktree(thread.worktreePath);
   }
 
-  /**
-   * Last-tab teardown must see siblings already archived. Serialize per
-   * worktree so parallel archive/purge of sibling tabs still removes once.
-   */
-  private enqueueWorktreeTeardown<T>(
-    thread: Thread,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const key = isGlobalThread(thread)
-      ? `archive:global:${thread.id}`
-      : `archive:wt:${normalizeWorktreePath(thread.worktreePath)}`;
+  private enqueueWorktreeTeardown<T>(thread: Thread, fn: () => Promise<T>): Promise<T> {
+    const key = isGlobalThread(thread) ? `archive:global:${thread.id}` : `archive:wt:${normalizeWorktreePath(thread.worktreePath)}`;
     return enqueueByKey(key, fn);
+  }
+  archiveWorkspace(threadRef: string): Promise<Thread[]> {
+    return archiveWorkspaceAgents(this, threadRef);
+  }
+  restoreWorkspace(threadRef: string): Promise<Thread[]> {
+    return restoreWorkspaceAgents(this, threadRef);
   }
 
   async archive(threadRef: string): Promise<Thread> {

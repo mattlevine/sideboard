@@ -43,7 +43,7 @@ import { Sidebar } from './components/Sidebar';
 import { ThreadPanel } from './components/ThreadPanel';
 import { CreateModal } from './components/CreateModal';
 import { CreateProcessingOverlay } from './components/CreateProcessingOverlay';
-import { OrchestratorPanel } from './components/OrchestratorPanel';
+import { ConnectedOrchestratorBar, OrchestratorPanel } from './components/OrchestratorPanel';
 import { GlobalBoard } from './components/GlobalBoard';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
@@ -1408,6 +1408,7 @@ export function App() {
               fileChanges={fileChanges}
               {...urlPreviewProps}
               {...threadPanelProps}
+              belowTabs={<ConnectedOrchestratorBar thread={selected} threads={threads} archived={archived} onOpen={openThreadByRef} />}
             />
           );
           })()}

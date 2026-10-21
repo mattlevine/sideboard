@@ -239,13 +239,24 @@ describe('phone orchestration chats', () => {
     const project = sidebar.projects.find((row) => row.path === '/tmp/sideboard');
     expect(project?.worktrees[0]?.chats.map((chat) => chat.id)).toEqual([thread.id]);
     expect(project?.worktrees[0]?.chats[0]?.agent).toBe('claude');
+    updateThread(thread.id, {
+      agentBlock: { reason: 'Allow the edit?', source: 'permission', at: '2026-10-17T00:00:00.000Z' },
+    });
+    expect(
+      listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.chats[0],
+    ).toMatchObject({ needsYou: true, blockedReason: 'Allow the edit?' });
     updateThread(thread.id, { tags: ['phone-sync'] });
     expect(listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.tags).toEqual([
       'phone-sync',
     ]);
     expect(openPhoneChat(thread.id)?.chat.id).toBe(thread.id);
     expect(archivePhoneChat(thread.id)).toBe(true);
-    expect(listPhoneHistory().chats[0]).toMatchObject({ id: thread.id, where: 'sideboard', agent: 'claude' });
+    expect(listPhoneHistory().chats[0]).toMatchObject({
+      id: thread.id,
+      where: 'sideboard',
+      agent: 'claude',
+      workspace: 'sideboard-ajax',
+    });
     expect(listPhoneSidebar().projects.some((row) => row.path === '/tmp/sideboard')).toBe(false);
   });
 
@@ -263,6 +274,8 @@ describe('phone orchestration chats', () => {
       prState: 'OPEN',
       prAuthorLogin: 'matt',
       prLabels: ['eng-review'],
+      prMergeable: 'CONFLICTING',
+      prChecksFailed: true,
     });
     const theirs = createEmptyThread({
       title: 'theirs',
@@ -299,25 +312,31 @@ describe('phone orchestration chats', () => {
     expect(badge(mine.id)).toEqual({
       id: 'pending',
       label: 'pending',
-      title: 'Waiting for review',
+      title: 'Waiting for review · checks failing · merge conflicts',
+      conflict: true,
     });
     expect(badge(theirs.id)).toEqual({
       id: 'review',
       label: 'review',
       title: "Someone else's PR",
     });
-    expect(badge(draft.id)).toBeUndefined();
+    expect(badge(draft.id)).toEqual({
+      id: 'draft',
+      label: 'draft',
+      title: 'Draft pull request',
+    });
     const mineChat = labeled?.worktrees.flatMap((worktree) => worktree.chats).find((chat) => chat.id === mine.id);
     expect(mineChat).toMatchObject({
       prUrl: 'https://github.com/acme/app/pull/4',
       prNumber: '4',
-      prStatus: 'Needs approval',
+      prStatus: 'Merge conflicts',
     });
-    expect(
-      listPhoneSidebar()
-        .projects.find((row) => row.path === '/tmp/sideboard')
-        ?.worktrees.every((worktree) => worktree.badge == null),
-    ).toBe(true);
+    const unlabeled = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard');
+    const quiet = (id: string) =>
+      unlabeled?.worktrees.find((worktree) => worktree.chats.some((chat) => chat.id === id))?.badge;
+    expect(quiet(mine.id)).toBeUndefined();
+    expect(quiet(theirs.id)).toBeUndefined();
+    expect(quiet(draft.id)).toBeUndefined();
   });
 
   it('adds an agent onto an existing project worktree', () => {

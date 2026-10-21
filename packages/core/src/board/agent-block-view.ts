@@ -10,9 +10,25 @@ export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Threa
   return group[0]?.status ?? 'idle';
 }
 
+/**
+ * True when this ask_user highlight belongs to a question the user already
+ * skipped in that chat. A block with no signature is the same generation
+ * (stamped before signatures existed, or a notify with no question set).
+ */
+export function isDismissedAskUserBlock(
+  block: AgentBlock | null | undefined,
+  dismissedQuestionSignature: string | null | undefined,
+): boolean {
+  if (!block || block.source !== 'ask_user') return false;
+  const dismissed = dismissedQuestionSignature?.trim();
+  if (!dismissed) return false;
+  if (!block.questionSignature) return true;
+  return block.questionSignature === dismissed;
+}
+
 /** Blocked highlight. Errors and archived chats keep their own status. */
 export function visibleAgentBlock(
-  thread: Pick<Thread, 'status' | 'agentBlock'>,
+  thread: Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>,
 ): AgentBlock | null {
   if (
     thread.status === 'archived' ||
@@ -23,6 +39,7 @@ export function visibleAgentBlock(
   }
   const block = thread.agentBlock;
   if (!block?.reason?.trim()) return null;
+  if (isDismissedAskUserBlock(block, thread.dismissedQuestionSignature)) return null;
   return block;
 }
 
@@ -31,7 +48,7 @@ export function visibleAgentBlock(
  * Herdr uses so the row that needs a decision is the one you see.
  */
 export function worktreeAgentBlock(
-  group: Array<Pick<Thread, 'status' | 'agentBlock'>>,
+  group: Array<Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
 ): AgentBlock | null {
   let best: AgentBlock | null = null;
   for (const thread of group) {
@@ -42,8 +59,47 @@ export function worktreeAgentBlock(
   return best;
 }
 
+/**
+ * Reason on the worktree parent row. While one of its chats is open, the
+ * row matches that chat — a sibling's question must not sit in the sidebar
+ * after you have switched agents. Closed rows still roll up the group.
+ */
+export function sidebarRowAgentBlock(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  opts: { active: boolean; selectedId: string | null },
+): AgentBlock | null {
+  if (opts.active) {
+    const open = group.find((thread) => thread.id === opts.selectedId);
+    if (open) return visibleAgentBlock(open);
+  }
+  return worktreeAgentBlock(group);
+}
+
+/**
+ * Closed worktree rows open the chat that asked. An already-open row keeps
+ * the selected chat — the parent is no longer showing a sibling's question.
+ */
+export function sidebarParentSelectId(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  primaryId: string,
+  opts: { active: boolean },
+): string {
+  if (opts.active) return primaryId;
+  return sidebarQuestionThreadId(group, primaryId);
+}
+
+export function sidebarQuestionThreadId(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  primaryId: string,
+): string {
+  const block = worktreeAgentBlock(group);
+  if (!block) return primaryId;
+  const owner = group.find((thread) => visibleAgentBlock(thread) === block);
+  return owner?.id ?? primaryId;
+}
+
 export function threadCardBlockFields(
-  group: Array<Pick<Thread, 'status' | 'agentBlock'>>,
+  group: Array<Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
 ): { blockedReason: string; blockedSource: AgentBlock['source'] } | null {
   const block = worktreeAgentBlock(group);
   return block ? { blockedReason: block.reason, blockedSource: block.source } : null;

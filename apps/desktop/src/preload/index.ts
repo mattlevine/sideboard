@@ -113,6 +113,8 @@ const api: IpcApi = {
   forkChatTab: (input) => ipcRenderer.invoke('forkChatTab', input),
   forkThreadWorktree: (input) => ipcRenderer.invoke('forkThreadWorktree', input),
   renameThread: (threadRef, title) => ipcRenderer.invoke('renameThread', threadRef, title),
+  dismissAskUser: (threadRef, signature) =>
+    ipcRenderer.invoke('dismissAskUser', threadRef, signature),
   setWorkspaceTags: (threadRef, tags) => ipcRenderer.invoke('setWorkspaceTags', threadRef, tags),
   setAttachments: (threadRef, attachments) =>
     ipcRenderer.invoke('setAttachments', threadRef, attachments),
@@ -290,6 +292,14 @@ const api: IpcApi = {
   publishArtifactPreview: (id, html) =>
     ipcRenderer.invoke('artifactPreview:publish', id, html),
   clearArtifactPreview: (id) => ipcRenderer.invoke('artifactPreview:clear', id),
+  mcpUiLookup: (toolName, threadId) => ipcRenderer.invoke('mcpUi:lookup', toolName, threadId),
+  mcpUiCallTool: (server, tool, args, threadId) =>
+    ipcRenderer.invoke('mcpUi:callTool', server, tool, args, threadId),
+  mcpUiReadResource: (server, uri, threadId) =>
+    ipcRenderer.invoke('mcpUi:readResource', server, uri, threadId),
+  publishMcpUiPreview: (id, html, csp) =>
+    ipcRenderer.invoke('mcpUiPreview:publish', id, html, csp),
+  clearMcpUiPreview: (id) => ipcRenderer.invoke('mcpUiPreview:clear', id),
   urlPreview: {
     show: (opts) => ipcRenderer.invoke('urlPreview:show', opts),
     setBounds: (bounds) => ipcRenderer.invoke('urlPreview:setBounds', bounds),

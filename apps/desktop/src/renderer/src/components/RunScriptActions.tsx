@@ -69,7 +69,8 @@ export function RunScriptActions({
           Split
         </button>
       ) : null}
-      {lower === 'run' && primaryPort != null ? (
+      {/* Pinned with Stop on every lower tab. An agent start does not switch to Run. */}
+      {primaryPort != null ? (
         <button
           type="button"
           className="dev-open-port"

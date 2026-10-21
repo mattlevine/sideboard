@@ -2,7 +2,7 @@ import type { AgentKind } from '../types/thread.js';
 import { coerceOrchestratorAgent } from '../agents/orchestrator-capable.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { outboundReplyFromTurn } from '../orchestrator/outbound-turn-reply.js';
-import { extractPendingPlanQuestions } from '../plan/ask-user.js';
+import { latestPendingPlanQuestions } from '../plan/ask-user.js';
 import { followUpBehavior, resolveOrchestratorDefaults } from '../store/app-settings.js';
 import { ensureRemoteCoordinator, findRemoteCoordinator } from '../store/global-workspace.js';
 import { readThread } from '../store/thread-store.js';
@@ -128,10 +128,17 @@ function runCoordinatorPrompt(
     thread = readThread(thread.id) ?? thread;
     if (thread.status === 'stopped') return;
     const result = orch.getTurnResult(thread.id);
-    const pending = extractPendingPlanQuestions(
-      [...thread.messages].reverse().find((m) => m.role === 'agent')?.parts,
-    );
-    if (result.taskState === 'input-required' && pending) {
+    const pending = latestPendingPlanQuestions({
+      messages: thread.messages,
+      agentBlock: thread.agentBlock,
+      dismissedQuestionSignature: thread.dismissedQuestionSignature,
+    });
+    if (
+      pending &&
+      result.taskState !== 'failed' &&
+      result.taskState !== 'canceled' &&
+      (result.taskState === 'input-required' || thread.agentBlock?.source === 'ask_user')
+    ) {
       opts.onOutbound({
         type: 'ask_user',
         text: result.text.trim(),

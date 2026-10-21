@@ -1,12 +1,38 @@
-import { describe, expect, it } from 'vitest';
-import { worktreeAgentBlock } from '../board/home-board.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  sidebarParentSelectId,
+  sidebarQuestionThreadId,
+  sidebarRowAgentBlock,
+  worktreeAgentBlock,
+  visibleAgentBlock,
+} from '../board/home-board.js';
+import { planQuestionsSignature } from '../plan/ask-user.js';
+import {
+  createEmptyThread,
+  invalidateThreadListCache,
+  readThread,
+  writeThread,
+} from '../store/thread-store.js';
 import type { MessagePart } from '../types/thread.js';
 import {
   agentBlockAfterTurn,
   clampBlockReason,
   decisionBlockFromParts,
+  dismissAskUserQuestion,
   makeAgentBlock,
+  settleAgentBlock,
+  writeAgentBlock,
 } from './agent-block.js';
+
+const askSignature = planQuestionsSignature([
+  {
+    question: 'Which API?',
+    options: [{ label: 'REST' }, { label: 'GraphQL' }],
+  },
+]);
 
 const askUser: MessagePart = {
   type: 'tool',
@@ -30,6 +56,15 @@ describe('decisionBlockFromParts', () => {
       source: 'ask_user',
       reason: 'Asked the user: Which API?',
       at: 't',
+      questionSignature: askSignature,
+      questions: [
+        {
+          question: 'Which API?',
+          header: undefined,
+          multiSelect: false,
+          options: [{ label: 'REST' }, { label: 'GraphQL' }],
+        },
+      ],
     });
   });
 
@@ -94,6 +129,50 @@ describe('agentBlockAfterTurn', () => {
     ).toBe(reported);
   });
 
+  it('does not restore an ask the user already skipped', () => {
+    const stamped = {
+      ...makeAgentBlock('ask_user', 'Asked the user: Which API?', 't'),
+      questionSignature: askSignature,
+    };
+    expect(
+      agentBlockAfterTurn({
+        existing: stamped,
+        parts: [askUser],
+        planMode: false,
+        failed: false,
+        dismissedQuestionSignature: askSignature,
+      }),
+    ).toBeNull();
+  });
+
+  it('keeps stamped questions when the transcript tool has no input', () => {
+    const questions = [
+      {
+        question: 'Which API?',
+        options: [{ label: 'REST' }, { label: 'GraphQL' }],
+      },
+    ];
+    const stamped = {
+      ...makeAgentBlock('ask_user', 'Asked the user: Which API?', 't'),
+      questionSignature: askSignature,
+      questions,
+    };
+    const bare: MessagePart = {
+      type: 'tool',
+      id: 'q1',
+      name: 'ask_user',
+      status: 'done',
+    };
+    const next = agentBlockAfterTurn({
+      existing: stamped,
+      parts: [bare],
+      planMode: false,
+      failed: false,
+    });
+    expect(next?.questions).toEqual(questions);
+    expect(next?.questionSignature).toBe(askSignature);
+  });
+
   it('drops an ask_user stamp once a later tool runs', () => {
     const stamped = makeAgentBlock('ask_user', 'Asked the user: Which API?', 't');
     const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
@@ -113,6 +192,158 @@ describe('agentBlockAfterTurn', () => {
         failed: false,
       }),
     ).toBe(stamped);
+  });
+});
+
+describe('visibleAgentBlock', () => {
+  it('hides an ask the chat already skipped and keeps a newer one', () => {
+    const skipped = {
+      source: 'ask_user' as const,
+      reason: 'Asked the user: Which API?',
+      at: 't',
+      questionSignature: askSignature,
+    };
+    expect(
+      visibleAgentBlock({
+        status: 'idle',
+        agentBlock: skipped,
+        dismissedQuestionSignature: askSignature,
+      }),
+    ).toBeNull();
+    expect(
+      visibleAgentBlock({
+        status: 'idle',
+        agentBlock: { ...skipped, questionSignature: 'other' },
+        dismissedQuestionSignature: askSignature,
+      })?.reason,
+    ).toBe('Asked the user: Which API?');
+    expect(
+      worktreeAgentBlock([
+        {
+          status: 'idle',
+          agentBlock: skipped,
+          dismissedQuestionSignature: askSignature,
+        },
+        {
+          status: 'idle',
+          agentBlock: { source: 'reported', reason: 'Need a token', at: 'u' },
+        },
+      ])?.reason,
+    ).toBe('Need a token');
+  });
+});
+
+describe('dismissAskUserQuestion', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sideboard-ask-dismiss-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+    invalidateThreadListCache();
+  });
+
+  afterEach(() => {
+    invalidateThreadListCache();
+    vi.unstubAllEnvs();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  function persist() {
+    const thread = createEmptyThread({
+      title: 'ask',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/ask',
+      worktreePath: '/tmp/ask',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    writeThread(thread);
+    return thread;
+  }
+
+  it('clears the sidebar ask and keeps the skip so the turn end cannot restore it', () => {
+    const thread = persist();
+    writeAgentBlock(thread.id, {
+      ...makeAgentBlock('ask_user', 'Asked the user: Which API?'),
+      questionSignature: askSignature,
+    });
+    dismissAskUserQuestion(thread.id, askSignature);
+    expect(readThread(thread.id)?.agentBlock).toBeNull();
+    expect(readThread(thread.id)?.dismissedQuestionSignature).toBe(askSignature);
+    settleAgentBlock(thread.id, [askUser], false);
+    expect(readThread(thread.id)?.agentBlock).toBeNull();
+  });
+
+  it('leaves a reported block in place', () => {
+    const thread = persist();
+    writeAgentBlock(thread.id, makeAgentBlock('reported', 'Need a token'));
+    dismissAskUserQuestion(thread.id, askSignature);
+    expect(readThread(thread.id)?.agentBlock?.source).toBe('reported');
+    expect(readThread(thread.id)?.dismissedQuestionSignature).toBe(askSignature);
+  });
+});
+
+describe('sidebarRowAgentBlock', () => {
+  const asked = {
+    id: 'asked',
+    status: 'idle' as const,
+    agentBlock: {
+      source: 'ask_user' as const,
+      reason: 'Asked the user: Which API?',
+      at: 'u',
+      questionSignature: askSignature,
+    },
+  };
+  const other = { id: 'other', status: 'idle' as const, agentBlock: null };
+
+  it('rolls up a closed worktree and matches the open chat', () => {
+    expect(
+      sidebarRowAgentBlock([other, asked], { active: false, selectedId: null })?.reason,
+    ).toBe('Asked the user: Which API?');
+    expect(
+      sidebarRowAgentBlock([other, asked], { active: true, selectedId: 'other' }),
+    ).toBeNull();
+    expect(
+      sidebarRowAgentBlock([other, asked], { active: true, selectedId: 'asked' })?.reason,
+    ).toBe('Asked the user: Which API?');
+  });
+});
+
+describe('sidebarParentSelectId', () => {
+  const asked = {
+    id: 'asked',
+    status: 'idle' as const,
+    agentBlock: {
+      source: 'ask_user' as const,
+      reason: 'Asked the user: Which API?',
+      at: 'u',
+      questionSignature: askSignature,
+    },
+  };
+  const primary = { id: 'primary', status: 'idle' as const, agentBlock: null };
+
+  it('opens the asking chat only while the worktree row is closed', () => {
+    expect(sidebarParentSelectId([primary, asked], 'primary', { active: false })).toBe('asked');
+    expect(sidebarParentSelectId([primary, asked], 'primary', { active: true })).toBe('primary');
+  });
+});
+
+describe('sidebarQuestionThreadId', () => {
+  it('opens the chat that asked instead of the primary row', () => {
+    const asked = {
+      id: 'asked',
+      status: 'idle' as const,
+      agentBlock: {
+        source: 'ask_user' as const,
+        reason: 'Asked the user: Which API?',
+        at: 'u',
+        questionSignature: askSignature,
+      },
+    };
+    const primary = { id: 'primary', status: 'idle' as const, agentBlock: null };
+    expect(sidebarQuestionThreadId([primary, asked], 'primary')).toBe('asked');
+    expect(sidebarQuestionThreadId([primary], 'primary')).toBe('primary');
   });
 });
 

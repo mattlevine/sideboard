@@ -4,6 +4,9 @@ const RESUME_MS = 1_500;
 
 export const RELAY_UNREACHABLE = 'Could not reach the relay.';
 
+export const RELAY_ADDRESS_INVALID =
+  'That relay address is not a websocket host. Use a host, or a URL whose path is /remote.';
+
 export type RelayLinkPhase = 'up' | 'retrying' | 'down';
 
 export type RelayReconnect = 'resume' | 'connect' | 'hosts' | 'up' | 'stop';
@@ -72,6 +75,8 @@ export function createRelayLink(opts: {
   sessionToken: () => string | null;
 }): RelayLink {
   let socket: WebSocket | null = null;
+  let openedFor: string | null = null;
+  const retired = new Set<WebSocket>();
   const queue: object[] = [];
   let pingTimer: ReturnType<typeof setInterval> | null = null;
   let pongTimer: ReturnType<typeof setTimeout> | null = null;
@@ -86,10 +91,28 @@ export function createRelayLink(opts: {
   };
 
   const connect = () => {
-    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+    const target = opts.url().trim();
+    if (!target) {
+      opts.onError(RELAY_ADDRESS_INVALID);
+      return;
+    }
+    if (
+      socket &&
+      openedFor === target &&
+      (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)
+    ) {
+      return;
+    }
     clearKeepalive();
-    const next = new WebSocket(opts.url().trim());
+    if (socket) {
+      retired.add(socket);
+      socket.close();
+      socket = null;
+      openedFor = null;
+    }
+    const next = new WebSocket(target);
     socket = next;
+    openedFor = target;
     let settled = false;
     next.onmessage = (event) => opts.onMessage(String(event.data));
     next.onerror = () => {
@@ -110,6 +133,10 @@ export function createRelayLink(opts: {
       for (const item of queued) next.send(JSON.stringify(item));
     };
     next.onclose = () => {
+      if (retired.has(next)) {
+        retired.delete(next);
+        return;
+      }
       if (settled) return;
       settled = true;
       clearKeepalive();
@@ -123,7 +150,12 @@ export function createRelayLink(opts: {
   };
 
   const send: RelayLink['send'] = (payload) => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    const target = opts.url().trim();
+    if (!target) {
+      opts.onError(RELAY_ADDRESS_INVALID);
+      return;
+    }
+    if (socket && openedFor === target && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(payload));
       return;
     }

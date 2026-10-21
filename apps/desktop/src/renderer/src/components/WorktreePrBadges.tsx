@@ -3,7 +3,7 @@ import {
   type WorktreeListBadgeThread,
 } from '@sideboard/home-board';
 
-/** Review / pending pills on sidebar and Home worktree titles. */
+/** Path-to-merge pills on sidebar and Home worktree titles. */
 export function WorktreePrBadges({
   group,
   viewerLogin,
@@ -24,10 +24,11 @@ export function WorktreePrBadges({
       {badges.map((badge) => (
         <span
           key={badge.id}
-          className={`board-badge ${badge.mod}`}
+          className={`board-badge ${badge.mod}${badge.conflict ? ' has-conflict' : ''}`}
           title={badge.title}
         >
           {badge.label}
+          {badge.conflict ? <span className="board-badge-conflict" aria-hidden /> : null}
         </span>
       ))}
     </>

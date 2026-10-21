@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Claude worktree turns treat Claude Code's “another write-capable agent” note as another worker in this chat and continue without mentioning it.
+- Cursor turns that go quiet after a tool call (Grok 4.7) now show that as lastError and auto-continue once, instead of ending as a silent Stopped.
+- A phone `ask_user` with no assistant text no longer leaves the chat running with a live cursor. Reopening a picker still only refreshes the questions.
+
+## [0.1.308] - 2026-10-20
+
+### Fixed
+
+- A question that shows in the sidebar also shows in the agent chat, and the phone receives it, when the transcript never stored the tool input.
+- A continue prompt no longer hides that picker while the sidebar highlight stays.
+- Clicking an open worktree stays on the selected chat instead of jumping to another chat in that workspace that asked.
+
+## [0.1.307] - 2026-10-20
+
+### Added
+
+- Claude worktree turns partition parallel writers and continue: one writer in the checkout, every other writer on an isolation worktree, then merge back. The reminder does not ask whether to isolate. Plan mode skips it. Other agents do not get it.
+
+## [0.1.306] - 2026-10-19
+
+### Fixed
+
+- Opening a phone chat that is still waiting on a question shows the choices again, without a second copy of the question.
+- The global board no longer logs a dirty-stat error for the coordinator workspace.
+
+## [0.1.305] - 2026-10-18
+
+### Added
+
+- Settings → Remote shows the phone pairing secret as a QR code. The phone app scans it. Paste stays available when the camera cannot.
+
+## [0.1.304] - 2026-10-18
+
+### Added
+
+- `sideboard serve` keeps schedules and the phone relay running after the desktop window quits. `--lan` prints a same-network relay URL for the phone.
+- A worktree Claude turn loads tools from enabled plugin MCP configs. A server in `~/.claude.json` with the same name still wins.
+- The phone list shows **Needs you** and the reason when a chat is blocked. The workspace mark turns amber when a chat is waiting and nothing in that workspace is running.
+- A repo can symlink gitignored directories from the primary checkout with `[worktree] shared_directories`.
+
+### Changed
+
+- Phone sessions are encrypted between the phone and this Mac. Pairing pins this Mac’s public key. The relay and a LAN socket forward ciphertext. Phones that were already paired have to pair again.
+
+### Fixed
+
+- `sideboard serve` exits when Sideboard.app already owns the host, and after you stop the process.
+
+## [0.1.303] - 2026-10-16
+
+### Added
+
+- Claude MCP Apps render under the tool result in the desktop chat and on the phone. The app can call tools, open links, and send a follow-up into the chat.
+
+## [0.1.302] - 2026-10-15
+
+### Fixed
+
+- A second agent on a workspace stays listed in the left sidebar while the orchestration chat is still open.
+
+## [0.1.301] - 2026-10-15
+
+### Fixed
+
+- The phone create composer can send a ticket with no extra message. An orchestration chat still needs a goal.
+- A phone file reply stays on the tab that asked for it when the path is `./`, a hash, `file://`, or an absolute path under the worktree.
+
+### Changed
+
+- Full autonomy approves Claude MCP calls without a prompt.
+- Allowing a Claude MCP prompt allows that whole server for the rest of the chat, not one set of arguments.
+
+## [0.1.300] - 2026-10-14
+
+### Changed
+
+- Failing checks and requested changes use the same red dot as merge conflicts, on the status pill. There is no second badge.
+
+## [0.1.299] - 2026-10-14
+
+### Added
+
+- Home has an Approved column for open pull requests GitHub has approved but not merged, between Review and Merged.
+- The desktop sidebar and the phone show the same status: new, draft, pending, review, approved, and merged.
+- An open pull request with merge conflicts keeps its status pill and shows a red dot on it.
+- Failing checks show a red failing pill. Requested changes show a red changes pill.
+
+### Changed
+
+- The Home board scrolls sideways when five columns do not fit. Cards in a column still scroll vertically.
+
+## [0.1.298] - 2026-10-14
+
+### Added
+
+- An orchestrator can archive a whole workspace or one agent, browse History, and restore either.
+- Agent chats show the orchestrator that opened them.
+- History shows the workspace name beside each archived chat on the desktop and the phone.
+
 ## [0.1.297] - 2026-10-13
 
 ### Changed

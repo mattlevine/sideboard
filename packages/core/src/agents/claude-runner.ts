@@ -71,6 +71,9 @@ async function main(): Promise<void> {
       cwd: req.cwd,
       pathToClaudeCodeExecutable: req.claudePath,
       permissionMode: req.permissionMode,
+      ...(req.permissionMode === 'bypassPermissions'
+        ? { allowDangerouslySkipPermissions: true }
+        : {}),
       allowedTools: req.allowedTools,
       mcpServers,
       includePartialMessages: true,
@@ -94,6 +97,11 @@ async function main(): Promise<void> {
         displayName?: string;
         suppressAlwaysAllowRule?: boolean;
         defaultToNo?: boolean;
+        decisionReason?: string;
+        decisionReasonType?: string;
+        matchedAskRule?: { source: string; toolName: string; ruleContent?: string };
+        requiresUserInteraction?: boolean;
+        mcpServer?: { name: string; source: string };
       },
     ) =>
       claudePermissionResult({
@@ -101,6 +109,8 @@ async function main(): Promise<void> {
         threadId: process.env.SIDEBOARD_THREAD_ID?.trim() || '',
         toolName,
         toolInput,
+        mcpServer: toolOpts.mcpServer?.name,
+        mcpServerSource: toolOpts.mcpServer?.source,
         options: toolOpts,
         rpc: req.agentRpc,
       });

@@ -6,12 +6,16 @@ export type SavedDesktop = {
   deviceId: string;
   deviceLabel: string;
   sessionToken: string;
+  /** Mac public key pinned from the pairing line. */
+  hostPublicKey: string;
+  /** Proved inside the encrypted handshake. Never sent to the relay. */
+  phoneToken: string;
 };
 
 function isSaved(value: unknown): value is SavedDesktop {
   if (!value || typeof value !== 'object') return false;
   const row = value as SavedDesktop;
-  return Boolean(row.deviceId && row.deviceLabel && row.sessionToken);
+  return Boolean(row.deviceId && row.deviceLabel && row.sessionToken && row.hostPublicKey && row.phoneToken);
 }
 
 export async function loadDesktops(): Promise<SavedDesktop[]> {

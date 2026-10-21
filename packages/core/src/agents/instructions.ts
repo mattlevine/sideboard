@@ -8,6 +8,8 @@ import {
   worktreeNameFromPath,
 } from '../git/worktree-labels.js';
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
+import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
 import type { DevPreview } from '../hook/dev-preview.js';
 import type { ActiveRun, Thread } from '../types/thread.js';
@@ -171,9 +173,60 @@ export function formatWorktreeDirective(
   return lines.join('\n');
 }
 
+/**
+ * Every worktree turn: which orchestration chat this agent is connected to.
+ * Null when the chat was opened on its own.
+ */
+export function formatConnectedOrchestratorReminder(
+  parent: Pick<Thread, 'id' | 'title' | 'status' | 'agent'> | null | undefined,
+): string | null {
+  if (!parent) return null;
+  const title = parent.title?.trim() || 'Orchestration';
+  const archived =
+    parent.status === 'archived' ? ' This orchestrator is archived.' : '';
+  return `Connected orchestrator: "${title}" (${parent.agent}, ${parent.status}). Open [${title}](sideboard://chat/${parent.id}). notify_orchestrator wakes that chat. You are not the orchestrator.${archived}`;
+}
+
+/** Worktree turn reminder. Null for Brightsy and for orchestration chats. */
+export function connectedOrchestratorTurnReminder(
+  thread: Thread,
+  find: (id: string) => Thread | null | undefined,
+): string | null {
+  if (thread.agent === 'brightsy' || isOrchestratorThread(thread)) return null;
+  return formatConnectedOrchestratorReminder(connectedOrchestrator(thread, find));
+}
+
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
   return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Schedules: create_schedule (at / every / cron; chatId=self for this chat). set_workspace_tags updates labels on this workspace (omit ref).';
+}
+
+/**
+ * Every Claude worktree turn that is not Plan mode.
+ *
+ * Claude Code's default `worktree.bgIsolation` is `worktree`: a second
+ * write-capable agent in this checkout is blocked, and the tool text tells
+ * the parent to re-spawn with `isolation: "worktree"` (or to set
+ * `bgIsolation: none`). Models stop and ask the user. That note is another
+ * worker in this same chat (or one Claude still has marked running). The
+ * parent partitions the files, continues, and does not report the note.
+ * Do not forbid `ask_user` in general —
+ * only asking whether to isolate. Cursor, Codex, and OpenCode subagents
+ * share this checkout (no isolation worktree / `bgIsolation` block), and
+ * Brightsy has no nested writer, so they do not get this reminder.
+ */
+export function formatClaudeSubagentReminder(): string {
+  return 'Claude subagents: if Task/Agent workers will edit files, write a short plan in this chat and continue in the same turn. Do not ask the user whether to isolate, and do not set worktree.bgIsolation to none. One writer may edit this workspace. Every other writer is an Agent with isolation "worktree" and a disjoint file list (read-only explore agents may overlap). While those agents run, leave their files alone. Merge each returned branch into this workspace, then remove the temporary worktree. You stay in this cwd. If Claude says another write-capable agent is in this directory, or that writes to the shared checkout are blocked, re-spawn that agent with isolation "worktree" or make the edit yourself. That note is another worker in this chat, or a worker Claude still has marked running. Do not mention it to the user.';
+}
+
+/** Claude worktree turns only. Null in Plan mode, for orchestrators, and for every other agent. */
+export function claudeSubagentTurnReminder(
+  thread: Pick<Thread, 'agent' | 'planMode' | 'sourceType' | 'repoPath'>,
+): string | null {
+  if (thread.agent !== 'claude' || thread.planMode || isOrchestratorThread(thread)) {
+    return null;
+  }
+  return formatClaudeSubagentReminder();
 }
 
 const PR_GOAL_RE =

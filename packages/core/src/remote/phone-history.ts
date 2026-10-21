@@ -1,4 +1,5 @@
 import type { Thread } from '../types/thread.js';
+import { workspaceNameLabel } from '../git/worktree-labels.js';
 import { isGlobalThread } from '../store/global-workspace.js';
 import { listThreads } from '../store/thread-store.js';
 import type { PhoneHistoryPage } from './phone-chats.js';
@@ -40,17 +41,23 @@ export function listPhoneHistory(opts?: { query?: string; after?: string }): Pho
     .filter((thread) => thread.status === 'archived')
     .filter((thread) => isGlobalThread(thread) || isProjectPath(thread.repoPath))
     .sort((a, b) => (historyStamp(a) < historyStamp(b) ? 1 : historyStamp(a) > historyStamp(b) ? -1 : 0))
-    .map((thread) => ({
-      id: thread.id,
-      title: thread.title?.trim() || 'Untitled',
-      preview: previewOf(thread),
-      updatedAt: historyStamp(thread),
-      where: isGlobalThread(thread) ? 'Orchestration' : repoName(thread.repoPath),
-      agent: thread.agent,
-    }))
+    .map((thread) => {
+      const workspace = workspaceNameLabel(thread);
+      return {
+        id: thread.id,
+        title: thread.title?.trim() || 'Untitled',
+        preview: previewOf(thread),
+        updatedAt: historyStamp(thread),
+        where: isGlobalThread(thread) ? 'Orchestration' : repoName(thread.repoPath),
+        agent: thread.agent,
+        ...(workspace ? { workspace } : {}),
+      };
+    })
     .filter((chat) => {
       if (!query) return true;
-      return `${chat.title} ${chat.where} ${chat.agent} ${chat.preview}`.toLowerCase().includes(query);
+      return `${chat.title} ${chat.where} ${chat.agent} ${chat.workspace ?? ''} ${chat.preview}`
+        .toLowerCase()
+        .includes(query);
     });
   let start = 0;
   if (after) {

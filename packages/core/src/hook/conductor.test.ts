@@ -1,11 +1,12 @@
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, writeFileSync, existsSync, lstatSync, readFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   buildWorkspaceScriptEnv,
   copyConfiguredFiles,
+  linkSharedDirectories,
   getRunMode,
   isOtherWorktreeListenerCwd,
   isThisWorktreeListenerCwd,
@@ -45,6 +46,26 @@ describe('resolveFilesToCopy', () => {
     const copied = copyConfiguredFiles(root, wt);
     expect(copied).toEqual(['.env', '.brightsy.json']);
     expect(resolveFilesToCopy(root)).toEqual(['.env', '.brightsy.json']);
+  });
+});
+
+describe('linkSharedDirectories', () => {
+  it('symlinks a gitignored directory and skips one that is not ignored', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sideboard-share-'));
+    const wt = mkdtempSync(join(tmpdir(), 'sideboard-share-wt-'));
+    execFileSync('git', ['init'], { cwd: root });
+    writeFileSync(join(root, '.gitignore'), 'node_modules\n');
+    mkdirSync(join(root, 'node_modules'));
+    writeFileSync(join(root, 'node_modules', 'pkg.txt'), 'ok\n');
+    mkdirSync(join(root, 'src'));
+    mkdirSync(join(root, '.sideboard'));
+    writeFileSync(
+      join(root, '.sideboard', 'settings.toml'),
+      `[worktree]\nshared_directories = ["node_modules", "src", "../outside"]\n`,
+    );
+    expect(linkSharedDirectories(root, wt)).toEqual(['node_modules']);
+    expect(lstatSync(join(wt, 'node_modules')).isSymbolicLink()).toBe(true);
+    expect(existsSync(join(wt, 'src'))).toBe(false);
   });
 });
 

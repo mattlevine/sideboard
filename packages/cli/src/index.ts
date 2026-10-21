@@ -12,6 +12,7 @@ import {
   listLinearIssues,
   resolveRepoRoot,
   startMcpServer,
+  startHeadlessHost,
   startOrchestration,
   hasRepoHook,
   settingsSourceLabel,
@@ -685,10 +686,41 @@ async function main(): Promise<void> {
       await startMcpServer();
     });
 
+  program
+    .command('serve')
+    .description('Keep schedules and the phone relay running after the desktop window quits')
+    .option('--lan', 'Also listen on this Mac so the phone can use ws://<lan-ip>:<port>/remote')
+    .action(async (opts: { lan?: boolean }) => {
+      const ac = new AbortController();
+      const stop = () => ac.abort();
+      process.on('SIGINT', stop);
+      process.on('SIGTERM', stop);
+      let code = 0;
+      try {
+        const host = await startHeadlessHost({ lan: Boolean(opts.lan), signal: ac.signal });
+        if (!host.ok) {
+          console.error(chalk.yellow(host.reason));
+          code = 1;
+        } else {
+          console.log(chalk.green('Sideboard host is running. Quit the desktop window; this process keeps the fleet.'));
+          if (host.lanUrls.length) {
+            console.log('Phone relay (same network):');
+            for (const url of host.lanUrls) console.log(`  ${url}`);
+          }
+          await untilAborted(ac.signal);
+          await host.stop();
+        }
+      } finally {
+        process.off('SIGINT', stop);
+        process.off('SIGTERM', stop);
+      }
+      process.exit(code);
+    });
+
   const scheduleCmd = program
     .command('schedule')
     .description(
-      'Local jobs that trigger a chat (Sideboard.app must be running to fire)',
+      'Local jobs that trigger a chat (Sideboard.app or `sideboard serve` must be running to fire)',
     );
 
   scheduleCmd
@@ -1046,6 +1078,17 @@ async function main(): Promise<void> {
     });
 
   await program.parseAsync(process.argv);
+}
+
+function untilAborted(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    signal.addEventListener('abort', () => resolve(), { once: true });
+    if (signal.aborted) resolve();
+  });
 }
 
 function statusColor(status: string): string {

@@ -5,10 +5,10 @@ import {
 } from './sidebar-chat-expand';
 
 describe('sidebar-chat-expand', () => {
-  it('stays collapsed until the worktree is selected', () => {
+  it('keeps a second workspace agent visible when that workspace is not selected', () => {
     expect(
       resolveSidebarChatExpanded({ chatCount: 2, selected: false }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       resolveSidebarChatExpanded({ chatCount: 1, selected: false }),
     ).toBe(false);
@@ -48,6 +48,16 @@ describe('sidebar-chat-expand', () => {
         minChats: 1,
       }),
     ).toBe(false);
+  });
+
+  it('keeps a second orchestration agent visible when Orchestration is not selected', () => {
+    expect(
+      resolveSidebarChatExpanded({
+        chatCount: 2,
+        selected: false,
+        minChats: 1,
+      }),
+    ).toBe(true);
   });
 });
 

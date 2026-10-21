@@ -6,6 +6,12 @@ import { refreshPhoneViewerLogin } from './phone-viewer-login.js';
 import { deliverPhoneTurn, emitControl, getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
 import { setPhonePermissionPush } from './phone-permission.js';
 import {
+  generatePhoneToken,
+  HostChannel,
+  hostPublicKey,
+  formatPairingBlob,
+} from './phone-e2ee.js';
+import {
   parseRemoteServerMessage,
   REMOTE_PING_INTERVAL_MS,
   REMOTE_PONG_TIMEOUT_MS,
@@ -18,6 +24,12 @@ export interface RemoteHostClientOptions {
   deviceId: string;
   deviceLabel: string;
   hostSecret: string;
+  /** Long-term X25519 seed for the phone session. Vaulted on this Mac. */
+  hostPrivateKey: string;
+  /** Phone token from the last successful pairing. */
+  phoneToken?: string | null;
+  /** Persist a phone token after the encrypted handshake accepts it. */
+  onPhoneToken?: (token: string) => void;
   /** Sideboard account credential from Settings → Remote. */
   accountToken?: string;
   signal?: AbortSignal;
@@ -98,6 +110,19 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
   let socket: WsWebSocket | null = null;
   let wantPair = false;
   let deviceLabel = opts.deviceLabel;
+  let savedPhoneToken = opts.phoneToken?.trim() || null;
+  let pendingPhoneToken: { token: string; expiresAt: number } | null = null;
+  const PAIR_TTL_MS = 10 * 60 * 1000;
+  const hostSeal = new HostChannel(opts.hostPrivateKey, (token) => {
+    const pending = pendingPhoneToken;
+    if (pending && pending.expiresAt > Date.now() && pending.token === token) {
+      pendingPhoneToken = null;
+      savedPhoneToken = token;
+      opts.onPhoneToken?.(token);
+      return true;
+    }
+    return Boolean(savedPhoneToken && savedPhoneToken === token);
+  });
   let keepalive: ReturnType<typeof createRemoteKeepalive> | null = null;
   let connectionGen = 0;
   let stopBoard: (() => void) | null = null;
@@ -210,15 +235,14 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         });
       });
       ws.on('message', (data) => {
+        if (gen !== connectionGen) return;
         const raw = typeof data === 'string' ? data : data.toString('utf8');
         const msg = parseRemoteServerMessage(raw);
         if (!msg) return;
-        if (gen === connectionGen) {
-          if (msg.type === 'phone_joined') startBoardSync();
-          if (msg.type === 'phone_left') {
-            setPhoneOpenChat(null);
-            stopBoardSync();
-          }
+        if (msg.type === 'phone_left') {
+          hostSeal.reset();
+          setPhoneOpenChat(null);
+          stopBoardSync();
         }
         handleServer(msg);
       });
@@ -233,14 +257,63 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
     }
     if (msg.type === 'pairing_code') {
       wantPair = false;
-      opts.onPairingCode?.(msg.code);
-      log(`pairing code ${msg.code}`);
+      const pending = pendingPhoneToken;
+      if (!pending || pending.expiresAt <= Date.now() || !opts.hostPrivateKey) {
+        opts.onPairingCode?.(null);
+        return;
+      }
+      opts.onPairingCode?.(formatPairingBlob(msg.code, hostPublicKey(opts.hostPrivateKey), pending.token));
+      log('pairing line ready');
       return;
     }
     if (msg.type === 'phone_joined') {
-      opts.onPairingCode?.(null);
-      opts.onStatus?.({ connected: true, phoneConnected: true });
-      log('phone joined');
+      hostSeal.reset();
+      return;
+    }
+    if (msg.type === 'e2ee_hello') {
+      const ready = hostSeal.readyFor({
+        v: 1,
+        clientPublicKey: msg.clientPublicKey,
+        clientNonce: msg.clientNonce,
+      });
+      if (ready) send({ type: 'e2ee_ready', ...ready });
+      return;
+    }
+    if (msg.type === 'e2ee') {
+      const opened = hostSeal.openFrame(msg.frame);
+      if (!opened) return;
+      if (opened.reject) {
+        hostSeal.reset();
+        send({ type: 'e2ee_fail' });
+        return;
+      }
+      if (opened.okFrame) {
+        send({ type: 'e2ee', frame: opened.okFrame });
+        startBoardSync();
+        opts.onPairingCode?.(null);
+        opts.onStatus?.({ connected: true, phoneConnected: true });
+        log('phone joined');
+        return;
+      }
+      if (opened.app?.type === 'stop') {
+        handleRemoteInbound('stop', {
+          deviceId: opts.deviceId,
+          onLog: log,
+          onOutbound: emit,
+          onOpenWorktreeFile: opts.onOpenWorktreeFile,
+        });
+        return;
+      }
+      if (opened.app?.type === 'prompt' && typeof opened.app.text === 'string') {
+        handleRemoteInbound(opened.app.text, {
+          deviceId: opts.deviceId,
+          onLog: log,
+          onOutbound: emit,
+          transcribeWav: opts.transcribeWav,
+          onOpenWorktreeFile: opts.onOpenWorktreeFile,
+          onOpenArtifact: opts.onOpenArtifact,
+        });
+      }
       return;
     }
     if (msg.type === 'phone_left') {
@@ -256,33 +329,17 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
       log(`remote error: ${msg.message}`);
       return;
     }
-    if (msg.type === 'stop') {
-      handleRemoteInbound('stop', {
-        deviceId: opts.deviceId,
-        onLog: log,
-        onOutbound: emit,
-        onOpenWorktreeFile: opts.onOpenWorktreeFile,
-      });
-      return;
-    }
-    if (msg.type === 'inbound') {
-      handleRemoteInbound(msg.text, {
-        deviceId: opts.deviceId,
-        onLog: log,
-        onOutbound: emit,
-        transcribeWav: opts.transcribeWav,
-        onOpenWorktreeFile: opts.onOpenWorktreeFile,
-        onOpenArtifact: opts.onOpenArtifact,
-      });
-    }
+    if (msg.type === 'stop' || msg.type === 'inbound') return;
   };
 
   const emit = (outbound: RemoteOutbound) => {
-    if (outbound.type === 'assistant') {
-      send({ type: 'assistant', text: outbound.text });
-      return;
-    }
-    send({ type: 'ask_user', text: outbound.text, questions: outbound.questions });
+    const frame = hostSeal.sealApp(
+      outbound.type === 'assistant'
+        ? { type: 'assistant', text: outbound.text }
+        : { type: 'ask_user', text: outbound.text, questions: outbound.questions },
+    );
+    if (!frame) return;
+    send({ type: 'e2ee', frame });
   };
 
   setPhonePermissionPush((chatId, prompt) => {
@@ -294,6 +351,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
 
   return {
     requestPairingCode() {
+      pendingPhoneToken = { token: generatePhoneToken(), expiresAt: Date.now() + PAIR_TTL_MS };
       wantPair = true;
       send({ type: 'host_pair' });
     },
