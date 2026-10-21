@@ -1,20 +1,9 @@
 import * as ExpoCrypto from 'expo-crypto';
-import { PhoneChannel, setPhoneE2EERandom, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
-
-export function lookupSealMaterial(
-  pinned: SealMaterial | null,
-  rows: Array<{ deviceId: string; sessionToken: string; hostPublicKey?: string; phoneToken?: string }>,
-  activeId: string | null,
-  pendingToken: string | null,
-): SealMaterial | null {
-  if (pinned?.hostPublicKey && pinned.phoneToken) return pinned;
-  const row =
-    (activeId ? rows.find((item) => item.deviceId === activeId) : undefined) ??
-    rows.find((item) => item.sessionToken === pendingToken);
-  if (!row?.hostPublicKey || !row.phoneToken) return null;
-  return { hostPublicKey: row.hostPublicKey, phoneToken: row.phoneToken };
-}
+import { PhoneChannel, setPhoneE2EERandom, type SealLookup, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
+import { lookupSealMaterial } from './phone-seal-lookup';
 import { createRelayLink, type RelayLink } from './relay-link';
+
+export { lookupSealMaterial };
 
 setPhoneE2EERandom((length) => ExpoCrypto.getRandomBytes(length));
 
@@ -24,9 +13,10 @@ setPhoneE2EERandom((length) => ExpoCrypto.getRandomBytes(length));
  * pairing line.
  */
 export function createSealedRelayLink(opts: Parameters<typeof createRelayLink>[0] & {
-  material: () => SealMaterial | null;
+  material: (hint?: SealLookup) => SealMaterial | null;
+  wanted?: () => SealLookup | null;
 }): RelayLink {
-  const channel = new PhoneChannel(opts.material);
+  const channel = new PhoneChannel(opts.material, opts.wanted);
   let inner: RelayLink | null = null;
   const sendRaw = (payload: object) => inner?.send(payload);
   const link = createRelayLink({
