@@ -205,6 +205,11 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
     expect(looksLikeCursorStreamCutOff('[unknown] Premature close')).toBe(true);
     expect(looksLikeCursorStreamCutOff('[unavailable] Error')).toBe(true);
     expect(
+      looksLikeRetryableRunnerCrash(
+        'Cursor run failed: Cursor stopped responding after a tool call (Grok 4.7)',
+      ),
+    ).toBe(true);
+    expect(
       looksLikeCursorStreamCutOff(
         '[unknown] [canceled] http/2 stream closed with error code CANCEL (0x8)',
       ),
@@ -602,6 +607,16 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
         partsCount: 34,
       }),
     ).toBe(true);
+    expect(
+      shouldFeedErrorBackToAgent({
+        detail: 'Cursor run failed: Cursor stopped responding after a tool call (Grok 4.7)',
+        assistantText: "I'll review this branch against main.",
+        partsCount: 3,
+      }),
+    ).toBe(true);
+    expect(
+      humanizeAgentFailDetail('Cursor stopped responding after a tool call (Grok 4.7)'),
+    ).toMatch(/retry the turn/i);
     expect(humanizeAgentFailDetail('[unknown] Premature close')).toMatch(/retry the turn/i);
     expect(formatAgentErrorContinuePrompt('segfault at 0x0')).toMatch(/Continue from where you left off/);
   });

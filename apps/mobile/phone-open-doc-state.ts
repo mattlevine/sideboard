@@ -108,7 +108,8 @@ export type PlacedOpenReply = {
 /**
  * Chat paths and the Mac's worktree-relative path often differ (`./`, a hash,
  * `file://`, or an absolute path under the worktree). Compare those shapes
- * without treating `other/apps/foo.ts` as `apps/foo.ts`.
+ * without treating `other/apps/foo.ts` as `apps/foo.ts`. An absolute path that
+ * merely ends with the relative path is a candidate; the closest open tab wins.
  */
 export function looseOpenPath(raw: string): string {
   let text = raw.trim();
@@ -125,12 +126,18 @@ export function looseOpenPath(raw: string): string {
   return text.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
 }
 
-export function sameOpenFile(requestedPath: string, canonicalPath: string): boolean {
-  const raw = looseOpenPath(requestedPath);
+/** Lower is a tighter path. Exact equality beats a longer absolute suffix. */
+function openPathScore(path: string, canonicalPath: string): number | null {
+  const raw = looseOpenPath(path);
   const canon = looseOpenPath(canonicalPath);
-  if (!raw || !canon) return false;
-  if (raw === canon) return true;
-  return raw.startsWith('/') && raw.endsWith(`/${canon}`);
+  if (!raw || !canon) return null;
+  if (raw === canon) return 0;
+  if (raw.startsWith('/') && raw.endsWith(`/${canon}`)) return raw.length;
+  return null;
+}
+
+export function sameOpenFile(requestedPath: string, canonicalPath: string): boolean {
+  return openPathScore(requestedPath, canonicalPath) != null;
 }
 
 function filePathFromDocId(id: string): string | null {
@@ -139,17 +146,28 @@ function filePathFromDocId(id: string): string | null {
   return id.slice(prefix.length);
 }
 
-/** In-flight or already-open tab whose path is this file, preferring a non-canonical id so it can be renamed. */
+/**
+ * Tab this file reply belongs on. Among suffix matches, the shortest path
+ * wins so `…/other/apps/foo.ts` does not take a reply for `apps/foo.ts`.
+ * A tie prefers the non-canonical id so an in-flight tab can be renamed.
+ */
 function matchingFileDocId(state: OpenDocsState, canonicalPath: string): string | null {
   const canonical = fileDocId(canonicalPath);
   const ids = [state.requestedId, ...state.docs.map((doc) => doc.id)].filter((id): id is string => Boolean(id));
+  let best: { id: string; score: number } | null = null;
+  const seen = new Set<string>();
   for (const id of ids) {
-    if (id === canonical) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
     const path = filePathFromDocId(id);
-    if (path && sameOpenFile(path, canonicalPath)) return id;
+    if (!path) continue;
+    const score = openPathScore(path, canonicalPath);
+    if (score == null) continue;
+    const closer = !best || score < best.score;
+    const renameTie = best != null && score === best.score && id !== canonical && best.id === canonical;
+    if (closer || renameTie) best = { id, score };
   }
-  if (state.requestedId === canonical || state.docs.some((doc) => doc.id === canonical)) return canonical;
-  return null;
+  return best?.id ?? null;
 }
 
 function retargetOpenDoc(state: OpenDocsState, fromId: string, toId: string): OpenDocsState {

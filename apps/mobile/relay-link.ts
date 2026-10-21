@@ -4,6 +4,9 @@ const RESUME_MS = 1_500;
 
 export const RELAY_UNREACHABLE = 'Could not reach the relay.';
 
+export const RELAY_ADDRESS_INVALID =
+  'That relay address is not a websocket host. Use a host, or a URL whose path is /remote.';
+
 export type RelayLinkPhase = 'up' | 'retrying' | 'down';
 
 export type RelayReconnect = 'resume' | 'connect' | 'hosts' | 'up' | 'stop';
@@ -89,6 +92,10 @@ export function createRelayLink(opts: {
 
   const connect = () => {
     const target = opts.url().trim();
+    if (!target) {
+      opts.onError(RELAY_ADDRESS_INVALID);
+      return;
+    }
     if (
       socket &&
       openedFor === target &&
@@ -144,6 +151,10 @@ export function createRelayLink(opts: {
 
   const send: RelayLink['send'] = (payload) => {
     const target = opts.url().trim();
+    if (!target) {
+      opts.onError(RELAY_ADDRESS_INVALID);
+      return;
+    }
     if (socket && openedFor === target && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(payload));
       return;

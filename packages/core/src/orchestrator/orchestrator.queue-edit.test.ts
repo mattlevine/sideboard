@@ -310,6 +310,33 @@ describe('Orchestrator queued-message editing', () => {
     expect(readThread(thread.id)?.queue).toHaveLength(3);
   });
 
+  it('resumes a Cursor idle-after-tools stall once, then parks', async () => {
+    const thread = seedThread([]);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as {
+      maybeEnqueueCrashContinue: (
+        id: string,
+        opts: { detail: string; assistantText: string; partsCount: number },
+      ) => void;
+      crashContinued: Map<string, number>;
+    };
+    const detail = 'Cursor run failed: Cursor stopped responding after a tool call (Grok 4.7)';
+    internal.maybeEnqueueCrashContinue(thread.id, {
+      detail,
+      assistantText: "I'll review this branch against main.",
+      partsCount: 3,
+    });
+    expect(readThread(thread.id)?.queue).toHaveLength(1);
+    expect(readThread(thread.id)?.queue[0]).toMatch(/Continue from where you left off/);
+    expect(internal.crashContinued.get(thread.id)).toBe(1);
+    internal.maybeEnqueueCrashContinue(thread.id, {
+      detail,
+      assistantText: "I'll review this branch against main.",
+      partsCount: 3,
+    });
+    expect(readThread(thread.id)?.queue).toHaveLength(1);
+  });
+
   it('does not auto-continue auth or quota failures', async () => {
     const thread = seedThread([]);
     const orch = new Orchestrator();

@@ -74,8 +74,8 @@ export function listPhoneMessages(thread: Thread): PhoneTranscriptMessage[] {
       .join('\n');
     const text =
       message.role === 'agent' ? phoneArtifactText(visible, message.parts, MESSAGE_LIMIT) : clip(visible, MESSAGE_LIMIT);
-    if (!text) continue;
     const apps = message.role === 'agent' ? phoneMcpApps(thread.agent, message.parts) : [];
+    if (!text && apps.length === 0) continue;
     out.push({ role: message.role, text, ...(apps.length ? { apps } : {}) });
   }
   const live = withLiveTail(thread, out);

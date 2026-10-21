@@ -1,7 +1,7 @@
 import { getMcpUiHost } from '../mcp-ui/host.js';
 import { readPhoneThread, type PhoneControlRequest } from './phone-chats.js';
 import { emitControl, phoneError, type RemoteOutbound } from './phone-live.js';
-import { phoneMcpToolPayload, type PhoneMcpUiRequest } from './phone-mcp-ui.js';
+import { phoneMcpToolPayloadFromMessages, type PhoneMcpUiRequest } from './phone-mcp-ui.js';
 
 const PHONE_HTML_CAP = 700_000;
 
@@ -38,8 +38,7 @@ export function dispatchPhoneMcpUi(
       );
     return true;
   }
-  const agentMessage = [...thread.messages].reverse().find((message) => message.role === 'agent');
-  const payload = phoneMcpToolPayload(agentMessage?.parts, cmd.tool, cmd.callId);
+  const payload = phoneMcpToolPayloadFromMessages(thread.messages, cmd.tool, cmd.callId);
   void getMcpUiHost()
     .viewForClaudeTool(cmd.tool, projectDirs)
     .then((view) => {

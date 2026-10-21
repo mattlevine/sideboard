@@ -66,7 +66,8 @@ import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
 import { composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
-import { applyStream, deliverPhoneMcpUi, finishAgent, openedTranscript, PhoneMcpApps, pushBubble, settleBubbles, type PhoneMcpUiControl } from './transcript';
+import { deliverPhoneMcpUi, PhoneMcpApps, type PhoneMcpUiControl } from './phone-mcp-app';
+import { applyPhoneTurn, applyStream, openedTranscript, phoneAskIsLive, phoneTurnPatch, pushBubble, settleBubbles } from './transcript';
 import { paintedFindStrings } from './find-surface';
 
 type AskOption = { label: string; description?: string };
@@ -525,23 +526,34 @@ export default function App() {
     }
     if ((control.op === 'assistant' || control.op === 'ask') && control.chatId) {
       const chatId = control.chatId;
+      let live = false;
       setTranscripts((prev) => {
         const current = prev[chatId] ?? EMPTY;
+        live = phoneAskIsLive(current);
         return {
           ...prev,
-          [chatId]: {
-            bubbles: finishAgent(current.bubbles, control.text, control.op === 'assistant' ? control.apps : undefined),
+          [chatId]: applyPhoneTurn(current, {
+            op: control.op,
+            text: control.text,
+            apps: control.op === 'assistant' ? control.apps : undefined,
             questions: control.op === 'ask' ? control.questions : null,
-            working: false,
-            activity: '',
-          },
+          }),
         };
       });
-      patchChat(chatId, {
-        status: 'idle',
-        preview: control.text.replace(/\s+/g, ' ').trim().slice(0, 90),
-        updatedAt: new Date().toISOString(),
-      });
+      const patch = phoneTurnPatch(control.op, control.text, { live });
+      if (!patch.refreshQuestionsOnly) {
+        patchChat(chatId, {
+          status: 'idle',
+          ...(patch.preview ? { preview: patch.preview } : {}),
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        mapChats((row) =>
+          row.id === chatId && phoneAskIsLive(row)
+            ? { ...row, status: 'idle', updatedAt: new Date().toISOString() }
+            : row,
+        );
+      }
       return;
     }
     if (control.op === 'stopped' && control.chatId) {
