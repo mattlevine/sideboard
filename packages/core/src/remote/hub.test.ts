@@ -157,6 +157,17 @@ describe('RemoteHub', () => {
     expect(personal.messages.filter((msg) => msg.type === 'inbound')).toEqual([
       { type: 'inbound', text: 'home' },
     ]);
+    hub.handleClientMessage(
+      phone,
+      JSON.stringify({ type: 'list_hosts', sessionTokens: [workToken, homeToken] }),
+    );
+    expect(last(phone)).toEqual({
+      type: 'hosts',
+      hosts: [
+        { sessionToken: workToken, deviceId: 'mac-work', deviceLabel: 'Work', online: true },
+        { sessionToken: homeToken, deviceId: 'mac-home', deviceLabel: 'Personal', online: true },
+      ],
+    });
   });
 
   it('keeps a phone session across disconnect and a Mac reconnect', () => {
