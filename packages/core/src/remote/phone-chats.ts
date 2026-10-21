@@ -510,10 +510,8 @@ function summarize(thread: Thread): PhoneChatSummary {
 }
 
 function previewOf(thread: Thread): string {
-  const messages = listPhoneMessages(thread);
-  const last = messages[messages.length - 1];
-  if (!last) return '';
-  return clip(last.text.replace(/\s+/g, ' ').trim(), PREVIEW_LIMIT);
+  const last = listPhoneMessages(thread).at(-1);
+  return last ? clip(last.text.replace(/\s+/g, ' ').trim(), PREVIEW_LIMIT) : '';
 }
 
 function repoName(repoPath: string): string {
