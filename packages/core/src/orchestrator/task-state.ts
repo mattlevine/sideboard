@@ -1,4 +1,4 @@
-import { isAskUserToolName } from '../plan/ask-user.js';
+import { lastTopLevelToolIsAskUser } from '../plan/ask-user.js';
 import type { MessagePart, ThreadStatus, TokenUsage } from '../types/thread.js';
 
 /**
@@ -46,14 +46,7 @@ export function needsCoordinatorAction(state: TaskState): boolean {
 
 /** True when the turn's last agent action was `ask_user` / AskUserQuestion. */
 export function endedOnAskUser(parts: MessagePart[] | undefined): boolean {
-  if (!parts?.length) return false;
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const p = parts[i]!;
-    if (p.type === 'tool' && !p.parentId) {
-      return isAskUserToolName(p.name);
-    }
-  }
-  return false;
+  return lastTopLevelToolIsAskUser(parts);
 }
 
 export function deriveTaskState(input: {

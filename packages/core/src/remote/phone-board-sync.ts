@@ -10,7 +10,15 @@ import { listPhoneSidebar, type PhoneChatSummary, type PhoneSidebar } from './ph
 export const PHONE_BOARD_SYNC_MS = 300;
 
 function chatKey(row: PhoneChatSummary): string {
-  return [row.id, row.title, row.status, row.agent, row.preview].join('\t');
+  return [
+    row.id,
+    row.title,
+    row.status,
+    row.agent,
+    row.preview,
+    row.needsYou ? '1' : '0',
+    row.blockedReason ?? '',
+  ].join('\t');
 }
 
 /**

@@ -1,5 +1,13 @@
+import { askBlockStillWaiting } from '../plan/ask-user.js';
 import type { AgentBlock } from '../types/agent-block.js';
 import type { Thread } from '../types/thread.js';
+
+type AgentBlockThread = Pick<
+  Thread,
+  'status' | 'agentBlock' | 'dismissedQuestionSignature'
+> & {
+  messages?: Array<{ role: string; ts?: string; origin?: string }>;
+};
 
 /** Activity dot for a worktree: running / queued beat idle sibling tabs. */
 export function worktreeBoardStatus(group: Array<Pick<Thread, 'status'>>): Thread['status'] {
@@ -26,10 +34,13 @@ export function isDismissedAskUserBlock(
   return block.questionSignature === dismissed;
 }
 
-/** Blocked highlight. Errors and archived chats keep their own status. */
-export function visibleAgentBlock(
-  thread: Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>,
-): AgentBlock | null {
+/**
+ * Blocked highlight. Errors and archived chats keep their own status.
+ * An ask_user stamp lands when the tool is called — before the picker is on
+ * screen — so hide it while the turn is still running, and drop it once the
+ * chat is no longer asking (later user message, or skip).
+ */
+export function visibleAgentBlock(thread: AgentBlockThread): AgentBlock | null {
   if (
     thread.status === 'archived' ||
     thread.status === 'error' ||
@@ -40,6 +51,10 @@ export function visibleAgentBlock(
   const block = thread.agentBlock;
   if (!block?.reason?.trim()) return null;
   if (isDismissedAskUserBlock(block, thread.dismissedQuestionSignature)) return null;
+  if (block.source === 'ask_user') {
+    if (thread.status === 'running' || thread.status === 'queued') return null;
+    if (!askBlockStillWaiting(block, thread.messages)) return null;
+  }
   return block;
 }
 
@@ -48,7 +63,7 @@ export function visibleAgentBlock(
  * Herdr uses so the row that needs a decision is the one you see.
  */
 export function worktreeAgentBlock(
-  group: Array<Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  group: AgentBlockThread[],
 ): AgentBlock | null {
   let best: AgentBlock | null = null;
   for (const thread of group) {
@@ -65,7 +80,7 @@ export function worktreeAgentBlock(
  * after you have switched agents. Closed rows still roll up the group.
  */
 export function sidebarRowAgentBlock(
-  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  group: Array<AgentBlockThread & Pick<Thread, 'id'>>,
   opts: { active: boolean; selectedId: string | null },
 ): AgentBlock | null {
   if (opts.active) {
@@ -80,7 +95,7 @@ export function sidebarRowAgentBlock(
  * the selected chat — the parent is no longer showing a sibling's question.
  */
 export function sidebarParentSelectId(
-  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  group: Array<AgentBlockThread & Pick<Thread, 'id'>>,
   primaryId: string,
   opts: { active: boolean },
 ): string {
@@ -89,7 +104,7 @@ export function sidebarParentSelectId(
 }
 
 export function sidebarQuestionThreadId(
-  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  group: Array<AgentBlockThread & Pick<Thread, 'id'>>,
   primaryId: string,
 ): string {
   const block = worktreeAgentBlock(group);
@@ -99,7 +114,7 @@ export function sidebarQuestionThreadId(
 }
 
 export function threadCardBlockFields(
-  group: Array<Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  group: AgentBlockThread[],
 ): { blockedReason: string; blockedSource: AgentBlock['source'] } | null {
   const block = worktreeAgentBlock(group);
   return block ? { blockedReason: block.reason, blockedSource: block.source } : null;

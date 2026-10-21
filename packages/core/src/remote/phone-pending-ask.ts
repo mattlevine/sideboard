@@ -13,6 +13,7 @@ export function republishPendingAsk(
     messages: thread.messages,
     agentBlock: thread.agentBlock,
     dismissedQuestionSignature: thread.dismissedQuestionSignature,
+    status: thread.status,
   });
   if (!pending) return;
   emitControl(opts, {

@@ -60,6 +60,17 @@ describe('phone board sync', () => {
     );
   });
 
+  it('changes when a Needs you ask appears or clears', () => {
+    const idle = chat();
+    const asking = chat({ needsYou: true, blockedReason: 'Asked the user: Which API?' });
+    expect(phoneBoardKey(board({ orchestration: [asking] }))).not.toBe(
+      phoneBoardKey(board({ orchestration: [idle] })),
+    );
+    expect(
+      phoneBoardKey(board({ orchestration: [chat({ needsYou: true, blockedReason: 'Done?' })] })),
+    ).not.toBe(phoneBoardKey(board({ orchestration: [asking] })));
+  });
+
   it('ignores bookkeeping timestamps when the list itself is unchanged', () => {
     const first = board({ orchestration: [chat({ updatedAt: 't0' })] });
     const second = board({ orchestration: [chat({ updatedAt: 't1' })] });

@@ -1,9 +1,9 @@
 /**
  * Why an agent is waiting on a person. Process liveness stays on
  * `ThreadStatus`; this is the attention flag (Herdr `blocked`).
- * Cleared when the next user message starts a turn, and an ask_user
- * highlight is also cleared when that question is no longer active in
- * its chat (the user skipped it).
+ * Cleared when the next user message starts a turn. An ask_user highlight
+ * is shown only while that question is on screen in the agent, and drops
+ * when the picker is gone (skip, a later user message, or the agent moved on).
  */
 export type AgentBlockSource = 'ask_user' | 'plan' | 'reported' | 'permission';
 

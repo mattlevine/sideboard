@@ -196,6 +196,46 @@ describe('agentBlockAfterTurn', () => {
 });
 
 describe('visibleAgentBlock', () => {
+  it('hides an ask_user stamp while the turn is still running', () => {
+    const asking = {
+      status: 'running' as const,
+      agentBlock: {
+        source: 'ask_user' as const,
+        reason: 'Asked the user: Which API?',
+        at: 't',
+        questionSignature: askSignature,
+      },
+    };
+    expect(visibleAgentBlock(asking)).toBeNull();
+    expect(visibleAgentBlock({ ...asking, status: 'queued' })).toBeNull();
+    expect(visibleAgentBlock({ ...asking, status: 'idle' })?.reason).toBe(
+      'Asked the user: Which API?',
+    );
+    expect(
+      visibleAgentBlock({
+        status: 'running',
+        agentBlock: { source: 'permission', reason: 'Allow the edit?', at: 't' },
+      })?.reason,
+    ).toBe('Allow the edit?');
+  });
+
+  it('hides an ask after a later user message in that chat', () => {
+    expect(
+      visibleAgentBlock({
+        status: 'idle',
+        agentBlock: {
+          source: 'ask_user',
+          reason: 'Asked the user: Which API?',
+          at: '2026-10-20T00:01:00.000Z',
+          questionSignature: askSignature,
+        },
+        messages: [
+          { role: 'user', ts: '2026-10-20T00:02:00.000Z' },
+        ],
+      }),
+    ).toBeNull();
+  });
+
   it('hides an ask the chat already skipped and keeps a newer one', () => {
     const skipped = {
       source: 'ask_user' as const,

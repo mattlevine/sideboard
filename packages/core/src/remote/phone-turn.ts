@@ -132,6 +132,7 @@ function runCoordinatorPrompt(
       messages: thread.messages,
       agentBlock: thread.agentBlock,
       dismissedQuestionSignature: thread.dismissedQuestionSignature,
+      status: thread.status,
     });
     if (
       pending &&

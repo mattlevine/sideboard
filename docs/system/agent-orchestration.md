@@ -32,7 +32,7 @@ Herdr marks `blocked` only when an agent is waiting on a person (approval, quest
 | `reported` | the agent called `notify_orchestrator` with a reason |
 | `permission` | the agent is waiting on a tool permission |
 
-`Thread.agentBlock.reason` is the short why. The sidebar and board highlight that agent until the next user message starts a turn. The phone list shows **Needs you** with that reason, and the workspace mark turns amber when nothing in that workspace is still running. An `ask_user` highlight also drops when that question is no longer active in its chat — the user skipped it, or sent their own message instead of answering. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
+`Thread.agentBlock.reason` is the short why. The sidebar, board, and phone desktop list highlight an `ask_user` only while that question is on screen in the agent (not the mid-turn stamp, and not after the picker is gone). Other blocks last until the next user message starts a turn. The phone list shows **Needs you** with that reason, and the workspace mark turns amber when nothing in that workspace is still running. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
 
 A2A also has `rejected` and `auth-required`. No Sideboard source yet — do not invent them.
 
