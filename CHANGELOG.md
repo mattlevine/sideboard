@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.311] - 2026-10-21
+
+### Fixed
+
+- An `ask_user` prompt no longer shows on the sidebar, Home board, or phone list until that question is on screen in the agent, and it clears as soon as the picker is gone.
+- Switching the phone between two paired Macs no longer asks to pair again.
+
 ## [0.1.310] - 2026-10-21
 
 ### Fixed
