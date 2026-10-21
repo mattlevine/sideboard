@@ -289,7 +289,7 @@ export default function App() {
   screenRef.current = screen;
   if (!linkRef.current) {
     linkRef.current = createSealedRelayLink({
-      material: () => lookupSealMaterial(sealMaterialRef.current, desktopsRef.current, activeIdRef.current, pendingTokenRef.current),
+      material: (hint) => lookupSealMaterial(sealMaterialRef.current, desktopsRef.current, activeIdRef.current, pendingTokenRef.current, hint),
       url: () => relay.socketUrl(),
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
@@ -712,6 +712,7 @@ export default function App() {
       const pinned = sealMaterialRef.current;
       const desktop: Desktop = { deviceId: msg.deviceId, deviceLabel: msg.deviceLabel, sessionToken: msg.sessionToken, hostPublicKey: pinned?.hostPublicKey ?? '', phoneToken: pinned?.phoneToken ?? '', online: true, expired: false };
       remember(desktop);
+      sealMaterialRef.current = null;
       setActiveId(desktop.deviceId);
       pendingTokenRef.current = desktop.sessionToken;
       attachedRef.current = true;
@@ -807,6 +808,11 @@ export default function App() {
   function showDesktops() {
     link.cancelResume();
     setError(null);
+    attachedRef.current = false;
+    pendingTokenRef.current = null;
+    sealMaterialRef.current = null;
+    activeIdRef.current = null;
+    setActiveId(null);
     const tokens = desktopsRef.current.map((row) => row.sessionToken);
     if (tokens.length === 0) {
       screenRef.current = 'pair';
@@ -820,12 +826,8 @@ export default function App() {
   }
 
   function choose(desktop: Desktop) {
-    if (desktop.expired) {
-      setError(`${desktop.deviceLabel} needs a new pairing code.`);
-      setScreen('pair');
-      return;
-    }
     setError(null);
+    sealMaterialRef.current = null;
     pendingTokenRef.current = desktop.sessionToken;
     link.send({ type: 'resume', sessionToken: desktop.sessionToken });
   }

@@ -18,6 +18,12 @@ export type SealMaterial = {
   phoneToken: string;
 };
 
+/** Which saved Mac the phone is handshaking with. */
+export type SealLookup = {
+  deviceId?: string;
+  sessionToken?: string;
+};
+
 export type PhoneHello = {
   v: 1;
   clientPublicKey: string;
@@ -84,14 +90,16 @@ export class PhoneChannel {
   private session: DirectionalSeal | null = null;
   private sealed = false;
   private pairedRaw: string | null = null;
+  private pin: SealMaterial | null = null;
   private readonly queue: object[] = [];
 
-  constructor(private readonly material: () => SealMaterial | null) {}
+  constructor(private readonly material: (hint?: SealLookup) => SealMaterial | null) {}
 
   reset(): void {
     this.session = null;
     this.sealed = false;
     this.pairedRaw = null;
+    this.pin = null;
     this.queue.length = 0;
   }
 
@@ -126,8 +134,16 @@ export class PhoneChannel {
   private begin(raw: string): { forward: string | null; send: object[] } {
     this.session = null;
     this.sealed = false;
+    this.pin = null;
     this.pairedRaw = raw;
-    const pin = this.material();
+    const msg = parseJson(raw);
+    const hint: SealLookup | undefined = msg
+      ? {
+          ...(typeof msg.deviceId === 'string' && msg.deviceId ? { deviceId: msg.deviceId } : {}),
+          ...(typeof msg.sessionToken === 'string' && msg.sessionToken ? { sessionToken: msg.sessionToken } : {}),
+        }
+      : undefined;
+    const pin = this.material(hint && (hint.deviceId || hint.sessionToken) ? hint : undefined);
     if (!pin) {
       this.reset();
       return {
@@ -135,6 +151,7 @@ export class PhoneChannel {
         send: [],
       };
     }
+    this.pin = pin;
     const clientSecret = clampPrivateKey(randomBytes(KEY_BYTES));
     const clientNonce = randomBytes(NONCE_BYTES);
     const hello: PhoneHello = {
@@ -147,14 +164,18 @@ export class PhoneChannel {
   }
 
   private acceptReady(msg: Record<string, unknown>): { forward: string | null; send: object[] } {
-    const pin = this.material();
+    const pin = this.pin ?? this.material();
     const ready = asReady(msg);
-    if (!this.session || !pin || !ready || !equalText(ready.desktopPublicKey, pin.hostPublicKey)) {
+    if (!ready) return { forward: null, send: [] };
+    if (!this.session || !pin) {
       this.reset();
       return {
         forward: JSON.stringify({ type: 'error', message: 'phone session expired — pair again' }),
         send: [],
       };
+    }
+    if (!equalText(ready.desktopPublicKey, pin.hostPublicKey)) {
+      return { forward: null, send: [] };
     }
     if (!this.session.acceptReady(ready)) {
       this.reset();
