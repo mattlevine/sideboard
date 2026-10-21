@@ -852,7 +852,7 @@ export function ThreadPanel({
       thread.agentBlock,
       thread.dismissedQuestionSignature,
       thread.status,
-    ],]
+    ],
   );
 
   const showPlanQuestions =
