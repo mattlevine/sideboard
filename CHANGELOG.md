@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.308] - 2026-10-20
+
+### Fixed
+
+- A question that shows in the sidebar also shows in the agent chat, and the phone receives it, when the transcript never stored the tool input.
+- A continue prompt no longer hides that picker while the sidebar highlight stays.
+- Clicking an open worktree stays on the selected chat instead of jumping to another chat in that workspace that asked.
+
 ## [0.1.307] - 2026-10-20
 
 ### Added
