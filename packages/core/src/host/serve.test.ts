@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -61,7 +61,10 @@ describe('headless host', () => {
     const host = await startHeadlessHost({ signal: ac.signal });
     expect(host.ok).toBe(true);
     expect(isThisProcessDesktopHost()).toBe(false);
-    expect(process.env[NODE_EXTRA_CA_CERTS]).toBe(systemCaBundlePath());
+    // Linux reuses the distro bundle; macOS/Windows use the app-data dump.
+    const extra = process.env[NODE_EXTRA_CA_CERTS]?.trim();
+    expect(extra).toBeTruthy();
+    expect(existsSync(extra!)).toBe(true);
     expect(process.env[NODE_USE_SYSTEM_CA]).toBe('1');
   });
 });
