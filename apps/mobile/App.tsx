@@ -290,6 +290,7 @@ export default function App() {
   if (!linkRef.current) {
     linkRef.current = createSealedRelayLink({
       material: (hint) => lookupSealMaterial(sealMaterialRef.current, desktopsRef.current, activeIdRef.current, pendingTokenRef.current, hint),
+      wanted: () => (pendingTokenRef.current ? { sessionToken: pendingTokenRef.current } : null),
       url: () => relay.socketUrl(),
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),

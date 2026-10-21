@@ -93,7 +93,10 @@ export class PhoneChannel {
   private pin: SealMaterial | null = null;
   private readonly queue: object[] = [];
 
-  constructor(private readonly material: (hint?: SealLookup) => SealMaterial | null) {}
+  constructor(
+    private readonly material: (hint?: SealLookup) => SealMaterial | null,
+    private readonly wanted?: () => SealLookup | null,
+  ) {}
 
   reset(): void {
     this.session = null;
@@ -143,6 +146,13 @@ export class PhoneChannel {
           ...(typeof msg.sessionToken === 'string' && msg.sessionToken ? { sessionToken: msg.sessionToken } : {}),
         }
       : undefined;
+    const wanted = this.wanted?.();
+    if (
+      (wanted?.sessionToken && hint?.sessionToken && wanted.sessionToken !== hint.sessionToken) ||
+      (wanted?.deviceId && hint?.deviceId && wanted.deviceId !== hint.deviceId)
+    ) {
+      return { forward: null, send: [] };
+    }
     const pin = this.material(hint && (hint.deviceId || hint.sessionToken) ? hint : undefined);
     if (!pin) {
       this.reset();
@@ -178,11 +188,7 @@ export class PhoneChannel {
       return { forward: null, send: [] };
     }
     if (!this.session.acceptReady(ready)) {
-      this.reset();
-      return {
-        forward: JSON.stringify({ type: 'error', message: 'phone session expired — pair again' }),
-        send: [],
-      };
+      return { forward: null, send: [] };
     }
     const frame = this.session.seal({
       type: 'e2ee_auth',

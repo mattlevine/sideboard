@@ -14,8 +14,9 @@ setPhoneE2EERandom((length) => ExpoCrypto.getRandomBytes(length));
  */
 export function createSealedRelayLink(opts: Parameters<typeof createRelayLink>[0] & {
   material: (hint?: SealLookup) => SealMaterial | null;
+  wanted?: () => SealLookup | null;
 }): RelayLink {
-  const channel = new PhoneChannel(opts.material);
+  const channel = new PhoneChannel(opts.material, opts.wanted);
   let inner: RelayLink | null = null;
   const sendRaw = (payload: object) => inner?.send(payload);
   const link = createRelayLink({

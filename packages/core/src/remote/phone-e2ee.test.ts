@@ -164,4 +164,44 @@ describe('phone session encryption', () => {
     const accepted = phone.onRelayMessage(JSON.stringify({ type: 'e2ee_ready', ...ready }));
     expect(accepted.send[0]).toMatchObject({ type: 'e2ee' });
   });
+
+  it('ignores a ready that matches the pin but not this hello', () => {
+    const ctx = pair();
+    const first = ctx.phone.onRelayMessage(JSON.stringify({ type: 'paired', deviceId: 'mac' }));
+    const hello1 = first.send[0] as { clientPublicKey: string; clientNonce: string };
+    const second = ctx.phone.onRelayMessage(JSON.stringify({ type: 'paired', deviceId: 'mac' }));
+    const hello2 = second.send[0] as { clientPublicKey: string; clientNonce: string };
+    const stale = ctx.host.readyFor({
+      v: 1,
+      clientPublicKey: hello1.clientPublicKey,
+      clientNonce: hello1.clientNonce,
+    });
+    expect(ctx.phone.onRelayMessage(JSON.stringify({ type: 'e2ee_ready', ...stale }))).toEqual({
+      forward: null,
+      send: [],
+    });
+    const ready = ctx.host.readyFor({
+      v: 1,
+      clientPublicKey: hello2.clientPublicKey,
+      clientNonce: hello2.clientNonce,
+    });
+    const accepted = ctx.phone.onRelayMessage(JSON.stringify({ type: 'e2ee_ready', ...ready }));
+    expect(accepted.send[0]).toMatchObject({ type: 'e2ee' });
+  });
+
+  it('drops a paired message for a Mac that is no longer selected', () => {
+    const work = pair();
+    const home = pair();
+    const phone = new PhoneChannel(
+      (hint) => (hint?.sessionToken === 'home-sess' ? home.material : work.material),
+      () => ({ sessionToken: 'home-sess' }),
+    );
+    expect(
+      phone.onRelayMessage(JSON.stringify({ type: 'paired', deviceId: 'mac-work', sessionToken: 'work-sess' })),
+    ).toEqual({ forward: null, send: [] });
+    const started = phone.onRelayMessage(
+      JSON.stringify({ type: 'paired', deviceId: 'mac-home', sessionToken: 'home-sess' }),
+    );
+    expect(started.send[0]).toMatchObject({ type: 'e2ee_hello' });
+  });
 });
