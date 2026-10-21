@@ -1,4 +1,5 @@
 import { WebSocket as WsWebSocket } from 'ws';
+import { systemCaTlsOptions } from '../http/system-ca.js';
 import { lookupPreferPublicDns } from '../slack/public-dns.js';
 import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
 import { startPhoneBoardSync } from './phone-board-sync.js';
@@ -55,6 +56,18 @@ export interface RemoteHostHandle {
 
 const BACKOFF_START_MS = 1000;
 const BACKOFF_MAX_MS = 30_000;
+
+const RELAY_TLS_RE =
+  /UNABLE_TO_GET_ISSUER|unable to get local issuer|SELF_SIGNED_CERT_IN_CHAIN/i;
+const RELAY_TLS_HINT =
+  ' — the TLS certificate was rejected. GitHub login can still work (browser Keychain trust); the relay socket uses Node TLS, which needs the corporate CA.';
+
+export function formatRemoteHostError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message === 'aborted') return message;
+  if (RELAY_TLS_RE.test(message)) return `${message}${RELAY_TLS_HINT}`;
+  return message;
+}
 
 /** JSON ping/pong. A missing pong means the socket is half-open and should reconnect. */
 export function createRemoteKeepalive(opts: {
@@ -169,7 +182,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         backoff = BACKOFF_START_MS;
       } catch (err) {
         if (opts.signal?.aborted) return;
-        const message = err instanceof Error ? err.message : String(err);
+        const message = formatRemoteHostError(err);
         if (message !== 'aborted') log(`remote error: ${message}`);
       }
       opts.onStatus?.({ connected: false, phoneConnected: false });
@@ -189,7 +202,10 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
       const gen = ++connectionGen;
       stopBoardSync();
       setPhoneOpenChat(null);
-      const ws = new WsWebSocket(opts.url, { lookup: lookupPreferPublicDns });
+      const ws = new WsWebSocket(opts.url, {
+        lookup: lookupPreferPublicDns,
+        ...systemCaTlsOptions(),
+      });
       socket = ws;
       let settled = false;
       const finish = (err?: Error) => {

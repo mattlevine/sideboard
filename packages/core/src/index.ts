@@ -76,6 +76,7 @@ export * from './integrations/optional-cli.js';
 export { setHttpFetchImpl, formatFetchError, httpFetch } from './http/fetch.js';
 export {
   applySystemCaEnv,
+  bootstrapSystemCa,
   materializeSystemCaBundle,
   trustSystemCertificates,
 } from './http/system-ca.js';
