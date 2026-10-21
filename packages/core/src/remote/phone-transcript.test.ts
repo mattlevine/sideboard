@@ -78,4 +78,41 @@ describe('listPhoneMessages', () => {
       'real follow up',
     ]);
   });
+
+  it('keeps an MCP app when the agent row has no visible text', () => {
+    const thread = createEmptyThread({
+      title: 'Phone',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/phone',
+      worktreePath: join(dataDir, 'wt'),
+      repoPath: join(dataDir, 'repo'),
+      agent: 'claude',
+    });
+    const saved = {
+      ...thread,
+      status: 'idle' as const,
+      messages: [
+        { role: 'user' as const, text: 'Phone\n\nroll', ts: thread.createdAt },
+        {
+          role: 'agent' as const,
+          text: '',
+          ts: thread.createdAt,
+          parts: [
+            {
+              type: 'tool' as const,
+              id: 'toolu_1',
+              name: 'mcp__dice__roll',
+              status: 'done' as const,
+              result: '{"n":4}',
+            },
+          ],
+        },
+      ],
+    };
+    expect(listPhoneMessages(saved)).toEqual([
+      { role: 'user', text: 'roll' },
+      { role: 'agent', text: '', apps: [{ id: 'toolu_1', tool: 'mcp__dice__roll' }] },
+    ]);
+  });
 });

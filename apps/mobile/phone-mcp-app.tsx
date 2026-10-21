@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Linking, View } from 'react-native';
 import WebView from 'react-native-webview';
+import { askPhoneMcp, deliverPhoneMcpWaiter, nextPhoneMcpReqId } from './phone-mcp-waiters';
 
 export type PhoneMcpAppRef = { id: string; tool: string };
 
@@ -27,32 +28,12 @@ type Reply = {
   error?: string;
 };
 
-const waiters = new Map<string, (reply: Reply) => void>();
-
 export function deliverPhoneMcpUi(control: { op?: string; reqId?: string }): boolean {
-  if (control.op !== 'mcp-ui' && control.op !== 'mcp-ui-call' && control.op !== 'mcp-ui-read') return false;
-  const wait = control.reqId ? waiters.get(control.reqId) : undefined;
-  if (wait && control.reqId) {
-    waiters.delete(control.reqId);
-    wait(control as Reply);
-  }
-  return true;
+  return deliverPhoneMcpWaiter(control);
 }
 
-function ask(send: (payload: object) => void, payload: { reqId: string }): Promise<Reply | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      if (waiters.get(payload.reqId)) {
-        waiters.delete(payload.reqId);
-        resolve(null);
-      }
-    }, 20_000);
-    waiters.set(payload.reqId, (reply) => {
-      clearTimeout(timer);
-      resolve(reply);
-    });
-    send(payload);
-  });
+function ask(send: (payload: object) => void, payload: { reqId: string; [key: string]: unknown }): Promise<Reply | null> {
+  return askPhoneMcp(send, payload).then((reply) => reply as Reply | null);
 }
 
 export function PhoneMcpApps({
@@ -86,11 +67,19 @@ function PhoneMcpApp({
   const [html, setHtml] = useState<string | null>(null);
   const [height, setHeight] = useState(280);
   const serverRef = useRef('');
+  const sendRef = useRef(send);
+  sendRef.current = send;
 
   useEffect(() => {
-    const reqId = `ui-${app.id}`.slice(0, 40);
+    const reqId = nextPhoneMcpReqId();
     let cancel = false;
-    void ask(send, { op: 'mcp-ui', chatId, tool: app.tool, callId: app.id, reqId }).then((reply) => {
+    void ask((payload) => sendRef.current(payload), {
+      op: 'mcp-ui',
+      chatId,
+      tool: app.tool,
+      callId: app.id,
+      reqId,
+    }).then((reply) => {
       if (cancel || !reply?.view) return;
       serverRef.current = reply.view.server;
       setHtml(shellHtml(reply.view));
@@ -98,7 +87,7 @@ function PhoneMcpApp({
     return () => {
       cancel = true;
     };
-  }, [app.id, app.tool, chatId, send]);
+  }, [app.id, app.tool, chatId]);
 
   if (!html) return null;
   return (
@@ -165,7 +154,7 @@ async function onGuest(
   }
   if (!ctx.server) return;
   if (msg.kind === 'call' && msg.name && msg.id != null) {
-    const reqId = `call-${String(msg.id)}`.slice(0, 40);
+    const reqId = nextPhoneMcpReqId();
     const reply = await ask(ctx.send, {
       op: 'mcp-ui-call',
       chatId: ctx.chatId,
@@ -178,7 +167,7 @@ async function onGuest(
     return;
   }
   if (msg.kind === 'legacy-call' && msg.name) {
-    const reqId = `leg-${msg.messageId ?? msg.name}`.slice(0, 40);
+    const reqId = nextPhoneMcpReqId();
     const reply = await ask(ctx.send, {
       op: 'mcp-ui-call',
       chatId: ctx.chatId,
@@ -196,7 +185,7 @@ async function onGuest(
     return;
   }
   if (msg.kind === 'read' && msg.uri && msg.id != null) {
-    const reqId = `read-${String(msg.id)}`.slice(0, 40);
+    const reqId = nextPhoneMcpReqId();
     const reply = await ask(ctx.send, {
       op: 'mcp-ui-read',
       chatId: ctx.chatId,

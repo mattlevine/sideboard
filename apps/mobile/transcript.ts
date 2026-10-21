@@ -1,5 +1,3 @@
-export { deliverPhoneMcpUi, PhoneMcpApps, type PhoneMcpUiControl } from './phone-mcp-app';
-
 export type OpenedMessage = {
   role: 'user' | 'agent';
   text: string;
@@ -66,12 +64,51 @@ export function finishAgent(
   const last = bubbles[bubbles.length - 1];
   const extra = apps?.length ? { apps } : {};
   if (last?.streaming) {
-    if (!trimmed) return bubbles.slice(0, -1);
+    if (!trimmed && !apps?.length) return bubbles.slice(0, -1);
     return [...bubbles.slice(0, -1), { ...last, text: trimmed, streaming: false, ...extra }];
+  }
+  if (!trimmed && apps?.length) {
+    return [...bubbles, { id: `app-${bubbles.length}`, role: 'agent', text: '', apps }];
   }
   const next = pushBubble(bubbles, 'agent', trimmed);
   if (!apps?.length || next === bubbles) return next;
   const added = next[next.length - 1];
   if (!added) return next;
   return [...next.slice(0, -1), { ...added, apps }];
+}
+
+/** Sidebar patch for a finished assistant row or an ask. Empty ask text is a question refresh. */
+export function phoneTurnPatch(
+  op: 'assistant' | 'ask',
+  text: string,
+): { refreshQuestionsOnly: boolean; status?: 'idle'; preview?: string } {
+  const preview = text.replace(/\s+/g, ' ').trim().slice(0, 90);
+  if (op === 'ask' && !preview) return { refreshQuestionsOnly: true };
+  return { refreshQuestionsOnly: false, status: 'idle', ...(preview ? { preview } : {}) };
+}
+
+/** Apply a finished turn. An ask with no text keeps the bubbles, preview, and chat status. */
+export function applyPhoneTurn<Q>(
+  current: { bubbles: OpenedBubble[]; questions: Q | null; working: boolean; activity?: string },
+  input: {
+    op: 'assistant' | 'ask';
+    text: string;
+    apps?: OpenedBubble['apps'];
+    questions?: Q | null;
+  },
+): { bubbles: OpenedBubble[]; questions: Q | null; working: boolean; activity: string } {
+  if (input.op === 'ask' && !input.text.trim()) {
+    return {
+      bubbles: current.bubbles,
+      questions: input.questions ?? null,
+      working: false,
+      activity: '',
+    };
+  }
+  return {
+    bubbles: finishAgent(current.bubbles, input.text, input.op === 'assistant' ? input.apps : undefined),
+    questions: input.op === 'ask' ? (input.questions ?? null) : null,
+    working: false,
+    activity: '',
+  };
 }

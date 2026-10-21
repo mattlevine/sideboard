@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { loadRelayUrl, normalizeRelayUrl, saveRelayUrl } from './relay-url';
+import { loadRelayUrl, relaySocketUrl, saveRelayUrl } from './relay-url';
 
 /** Relay address for the pair screen. Remembers a valid URL across launches. */
 export function useSavedRelayUrl(fallback: string) {
@@ -38,6 +38,6 @@ export function useSavedRelayUrl(fallback: string) {
     url,
     setUrl,
     loaded,
-    socketUrl: () => normalizeRelayUrl(urlRef.current) || fallback,
+    socketUrl: () => relaySocketUrl(urlRef.current, fallback),
   };
 }

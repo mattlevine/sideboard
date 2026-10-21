@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PHONE_CONTROL_PREFIX, takePhoneControl } from './phone-chats.js';
-import { phoneMcpApps, phoneMcpToolPayload } from './phone-mcp-ui.js';
+import { phoneMcpApps, phoneMcpToolPayload, phoneMcpToolPayloadFromMessages } from './phone-mcp-ui.js';
 import type { MessagePart } from '../types/thread.js';
 
 const roll: MessagePart = {
@@ -29,6 +29,22 @@ describe('phoneMcpApps', () => {
       resultText: '{"n":4}',
       isError: false,
     });
+  });
+
+  it('does not reuse a later call of the same tool', () => {
+    const later: MessagePart = { ...roll, id: 'toolu_2', input: { sides: 20 }, result: '{"n":1}' };
+    expect(phoneMcpToolPayload([roll, later], 'mcp__dice__roll', 'missing')).toBeNull();
+    expect(
+      phoneMcpToolPayloadFromMessages(
+        [
+          { role: 'agent', parts: [roll] },
+          { role: 'user' },
+          { role: 'agent', parts: [later] },
+        ],
+        'mcp__dice__roll',
+        'toolu_1',
+      ),
+    ).toEqual({ input: { sides: 6 }, resultText: '{"n":4}', isError: false });
   });
 });
 

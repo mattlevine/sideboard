@@ -224,8 +224,8 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 }
 .shot-swap {
   position: relative;
+  /* Taller of the two shots. Do not animate this — the page below would jump. */
   aspect-ratio: 2706 / 1781;
-  animation: shot-frame 10s ease-in-out infinite;
 }
 .shot-swap img {
   position: absolute;
@@ -238,27 +238,31 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 .shot-b { animation: shot-show-b 10s ease-in-out infinite; }
 .shot-swap-caps { display: grid; }
 .shot-swap-caps span { grid-area: 1 / 1; }
-.shot-swap-caps span:first-child { animation: shot-show-a 10s ease-in-out infinite; }
-.shot-swap-caps span:last-child { animation: shot-show-b 10s ease-in-out infinite; }
-@keyframes shot-frame {
-  0%, 40% { aspect-ratio: 2706 / 1781; }
-  50%, 90% { aspect-ratio: 2718 / 1676; }
-  100% { aspect-ratio: 2706 / 1781; }
-}
+.shot-swap-caps span:first-child { animation: shot-cap-a 10s linear infinite; }
+.shot-swap-caps span:last-child { animation: shot-cap-b 10s linear infinite; }
 @keyframes shot-show-a {
-  0%, 40% { opacity: 1; }
-  50%, 90% { opacity: 0; }
-  100% { opacity: 1; }
+  0%, 40% { opacity: 1; visibility: visible; }
+  50%, 90% { opacity: 0; visibility: hidden; }
+  100% { opacity: 1; visibility: visible; }
 }
 @keyframes shot-show-b {
-  0%, 40% { opacity: 0; }
-  50%, 90% { opacity: 1; }
-  100% { opacity: 0; }
+  0%, 40% { opacity: 0; visibility: hidden; }
+  50%, 90% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+@keyframes shot-cap-a {
+  0%, 44% { opacity: 1; visibility: visible; }
+  45%, 100% { opacity: 0; visibility: hidden; }
+}
+@keyframes shot-cap-b {
+  0%, 44% { opacity: 0; visibility: hidden; }
+  45%, 94% { opacity: 1; visibility: visible; }
+  95%, 100% { opacity: 0; visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
   .shot-swap, .shot-a, .shot-b, .shot-swap-caps span { animation: none; }
   .shot-swap { aspect-ratio: 2706 / 1781; }
-  .shot-b, .shot-swap-caps span:last-child { opacity: 0; }
+  .shot-b, .shot-swap-caps span:last-child { opacity: 0; visibility: hidden; }
 }
 
 .agents {

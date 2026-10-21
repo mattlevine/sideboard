@@ -90,15 +90,29 @@ export function phoneMcpToolPayload(
   callId: string,
 ): { input: Record<string, unknown>; resultText: string; isError: boolean } | null {
   if (!parts) return null;
-  const matches = parts.filter(
-    (part): part is Extract<MessagePart, { type: 'tool' }> =>
-      part.type === 'tool' && part.name === tool && !part.parentId,
+  const part = parts.find(
+    (row): row is Extract<MessagePart, { type: 'tool' }> =>
+      row.type === 'tool' && row.id === callId && row.name === tool && !row.parentId,
   );
-  const part = matches.find((row) => row.id === callId) ?? matches[matches.length - 1];
   if (!part) return null;
   return {
     input: part.input ?? {},
     resultText: part.result ?? '',
     isError: part.status === 'error',
   };
+}
+
+/** The app's call id can sit on an earlier agent message than the latest turn. */
+export function phoneMcpToolPayloadFromMessages(
+  messages: Array<{ role: string; parts?: MessagePart[] }>,
+  tool: string,
+  callId: string,
+): { input: Record<string, unknown>; resultText: string; isError: boolean } | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== 'agent') continue;
+    const payload = phoneMcpToolPayload(message.parts, tool, callId);
+    if (payload) return payload;
+  }
+  return null;
 }

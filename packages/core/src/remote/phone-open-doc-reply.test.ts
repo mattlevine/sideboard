@@ -60,6 +60,18 @@ describe('placeOpenReply', () => {
     expect(placed?.state.docs[1]?.viewer.status).toBe('loading');
   });
 
+  it('does not give a shorter file reply to a longer absolute tab', () => {
+    const short = '/tmp/sideboard-wt/apps/foo.ts';
+    const long = '/tmp/sideboard-wt/other/apps/foo.ts';
+    let state = beginOpenDoc(emptyOpenDocs(), fileDocId(short), short);
+    state = beginOpenDoc(state, fileDocId(long), long);
+    const placed = placeOpenReply(state, file('apps/foo.ts'));
+    expect(placed?.replacedId).toBe(fileDocId(short));
+    expect(placed?.state.requestedId).toBe(fileDocId(long));
+    expect(placed?.state.docs.find((doc) => doc.id === fileDocId('apps/foo.ts'))?.viewer.status).toBe('file');
+    expect(placed?.state.docs.find((doc) => doc.id === fileDocId(long))?.viewer.status).toBe('loading');
+  });
+
   it('drops a reply for a file the user already closed', () => {
     let state = beginOpenDoc(emptyOpenDocs(), fileDocId('./a.ts'), './a.ts');
     state = closeOpenDoc(state, fileDocId('./a.ts'));
