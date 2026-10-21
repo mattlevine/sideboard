@@ -17,6 +17,7 @@ import {
   groupHomeBoardWorktrees,
   isHomeBoardThread,
   visiblePage,
+  sidebarQuestionThreadId,
   visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus,
   worktreeMatchesOwnership,
   reviewLabelForRepo,
@@ -367,7 +368,7 @@ function WorktreeCard({
   const dirty = loaded && Boolean(stat?.dirty);
 
   function openWorktree() {
-    if (!archiving) onOpenThread(primary.id);
+    if (!archiving) onOpenThread(sidebarQuestionThreadId(group, primary.id));
   }
 
   return (

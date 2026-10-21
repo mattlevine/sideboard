@@ -19,11 +19,7 @@ import type {
   WorktreeOpenerId,
 } from '@sideboard-ai/core';
 import { resolveUsageOnLimit } from '@sideboard/usage-on-limit';
-import {
-  extractPendingPlanQuestions,
-  formatPlanQuestionsForChat,
-  latestPendingPlanQuestions,
-} from '@sideboard/plan-ask-user';
+import { latestPendingPlanQuestions } from '@sideboard/plan-ask-user';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { decodeBrightsyTarget, type BrightsyChatTargets } from '@sideboard/brightsy-targets';
 import {
@@ -87,7 +83,11 @@ import { isRoutineStopNote, isSetupLastError } from '../lib/pane-progress';
 import { CreateProcessingOverlay } from './CreateProcessingOverlay';
 import { AgentOptionsPicker, type AgentOptionsValue } from './AgentOptionsPicker';
 import { ThinkingEffortChip } from './ThinkingEffortChip';
-import { PlanQuestionsPanel } from './PlanQuestionsPanel';
+import {
+  PlanQuestionsChatBrief,
+  PlanQuestionsOrphanBrief,
+  PlanQuestionsPanel,
+} from './PlanQuestionsPanel';
 import { ToolPermissionBar, toolPermissionFromThread } from './ToolPermissionBar';
 import { PlanApprovalCard } from './PlanApprovalCard';
 import { PlanReadyBar } from './PlanReadyBar';
@@ -525,22 +525,10 @@ const ChatTranscript = memo(function ChatTranscript({
                   }
                   hideAnswer={hidePlanProse}
                 />
-                {showPlanQuestions &&
-                  pendingPlanQuestions &&
-                  extractPendingPlanQuestions(m.parts)?.signature ===
-                    pendingPlanQuestions.signature && (
-                    <div
-                      className="plan-questions-chat-brief"
-                      data-chat-text=""
-                      key={pendingPlanQuestions.signature}
-                    >
-                      <MarkdownMessage
-                        text={formatPlanQuestionsForChat(
-                          pendingPlanQuestions.questions,
-                        )}
-                      />
-                    </div>
-                  )}
+                <PlanQuestionsChatBrief
+                  pending={showPlanQuestions ? pendingPlanQuestions : null}
+                  parts={m.parts}
+                />
               </>
             ) : m.role === 'summary' ? (
               <AgentMessage
@@ -673,24 +661,17 @@ const ChatTranscript = memo(function ChatTranscript({
               </div>
             </>
           )}
-          {showPlanQuestions &&
-            pendingPlanQuestions &&
-            extractPendingPlanQuestions(liveParts)?.signature ===
-              pendingPlanQuestions.signature && (
-              <div
-                className="plan-questions-chat-brief"
-                data-chat-text=""
-                key={pendingPlanQuestions.signature}
-              >
-                <MarkdownMessage
-                  text={formatPlanQuestionsForChat(
-                    pendingPlanQuestions.questions,
-                  )}
-                />
-              </div>
-            )}
+          <PlanQuestionsChatBrief
+            pending={showPlanQuestions ? pendingPlanQuestions : null}
+            parts={liveParts}
+          />
         </div>
       )}
+      <PlanQuestionsOrphanBrief
+        pending={showPlanQuestions ? pendingPlanQuestions : null}
+        messages={messages}
+        liveParts={liveParts}
+      />
     </>
   );
 });
@@ -860,8 +841,16 @@ export function ThreadPanel({
         messages: thread.messages,
         liveParts,
         userReplied: Boolean(pendingUser),
+        agentBlock: thread.agentBlock,
+        dismissedQuestionSignature: thread.dismissedQuestionSignature,
       }),
-    [liveParts, thread.messages, pendingUser],
+    [
+      liveParts,
+      thread.messages,
+      pendingUser,
+      thread.agentBlock,
+      thread.dismissedQuestionSignature,
+    ],
   );
 
   const showPlanQuestions =

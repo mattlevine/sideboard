@@ -28,5 +28,16 @@ export interface AgentBlock {
   at: string;
   /** ask_user question-set signature, so a skip can drop this highlight. */
   questionSignature?: string;
+  /**
+   * Full ask_user payload. The composer reads this when the transcript
+   * tool call never stored its input, so the sidebar highlight and the
+   * chat picker stay the same question.
+   */
+  questions?: Array<{
+    question: string;
+    header?: string;
+    multiSelect?: boolean;
+    options: Array<{ label: string; description?: string }>;
+  }>;
   permission?: AgentPermissionPrompt;
 }

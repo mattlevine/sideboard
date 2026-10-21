@@ -269,7 +269,14 @@ export {
   type WorktreeListBadgeThread,
 } from './worktree-list-badges.js';
 
-export { visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus } from './agent-block-view.js';
+export {
+  sidebarParentSelectId,
+  sidebarQuestionThreadId,
+  sidebarRowAgentBlock,
+  visibleAgentBlock,
+  worktreeAgentBlock,
+  worktreeBoardStatus,
+} from './agent-block-view.js';
 
 function normalizeIssueKey(value: string): string {
   return value.trim().toLowerCase().replace(/^#/, '');

@@ -59,6 +59,45 @@ export function worktreeAgentBlock(
   return best;
 }
 
+/**
+ * Reason on the worktree parent row. While one of its chats is open, the
+ * row matches that chat — a sibling's question must not sit in the sidebar
+ * after you have switched agents. Closed rows still roll up the group.
+ */
+export function sidebarRowAgentBlock(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  opts: { active: boolean; selectedId: string | null },
+): AgentBlock | null {
+  if (opts.active) {
+    const open = group.find((thread) => thread.id === opts.selectedId);
+    if (open) return visibleAgentBlock(open);
+  }
+  return worktreeAgentBlock(group);
+}
+
+/**
+ * Closed worktree rows open the chat that asked. An already-open row keeps
+ * the selected chat — the parent is no longer showing a sibling's question.
+ */
+export function sidebarParentSelectId(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  primaryId: string,
+  opts: { active: boolean },
+): string {
+  if (opts.active) return primaryId;
+  return sidebarQuestionThreadId(group, primaryId);
+}
+
+export function sidebarQuestionThreadId(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  primaryId: string,
+): string {
+  const block = worktreeAgentBlock(group);
+  if (!block) return primaryId;
+  const owner = group.find((thread) => visibleAgentBlock(thread) === block);
+  return owner?.id ?? primaryId;
+}
+
 export function threadCardBlockFields(
   group: Array<Pick<Thread, 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
 ): { blockedReason: string; blockedSource: AgentBlock['source'] } | null {

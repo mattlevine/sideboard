@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { worktreeAgentBlock, visibleAgentBlock } from '../board/home-board.js';
+import {
+  sidebarParentSelectId,
+  sidebarQuestionThreadId,
+  sidebarRowAgentBlock,
+  worktreeAgentBlock,
+  visibleAgentBlock,
+} from '../board/home-board.js';
 import { planQuestionsSignature } from '../plan/ask-user.js';
 import {
   createEmptyThread,
@@ -51,6 +57,14 @@ describe('decisionBlockFromParts', () => {
       reason: 'Asked the user: Which API?',
       at: 't',
       questionSignature: askSignature,
+      questions: [
+        {
+          question: 'Which API?',
+          header: undefined,
+          multiSelect: false,
+          options: [{ label: 'REST' }, { label: 'GraphQL' }],
+        },
+      ],
     });
   });
 
@@ -129,6 +143,34 @@ describe('agentBlockAfterTurn', () => {
         dismissedQuestionSignature: askSignature,
       }),
     ).toBeNull();
+  });
+
+  it('keeps stamped questions when the transcript tool has no input', () => {
+    const questions = [
+      {
+        question: 'Which API?',
+        options: [{ label: 'REST' }, { label: 'GraphQL' }],
+      },
+    ];
+    const stamped = {
+      ...makeAgentBlock('ask_user', 'Asked the user: Which API?', 't'),
+      questionSignature: askSignature,
+      questions,
+    };
+    const bare: MessagePart = {
+      type: 'tool',
+      id: 'q1',
+      name: 'ask_user',
+      status: 'done',
+    };
+    const next = agentBlockAfterTurn({
+      existing: stamped,
+      parts: [bare],
+      planMode: false,
+      failed: false,
+    });
+    expect(next?.questions).toEqual(questions);
+    expect(next?.questionSignature).toBe(askSignature);
   });
 
   it('drops an ask_user stamp once a later tool runs', () => {
@@ -239,6 +281,69 @@ describe('dismissAskUserQuestion', () => {
     dismissAskUserQuestion(thread.id, askSignature);
     expect(readThread(thread.id)?.agentBlock?.source).toBe('reported');
     expect(readThread(thread.id)?.dismissedQuestionSignature).toBe(askSignature);
+  });
+});
+
+describe('sidebarRowAgentBlock', () => {
+  const asked = {
+    id: 'asked',
+    status: 'idle' as const,
+    agentBlock: {
+      source: 'ask_user' as const,
+      reason: 'Asked the user: Which API?',
+      at: 'u',
+      questionSignature: askSignature,
+    },
+  };
+  const other = { id: 'other', status: 'idle' as const, agentBlock: null };
+
+  it('rolls up a closed worktree and matches the open chat', () => {
+    expect(
+      sidebarRowAgentBlock([other, asked], { active: false, selectedId: null })?.reason,
+    ).toBe('Asked the user: Which API?');
+    expect(
+      sidebarRowAgentBlock([other, asked], { active: true, selectedId: 'other' }),
+    ).toBeNull();
+    expect(
+      sidebarRowAgentBlock([other, asked], { active: true, selectedId: 'asked' })?.reason,
+    ).toBe('Asked the user: Which API?');
+  });
+});
+
+describe('sidebarParentSelectId', () => {
+  const asked = {
+    id: 'asked',
+    status: 'idle' as const,
+    agentBlock: {
+      source: 'ask_user' as const,
+      reason: 'Asked the user: Which API?',
+      at: 'u',
+      questionSignature: askSignature,
+    },
+  };
+  const primary = { id: 'primary', status: 'idle' as const, agentBlock: null };
+
+  it('opens the asking chat only while the worktree row is closed', () => {
+    expect(sidebarParentSelectId([primary, asked], 'primary', { active: false })).toBe('asked');
+    expect(sidebarParentSelectId([primary, asked], 'primary', { active: true })).toBe('primary');
+  });
+});
+
+describe('sidebarQuestionThreadId', () => {
+  it('opens the chat that asked instead of the primary row', () => {
+    const asked = {
+      id: 'asked',
+      status: 'idle' as const,
+      agentBlock: {
+        source: 'ask_user' as const,
+        reason: 'Asked the user: Which API?',
+        at: 'u',
+        questionSignature: askSignature,
+      },
+    };
+    const primary = { id: 'primary', status: 'idle' as const, agentBlock: null };
+    expect(sidebarQuestionThreadId([primary, asked], 'primary')).toBe('asked');
+    expect(sidebarQuestionThreadId([primary], 'primary')).toBe('primary');
   });
 });
 

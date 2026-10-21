@@ -132,8 +132,22 @@ export type ToolPartLike = {
   id?: string;
   name?: string;
   input?: Record<string, unknown>;
+  /** Tool result text. ask_user echoes the questions here when input was empty. */
+  result?: string;
   status?: string;
 };
+
+function questionsFromToolPart(part: ToolPartLike): PlanQuestion[] {
+  const fromInput = parsePlanQuestionsInput(part.input);
+  if (fromInput.length) return fromInput;
+  const raw = part.result?.trim();
+  if (!raw || !raw.startsWith('{')) return [];
+  try {
+    return parsePlanQuestionsInput(JSON.parse(raw) as unknown);
+  } catch {
+    return [];
+  }
+}
 
 /** Newest ask-user tool part with parseable questions (live or persisted). */
 export function extractPendingPlanQuestions(
@@ -143,7 +157,7 @@ export function extractPendingPlanQuestions(
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i]!;
     if (p.type !== 'tool' || !isAskUserToolName(p.name)) continue;
-    const questions = parsePlanQuestionsInput(p.input);
+    const questions = questionsFromToolPart(p);
     if (!questions.length) continue;
     return {
       id: p.id || `ask-${i}`,
@@ -155,16 +169,68 @@ export function extractPendingPlanQuestions(
   return null;
 }
 
+/** Sidebar ask_user highlight, including questions stamped at call time. */
+export interface AskBlockSnapshot {
+  source?: string;
+  at?: string;
+  questionSignature?: string;
+  questions?: PlanQuestion[];
+}
+
+function pendingFromAskBlock(
+  block: AskBlockSnapshot | null | undefined,
+  dismissedQuestionSignature?: string | null,
+): PendingPlanQuestions | null {
+  if (!block || block.source !== 'ask_user' || !block.questions?.length) return null;
+  const dismissed = dismissedQuestionSignature?.trim();
+  if (dismissed && (!block.questionSignature || block.questionSignature === dismissed)) {
+    return null;
+  }
+  const signature =
+    block.questionSignature?.trim() || planQuestionsSignature(block.questions);
+  return {
+    id: `ask-block:${signature}`,
+    signature,
+    questions: block.questions,
+    source: 'ask_user',
+  };
+}
+
+/**
+ * True when no later user reply has landed after this ask.
+ * Host continue prompts are user rows but not answers — they keep the block.
+ */
+function askBlockStillWaiting(
+  block: AskBlockSnapshot | null | undefined,
+  messages: Array<{ role: string; ts?: string; origin?: string }>,
+): boolean {
+  const askedAt = block?.at;
+  if (!askedAt) return false;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]!;
+    if (message.role !== 'user' || message.origin === 'continue') continue;
+    if (!message.ts) return true;
+    return askedAt > message.ts;
+  }
+  return true;
+}
+
 /**
  * Questions still waiting on the user. After they reply (composer picker or
  * a normal chat message — persisted or in-flight), this is null so the panel
  * does not remount from the previous agent turn.
  */
 export function latestPendingPlanQuestions(input: {
-  messages: Array<{ role: string; parts?: ToolPartLike[] }>;
+  messages: Array<{ role: string; parts?: ToolPartLike[]; ts?: string; origin?: string }>;
   liveParts?: ToolPartLike[] | null;
   /** Optimistic user send not yet in `messages`. */
   userReplied?: boolean;
+  /**
+   * Sidebar highlight. The chat picker uses it when the transcript tool
+   * call is missing or stored its result without the original input.
+   */
+  agentBlock?: AskBlockSnapshot | null;
+  dismissedQuestionSignature?: string | null;
 }): PendingPlanQuestions | null {
   if (input.userReplied) return null;
 
@@ -172,8 +238,18 @@ export function latestPendingPlanQuestions(input: {
   if (fromLive) return fromLive;
 
   const last = input.messages[input.messages.length - 1];
-  if (last?.role === 'user') return null;
-  if (last?.role === 'agent') return extractPendingPlanQuestions(last.parts);
+  if (last?.role === 'agent') {
+    const fromParts = extractPendingPlanQuestions(last.parts);
+    if (fromParts) return fromParts;
+  }
+
+  const fromBlock = pendingFromAskBlock(
+    input.agentBlock,
+    input.dismissedQuestionSignature,
+  );
+  if (fromBlock && askBlockStillWaiting(input.agentBlock, input.messages)) {
+    return fromBlock;
+  }
   return null;
 }
 

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  extractPendingPlanQuestions,
   formatPlanQuestionAnswers,
+  formatPlanQuestionsForChat,
   type PlanQuestionAnswer,
   type PendingPlanQuestions,
 } from '@sideboard/plan-ask-user';
+import { MarkdownMessage } from './MarkdownMessage';
 
 interface Props {
   pending: PendingPlanQuestions;
@@ -299,6 +302,59 @@ export function PlanQuestionsPanel({
           ↑
         </button>
       </div>
+    </div>
+  );
+}
+
+function QuestionBrief({ pending }: { pending: PendingPlanQuestions }) {
+  return (
+    <div className="plan-questions-chat-brief" data-chat-text="">
+      <MarkdownMessage text={formatPlanQuestionsForChat(pending.questions)} />
+    </div>
+  );
+}
+
+type QuestionParts = Parameters<typeof extractPendingPlanQuestions>[0];
+
+/** In-transcript brief when this message actually contains the ask. */
+export function PlanQuestionsChatBrief({
+  pending,
+  parts,
+}: {
+  pending: PendingPlanQuestions | null;
+  parts?: QuestionParts;
+}) {
+  if (!pending) return null;
+  if (extractPendingPlanQuestions(parts)?.signature !== pending.signature) return null;
+  return <QuestionBrief pending={pending} />;
+}
+
+function transcriptCarriesQuestions(
+  messages: Array<{ parts?: QuestionParts }>,
+  liveParts: QuestionParts,
+  signature: string,
+): boolean {
+  if (extractPendingPlanQuestions(liveParts)?.signature === signature) return true;
+  return messages.some(
+    (message) => extractPendingPlanQuestions(message.parts)?.signature === signature,
+  );
+}
+
+/** Brief at the end of the chat when the transcript never stored the tool input. */
+export function PlanQuestionsOrphanBrief({
+  pending,
+  messages,
+  liveParts,
+}: {
+  pending: PendingPlanQuestions | null;
+  messages: Array<{ parts?: QuestionParts }>;
+  liveParts?: QuestionParts;
+}) {
+  if (!pending) return null;
+  if (transcriptCarriesQuestions(messages, liveParts, pending.signature)) return null;
+  return (
+    <div className="msg agent">
+      <QuestionBrief pending={pending} />
     </div>
   );
 }
