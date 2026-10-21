@@ -184,6 +184,33 @@ describe('latestPendingPlanQuestions', () => {
     expect(pending?.signature).toBe('sig');
   });
 
+  it('keeps the sidebar ask across a host continue prompt', () => {
+    const questions = [
+      {
+        question: 'Which API?',
+        options: [{ label: 'REST' }, { label: 'GraphQL' }],
+      },
+    ];
+    const pending = latestPendingPlanQuestions({
+      messages: [
+        { role: 'user', ts: '2026-10-20T00:00:00.000Z' },
+        { role: 'agent', ts: '2026-10-20T00:01:00.000Z' },
+        {
+          role: 'user',
+          ts: '2026-10-20T00:02:00.000Z',
+          origin: 'continue',
+        },
+      ],
+      agentBlock: {
+        source: 'ask_user',
+        at: '2026-10-20T00:01:00.000Z',
+        questionSignature: 'sig',
+        questions,
+      },
+    });
+    expect(pending?.signature).toBe('sig');
+  });
+
   it('hides a sidebar ask after a later user message', () => {
     expect(
       latestPendingPlanQuestions({

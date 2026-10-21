@@ -196,16 +196,19 @@ function pendingFromAskBlock(
   };
 }
 
-/** True when no later user message has landed after this ask. */
+/**
+ * True when no later user reply has landed after this ask.
+ * Host continue prompts are user rows but not answers — they keep the block.
+ */
 function askBlockStillWaiting(
   block: AskBlockSnapshot | null | undefined,
-  messages: Array<{ role: string; ts?: string }>,
+  messages: Array<{ role: string; ts?: string; origin?: string }>,
 ): boolean {
   const askedAt = block?.at;
   if (!askedAt) return false;
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i]!;
-    if (message.role !== 'user') continue;
+    if (message.role !== 'user' || message.origin === 'continue') continue;
     if (!message.ts) return true;
     return askedAt > message.ts;
   }
@@ -218,7 +221,7 @@ function askBlockStillWaiting(
  * does not remount from the previous agent turn.
  */
 export function latestPendingPlanQuestions(input: {
-  messages: Array<{ role: string; parts?: ToolPartLike[]; ts?: string }>;
+  messages: Array<{ role: string; parts?: ToolPartLike[]; ts?: string; origin?: string }>;
   liveParts?: ToolPartLike[] | null;
   /** Optimistic user send not yet in `messages`. */
   userReplied?: boolean;

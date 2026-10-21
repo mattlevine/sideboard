@@ -76,10 +76,18 @@ export function sidebarRowAgentBlock(
 }
 
 /**
- * Thread to open when a worktree row is showing a question highlight.
- * The parent row rolls up any sibling; the click should land on the chat
- * that actually asked, which is where the picker renders.
+ * Closed worktree rows open the chat that asked. An already-open row keeps
+ * the selected chat — the parent is no longer showing a sibling's question.
  */
+export function sidebarParentSelectId(
+  group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
+  primaryId: string,
+  opts: { active: boolean },
+): string {
+  if (opts.active) return primaryId;
+  return sidebarQuestionThreadId(group, primaryId);
+}
+
 export function sidebarQuestionThreadId(
   group: Array<Pick<Thread, 'id' | 'status' | 'agentBlock' | 'dismissedQuestionSignature'>>,
   primaryId: string,

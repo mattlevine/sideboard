@@ -270,6 +270,7 @@ export {
 } from './worktree-list-badges.js';
 
 export {
+  sidebarParentSelectId,
   sidebarQuestionThreadId,
   sidebarRowAgentBlock,
   visibleAgentBlock,

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  sidebarParentSelectId,
   sidebarQuestionThreadId,
   sidebarRowAgentBlock,
   worktreeAgentBlock,
@@ -306,6 +307,25 @@ describe('sidebarRowAgentBlock', () => {
     expect(
       sidebarRowAgentBlock([other, asked], { active: true, selectedId: 'asked' })?.reason,
     ).toBe('Asked the user: Which API?');
+  });
+});
+
+describe('sidebarParentSelectId', () => {
+  const asked = {
+    id: 'asked',
+    status: 'idle' as const,
+    agentBlock: {
+      source: 'ask_user' as const,
+      reason: 'Asked the user: Which API?',
+      at: 'u',
+      questionSignature: askSignature,
+    },
+  };
+  const primary = { id: 'primary', status: 'idle' as const, agentBlock: null };
+
+  it('opens the asking chat only while the worktree row is closed', () => {
+    expect(sidebarParentSelectId([primary, asked], 'primary', { active: false })).toBe('asked');
+    expect(sidebarParentSelectId([primary, asked], 'primary', { active: true })).toBe('primary');
   });
 });
 

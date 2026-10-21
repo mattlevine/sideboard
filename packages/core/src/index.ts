@@ -235,6 +235,7 @@ export {
   classifyWorktreeListBadges,
   reviewLabelForRepo,
   worktreeBoardStatus,
+  sidebarParentSelectId,
   sidebarQuestionThreadId,
   sidebarRowAgentBlock,
   visibleAgentBlock,

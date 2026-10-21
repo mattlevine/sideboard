@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  sidebarQuestionThreadId,
+  sidebarParentSelectId,
   sidebarRowAgentBlock,
   worktreeBoardStatus,
 } from '@sideboard/home-board';
@@ -226,16 +226,11 @@ export function WorktreeSidebarRow({
         onClick={(e) => {
           if (archiving) return;
           const additive = e.metaKey || e.ctrlKey || e.shiftKey;
-          const targetId = sidebarQuestionThreadId(group, primary.id);
           if (active && !additive) {
-            if (targetId !== selectedId) {
-              onSelect(targetId, false);
-              return;
-            }
             if (collapsedWhileSelected) setCollapsedWhileSelected(false);
             return;
           }
-          onSelect(targetId, additive);
+          onSelect(sidebarParentSelectId(group, primary.id, { active }), additive);
         }}
         onContextMenu={(e) => {
           if (!onMarkUnread || archiving) return;
