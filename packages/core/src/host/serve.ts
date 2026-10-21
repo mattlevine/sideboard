@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
+import { bootstrapSystemCa } from '../http/system-ca.js';
 import { caffeinateWhileRunningEnabled, caffeinateWhileSchedulesEnabled, caffeinateWhileSlackListenEnabled, loadAppSettings } from '../store/app-settings.js';
 import {
   claimDesktopHost,
@@ -50,6 +51,9 @@ export async function startHeadlessHost(opts?: {
   const blocked = headlessHostBlockedReason();
   if (blocked) return { ok: false, reason: blocked };
   claimDesktopHost();
+  // Same as desktop main: Node TLS (`ws`) does not pick up Keychain CAs from
+  // NODE_EXTRA_CA_CERTS set after process start unless we dump them first.
+  bootstrapSystemCa();
   armSchedules();
 
   const ac = new AbortController();

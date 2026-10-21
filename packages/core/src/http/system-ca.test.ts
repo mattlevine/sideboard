@@ -4,12 +4,15 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applySystemCaEnv,
+  bootstrapSystemCa,
   collectSystemCaPem,
   materializeSystemCaBundle,
+  mergeSystemCaIntoTlsOptions,
   NODE_EXTRA_CA_CERTS,
   NODE_USE_SYSTEM_CA,
   splitPemCertificates,
   systemCaBundlePath,
+  systemCaTlsOptions,
   trustSystemCertificates,
 } from './system-ca.js';
 
@@ -123,5 +126,120 @@ describe('materializeSystemCaBundle', () => {
 describe('trustSystemCertificates', () => {
   it('is a boolean and does not throw', () => {
     expect(typeof trustSystemCertificates({ platform: 'win32' })).toBe('boolean');
+  });
+
+  it('wraps createSecureContext when setDefaultCACertificates is missing', () => {
+    const prevExtra = process.env.NODE_EXTRA_CA_CERTS;
+    const dir = mkdtempSync(join(tmpdir(), 'sb-system-ca-n20-'));
+    const pemPath = join(dir, 'ca.pem');
+    writeFileSync(pemPath, SAMPLE_PEM);
+    process.env.NODE_EXTRA_CA_CERTS = pemPath;
+    try {
+      const extra = splitPemCertificates(SAMPLE_PEM)[0];
+      const create = vi.fn((opts?: { ca?: Array<string | Buffer> }) => opts);
+      const fakeTls = {
+        createSecureContext: create,
+        rootCertificates: ['ROOT'],
+      };
+      expect(trustSystemCertificates({ tls: fakeTls, platform: 'win32' })).toBe(true);
+      fakeTls.createSecureContext({});
+      expect(create).toHaveBeenCalledWith({ ca: ['ROOT', extra] });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      if (prevExtra === undefined) delete process.env.NODE_EXTRA_CA_CERTS;
+      else process.env.NODE_EXTRA_CA_CERTS = prevExtra;
+    }
+  });
+});
+
+describe('mergeSystemCaIntoTlsOptions', () => {
+  const extra = ['EXTRA'];
+  const roots = ['ROOT'];
+
+  it('uses Mozilla roots plus extra when ca is omitted', () => {
+    expect(mergeSystemCaIntoTlsOptions(undefined, extra, roots).ca).toEqual(['ROOT', 'EXTRA']);
+  });
+
+  it('appends extra to an existing ca list', () => {
+    expect(mergeSystemCaIntoTlsOptions({ ca: ['GIVEN'] }, extra, roots).ca).toEqual([
+      'GIVEN',
+      'EXTRA',
+    ]);
+  });
+
+  it('appends extra to a single ca string', () => {
+    expect(mergeSystemCaIntoTlsOptions({ ca: 'GIVEN' }, extra, roots).ca).toEqual([
+      'GIVEN',
+      'EXTRA',
+    ]);
+  });
+});
+
+describe('systemCaTlsOptions', () => {
+  const prevExtra = process.env.NODE_EXTRA_CA_CERTS;
+
+  afterEach(() => {
+    if (prevExtra === undefined) delete process.env.NODE_EXTRA_CA_CERTS;
+    else process.env.NODE_EXTRA_CA_CERTS = prevExtra;
+  });
+
+  it('includes the extra bundle after Mozilla roots', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sb-system-ca-tls-'));
+    const pemPath = join(dir, 'ca.pem');
+    writeFileSync(pemPath, SAMPLE_PEM);
+    process.env.NODE_EXTRA_CA_CERTS = pemPath;
+    try {
+      const extra = splitPemCertificates(SAMPLE_PEM)[0];
+      const opts = systemCaTlsOptions({ platform: 'win32' });
+      expect(opts.ca?.at(-1)).toBe(extra);
+      expect(opts.ca?.length).toBeGreaterThan(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns no ca when there are no extra OS certificates', () => {
+    delete process.env.NODE_EXTRA_CA_CERTS;
+    expect(systemCaTlsOptions({ platform: 'win32', appData: () => '/tmp/sb-missing-ca' })).toEqual(
+      {},
+    );
+  });
+});
+
+describe('bootstrapSystemCa', () => {
+  const prevExtra = process.env.NODE_EXTRA_CA_CERTS;
+  const prevUse = process.env.NODE_USE_SYSTEM_CA;
+
+  afterEach(() => {
+    if (prevExtra === undefined) delete process.env.NODE_EXTRA_CA_CERTS;
+    else process.env.NODE_EXTRA_CA_CERTS = prevExtra;
+    if (prevUse === undefined) delete process.env.NODE_USE_SYSTEM_CA;
+    else process.env.NODE_USE_SYSTEM_CA = prevUse;
+  });
+
+  it('exports the Keychain dump for Node children', () => {
+    delete process.env.NODE_EXTRA_CA_CERTS;
+    delete process.env.NODE_USE_SYSTEM_CA;
+    const dir = mkdtempSync(join(tmpdir(), 'sb-system-ca-boot-'));
+    try {
+      const setDefault = vi.fn();
+      bootstrapSystemCa({
+        platform: 'darwin',
+        appData: () => dir,
+        spawn: () => ({ status: 0, stdout: SAMPLE_PEM }),
+        tls: {
+          getCACertificates: (type) => (type === 'system' ? [] : ['BUNDLED']),
+          setDefaultCACertificates: setDefault,
+        },
+      });
+      expect(process.env.NODE_USE_SYSTEM_CA).toBe('1');
+      expect(process.env.NODE_EXTRA_CA_CERTS).toBe(systemCaBundlePath({ appData: () => dir }));
+      expect(setDefault).toHaveBeenCalled();
+      const trusted = setDefault.mock.calls[0]?.[0] as string[];
+      expect(trusted).toContain('BUNDLED');
+      expect(trusted).toContain(splitPemCertificates(SAMPLE_PEM)[0]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

@@ -6,6 +6,7 @@ import {
 } from './relay-protocol.js';
 import { resolveWebSocket, type SlackInboundMessage, type SlackWebSocketCtor } from './socket-mode.js';
 import { lookupPreferPublicDns } from './public-dns.js';
+import { systemCaTlsOptions } from '../http/system-ca.js';
 import { WebSocket as WsWebSocket } from 'ws';
 
 export interface SlackRelayRegisterWorkspace {
@@ -75,7 +76,10 @@ export async function runSlackRelayClient(opts: SlackRelayClientOptions): Promis
     ? resolveWebSocket(opts.WebSocketImpl)
     : (class {
         constructor(url: string) {
-          return new WsWebSocket(url, { lookup: lookupPreferPublicDns });
+          return new WsWebSocket(url, {
+            lookup: lookupPreferPublicDns,
+            ...systemCaTlsOptions(),
+          });
         }
       } as unknown as SlackWebSocketCtor);
   const url = opts.url.trim();

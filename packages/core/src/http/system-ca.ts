@@ -1,14 +1,17 @@
 /**
- * Trust OS / Keychain CAs in Node (undici `fetch`).
+ * Trust OS / Keychain CAs in Node (undici `fetch`, `ws`, `https`).
  *
  * Electron main Linear (create-worktree issue picker) uses `net.fetch` —
- * Chromium already reads the system store. Agent Linear tools run in a
- * real Node MCP process whose Mozilla bundle does not include corporate
- * VPN/proxy CAs, which surfaces as UNABLE_TO_GET_ISSUER_CERT_LOCALLY.
+ * Chromium already reads the system store. The phone relay WebSocket and
+ * agent Linear tools use Node TLS, whose Mozilla bundle does not include
+ * corporate VPN/proxy CAs (Zscaler), which surfaces as
+ * UNABLE_TO_GET_ISSUER_CERT_LOCALLY.
  *
  * Node 22.15+ can load the system store (`NODE_USE_SYSTEM_CA=1` /
- * `tls.getCACertificates('system')`). Older Node and some Keychain layouts
- * still need a PEM dump via `NODE_EXTRA_CA_CERTS`.
+ * `tls.getCACertificates('system')`). Electron 34 ships Node 20, where
+ * `NODE_EXTRA_CA_CERTS` is only read at process start and
+ * `setDefaultCACertificates` does not exist — so we dump Keychain PEMs
+ * and either pass them as `ca` or wrap `tls.createSecureContext`.
  */
 import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -36,6 +39,9 @@ type EnvLike = NodeJS.ProcessEnv | Record<string, string | undefined>;
 type TlsSystemCa = {
   getCACertificates?: (type?: 'default' | 'system' | 'bundled' | 'extra') => string[];
   setDefaultCACertificates?: (certs: readonly (string | Buffer)[]) => void;
+  createSecureContext?: typeof tls.createSecureContext;
+  rootCertificates?: readonly string[];
+  __sideboardSystemCaPatched?: boolean;
 };
 
 export type SystemCaSpawn = (
@@ -49,6 +55,7 @@ export type SystemCaIo = {
   spawn?: SystemCaSpawn;
   now?: () => number;
   appData?: () => string;
+  tls?: TlsSystemCa;
 };
 
 export function splitPemCertificates(pem: string): string[] {
@@ -153,36 +160,82 @@ export function applySystemCaEnv(env: EnvLike): void {
   if (inherited) env[NODE_EXTRA_CA_CERTS] = inherited;
 }
 
-function extraCertsFromBundle(): string[] {
+function extraCertsFromBundle(io: SystemCaIo = {}): string[] {
   const path = process.env.NODE_EXTRA_CA_CERTS?.trim();
   if (path) return splitPemCertificates(readExistingFile(path));
-  const dest = systemCaBundlePath();
-  return splitPemCertificates(readExistingFile(dest));
+  return splitPemCertificates(readExistingFile(systemCaBundlePath(io)));
+}
+
+function extraSystemCaPems(io: SystemCaIo = {}): string[] {
+  const fromBundle = extraCertsFromBundle(io);
+  if (fromBundle.length > 0) return fromBundle;
+  return splitPemCertificates(collectSystemCaPem(io));
+}
+
+export function mergeSystemCaIntoTlsOptions(
+  options: tls.SecureContextOptions | undefined,
+  extra: readonly (string | Buffer)[],
+  roots: readonly string[] = tls.rootCertificates,
+): tls.SecureContextOptions {
+  const existing = options?.ca;
+  const base: Array<string | Buffer> =
+    existing == null ? [...roots] : Array.isArray(existing) ? [...existing] : [existing];
+  return { ...options, ca: [...base, ...extra] };
+}
+
+/** `ca` for Node `https` / `ws` when the process cannot change default CAs. */
+export function systemCaTlsOptions(io: SystemCaIo = {}): { ca?: string[] } {
+  const extra = extraSystemCaPems(io);
+  if (extra.length === 0) return {};
+  return { ca: [...tls.rootCertificates, ...extra] };
+}
+
+function installCreateSecureContextCaPatch(api: TlsSystemCa, extra: string[]): boolean {
+  if (api.__sideboardSystemCaPatched) return true;
+  if (typeof api.createSecureContext !== 'function') return false;
+  const orig = api.createSecureContext;
+  const roots = api.rootCertificates ?? tls.rootCertificates;
+  api.createSecureContext = ((options?: tls.SecureContextOptions) =>
+    orig(mergeSystemCaIntoTlsOptions(options, extra, roots))) as typeof tls.createSecureContext;
+  api.__sideboardSystemCaPatched = true;
+  return true;
 }
 
 /**
  * Expand this process's default TLS CAs with the OS store. Safe no-op on
- * Node builds that lack `tls.getCACertificates` / `setDefaultCACertificates`.
+ * Node builds that lack `tls.getCACertificates` / `setDefaultCACertificates`
+ * *and* have no extra PEMs to wrap into `createSecureContext`.
  */
 export function trustSystemCertificates(io: SystemCaIo = {}): boolean {
   try {
-    const api = tls as unknown as TlsSystemCa;
+    const extra = extraSystemCaPems(io);
+    const api = io.tls ?? (tls as TlsSystemCa);
     if (
-      typeof api.getCACertificates !== 'function' ||
-      typeof api.setDefaultCACertificates !== 'function'
+      typeof api.getCACertificates === 'function' &&
+      typeof api.setDefaultCACertificates === 'function'
     ) {
-      return false;
+      const current = api.getCACertificates('default');
+      const system = api.getCACertificates('system');
+      if (system.length === 0 && extra.length === 0) return false;
+      api.setDefaultCACertificates([...current, ...system, ...extra]);
+      return true;
     }
-    const current = api.getCACertificates('default');
-    const system = api.getCACertificates('system');
-    let extra = extraCertsFromBundle();
-    if (system.length === 0 && extra.length === 0) {
-      extra = splitPemCertificates(collectSystemCaPem(io));
-    }
-    if (system.length === 0 && extra.length === 0) return false;
-    api.setDefaultCACertificates([...current, ...system, ...extra]);
-    return true;
+    if (extra.length === 0) return false;
+    return installCreateSecureContextCaPatch(api, extra);
   } catch {
     return false;
   }
+}
+
+/**
+ * Dump OS CAs, export them for Node children, and trust them in this
+ * process. Safe to call more than once. Never throws.
+ */
+export function bootstrapSystemCa(io: SystemCaIo = {}): void {
+  const systemCaBundle = materializeSystemCaBundle(io);
+  if (systemCaBundle && !process.env.NODE_EXTRA_CA_CERTS?.trim()) {
+    process.env.NODE_EXTRA_CA_CERTS = systemCaBundle;
+  }
+  applySystemCaEnv(process.env);
+  trustSystemCertificates(io);
 }

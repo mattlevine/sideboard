@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRemoteKeepalive } from './client.js';
+import { createRemoteKeepalive, formatRemoteHostError } from './client.js';
 
 describe('createRemoteKeepalive', () => {
   afterEach(() => {
@@ -37,5 +37,21 @@ describe('createRemoteKeepalive', () => {
     vi.advanceTimersByTime(15_000);
     expect(timeouts).toEqual([]);
     keepalive.stop();
+  });
+});
+
+describe('formatRemoteHostError', () => {
+  it('explains a corporate CA rejection on the relay socket', () => {
+    const formatted = formatRemoteHostError(
+      Object.assign(new Error('unable to get local issuer certificate'), {
+        code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+      }),
+    );
+    expect(formatted).toContain('unable to get local issuer certificate');
+    expect(formatted).toContain('corporate CA');
+  });
+
+  it('leaves unrelated socket errors unchanged', () => {
+    expect(formatRemoteHostError(new Error('remote ping timeout'))).toBe('remote ping timeout');
   });
 });

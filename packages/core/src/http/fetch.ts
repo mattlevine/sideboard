@@ -3,10 +3,10 @@
  *
  * Electron main should call {@link setHttpFetchImpl} with `net.fetch` so
  * requests use Chromium's network stack (create-worktree issue picker).
- * Agent Linear tools run in a Node MCP process — call
- * `trustSystemCertificates` / `applySystemCaEnv` so undici trusts Keychain
- * CAs. Node's undici `fetch` otherwise fails behind corporate VPN/proxy as
- * an opaque `TypeError: fetch failed` or `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`.
+ * Agent Linear tools run in a Node MCP process — call `bootstrapSystemCa`
+ * so undici trusts Keychain CAs. Node's undici `fetch` otherwise fails
+ * behind corporate VPN/proxy as an opaque `TypeError: fetch failed` or
+ * `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`.
  */
 
 let injected: typeof fetch | null = null;
