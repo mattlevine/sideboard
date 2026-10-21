@@ -10,6 +10,7 @@ export {
   guestBridgeEffects,
   legacyAck,
   legacyResponse,
+  resourceTeardownRequest,
   rpcError,
   rpcResult,
   toolInputNotification,

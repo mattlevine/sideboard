@@ -1,3 +1,5 @@
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
@@ -26,6 +28,18 @@ describe('McpUiHost', () => {
           description: 'Roll dice',
           inputSchema: { type: 'object' as const, properties: {} },
           _meta: { ui: { resourceUri: 'ui://dice/app.html' } },
+        },
+        {
+          name: 'rate',
+          description: 'Rate',
+          inputSchema: { type: 'object' as const, properties: {} },
+          _meta: { ui: { visibility: ['app'] } },
+        },
+        {
+          name: 'secret',
+          description: 'Model only',
+          inputSchema: { type: 'object' as const, properties: {} },
+          _meta: { ui: { visibility: ['model'] } },
         },
       ],
     }));
@@ -66,5 +80,28 @@ describe('McpUiHost', () => {
 
     const called = await host.callTool('dice', 'roll', { sides: 6 });
     expect(called).toMatchObject({ structuredContent: { echoed: 'roll' } });
+    expect(await host.callTool('dice', 'rate', {})).toMatchObject({
+      structuredContent: { echoed: 'rate' },
+    });
+    await expect(host.callTool('dice', 'secret', {})).rejects.toThrow(/not available to the app/);
+
+    const proxied = await host.proxyEntries({ dice: { command: 'dice' } });
+    expect(proxied.dice).toMatchObject({ type: 'http' });
+    const url = String(proxied.dice?.url ?? '');
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/s\/dice$/);
+    const transport = new StreamableHTTPClientTransport(new URL(url), {
+      requestInit: { headers: (proxied.dice?.headers as Record<string, string>) ?? {} },
+    });
+    const client = new Client({ name: 'claude', version: '0.0.0' });
+    await client.connect(transport);
+    try {
+      const listed = await client.listTools();
+      expect(listed.tools.map((tool) => tool.name).sort()).toEqual(['roll', 'secret']);
+      await expect(client.callTool({ name: 'rate', arguments: {} })).rejects.toThrow(
+        /not available to the model/,
+      );
+    } finally {
+      await client.close();
+    }
   });
 });

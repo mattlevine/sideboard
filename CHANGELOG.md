@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Claude MCP Apps share one upstream session through a loopback proxy. App-only tools stay off the model. `ui/update-model-context` is stashed for the next turn.
+
+### Fixed
+
+- MCP App CSP matches SEP-1865 defaults (`connect-src 'none'`, no `unsafe-eval`) and keeps wildcard resource origins.
+- Phone MCP Apps no longer run same-origin with the WebView shell, send `ui/resource-teardown` on unmount, and can `resources/read` the same URIs as desktop.
+
 ## [0.1.311] - 2026-10-21
 
 ### Fixed

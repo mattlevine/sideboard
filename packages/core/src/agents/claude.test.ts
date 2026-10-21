@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { run } from '../git/run.js';
 import {
   CLAUDE_PROMPT_ARG_MAX,
@@ -54,7 +56,28 @@ vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../mcp-ui/host.js', () => ({
+  getMcpUiHost: () => ({
+    proxyEntries: async (entries: Record<string, Record<string, unknown>>) => {
+      const out: Record<string, Record<string, unknown>> = {};
+      for (const name of Object.keys(entries)) {
+        out[name] = {
+          type: 'http',
+          url: `http://127.0.0.1:9/s/${encodeURIComponent(name)}`,
+          headers: { Authorization: 'Bearer t' },
+        };
+      }
+      return out;
+    },
+  }),
+  closeMcpUiHost: () => undefined,
+}));
+
+let dataDir: string;
+
 beforeEach(() => {
+  dataDir = mkdtempSync(join(tmpdir(), 'sideboard-claude-cli-'));
+  vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
   claudeSettings.executablePath = undefined;
   claudeSettings.chromeEnabled = false;
   claudeSettings.linearConnected = false;
@@ -62,6 +85,11 @@ beforeEach(() => {
   claudeSettings.posthogConnected = false;
   for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   vi.mocked(run).mockClear();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  rmSync(dataDir, { recursive: true, force: true });
 });
 
 function allowedOf(args: string[]): string[] {
@@ -211,9 +239,11 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).not.toContain('mcp__brightsy__*');
     const mcpIdx = cmd.args.indexOf('--mcp-config');
     const cfg = JSON.parse(readFileSync(cmd.args[mcpIdx + 1]!, 'utf8')) as {
-      mcpServers: Record<string, { command?: string }>;
+      mcpServers: Record<string, { command?: string; url?: string; type?: string }>;
     };
-    expect(cfg.mcpServers.gmail?.command).toBe('npx');
+    expect(cfg.mcpServers.gmail?.command).toBeUndefined();
+    expect(cfg.mcpServers.gmail?.type).toBe('http');
+    expect(cfg.mcpServers.gmail?.url).toMatch(/^http:\/\/127\.0\.0\.1:9\/s\/gmail$/);
     expect(cfg.mcpServers.sideboard).toBeTruthy();
   });
 

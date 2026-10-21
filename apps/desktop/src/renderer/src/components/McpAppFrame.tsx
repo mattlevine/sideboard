@@ -8,6 +8,7 @@ import {
   legacyResponse,
   mcpUiContentSecurityPolicy,
   mcpUiFrameId,
+  resourceTeardownRequest,
   rpcError,
   rpcResult,
   toolInputNotification,
@@ -103,7 +104,13 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
       .catch(() => undefined);
     return () => {
       cancelled = true;
-      void window.sideboard.clearMcpUiPreview(frameId);
+      iframeRef.current?.contentWindow?.postMessage(
+        resourceTeardownRequest(`td-${frameId}`, 'unmount'),
+        '*',
+      );
+      window.setTimeout(() => {
+        void window.sideboard.clearMcpUiPreview(frameId);
+      }, 250);
     };
   }, [toolCallId, toolName, result]);
 
@@ -138,6 +145,15 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
           void window.sideboard.sendToThread(threadId, effect.text).then(
             () => post(rpcResult(effect.id, {})),
             () => post(rpcError(effect.id, 'Message sending denied')),
+          );
+        } else if (effect.type === 'update-context') {
+          if (!threadId) {
+            post(rpcError(effect.id, 'Context update denied'));
+            continue;
+          }
+          void window.sideboard.mcpUiUpdateModelContext(threadId, effect.text).then(
+            () => post(rpcResult(effect.id, {})),
+            () => post(rpcError(effect.id, 'Context update denied')),
           );
         } else if (effect.type === 'call-tool' || effect.type === 'read-resource') {
           const server = viewRef.current?.server;

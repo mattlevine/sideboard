@@ -248,6 +248,11 @@ export interface Thread {
    * (prevents infinite agent-switch cascades).
    */
   quotaContinuedFromId?: string | null;
+  /**
+   * Last MCP App `ui/update-model-context` text. Prepended on the next turn
+   * then cleared. Does not start a turn by itself.
+   */
+  mcpAppModelContext?: string | null;
 }
 
 export interface CreateChatTabInput {

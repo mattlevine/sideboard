@@ -8,20 +8,22 @@ import {
   type McpServerLaunch,
   type McpUiView,
 } from './meta.js';
+import { listenMcpUiProxy, type McpUiProxyListen } from './proxy-http.js';
 import { openMcpUiSession, type McpUiSession, type McpUiToolInfo } from './session.js';
+import { toolVisibleTo } from './visibility.js';
 
 const TOOL_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Sideboard's own MCP Apps client for the servers Claude was given.
- * Claude Code stays text-only: it never fetches `ui://` resources, so the
- * desktop opens a second connection to read the HTML and to proxy tool
- * calls the iframe makes. Stdio servers therefore run twice — once for
- * Claude, once for this host.
+ * MCP Apps host. Claude talks to a loopback proxy (`proxyEntries`) that
+ * shares this process's upstream session and hides app-only tools. The
+ * iframe uses the same session for `tools/call` / `resources/read`.
  */
 export class McpUiHost {
   private sessions = new Map<string, Promise<McpUiSession>>();
   private toolLists = new Map<string, { at: number; key: string; tools: McpUiToolInfo[] }>();
+  private proxy: Promise<McpUiProxyListen> | undefined;
+  private proxyProjectDirs: string[] | undefined;
 
   constructor(
     private readonly opts: {
@@ -63,14 +65,50 @@ export class McpUiHost {
     }
   }
 
+  /**
+   * Point Claude at loopback HTTP so it shares this host's upstream session
+   * and never sees `visibility: ["app"]` tools.
+   */
+  async proxyEntries(
+    entries: Record<string, Record<string, unknown>>,
+    projectDirs?: string[],
+  ): Promise<Record<string, Record<string, unknown>>> {
+    const names = Object.keys(entries).filter((name) => name.trim());
+    if (names.length === 0) return {};
+    this.proxyProjectDirs = projectDirs;
+    try {
+      const listen = await this.ensureProxy();
+      const out: Record<string, Record<string, unknown>> = {};
+      for (const name of names) {
+        out[name] = {
+          type: 'http',
+          url: listen.urlFor(name),
+          headers: listen.headers,
+        };
+      }
+      return out;
+    } catch (err) {
+      console.error('[mcp-ui] proxy:', err instanceof Error ? err.message : err);
+      return { ...entries };
+    }
+  }
+
   async callTool(
     server: string,
     tool: string,
     args: Record<string, unknown>,
     projectDirs?: string[],
   ): Promise<unknown> {
-    const session = await this.sessionForName(server, projectDirs);
-    if (!session) throw new Error(`MCP server ${server} is not available`);
+    const entry = this.userEntries(projectDirs)[server];
+    if (!entry) throw new Error(`MCP server ${server} is not available`);
+    const launch = parseMcpServerLaunch(entry);
+    if (!launch) throw new Error(`MCP server ${server} is not available`);
+    const session = await this.sessionFor(server, launch);
+    const tools = await this.toolsFor(server, launch, session);
+    const info = tools.find((item) => item.name === tool);
+    if (!info || !toolVisibleTo(info.visibility, 'app')) {
+      throw new Error(`Tool ${tool} is not available to the app`);
+    }
     return session.callTool(tool, args);
   }
 
@@ -93,11 +131,25 @@ export class McpUiHost {
 
   async closeAll(): Promise<void> {
     const pending = [...this.sessions.values()];
+    const proxy = this.proxy;
     this.sessions.clear();
     this.toolLists.clear();
-    await Promise.all(
-      pending.map((session) => session.then((open) => open.close()).catch(() => undefined)),
-    );
+    this.proxy = undefined;
+    await Promise.all([
+      ...pending.map((session) => session.then((open) => open.close()).catch(() => undefined)),
+      proxy ? proxy.then((listen) => listen.close()).catch(() => undefined) : Promise.resolve(),
+    ]);
+  }
+
+  private ensureProxy(): Promise<McpUiProxyListen> {
+    if (this.proxy) return this.proxy;
+    this.proxy = listenMcpUiProxy({
+      sessionFor: (server) => this.sessionForName(server, this.proxyProjectDirs),
+    }).catch((err) => {
+      this.proxy = undefined;
+      throw err;
+    });
+    return this.proxy;
   }
 
   private userEntries(projectDirs?: string[]): Record<string, Record<string, unknown>> {

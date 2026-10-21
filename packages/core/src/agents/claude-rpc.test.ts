@@ -41,6 +41,23 @@ vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../mcp-ui/host.js', () => ({
+  getMcpUiHost: () => ({
+    proxyEntries: async (entries: Record<string, Record<string, unknown>>) => {
+      const out: Record<string, Record<string, unknown>> = {};
+      for (const name of Object.keys(entries)) {
+        out[name] = {
+          type: 'http',
+          url: `http://127.0.0.1:9/s/${encodeURIComponent(name)}`,
+          headers: { Authorization: 'Bearer t' },
+        };
+      }
+      return out;
+    },
+  }),
+  closeMcpUiHost: () => undefined,
+}));
+
 vi.mock('../git/run.js', () => ({
   run: vi.fn(async (cmd: string, _args: string[]) => {
     if (cmd === 'which') return { exitCode: 0, stdout: '/usr/bin/claude', stderr: '' };
@@ -142,7 +159,11 @@ describe('Claude Agent RPC worktree hook', () => {
       allowedTools: string[];
       isolateClaudeAiMcp?: boolean;
     };
-    expect(req.mcpServers?.gmail).toEqual({ command: 'npx', args: ['-y', 'gmail'] });
+    expect(req.mcpServers?.gmail).toEqual({
+      type: 'http',
+      url: 'http://127.0.0.1:9/s/gmail',
+      headers: { Authorization: 'Bearer t' },
+    });
     expect(req.allowedTools).toContain('mcp__gmail');
     expect(req.isolateClaudeAiMcp).toBe(false);
   });
@@ -165,7 +186,10 @@ describe('Claude Agent RPC worktree hook', () => {
       mcpServers?: Record<string, { command?: string }>;
       isolateClaudeAiMcp?: boolean;
     };
-    expect(req.mcpServers?.gmail?.command).toBe('npx');
+    expect(req.mcpServers?.gmail).toMatchObject({
+      type: 'http',
+      url: 'http://127.0.0.1:9/s/gmail',
+    });
     expect(req.isolateClaudeAiMcp).toBe(true);
   });
 

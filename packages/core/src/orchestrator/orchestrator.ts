@@ -117,6 +117,7 @@ import {
   withThreadLock,
 } from '../store/thread-store.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
+import { takeMcpAppModelContext } from '../mcp-ui/model-context.js';
 import { clearAgentBlock, dismissAskUserQuestion, settleAgentBlock } from './agent-block.js';
 import {
   notifyParentOfChildHalt,
@@ -1591,6 +1592,7 @@ export class Orchestrator {
       orchestrationReminder,
       prGateDirective,
       injectedNoticeContext,
+      takeMcpAppModelContext(threadId),
       expandedPrompt,
     ]
       .filter(Boolean)

@@ -8,7 +8,8 @@ export type PhoneMcpAppRef = { id: string; tool: string };
 export type PhoneMcpUiControl =
   | { op: 'mcp-ui'; chatId: string; reqId: string; view?: unknown }
   | { op: 'mcp-ui-call'; chatId: string; reqId: string; result?: unknown; error?: string }
-  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string };
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string }
+  | { op: 'mcp-ui-context'; chatId: string; reqId: string; result?: unknown; error?: string };
 
 type McpView = {
   server: string;
@@ -86,6 +87,9 @@ function PhoneMcpApp({
     });
     return () => {
       cancel = true;
+      webRef.current?.postMessage(
+        JSON.stringify({ kind: 'teardown', id: `td-${app.id}`, reason: 'unmount' }),
+      );
     };
   }, [app.id, app.tool, chatId]);
 
@@ -152,6 +156,22 @@ async function onGuest(
     if (msg.id != null) post({ kind: 'rpc', id: msg.id, result: {} });
     return;
   }
+  if (msg.kind === 'context' && msg.id != null) {
+    const text = msg.text?.trim() ?? '';
+    if (!text) {
+      post({ kind: 'rpc', id: msg.id, error: 'Invalid content format' });
+      return;
+    }
+    const reqId = nextPhoneMcpReqId();
+    const reply = await ask(ctx.send, {
+      op: 'mcp-ui-context',
+      chatId: ctx.chatId,
+      reqId,
+      text: text.slice(0, 8000),
+    });
+    post({ kind: 'rpc', id: msg.id, result: reply?.result ?? {}, error: reply?.error });
+    return;
+  }
   if (!ctx.server) return;
   if (msg.kind === 'call' && msg.name && msg.id != null) {
     const reqId = nextPhoneMcpReqId();
@@ -205,7 +225,7 @@ function shellHtml(view: McpView): string {
     : `<!DOCTYPE html><html><head>${meta}</head><body>${view.html}</body></html>`;
   return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
 <body style="margin:0;background:#121212">
-<iframe id="app" sandbox="allow-scripts allow-forms allow-same-origin" style="border:0;width:100%;height:100vh"></iframe>
+<iframe id="app" sandbox="allow-scripts allow-forms" style="border:0;width:100%;height:100vh"></iframe>
 <script>
 const APP_HTML = ${JSON.stringify(appHtml)};
 const INPUT = ${JSON.stringify(view.input ?? {})};
@@ -258,6 +278,18 @@ window.addEventListener('message', function (event) {
   if (msg.method === 'tools/call' && id != null) { send({ kind: 'call', id: id, name: params.name, args: params.arguments || {} }); return; }
   if (msg.method === 'resources/read' && id != null) { send({ kind: 'read', id: id, uri: params.uri }); return; }
   if (msg.method === 'ui/open-link' && id != null) { send({ kind: 'link', id: id, url: params.url }); return; }
+  if (msg.method === 'ui/request-display-mode' && id != null) { reply(id, { mode: 'inline' }); return; }
+  if (msg.method === 'ui/update-model-context' && id != null) {
+    var ctx = [];
+    var blocks = Array.isArray(params.content) ? params.content : [];
+    for (var i = 0; i < blocks.length; i++) {
+      if (blocks[i] && typeof blocks[i].text === 'string' && blocks[i].text.trim()) ctx.push(blocks[i].text.trim());
+    }
+    if (params.structuredContent && typeof params.structuredContent === 'object') ctx.push(JSON.stringify(params.structuredContent));
+    if (!ctx.length) { reply(id, undefined, 'Invalid content format'); return; }
+    send({ kind: 'context', id: id, text: 'MCP App context:\\n' + ctx.join('\\n') });
+    return;
+  }
   if (msg.method === 'ui/message' && id != null) {
     send({ kind: 'chat', id: id, text: (params.content && params.content.text) || params.text || '' });
     return;
@@ -270,7 +302,12 @@ window.addEventListener('message', function (event) {
 function fromHost(raw) {
   var data = raw;
   if (typeof raw === 'string') { try { data = JSON.parse(raw); } catch (e) { return; } }
-  if (!data || data.kind !== 'rpc') return;
+  if (!data) return;
+  if (data.kind === 'teardown') {
+    post({ jsonrpc: '2.0', id: data.id, method: 'ui/resource-teardown', params: { reason: data.reason || 'unmount' } });
+    return;
+  }
+  if (data.kind !== 'rpc') return;
   if (data.legacyMessageId) {
     post({ type: 'ui-message-response', messageId: data.legacyMessageId, payload: data.error ? { error: { message: data.error } } : { response: data.result } });
     return;

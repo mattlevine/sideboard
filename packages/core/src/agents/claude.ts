@@ -15,6 +15,7 @@ import {
   CLAUDE_PRINT_BG_WAIT_CEILING_MS,
   mcpAllowToolsFromNames,
 } from './claude-mcp.js';
+import { getMcpUiHost } from '../mcp-ui/host.js';
 import { listUserClaudeMcpServerEntries } from './orch-mcp-isolation.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import {
@@ -653,7 +654,12 @@ export const claudeAdapter: AgentAdapter = {
     // servers (not sideboard/brightsy) into it so Gmail/etc. still work, and
     // only auto-approve names we actually wrote. Coordinators stay injected-only
     // so HTTP connectors cannot hang the first find-work turn.
-    const userMcpEntries = isOrchestrator ? {} : listUserClaudeMcpServerEntries(homedir(), [thread.repoPath, thread.worktreePath]);
+    const userMcpEntries = isOrchestrator
+      ? {}
+      : listUserClaudeMcpServerEntries(homedir(), [thread.repoPath, thread.worktreePath]);
+    const userMcpForClaude = isOrchestrator
+      ? userMcpEntries
+      : await getMcpUiHost().proxyEntries(userMcpEntries, [thread.repoPath, thread.worktreePath]);
     let allowedTools: string[];
     if (isOrchestrator) {
       allowedTools = [
@@ -690,7 +696,7 @@ export const claudeAdapter: AgentAdapter = {
         systemPrompt,
         claudePath: claude,
         chrome: chromeOn,
-        mcpServers: mcpServersRecord(injectedServers, userMcpEntries),
+        mcpServers: mcpServersRecord(injectedServers, userMcpForClaude),
         allowedTools: withClaudePilotRpcTools(allowedTools),
         agentRpc: rpc,
         isolateClaudeAiMcp: isOrchestrator || isLocalDevAppDataDir(),
@@ -712,7 +718,7 @@ export const claudeAdapter: AgentAdapter = {
     if (systemPrompt) {
       args.push('--append-system-prompt', systemPrompt);
     }
-    const mcpConfigPath = writeMcpServersConfig(injectedServers, userMcpEntries);
+    const mcpConfigPath = writeMcpServersConfig(injectedServers, userMcpForClaude);
     if (mcpConfigPath) {
       args.push('--mcp-config', mcpConfigPath);
       // Always strict: worktree turns otherwise merge ~/.claude.json (user

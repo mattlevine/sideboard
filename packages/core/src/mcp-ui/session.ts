@@ -9,6 +9,7 @@ import {
   type McpServerLaunch,
   type McpUiCsp,
 } from './meta.js';
+import { visibilityFromMeta, type McpUiAudience } from './visibility.js';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -17,6 +18,7 @@ export type McpUiToolInfo = {
   description?: string;
   inputSchema?: Record<string, unknown>;
   resourceUri: string | null;
+  visibility: McpUiAudience[];
   csp?: McpUiCsp;
 };
 
@@ -61,6 +63,7 @@ export async function openMcpUiSessionFromTransport(transport: Transport): Promi
           ...(tool.description ? { description: tool.description } : {}),
           ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
           resourceUri: uiResourceUriFromMeta(meta),
+          visibility: visibilityFromMeta(meta),
           ...(cspFromMeta(meta) ? { csp: cspFromMeta(meta) } : {}),
         };
       });
