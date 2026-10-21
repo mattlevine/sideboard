@@ -8,6 +8,7 @@ import {
   legacyResponse,
   mcpUiContentSecurityPolicy,
   mcpUiFrameId,
+  resourceTeardownRequest,
   rpcError,
   rpcResult,
   toolInputNotification,
@@ -73,6 +74,26 @@ export function ToolRowFooter({
 
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT = 720;
+const PREVIEW_CLEAR_MS = 250;
+const pendingPreviewClears = new Map<string, ReturnType<typeof window.setTimeout>>();
+
+function cancelPreviewClear(frameId: string) {
+  const timer = pendingPreviewClears.get(frameId);
+  if (timer == null) return;
+  window.clearTimeout(timer);
+  pendingPreviewClears.delete(frameId);
+}
+
+function schedulePreviewClear(frameId: string) {
+  cancelPreviewClear(frameId);
+  pendingPreviewClears.set(
+    frameId,
+    window.setTimeout(() => {
+      pendingPreviewClears.delete(frameId);
+      void window.sideboard.clearMcpUiPreview(frameId);
+    }, PREVIEW_CLEAR_MS),
+  );
+}
 
 type Props = {
   toolCallId: string;
@@ -90,8 +111,9 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
   const viewRef = useRef<McpUiView | null>(null);
 
   useEffect(() => {
-    if (!toolName.startsWith('mcp__')) return;
     const frameId = mcpUiFrameId(toolCallId);
+    cancelPreviewClear(frameId);
+    if (!toolName.startsWith('mcp__')) return;
     let cancelled = false;
     void loadView(toolName, result, threadId)
       .then(async (view) => {
@@ -103,7 +125,11 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
       .catch(() => undefined);
     return () => {
       cancelled = true;
-      void window.sideboard.clearMcpUiPreview(frameId);
+      iframeRef.current?.contentWindow?.postMessage(
+        resourceTeardownRequest(`td-${frameId}`, 'unmount'),
+        '*',
+      );
+      schedulePreviewClear(frameId);
     };
   }, [toolCallId, toolName, result]);
 
@@ -138,6 +164,15 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
           void window.sideboard.sendToThread(threadId, effect.text).then(
             () => post(rpcResult(effect.id, {})),
             () => post(rpcError(effect.id, 'Message sending denied')),
+          );
+        } else if (effect.type === 'update-context') {
+          if (!threadId) {
+            post(rpcError(effect.id, 'Context update denied'));
+            continue;
+          }
+          void window.sideboard.mcpUiUpdateModelContext(threadId, effect.text).then(
+            () => post(rpcResult(effect.id, {})),
+            () => post(rpcError(effect.id, 'Context update denied')),
           );
         } else if (effect.type === 'call-tool' || effect.type === 'read-resource') {
           const server = viewRef.current?.server;

@@ -297,6 +297,8 @@ const api: IpcApi = {
     ipcRenderer.invoke('mcpUi:callTool', server, tool, args, threadId),
   mcpUiReadResource: (server, uri, threadId) =>
     ipcRenderer.invoke('mcpUi:readResource', server, uri, threadId),
+  mcpUiUpdateModelContext: (threadId, text) =>
+    ipcRenderer.invoke('mcpUi:updateModelContext', threadId, text),
   publishMcpUiPreview: (id, html, csp) =>
     ipcRenderer.invoke('mcpUiPreview:publish', id, html, csp),
   clearMcpUiPreview: (id) => ipcRenderer.invoke('mcpUiPreview:clear', id),

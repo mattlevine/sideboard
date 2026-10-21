@@ -321,6 +321,7 @@ export {
   userMcpNamesToDisable,
 } from './agents/orch-mcp-isolation.js';
 export { closeMcpUiHost, getMcpUiHost } from './mcp-ui/host.js';
+export { stashMcpAppModelContext } from './mcp-ui/model-context.js';
 export type { McpUiView } from './mcp-ui/meta.js';
 export { mcpUiContentSecurityPolicy } from './mcp-ui/meta.js';
 export {

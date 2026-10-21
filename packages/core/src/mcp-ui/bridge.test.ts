@@ -55,6 +55,23 @@ describe('guestBridgeEffects', () => {
     ).toEqual([{ type: 'chat', text: 'again', id: 3 }]);
     expect(
       guestBridgeEffects(
+        {
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'ui/update-model-context',
+          params: { content: [{ type: 'text', text: 'score 8' }] },
+        },
+        {},
+      ),
+    ).toEqual([{ type: 'update-context', text: 'MCP App context:\nscore 8', id: 4 }]);
+    expect(
+      guestBridgeEffects(
+        { jsonrpc: '2.0', id: 5, method: 'ui/request-display-mode', params: { mode: 'fullscreen' } },
+        {},
+      ),
+    ).toMatchObject([{ type: 'reply', message: { result: { mode: 'inline' } } }]);
+    expect(
+      guestBridgeEffects(
         { jsonrpc: '2.0', method: 'ui/notifications/size-changed', params: { height: 320 } },
         {},
       ),

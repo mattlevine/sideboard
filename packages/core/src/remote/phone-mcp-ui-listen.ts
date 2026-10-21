@@ -1,4 +1,5 @@
 import { getMcpUiHost } from '../mcp-ui/host.js';
+import { stashMcpAppModelContext } from '../mcp-ui/model-context.js';
 import { readPhoneThread, type PhoneControlRequest } from './phone-chats.js';
 import { emitControl, phoneError, type RemoteOutbound } from './phone-live.js';
 import { phoneMcpToolPayloadFromMessages, type PhoneMcpUiRequest } from './phone-mcp-ui.js';
@@ -10,7 +11,14 @@ export function dispatchPhoneMcpUi(
   cmd: PhoneControlRequest,
   opts: { onOutbound: (msg: RemoteOutbound) => void },
 ): cmd is PhoneMcpUiRequest {
-  if (cmd.op !== 'mcp-ui' && cmd.op !== 'mcp-ui-call' && cmd.op !== 'mcp-ui-read') return false;
+  if (
+    cmd.op !== 'mcp-ui' &&
+    cmd.op !== 'mcp-ui-call' &&
+    cmd.op !== 'mcp-ui-read' &&
+    cmd.op !== 'mcp-ui-context'
+  ) {
+    return false;
+  }
   const thread = readPhoneThread(cmd.chatId);
   const reqId = cmd.reqId;
   const chatId = cmd.chatId;
@@ -20,6 +28,11 @@ export function dispatchPhoneMcpUi(
     return true;
   }
   const projectDirs = [thread.repoPath, thread.worktreePath];
+  if (cmd.op === 'mcp-ui-context') {
+    stashMcpAppModelContext(thread.id, cmd.text);
+    emitControl(opts, { op: 'mcp-ui-context', chatId, reqId, result: {} });
+    return true;
+  }
   if (cmd.op === 'mcp-ui-call') {
     void getMcpUiHost()
       .callTool(cmd.server, cmd.tool, cmd.args, projectDirs)

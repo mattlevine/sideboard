@@ -19,7 +19,14 @@ export function nextPhoneMcpReqId(): string {
 }
 
 export function deliverPhoneMcpWaiter(control: { op?: string; reqId?: string } & PhoneMcpWaiterReply): boolean {
-  if (control.op !== 'mcp-ui' && control.op !== 'mcp-ui-call' && control.op !== 'mcp-ui-read') return false;
+  if (
+    control.op !== 'mcp-ui' &&
+    control.op !== 'mcp-ui-call' &&
+    control.op !== 'mcp-ui-read' &&
+    control.op !== 'mcp-ui-context'
+  ) {
+    return false;
+  }
   const reqId = control.reqId;
   const wait = reqId ? waiters.get(reqId) : undefined;
   if (wait && reqId) {

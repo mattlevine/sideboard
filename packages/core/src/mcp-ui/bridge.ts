@@ -10,6 +10,7 @@ export type BridgeEffect =
   | { type: 'resize'; width?: number; height?: number }
   | { type: 'open-link'; url: string; id: JsonRpcId }
   | { type: 'chat'; text: string; id: JsonRpcId }
+  | { type: 'update-context'; text: string; id: JsonRpcId }
   | { type: 'call-tool'; name: string; args: Record<string, unknown>; id: JsonRpcId }
   | { type: 'read-resource'; uri: string; id: JsonRpcId }
   | { type: 'ready' }
@@ -75,6 +76,14 @@ export function guestBridgeEffects(
     if (!text) return [{ type: 'reply', message: rpcError(id, 'Invalid message format') }];
     return [{ type: 'chat', text, id }];
   }
+  if (method === 'ui/update-model-context' && id !== undefined) {
+    const text = modelContextText(params);
+    if (!text) return [{ type: 'reply', message: rpcError(id, 'Invalid content format') }];
+    return [{ type: 'update-context', text, id }];
+  }
+  if (method === 'ui/request-display-mode' && id !== undefined) {
+    return [{ type: 'reply', message: rpcResult(id, { mode: 'inline' }) }];
+  }
   if (method === 'tools/call' && id !== undefined) {
     const name = typeof params.name === 'string' ? params.name.trim() : '';
     if (!name) return [{ type: 'reply', message: rpcError(id, 'Missing tool name') }];
@@ -89,6 +98,10 @@ export function guestBridgeEffects(
     return [{ type: 'reply', message: rpcError(id, `Unsupported method ${method}`) }];
   }
   return [];
+}
+
+export function resourceTeardownRequest(id: JsonRpcId, reason: string): Record<string, unknown> {
+  return { jsonrpc: '2.0', id, method: 'ui/resource-teardown', params: { reason } };
 }
 
 export function rpcResult(id: JsonRpcId, result: unknown): Record<string, unknown> {
@@ -119,7 +132,6 @@ function initializeResult(id: JsonRpcId, hostContext: BridgeHostContext): Record
       openLinks: {},
       serverTools: {},
       serverResources: {},
-      logging: {},
     },
     hostContext,
   });
@@ -153,6 +165,21 @@ function legacyEffects(message: unknown): BridgeEffect[] | null {
     return [{ type: 'legacy-link', url, ...(messageId ? { messageId } : {}) }];
   }
   return [];
+}
+
+function modelContextText(params: Record<string, unknown>): string | null {
+  const lines: string[] = [];
+  const content = Array.isArray(params.content) ? params.content : [];
+  for (const block of content) {
+    const rec = asRecord(block);
+    if (typeof rec.text === 'string' && rec.text.trim()) lines.push(rec.text.trim());
+  }
+  const structured = params.structuredContent;
+  if (structured && typeof structured === 'object' && !Array.isArray(structured)) {
+    lines.push(JSON.stringify(structured));
+  }
+  const body = lines.join('\n').trim().slice(0, 8_000);
+  return body ? `MCP App context:\n${body}` : null;
 }
 
 function messageText(params: Record<string, unknown>): string {

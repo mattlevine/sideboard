@@ -45,6 +45,13 @@ describe('ui resource meta', () => {
     expect(mcpUiContentSecurityPolicy({ connectDomains: ['https://api.example'] })).toContain(
       "connect-src 'self' https://api.example",
     );
+    expect(mcpUiContentSecurityPolicy()).toContain("connect-src 'none'");
+    expect(mcpUiContentSecurityPolicy()).not.toContain('unsafe-eval');
+    expect(
+      cspFromMeta({
+        ui: { csp: { resourceDomains: ['https://*.example.com'] } },
+      }),
+    ).toEqual({ resourceDomains: ['https://*.example.com'] });
   });
 });
 

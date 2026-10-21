@@ -248,6 +248,7 @@ export interface Thread {
    * (prevents infinite agent-switch cascades).
    */
   quotaContinuedFromId?: string | null;
+  mcpAppModelContext?: string | null;
 }
 
 export interface CreateChatTabInput {

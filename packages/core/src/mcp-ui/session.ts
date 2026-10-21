@@ -3,12 +3,14 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { ResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import {
   cspFromMeta,
   uiResourceUriFromMeta,
   type McpServerLaunch,
   type McpUiCsp,
 } from './meta.js';
+import { visibilityFromMeta, type McpUiAudience } from './visibility.js';
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -17,11 +19,16 @@ export type McpUiToolInfo = {
   description?: string;
   inputSchema?: Record<string, unknown>;
   resourceUri: string | null;
+  visibility: McpUiAudience[];
   csp?: McpUiCsp;
 };
 
 export type McpUiSession = {
   listTools(): Promise<McpUiToolInfo[]>;
+  listResources(): Promise<{ resources: unknown[] }>;
+  listResourceTemplates(): Promise<{ resourceTemplates: unknown[] }>;
+  listPrompts(): Promise<{ prompts: unknown[] }>;
+  getPrompt(name: string, args?: Record<string, string>): Promise<unknown>;
   readResource(uri: string): Promise<{
     uri: string;
     mimeType?: string;
@@ -30,8 +37,24 @@ export type McpUiSession = {
     csp?: McpUiCsp;
   } | null>;
   callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
+  capabilities(): {
+    tools?: object;
+    resources?: object;
+    prompts?: object;
+    completions?: object;
+    logging?: object;
+  };
+  forward(method: string, params?: unknown): Promise<unknown>;
   close(): Promise<void>;
 };
+
+async function orEmpty<T>(run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch {
+    return fallback;
+  }
+}
 
 const UI_CAPABILITIES = {
   extensions: {
@@ -61,9 +84,28 @@ export async function openMcpUiSessionFromTransport(transport: Transport): Promi
           ...(tool.description ? { description: tool.description } : {}),
           ...(tool.inputSchema ? { inputSchema: tool.inputSchema } : {}),
           resourceUri: uiResourceUriFromMeta(meta),
+          visibility: visibilityFromMeta(meta),
           ...(cspFromMeta(meta) ? { csp: cspFromMeta(meta) } : {}),
         };
       });
+    },
+    listResources: () =>
+      orEmpty(
+        () => client.listResources(undefined, { timeout: REQUEST_TIMEOUT_MS }),
+        { resources: [] },
+      ),
+    listResourceTemplates: () =>
+      orEmpty(
+        () => client.listResourceTemplates(undefined, { timeout: REQUEST_TIMEOUT_MS }),
+        { resourceTemplates: [] },
+      ),
+    listPrompts: () =>
+      orEmpty(
+        () => client.listPrompts(undefined, { timeout: REQUEST_TIMEOUT_MS }),
+        { prompts: [] },
+      ),
+    getPrompt(name, args) {
+      return client.getPrompt({ name, arguments: args }, { timeout: REQUEST_TIMEOUT_MS });
     },
     async readResource(uri: string) {
       const result = await client.readResource({ uri }, { timeout: REQUEST_TIMEOUT_MS });
@@ -81,6 +123,23 @@ export async function openMcpUiSessionFromTransport(transport: Transport): Promi
     },
     async callTool(name, args) {
       return client.callTool({ name, arguments: args }, undefined, { timeout: REQUEST_TIMEOUT_MS });
+    },
+    capabilities() {
+      const caps = client.getServerCapabilities() ?? {};
+      return {
+        tools: caps.tools ?? {},
+        resources: caps.resources ?? {},
+        prompts: caps.prompts ?? {},
+        completions: caps.completions ?? {},
+        ...(caps.logging ? { logging: caps.logging } : {}),
+      };
+    },
+    forward(method, params) {
+      return client.request(
+        { method, params } as never,
+        ResultSchema,
+        { timeout: REQUEST_TIMEOUT_MS },
+      );
     },
     async close() {
       await client.close();

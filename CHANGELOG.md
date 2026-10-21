@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.312] - 2026-10-21
+
+### Added
+
+- Claude MCP Apps share one upstream session through a loopback proxy. App-only tools stay off the model. `ui/update-model-context` is stashed for the next turn.
+
+### Fixed
+
+- MCP App CSP matches SEP-1865 defaults (`connect-src 'none'`, no `unsafe-eval`) and keeps wildcard resource origins.
+- Phone MCP Apps no longer run same-origin with the WebView shell, send `ui/resource-teardown` on unmount, and can `resources/read` the same URIs as desktop.
+- MCP App unmount cancels a pending preview clear even across remounts, and the phone keeps the WebView until teardown is delivered (including when the last card leaves a bubble).
+- Claude's MCP proxy forwards resources, prompts, and other upstream methods, and scopes loopback URLs per worktree so concurrent chats keep their own project dirs.
+
 ## [0.1.311] - 2026-10-21
 
 ### Fixed

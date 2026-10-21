@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron';
-import { getMcpUiHost, readThread } from '@sideboard-ai/core';
+import { getMcpUiHost, readThread, stashMcpAppModelContext } from '@sideboard-ai/core';
 
 function projectDirsFor(threadId: unknown): string[] | undefined {
   if (typeof threadId !== 'string' || !threadId.trim()) return undefined;
@@ -35,5 +35,13 @@ export function registerMcpUiIpc(): void {
       throw new Error('invalid mcp-ui resource read');
     }
     return host.readResource(server, uri, projectDirsFor(threadId));
+  });
+
+  ipcMain.handle('mcpUi:updateModelContext', async (_e, threadId: unknown, text: unknown) => {
+    if (typeof threadId !== 'string' || !threadId.trim()) throw new Error('invalid mcp-ui thread');
+    if (typeof text !== 'string' || !text.trim()) throw new Error('invalid mcp-ui context');
+    const thread = readThread(threadId.trim());
+    if (!thread || thread.agent !== 'claude') throw new Error('MCP App context needs a Claude chat');
+    stashMcpAppModelContext(thread.id, text);
   });
 }

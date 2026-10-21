@@ -310,7 +310,7 @@ function parsePhoneControl(value: unknown): PhoneControlRequest | 'invalid' {
     return { op: 'git', chatId, action: action as PhoneHeaderGitAction };
   }
   if (op === 'pane') return parsePhonePane(value, chatId);
-  if (op === 'open-artifact') return parseOpenArtifact(value, chatId); if (op === 'mcp-ui' || op === 'mcp-ui-call' || op === 'mcp-ui-read') return parsePhoneMcpUi(value, op, chatId);
+  if (op === 'open-artifact') return parseOpenArtifact(value, chatId); if (op === 'mcp-ui' || op === 'mcp-ui-call' || op === 'mcp-ui-read' || op === 'mcp-ui-context') return parsePhoneMcpUi(value, op, chatId);
   if (op === 'open-file' || op === 'media') {
     const path = textField(value, 'path');
     if (!path || path.length > 2000) return 'invalid';

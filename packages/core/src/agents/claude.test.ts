@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { run } from '../git/run.js';
 import {
   CLAUDE_PROMPT_ARG_MAX,
@@ -54,7 +56,20 @@ vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../mcp-ui/host.js', () => ({
+  proxyClaudeUserMcp: async (orchestrator: boolean) =>
+    orchestrator ? {} : Object.fromEntries(
+      Object.keys(userClaudeMcpEntries).map((name) => [
+        name,
+        { type: 'http', url: `http://127.0.0.1:9/s/${encodeURIComponent(name)}`, headers: { Authorization: 'Bearer t' } },
+      ]),
+    ),
+}));
+
+let dataDir: string;
 beforeEach(() => {
+  dataDir = mkdtempSync(join(tmpdir(), 'sideboard-claude-cli-'));
+  vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
   claudeSettings.executablePath = undefined;
   claudeSettings.chromeEnabled = false;
   claudeSettings.linearConnected = false;
@@ -63,6 +78,7 @@ beforeEach(() => {
   for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   vi.mocked(run).mockClear();
 });
+afterEach(() => { vi.unstubAllEnvs(); rmSync(dataDir, { recursive: true, force: true }); });
 
 function allowedOf(args: string[]): string[] {
   return args.flatMap((arg, i) => (arg === '--allowedTools' && args[i + 1] ? [args[i + 1]] : []));
@@ -199,22 +215,6 @@ describe('claudeAdapter.buildTurn', () => {
         (cmd === 'claude' || String(cmd).endsWith('/claude')) && args?.[0] === 'mcp',
     );
     expect(probed).toBe(false);
-  });
-
-  it('loads user ~/.claude.json MCP into the strict config and auto-approves those tools', async () => {
-    userClaudeMcpEntries.gmail = { command: 'npx', args: ['-y', 'gmail'] };
-    const cmd = await claudeAdapter.buildTurn(baseThread, { prompt: 'hi' });
-    const allowed = allowedOf(cmd.args);
-    expect(allowed).toContain('mcp__gmail');
-    expect(allowed).toContain('mcp__gmail__*');
-    expect(allowed).not.toContain('mcp__sideboard__*');
-    expect(allowed).not.toContain('mcp__brightsy__*');
-    const mcpIdx = cmd.args.indexOf('--mcp-config');
-    const cfg = JSON.parse(readFileSync(cmd.args[mcpIdx + 1]!, 'utf8')) as {
-      mcpServers: Record<string, { command?: string }>;
-    };
-    expect(cfg.mcpServers.gmail?.command).toBe('npx');
-    expect(cfg.mcpServers.sideboard).toBeTruthy();
   });
 
   it('worktree turns inject Sideboard MCP but only auto-approve present_* UI tools', async () => {

@@ -33,7 +33,8 @@ export type PhoneMcpUiRequest =
       tool: string;
       args: Record<string, unknown>;
     }
-  | { op: 'mcp-ui-read'; chatId: string; reqId: string; server: string; uri: string };
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; server: string; uri: string }
+  | { op: 'mcp-ui-context'; chatId: string; reqId: string; text: string };
 
 export interface PhoneMcpUiView {
   server: string;
@@ -49,7 +50,8 @@ export interface PhoneMcpUiView {
 export type PhoneMcpUiReply =
   | { op: 'mcp-ui'; chatId: string; reqId: string; view: PhoneMcpUiView | null }
   | { op: 'mcp-ui-call'; chatId: string; reqId: string; result?: unknown; error?: string }
-  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string };
+  | { op: 'mcp-ui-read'; chatId: string; reqId: string; result?: unknown; error?: string }
+  | { op: 'mcp-ui-context'; chatId: string; reqId: string; result?: unknown; error?: string };
 
 function controlText(value: object, key: string): string {
   const raw = (value as Record<string, unknown>)[key];
@@ -67,13 +69,21 @@ export function parsePhoneMcpUi(value: object, op: string, chatId: string): Phon
     }
     return { op: 'mcp-ui', chatId, tool, callId, reqId };
   }
+  if (op === 'mcp-ui-context') {
+    const reqId = controlText(value, 'reqId');
+    const text = controlText(value, 'text');
+    if (!reqId || reqId.length > 40 || !text || text.length > 8_000) return 'invalid';
+    return { op, chatId, reqId, text };
+  }
   if (op !== 'mcp-ui-call' && op !== 'mcp-ui-read') return 'invalid';
   const reqId = controlText(value, 'reqId');
   const server = controlText(value, 'server');
   if (!reqId || reqId.length > 40 || !server || server.length > 120) return 'invalid';
   if (op === 'mcp-ui-read') {
     const uri = controlText(value, 'uri');
-    if (!uri.startsWith('ui://') || uri.length > 500) return 'invalid';
+    if (!uri || uri.length > 500 || /\s/.test(uri) || /^(javascript|data):/i.test(uri)) {
+      return 'invalid';
+    }
     return { op, chatId, reqId, server, uri };
   }
   const tool = controlText(value, 'tool');

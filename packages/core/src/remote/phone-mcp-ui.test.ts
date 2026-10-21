@@ -67,5 +67,38 @@ describe('phone mcp-ui control', () => {
         }),
     );
     expect(call).toMatchObject({ op: 'mcp-ui-call', server: 'dice', args: { sides: 20 } });
+    const context = takePhoneControl(
+      PHONE_CONTROL_PREFIX +
+        JSON.stringify({
+          op: 'mcp-ui-context',
+          chatId: 'c1',
+          reqId: 'r3',
+          text: 'MCP App context:\nscore 8',
+        }),
+    );
+    expect(context).toMatchObject({ op: 'mcp-ui-context', text: 'MCP App context:\nscore 8' });
+    const read = takePhoneControl(
+      PHONE_CONTROL_PREFIX +
+        JSON.stringify({
+          op: 'mcp-ui-read',
+          chatId: 'c1',
+          reqId: 'r4',
+          server: 'dice',
+          uri: 'resource://dice/face.json',
+        }),
+    );
+    expect(read).toMatchObject({ op: 'mcp-ui-read', uri: 'resource://dice/face.json' });
+    expect(
+      takePhoneControl(
+        PHONE_CONTROL_PREFIX +
+          JSON.stringify({
+            op: 'mcp-ui-read',
+            chatId: 'c1',
+            reqId: 'r5',
+            server: 'dice',
+            uri: 'javascript:alert(1)',
+          }),
+      ),
+    ).toBe('invalid');
   });
 });

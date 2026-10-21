@@ -4,8 +4,8 @@ import type { McpUiView } from '../mcp-ui/meta.js';
 export interface McpUiIpc {
   /**
    * MCP App HTML for a Claude tool (`mcp__server__tool`). Null when that
-   * server has no `ui://` resource. The desktop opens its own MCP connection;
-   * Claude Code only returns the text result.
+   * server has no `ui://` resource. Claude talks to a loopback proxy that
+   * shares this host session.
    */
   mcpUiLookup(toolName: string, threadId?: string): Promise<McpUiView | null>;
   mcpUiCallTool(
@@ -15,6 +15,8 @@ export interface McpUiIpc {
     threadId?: string,
   ): Promise<unknown>;
   mcpUiReadResource(server: string, uri: string, threadId?: string): Promise<unknown>;
+  /** Stash `ui/update-model-context` for the next agent turn. Does not send. */
+  mcpUiUpdateModelContext(threadId: string, text: string): Promise<void>;
   /** Sandboxed custom-protocol URL for an MCP App (inline scripts allowed). */
   publishMcpUiPreview(id: string, html: string, csp: string): Promise<{ url: string }>;
   clearMcpUiPreview(id: string): Promise<void>;

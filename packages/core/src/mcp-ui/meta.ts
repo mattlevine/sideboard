@@ -197,18 +197,18 @@ export function mcpUiContentSecurityPolicy(csp?: McpUiCsp): string {
   const connect = (csp?.connectDomains ?? []).join(' ');
   const frames = csp?.frameDomains?.length ? csp.frameDomains.join(' ') : "'none'";
   const base = csp?.baseUriDomains?.length ? csp.baseUriDomains.join(' ') : "'none'";
+  const connectSrc = connect ? `'self' ${connect}`.trim() : "'none'";
   return [
     "default-src 'none'",
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${resource}`.trim(),
+    `script-src 'self' 'unsafe-inline' ${resource}`.trim(),
     `style-src 'self' 'unsafe-inline' ${resource}`.trim(),
-    `img-src 'self' data: blob: ${resource}`.trim(),
-    `font-src 'self' data: ${resource}`.trim(),
-    `connect-src 'self' ${connect}`.trim(),
-    `media-src 'self' data: blob: ${resource}`.trim(),
+    `img-src 'self' data: ${resource}`.trim(),
+    `font-src 'self' ${resource}`.trim(),
+    `connect-src ${connectSrc}`,
+    `media-src 'self' data: ${resource}`.trim(),
     `frame-src ${frames}`,
     `base-uri ${base}`,
     "object-src 'none'",
-    "form-action 'self'",
   ].join('; ');
 }
 
@@ -286,8 +286,10 @@ function originList(value: unknown): string[] | undefined {
 }
 
 function originToken(value: string): string | null {
+  const trimmed = value.trim();
+  if (/^(https?|wss?):\/\/\*\.[a-z0-9.-]+(?::\d+)?$/i.test(trimmed)) return trimmed;
   try {
-    const url = new URL(value.trim());
+    const url = new URL(trimmed);
     if (url.protocol !== 'https:' && url.protocol !== 'http:' && url.protocol !== 'wss:' && url.protocol !== 'ws:') {
       return null;
     }
