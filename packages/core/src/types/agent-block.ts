@@ -39,5 +39,11 @@ export interface AgentBlock {
     multiSelect?: boolean;
     options: Array<{ label: string; description?: string }>;
   }>;
+  /**
+   * True once ask_user is the last top-level tool in the live stream or
+   * the finished turn. A mid-turn stamp without this stays off the
+   * sidebar / board / phone until the picker is actually on screen.
+   */
+  onScreen?: boolean;
   permission?: AgentPermissionPrompt;
 }

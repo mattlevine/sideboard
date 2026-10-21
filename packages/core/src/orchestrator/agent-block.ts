@@ -56,6 +56,7 @@ export function decisionBlockFromParts(
       : 'Waiting for an answer in that chat.';
     return {
       ...makeAgentBlock('ask_user', reason, at),
+      onScreen: true,
       ...(pending
         ? { questionSignature: pending.signature, questions: pending.questions }
         : {}),
@@ -149,6 +150,63 @@ export function dismissAskUserQuestion(threadId: string, signature: string): voi
     dismissedQuestionSignature: sig,
     ...(clearBlock ? { agentBlock: null } : {}),
   });
+}
+
+function askBlocksEqual(
+  a: AgentBlock | null | undefined,
+  b: AgentBlock | null | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.source === b.source &&
+    a.reason === b.reason &&
+    a.at === b.at &&
+    a.onScreen === b.onScreen &&
+    a.questionSignature === b.questionSignature
+  );
+}
+
+/**
+ * Live-stream counterpart to settle. Mark an ask_user block on-screen once
+ * that tool is the last top-level action; drop it when a later tool runs.
+ */
+export function askBlockAfterLiveParts(
+  existing: AgentBlock | null | undefined,
+  parts: MessagePart[] | undefined,
+): AgentBlock | null {
+  const last = lastTopLevelTool(parts);
+  if (last?.type === 'tool' && isAskUserToolName(last.name)) {
+    if (existing?.source === 'ask_user' && existing.onScreen) return existing;
+    const pending = extractPendingPlanQuestions(parts);
+    const questions = pending?.questions ?? existing?.questions;
+    if (!questions?.length) {
+      return existing?.source === 'ask_user'
+        ? { ...existing, onScreen: true }
+        : existing ?? null;
+    }
+    const at = existing?.source === 'ask_user' ? existing.at : undefined;
+    return {
+      ...makeAgentBlock('ask_user', formatAskUserNotifyMessage(questions), at),
+      onScreen: true,
+      questionSignature:
+        pending?.signature ?? existing?.questionSignature,
+      questions,
+    };
+  }
+  if (last && existing?.source === 'ask_user') return null;
+  return existing ?? null;
+}
+
+export function syncAskUserBlockFromLive(
+  threadId: string,
+  parts: MessagePart[] | undefined,
+): void {
+  const thread = readThread(threadId);
+  if (!thread || thread.status === 'archived') return;
+  const next = askBlockAfterLiveParts(thread.agentBlock, parts);
+  if (askBlocksEqual(thread.agentBlock, next)) return;
+  updateThread(threadId, { agentBlock: next });
 }
 
 export function writeAgentBlock(threadId: string, block: AgentBlock): void {

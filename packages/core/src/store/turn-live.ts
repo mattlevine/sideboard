@@ -8,6 +8,7 @@ import {
 import type { AgentEvent, MessagePart } from '../types/thread.js';
 import { applyAgentEvent, isPollWrapperToolName, liveActivitySummary, toolDescription } from '../agents/message-parts.js';
 import { threadLivePath } from './paths.js';
+import { syncAskUserBlockFromLive } from '../orchestrator/agent-block.js';
 
 export interface TurnLiveProgress {
   updatedAt: string;
@@ -104,6 +105,7 @@ export function noteTurnLiveEvent(threadId: string, event: AgentEvent): void {
   const prev = buffers.get(threadId) ?? { parts: [], timer: null };
   prev.parts = trimParts(applyAgentEvent(prev.parts, event));
   buffers.set(threadId, prev);
+  syncAskUserBlockFromLive(threadId, prev.parts);
   if (event.type === 'exit') {
     flush(threadId);
     const cur = buffers.get(threadId);

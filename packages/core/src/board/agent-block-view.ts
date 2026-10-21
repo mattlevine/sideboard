@@ -37,8 +37,8 @@ export function isDismissedAskUserBlock(
 /**
  * Blocked highlight. Errors and archived chats keep their own status.
  * An ask_user stamp lands when the tool is called — before the picker is on
- * screen — so hide it while the turn is still running, and drop it once the
- * chat is no longer asking (later user message, or skip).
+ * screen — so hide it while the turn is in flight unless `onScreen` (the
+ * live last tool is ask_user). Drop it once the chat is no longer asking.
  */
 export function visibleAgentBlock(thread: AgentBlockThread): AgentBlock | null {
   if (
@@ -52,7 +52,8 @@ export function visibleAgentBlock(thread: AgentBlockThread): AgentBlock | null {
   if (!block?.reason?.trim()) return null;
   if (isDismissedAskUserBlock(block, thread.dismissedQuestionSignature)) return null;
   if (block.source === 'ask_user') {
-    if (thread.status === 'running' || thread.status === 'queued') return null;
+    const inFlight = thread.status === 'running' || thread.status === 'queued';
+    if (inFlight && !block.onScreen) return null;
     if (!askBlockStillWaiting(block, thread.messages)) return null;
   }
   return block;

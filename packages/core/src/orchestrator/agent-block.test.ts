@@ -19,11 +19,13 @@ import {
 import type { MessagePart } from '../types/thread.js';
 import {
   agentBlockAfterTurn,
+  askBlockAfterLiveParts,
   clampBlockReason,
   decisionBlockFromParts,
   dismissAskUserQuestion,
   makeAgentBlock,
   settleAgentBlock,
+  syncAskUserBlockFromLive,
   writeAgentBlock,
 } from './agent-block.js';
 
@@ -56,6 +58,7 @@ describe('decisionBlockFromParts', () => {
       source: 'ask_user',
       reason: 'Asked the user: Which API?',
       at: 't',
+      onScreen: true,
       questionSignature: askSignature,
       questions: [
         {
@@ -195,8 +198,58 @@ describe('agentBlockAfterTurn', () => {
   });
 });
 
+describe('askBlockAfterLiveParts', () => {
+  const stamped = {
+    ...makeAgentBlock('ask_user', 'Asked the user: Which API?', 't'),
+    questionSignature: askSignature,
+    questions: [
+      {
+        question: 'Which API?',
+        options: [{ label: 'REST' }, { label: 'GraphQL' }],
+      },
+    ],
+  };
+
+  it('marks a stamped ask on-screen once live last tool is ask_user', () => {
+    const next = askBlockAfterLiveParts(stamped, [askUser]);
+    expect(next?.onScreen).toBe(true);
+    expect(next?.questionSignature).toBe(askSignature);
+    expect(next?.questions?.[0]?.question).toBe('Which API?');
+  });
+
+  it('builds the ask from live parts when nothing was stamped yet', () => {
+    const next = askBlockAfterLiveParts(null, [askUser]);
+    expect(next).toMatchObject({
+      source: 'ask_user',
+      onScreen: true,
+      questionSignature: askSignature,
+    });
+  });
+
+  it('drops the ask once a later live tool runs', () => {
+    const later: MessagePart = {
+      type: 'tool',
+      id: 'r1',
+      name: 'Read',
+      status: 'running',
+    };
+    expect(askBlockAfterLiveParts({ ...stamped, onScreen: true }, [askUser, later])).toBeNull();
+  });
+
+  it('leaves a permission block alone when live last tool is not ask_user', () => {
+    const permission = makeAgentBlock('permission', 'Allow the edit?', 't');
+    const later: MessagePart = {
+      type: 'tool',
+      id: 'r1',
+      name: 'Read',
+      status: 'running',
+    };
+    expect(askBlockAfterLiveParts(permission, [later])).toBe(permission);
+  });
+});
+
 describe('visibleAgentBlock', () => {
-  it('hides an ask_user stamp while the turn is still running', () => {
+  it('hides an ask_user stamp until the picker is on screen', () => {
     const asking = {
       status: 'running' as const,
       agentBlock: {
@@ -208,6 +261,12 @@ describe('visibleAgentBlock', () => {
     };
     expect(visibleAgentBlock(asking)).toBeNull();
     expect(visibleAgentBlock({ ...asking, status: 'queued' })).toBeNull();
+    expect(
+      visibleAgentBlock({
+        ...asking,
+        agentBlock: { ...asking.agentBlock, onScreen: true },
+      })?.reason,
+    ).toBe('Asked the user: Which API?');
     expect(visibleAgentBlock({ ...asking, status: 'idle' })?.reason).toBe(
       'Asked the user: Which API?',
     );
@@ -321,6 +380,21 @@ describe('dismissAskUserQuestion', () => {
     dismissAskUserQuestion(thread.id, askSignature);
     expect(readThread(thread.id)?.agentBlock?.source).toBe('reported');
     expect(readThread(thread.id)?.dismissedQuestionSignature).toBe(askSignature);
+  });
+
+  it('marks a live ask on-screen and clears it after a later tool', () => {
+    const thread = persist();
+    writeAgentBlock(thread.id, {
+      ...makeAgentBlock('ask_user', 'Asked the user: Which API?'),
+      questionSignature: askSignature,
+    });
+    syncAskUserBlockFromLive(thread.id, [askUser]);
+    expect(readThread(thread.id)?.agentBlock?.onScreen).toBe(true);
+    syncAskUserBlockFromLive(thread.id, [
+      askUser,
+      { type: 'tool', id: 'r1', name: 'Read', status: 'running' },
+    ]);
+    expect(readThread(thread.id)?.agentBlock).toBeNull();
   });
 });
 
