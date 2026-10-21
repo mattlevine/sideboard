@@ -245,6 +245,22 @@ describe('phone orchestration chats', () => {
     expect(
       listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.chats[0],
     ).toMatchObject({ needsYou: true, blockedReason: 'Allow the edit?' });
+    updateThread(thread.id, {
+      status: 'running',
+      agentBlock: {
+        reason: 'Asked the user: Which API?',
+        source: 'ask_user',
+        at: '2026-10-17T00:00:01.000Z',
+      },
+    });
+    expect(
+      listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.chats[0]
+        ?.needsYou,
+    ).toBeUndefined();
+    updateThread(thread.id, { status: 'idle' });
+    expect(
+      listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.chats[0],
+    ).toMatchObject({ needsYou: true, blockedReason: 'Asked the user: Which API?' });
     updateThread(thread.id, { tags: ['phone-sync'] });
     expect(listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.tags).toEqual([
       'phone-sync',

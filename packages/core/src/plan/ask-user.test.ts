@@ -252,6 +252,52 @@ describe('latestPendingPlanQuestions', () => {
       }),
     ).toBeNull();
   });
+
+  it('does not use a mid-turn stamp until the ask is the last live tool', () => {
+    const questions = [
+      {
+        question: 'Which API?',
+        options: [{ label: 'REST' }, { label: 'GraphQL' }],
+      },
+    ];
+    const stamp = {
+      source: 'ask_user' as const,
+      at: '2026-10-20T00:01:00.000Z',
+      questionSignature: 'sig',
+      questions,
+    };
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'user', ts: '2026-10-20T00:00:00.000Z' }],
+        agentBlock: stamp,
+        status: 'running',
+      }),
+    ).toBeNull();
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'user', ts: '2026-10-20T00:00:00.000Z' }],
+        liveParts: [askPart],
+        agentBlock: stamp,
+        status: 'running',
+      })?.id,
+    ).toBe('q1');
+  });
+
+  it('hides the ask once a later tool runs', () => {
+    const later = { type: 'tool' as const, id: 'r1', name: 'Read', status: 'done' as const };
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'user' }],
+        liveParts: [askPart, later],
+        status: 'running',
+      }),
+    ).toBeNull();
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'agent', parts: [askPart, later] }],
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('formatPlanQuestionAnswers', () => {

@@ -843,6 +843,7 @@ export function ThreadPanel({
         userReplied: Boolean(pendingUser),
         agentBlock: thread.agentBlock,
         dismissedQuestionSignature: thread.dismissedQuestionSignature,
+        status: thread.status,
       }),
     [
       liveParts,
@@ -850,7 +851,8 @@ export function ThreadPanel({
       pendingUser,
       thread.agentBlock,
       thread.dismissedQuestionSignature,
-    ],
+      thread.status,
+    ],]
   );
 
   const showPlanQuestions =

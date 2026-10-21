@@ -131,11 +131,30 @@ export type ToolPartLike = {
   type: string;
   id?: string;
   name?: string;
+  parentId?: string;
   input?: Record<string, unknown>;
   /** Tool result text. ask_user echoes the questions here when input was empty. */
   result?: string;
   status?: string;
 };
+
+/** True when the last top-level tool (not a nested child) is ask_user. */
+export function lastTopLevelToolIsAskUser(
+  parts: ToolPartLike[] | undefined | null,
+): boolean {
+  if (!parts?.length) return false;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]!;
+    if (part.type === 'tool' && !part.parentId) {
+      return isAskUserToolName(part.name);
+    }
+  }
+  return false;
+}
+
+function hasTopLevelTool(parts: ToolPartLike[] | undefined | null): boolean {
+  return Boolean(parts?.some((part) => part.type === 'tool' && !part.parentId));
+}
 
 function questionsFromToolPart(part: ToolPartLike): PlanQuestion[] {
   const fromInput = parsePlanQuestionsInput(part.input);
@@ -200,10 +219,11 @@ function pendingFromAskBlock(
  * True when no later user reply has landed after this ask.
  * Host continue prompts are user rows but not answers — they keep the block.
  */
-function askBlockStillWaiting(
+export function askBlockStillWaiting(
   block: AskBlockSnapshot | null | undefined,
-  messages: Array<{ role: string; ts?: string; origin?: string }>,
+  messages: Array<{ role: string; ts?: string; origin?: string }> | undefined | null,
 ): boolean {
+  if (!messages?.length) return Boolean(block?.at);
   const askedAt = block?.at;
   if (!askedAt) return false;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -231,24 +251,34 @@ export function latestPendingPlanQuestions(input: {
    */
   agentBlock?: AskBlockSnapshot | null;
   dismissedQuestionSignature?: string | null;
+  /** Hide a mid-turn stamp until the ask is the last tool (or the turn ends). */
+  status?: string;
 }): PendingPlanQuestions | null {
   if (input.userReplied) return null;
 
-  const fromLive = extractPendingPlanQuestions(input.liveParts);
-  if (fromLive) return fromLive;
+  const fromBlock = () =>
+    pendingFromAskBlock(input.agentBlock, input.dismissedQuestionSignature);
 
-  const last = input.messages[input.messages.length - 1];
-  if (last?.role === 'agent') {
-    const fromParts = extractPendingPlanQuestions(last.parts);
-    if (fromParts) return fromParts;
+  if (lastTopLevelToolIsAskUser(input.liveParts)) {
+    return extractPendingPlanQuestions(input.liveParts) ?? fromBlock();
   }
 
-  const fromBlock = pendingFromAskBlock(
-    input.agentBlock,
-    input.dismissedQuestionSignature,
-  );
-  if (fromBlock && askBlockStillWaiting(input.agentBlock, input.messages)) {
-    return fromBlock;
+  const last = input.messages[input.messages.length - 1];
+  if (last?.role === 'agent' && lastTopLevelToolIsAskUser(last.parts)) {
+    return extractPendingPlanQuestions(last.parts) ?? fromBlock();
+  }
+
+  // A later top-level tool means the picker is no longer on screen.
+  if (hasTopLevelTool(input.liveParts) || (last?.role === 'agent' && hasTopLevelTool(last.parts))) {
+    return null;
+  }
+
+  // Stamp lands when ask_user is called, before the tool is in the stream.
+  if (input.status === 'running' || input.status === 'queued') return null;
+
+  const stamped = fromBlock();
+  if (stamped && askBlockStillWaiting(input.agentBlock, input.messages)) {
+    return stamped;
   }
   return null;
 }

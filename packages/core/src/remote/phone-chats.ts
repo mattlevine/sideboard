@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
-import { classifyWorktreeListBadges, groupHomeBoardWorktrees } from '../board/home-board.js';
+import { classifyWorktreeListBadges, groupHomeBoardWorktrees, visibleAgentBlock } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { workspaceTagsFromGroup, worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
 import type {
@@ -494,6 +494,7 @@ function parsePhoneCreate(value: object): PhoneControlRequest | 'invalid' {
 
 function summarize(thread: Thread): PhoneChatSummary {
   const pr = phonePrPill(thread);
+  const block = visibleAgentBlock(thread);
   return {
     id: thread.id,
     title: thread.title?.trim() || 'Untitled',
@@ -504,15 +505,13 @@ function summarize(thread: Thread): PhoneChatSummary {
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
-    ...(thread.agentBlock ? { needsYou: true as const, blockedReason: thread.agentBlock.reason } : {}),
+    ...(block ? { needsYou: true as const, blockedReason: block.reason } : {}),
   };
 }
 
 function previewOf(thread: Thread): string {
-  const messages = listPhoneMessages(thread);
-  const last = messages[messages.length - 1];
-  if (!last) return '';
-  return clip(last.text.replace(/\s+/g, ' ').trim(), PREVIEW_LIMIT);
+  const last = listPhoneMessages(thread).at(-1);
+  return last ? clip(last.text.replace(/\s+/g, ' ').trim(), PREVIEW_LIMIT) : '';
 }
 
 function repoName(repoPath: string): string {
