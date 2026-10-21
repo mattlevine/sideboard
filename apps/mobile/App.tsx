@@ -1615,7 +1615,7 @@ export default function App() {
                       findQuery={findOpen ? findQuery : ''}
                       findLocal={currentLocalIndex(findHits, findSafeIndex, bubble.id)}
                     />
-                    {bubble.apps?.length && activeChatId ? <PhoneMcpApps apps={bubble.apps} chatId={activeChatId} send={(payload) => link?.send(phoneCommand(payload))} /> : null}
+                    {activeChatId ? <PhoneMcpApps apps={bubble.apps ?? []} chatId={activeChatId} send={(payload) => link?.send(phoneCommand(payload))} /> : null}
                   </Pressable>
                 )}
               </View>

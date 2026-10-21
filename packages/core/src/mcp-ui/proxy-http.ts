@@ -47,7 +47,8 @@ export async function listenMcpUiProxy(opts: {
       }
       const header = req.headers['mcp-session-id'];
       const sid = typeof header === 'string' ? header : '';
-      let transport = sid ? transports.get(`${target.server}:${sid}`) : undefined;
+      const sessionKey = `${target.server}:${target.dirsKey}`;
+      let transport = sid ? transports.get(`${sessionKey}:${sid}`) : undefined;
       if (!transport) {
         if (req.method !== 'POST') {
           res.writeHead(400).end();
@@ -57,16 +58,16 @@ export async function listenMcpUiProxy(opts: {
           sessionIdGenerator: () => randomUUID(),
           allowedHosts: ['127.0.0.1', 'localhost'],
           onsessioninitialized: (id) => {
-            transports.set(`${target.server}:${id}`, created);
+            transports.set(`${sessionKey}:${id}`, created);
           },
           onsessionclosed: (id) => {
-            transports.delete(`${target.server}:${id}`);
+            transports.delete(`${sessionKey}:${id}`);
           },
         });
         transport = created;
         const mcp = new Server(
           { name: `sideboard-ui-proxy-${target.server}`, version: '1.0.0' },
-          { capabilities: { tools: {}, resources: {}, prompts: {} } },
+          { capabilities: session.capabilities() },
         );
         attachMcpUiProxyHandlers(mcp, session);
         await mcp.connect(created);

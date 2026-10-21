@@ -123,8 +123,9 @@ describe('McpUiHost', () => {
 
     const host = new McpUiHost({
       entries: (dirs): Record<string, Record<string, unknown>> => {
-        if (dirs?.[0] !== '/wt-a') return {};
-        return { onlyA: { command: 'onlyA' } };
+        if (dirs?.[0] === '/wt-a') return { onlyA: { command: 'onlyA' } };
+        if (dirs?.[0] === '/wt-b') return { other: { command: 'other' } };
+        return {};
       },
       openSession: () => openMcpUiSessionFromTransport(clientTransport),
     });
@@ -133,7 +134,7 @@ describe('McpUiHost', () => {
     const first = await host.proxyEntries({ onlyA: { command: 'onlyA' } }, ['/wt-a']);
     const firstUrl = String(first.onlyA?.url ?? '');
     expect(firstUrl).toMatch(/\/s\/onlyA\/d\/[a-f0-9]{16}$/);
-    await host.proxyEntries({}, ['/wt-b']);
+    await host.proxyEntries({ other: { command: 'other' } }, ['/wt-b']);
 
     const transport = new StreamableHTTPClientTransport(new URL(firstUrl), {
       requestInit: { headers: (first.onlyA?.headers as Record<string, string>) ?? {} },

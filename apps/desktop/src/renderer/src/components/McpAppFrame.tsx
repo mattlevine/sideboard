@@ -74,6 +74,26 @@ export function ToolRowFooter({
 
 const MIN_HEIGHT = 120;
 const MAX_HEIGHT = 720;
+const PREVIEW_CLEAR_MS = 250;
+const pendingPreviewClears = new Map<string, ReturnType<typeof window.setTimeout>>();
+
+function cancelPreviewClear(frameId: string) {
+  const timer = pendingPreviewClears.get(frameId);
+  if (timer == null) return;
+  window.clearTimeout(timer);
+  pendingPreviewClears.delete(frameId);
+}
+
+function schedulePreviewClear(frameId: string) {
+  cancelPreviewClear(frameId);
+  pendingPreviewClears.set(
+    frameId,
+    window.setTimeout(() => {
+      pendingPreviewClears.delete(frameId);
+      void window.sideboard.clearMcpUiPreview(frameId);
+    }, PREVIEW_CLEAR_MS),
+  );
+}
 
 type Props = {
   toolCallId: string;
@@ -89,15 +109,11 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
   const [url, setUrl] = useState<string | null>(null);
   const [height, setHeight] = useState(280);
   const viewRef = useRef<McpUiView | null>(null);
-  const clearTimerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (!toolName.startsWith('mcp__')) return;
     const frameId = mcpUiFrameId(toolCallId);
-    if (clearTimerRef.current != null) {
-      window.clearTimeout(clearTimerRef.current);
-      clearTimerRef.current = undefined;
-    }
+    cancelPreviewClear(frameId);
+    if (!toolName.startsWith('mcp__')) return;
     let cancelled = false;
     void loadView(toolName, result, threadId)
       .then(async (view) => {
@@ -113,10 +129,7 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
         resourceTeardownRequest(`td-${frameId}`, 'unmount'),
         '*',
       );
-      clearTimerRef.current = window.setTimeout(() => {
-        clearTimerRef.current = undefined;
-        void window.sideboard.clearMcpUiPreview(frameId);
-      }, 250);
+      schedulePreviewClear(frameId);
     };
   }, [toolCallId, toolName, result]);
 

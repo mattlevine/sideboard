@@ -15,7 +15,7 @@ import { toolVisibleTo } from './visibility.js';
 export function createMcpUiProxyServer(name: string, session: McpUiSession): Server {
   const server = new Server(
     { name: `sideboard-ui-proxy-${name}`, version: '1.0.0' },
-    { capabilities: { tools: {}, resources: {}, prompts: {} } },
+    { capabilities: session.capabilities() },
   );
   attachMcpUiProxyHandlers(server, session);
   return server;
@@ -61,6 +61,9 @@ export function attachMcpUiProxyHandlers(server: Server, session: McpUiSession):
       [key: string]: unknown;
     };
   });
+  server.fallbackRequestHandler = async (request) => {
+    return (await session.forward(request.method, request.params)) as { [key: string]: unknown };
+  };
 }
 
 function listedTool(tool: McpUiToolInfo) {

@@ -3,6 +3,7 @@ import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { ResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import {
   cspFromMeta,
   uiResourceUriFromMeta,
@@ -36,6 +37,14 @@ export type McpUiSession = {
     csp?: McpUiCsp;
   } | null>;
   callTool(name: string, args: Record<string, unknown>): Promise<unknown>;
+  capabilities(): {
+    tools?: object;
+    resources?: object;
+    prompts?: object;
+    completions?: object;
+    logging?: object;
+  };
+  forward(method: string, params?: unknown): Promise<unknown>;
   close(): Promise<void>;
 };
 
@@ -114,6 +123,23 @@ export async function openMcpUiSessionFromTransport(transport: Transport): Promi
     },
     async callTool(name, args) {
       return client.callTool({ name, arguments: args }, undefined, { timeout: REQUEST_TIMEOUT_MS });
+    },
+    capabilities() {
+      const caps = client.getServerCapabilities() ?? {};
+      return {
+        tools: caps.tools ?? {},
+        resources: caps.resources ?? {},
+        prompts: caps.prompts ?? {},
+        completions: caps.completions ?? {},
+        ...(caps.logging ? { logging: caps.logging } : {}),
+      };
+    },
+    forward(method, params) {
+      return client.request(
+        { method, params } as never,
+        ResultSchema,
+        { timeout: REQUEST_TIMEOUT_MS },
+      );
     },
     async close() {
       await client.close();

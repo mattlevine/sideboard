@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
+  CompleteRequestSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
@@ -25,7 +26,7 @@ describe('mcp-ui proxy', () => {
     const [proxyClient, proxyServer] = InMemoryTransport.createLinkedPair();
     const origin = new Server(
       { name: 'scholar', version: '0.0.0' },
-      { capabilities: { tools: {}, resources: {}, prompts: {} } },
+      { capabilities: { tools: {}, resources: {}, prompts: {}, completions: {} } },
     );
     origin.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
@@ -60,6 +61,9 @@ describe('mcp-ui proxy', () => {
         { role: 'user' as const, content: { type: 'text' as const, text: request.params.name } },
       ],
     }));
+    origin.setRequestHandler(CompleteRequestSchema, async (request) => ({
+      completion: { values: [request.params.argument.value] },
+    }));
     await origin.connect(upstreamServer);
     const session = await openMcpUiSessionFromTransport(upstreamClient);
     const proxy = createMcpUiProxyServer('scholar', session);
@@ -84,5 +88,10 @@ describe('mcp-ui proxy', () => {
     expect(prompts.prompts.map((item) => item.name)).toEqual(['quiz']);
     const prompt = await client.getPrompt({ name: 'quiz' });
     expect(prompt).toMatchObject({ messages: [{ content: { text: 'quiz' } }] });
+    const completion = await client.complete({
+      ref: { type: 'ref/prompt', name: 'quiz' },
+      argument: { name: 'q', value: 'hi' },
+    });
+    expect(completion.completion.values).toEqual(['hi']);
   });
 });
