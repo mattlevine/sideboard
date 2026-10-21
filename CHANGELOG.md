@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Cursor turns that go quiet after a tool call (Grok 4.7) now show that as lastError and auto-continue once, instead of ending as a silent Stopped.
+- A phone `ask_user` with no assistant text no longer leaves the chat running with a live cursor. Reopening a picker still only refreshes the questions.
 
 ## [0.1.308] - 2026-10-20
 

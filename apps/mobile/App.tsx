@@ -67,7 +67,7 @@ import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
 import { composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
 import { deliverPhoneMcpUi, PhoneMcpApps, type PhoneMcpUiControl } from './phone-mcp-app';
-import { applyPhoneTurn, applyStream, openedTranscript, phoneTurnPatch, pushBubble, settleBubbles } from './transcript';
+import { applyPhoneTurn, applyStream, openedTranscript, phoneAskIsLive, phoneTurnPatch, pushBubble, settleBubbles } from './transcript';
 import { paintedFindStrings } from './find-surface';
 
 type AskOption = { label: string; description?: string };
@@ -526,9 +526,10 @@ export default function App() {
     }
     if ((control.op === 'assistant' || control.op === 'ask') && control.chatId) {
       const chatId = control.chatId;
-      const patch = phoneTurnPatch(control.op, control.text);
+      let live = false;
       setTranscripts((prev) => {
         const current = prev[chatId] ?? EMPTY;
+        live = phoneAskIsLive(current);
         return {
           ...prev,
           [chatId]: applyPhoneTurn(current, {
@@ -539,12 +540,19 @@ export default function App() {
           }),
         };
       });
+      const patch = phoneTurnPatch(control.op, control.text, { live });
       if (!patch.refreshQuestionsOnly) {
         patchChat(chatId, {
           status: 'idle',
           ...(patch.preview ? { preview: patch.preview } : {}),
           updatedAt: new Date().toISOString(),
         });
+      } else {
+        mapChats((row) =>
+          row.id === chatId && phoneAskIsLive(row)
+            ? { ...row, status: 'idle', updatedAt: new Date().toISOString() }
+            : row,
+        );
       }
       return;
     }

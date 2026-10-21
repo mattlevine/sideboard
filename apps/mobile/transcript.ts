@@ -77,17 +77,32 @@ export function finishAgent(
   return [...next.slice(0, -1), { ...added, apps }];
 }
 
+/** True when this empty ask is finishing a live turn, not reopening a picker. */
+export function phoneAskIsLive(input: {
+  working?: boolean;
+  bubbles?: Array<{ streaming?: boolean }>;
+  status?: string;
+}): boolean {
+  if (input.working) return true;
+  if (input.bubbles?.some((bubble) => bubble.streaming)) return true;
+  return input.status === 'running' || input.status === 'queued';
+}
+
 /** Sidebar patch for a finished assistant row or an ask. Empty ask text is a question refresh. */
 export function phoneTurnPatch(
   op: 'assistant' | 'ask',
   text: string,
+  opts?: { live?: boolean },
 ): { refreshQuestionsOnly: boolean; status?: 'idle'; preview?: string } {
   const preview = text.replace(/\s+/g, ' ').trim().slice(0, 90);
-  if (op === 'ask' && !preview) return { refreshQuestionsOnly: true };
+  if (op === 'ask' && !preview) {
+    if (opts?.live) return { refreshQuestionsOnly: false, status: 'idle' };
+    return { refreshQuestionsOnly: true };
+  }
   return { refreshQuestionsOnly: false, status: 'idle', ...(preview ? { preview } : {}) };
 }
 
-/** Apply a finished turn. An ask with no text keeps the bubbles, preview, and chat status. */
+/** Apply a finished turn. An ask with no text keeps the bubbles and preview. */
 export function applyPhoneTurn<Q>(
   current: { bubbles: OpenedBubble[]; questions: Q | null; working: boolean; activity?: string },
   input: {
@@ -99,7 +114,7 @@ export function applyPhoneTurn<Q>(
 ): { bubbles: OpenedBubble[]; questions: Q | null; working: boolean; activity: string } {
   if (input.op === 'ask' && !input.text.trim()) {
     return {
-      bubbles: current.bubbles,
+      bubbles: settleBubbles(current.bubbles),
       questions: input.questions ?? null,
       working: false,
       activity: '',

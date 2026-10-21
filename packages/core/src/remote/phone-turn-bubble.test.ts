@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { applyPhoneTurn, finishAgent, phoneTurnPatch } from '../../../../apps/mobile/transcript.ts';
+import {
+  applyPhoneTurn,
+  finishAgent,
+  phoneAskIsLive,
+  phoneTurnPatch,
+} from '../../../../apps/mobile/transcript.ts';
 
 const app = { id: 'toolu_1', tool: 'mcp__dice__roll' };
 
@@ -18,12 +23,21 @@ describe('phone ask refresh', () => {
     const bubbles = [{ id: 'live', role: 'agent' as const, text: 'still here', streaming: true }];
     const questions = [{ question: 'Which API?', options: [{ label: 'REST' }] }];
     expect(phoneTurnPatch('ask', '')).toEqual({ refreshQuestionsOnly: true });
+    expect(phoneTurnPatch('ask', '', { live: true })).toEqual({
+      refreshQuestionsOnly: false,
+      status: 'idle',
+    });
     expect(
       applyPhoneTurn(
         { bubbles, questions: null, working: true, activity: 'thinking' },
         { op: 'ask', text: '', questions },
       ),
-    ).toEqual({ bubbles, questions, working: false, activity: '' });
+    ).toEqual({
+      bubbles: [{ id: 'live', role: 'agent', text: 'still here', streaming: false }],
+      questions,
+      working: false,
+      activity: '',
+    });
   });
 
   it('still records a real assistant reply', () => {
@@ -33,5 +47,9 @@ describe('phone ask refresh', () => {
       preview: 'Done.',
     });
     expect(phoneTurnPatch('assistant', '   ')).toEqual({ refreshQuestionsOnly: false, status: 'idle' });
+    expect(phoneAskIsLive({ working: true })).toBe(true);
+    expect(phoneAskIsLive({ bubbles: [{ streaming: true }] })).toBe(true);
+    expect(phoneAskIsLive({ status: 'running' })).toBe(true);
+    expect(phoneAskIsLive({ status: 'stopped' })).toBe(false);
   });
 });
