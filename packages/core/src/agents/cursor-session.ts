@@ -136,8 +136,10 @@ export function withCursorLocalHangGuards<T extends Record<string, unknown>>(
 /**
  * Local `run.stream()` can stall after the last assistant/tool frame (work is
  * on disk, wait() never resolves). Treat idle as end-of-turn instead of hanging
- * the Sideboard runner forever. Long enough for a quiet shell/test; short
- * enough that wait_for_turn (10 min default) still sees a result.
+ * the Sideboard runner forever. Idle after a completed tool with no follow-up
+ * assistant text is a failed turn (see cursor-stream-cutoff). Long enough for a
+ * quiet shell/test; short enough that wait_for_turn (10 min default) still sees
+ * a result.
  */
 export const CURSOR_STREAM_IDLE_MS = 180_000;
 

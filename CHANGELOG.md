@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Cursor turns that go quiet after a tool call (Grok 4.7) now show that as lastError and auto-continue once, instead of ending as a silent Stopped.
+
 ## [0.1.308] - 2026-10-20
 
 ### Fixed
