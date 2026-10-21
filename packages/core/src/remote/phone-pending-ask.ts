@@ -9,7 +9,11 @@ export function republishPendingAsk(
 ): void {
   const thread = readPhoneThread(chatId);
   if (!thread) return;
-  const pending = latestPendingPlanQuestions({ messages: thread.messages });
+  const pending = latestPendingPlanQuestions({
+    messages: thread.messages,
+    agentBlock: thread.agentBlock,
+    dismissedQuestionSignature: thread.dismissedQuestionSignature,
+  });
   if (!pending) return;
   emitControl(opts, {
     op: 'ask',

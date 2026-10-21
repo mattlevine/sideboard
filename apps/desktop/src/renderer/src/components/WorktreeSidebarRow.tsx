@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { worktreeAgentBlock, worktreeBoardStatus } from '@sideboard/home-board';
+import {
+  sidebarQuestionThreadId,
+  sidebarRowAgentBlock,
+  worktreeBoardStatus,
+} from '@sideboard/home-board';
 import { worktreeAnchorLabel, workspaceTagsFromGroup } from '@sideboard/worktree-labels';
 import type { AgentKind, Autonomy, ThinkingEffort, Thread } from '@sideboard-ai/core';
 import { loadThreadDefaults } from '../lib/thread-defaults';
@@ -144,7 +148,7 @@ export function WorktreeSidebarRow({
 
   const orch = primary.sourceType === 'orchestration';
   const dirty = !orch && loaded && Boolean(stat?.dirty);
-  const block = worktreeAgentBlock(group);
+  const block = sidebarRowAgentBlock(group, { active, selectedId });
   const expandKey = groupKey?.trim() || unreadWorktreeKey(primary);
   const nestMin = orch ? 1 : SIDEBAR_NEST_MIN_CHATS;
   const expanded = resolveSidebarChatExpanded({
@@ -222,11 +226,16 @@ export function WorktreeSidebarRow({
         onClick={(e) => {
           if (archiving) return;
           const additive = e.metaKey || e.ctrlKey || e.shiftKey;
+          const targetId = sidebarQuestionThreadId(group, primary.id);
           if (active && !additive) {
+            if (targetId !== selectedId) {
+              onSelect(targetId, false);
+              return;
+            }
             if (collapsedWhileSelected) setCollapsedWhileSelected(false);
             return;
           }
-          onSelect(primary.id, additive);
+          onSelect(targetId, additive);
         }}
         onContextMenu={(e) => {
           if (!onMarkUnread || archiving) return;

@@ -141,6 +141,90 @@ describe('latestPendingPlanQuestions', () => {
     });
     expect(pending?.id).toBe('q1');
   });
+
+  it('reads questions from the tool result when input was not stored', () => {
+    const pending = extractPendingPlanQuestions([
+      {
+        type: 'tool',
+        id: 'q-result',
+        name: 'mcp__sideboard__ask_user',
+        status: 'done',
+        result: JSON.stringify({
+          ok: true,
+          questions: [
+            {
+              question: 'Which API?',
+              options: [{ label: 'REST' }, { label: 'GraphQL' }],
+            },
+          ],
+        }),
+      },
+    ]);
+    expect(pending?.questions[0]?.question).toBe('Which API?');
+    expect(pending?.id).toBe('q-result');
+  });
+
+  it('shows the sidebar ask in chat when the transcript never stored it', () => {
+    const questions = [
+      {
+        question: 'Which API?',
+        options: [{ label: 'REST' }, { label: 'GraphQL' }],
+      },
+    ];
+    const pending = latestPendingPlanQuestions({
+      messages: [{ role: 'user', ts: '2026-10-20T00:00:00.000Z' }],
+      agentBlock: {
+        source: 'ask_user',
+        at: '2026-10-20T00:01:00.000Z',
+        questionSignature: 'sig',
+        questions,
+      },
+    });
+    expect(pending?.questions).toEqual(questions);
+    expect(pending?.signature).toBe('sig');
+  });
+
+  it('hides a sidebar ask after a later user message', () => {
+    expect(
+      latestPendingPlanQuestions({
+        messages: [
+          { role: 'agent', ts: '2026-10-20T00:01:00.000Z' },
+          { role: 'user', ts: '2026-10-20T00:02:00.000Z' },
+        ],
+        agentBlock: {
+          source: 'ask_user',
+          at: '2026-10-20T00:01:00.000Z',
+          questionSignature: 'sig',
+          questions: [
+            {
+              question: 'Which API?',
+              options: [{ label: 'REST' }, { label: 'GraphQL' }],
+            },
+          ],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it('hides a sidebar ask the user already skipped', () => {
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'agent', ts: '2026-10-20T00:01:00.000Z' }],
+        agentBlock: {
+          source: 'ask_user',
+          at: '2026-10-20T00:01:00.000Z',
+          questionSignature: 'sig',
+          questions: [
+            {
+              question: 'Which API?',
+              options: [{ label: 'REST' }, { label: 'GraphQL' }],
+            },
+          ],
+        },
+        dismissedQuestionSignature: 'sig',
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('formatPlanQuestionAnswers', () => {

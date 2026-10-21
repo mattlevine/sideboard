@@ -302,6 +302,17 @@ function QueuedRemoveIcon() {
   );
 }
 
+function transcriptCarriesQuestions(
+  messages: Array<{ parts?: MessagePart[] }>,
+  liveParts: MessagePart[] | undefined,
+  signature: string,
+): boolean {
+  if (extractPendingPlanQuestions(liveParts)?.signature === signature) return true;
+  return messages.some(
+    (message) => extractPendingPlanQuestions(message.parts)?.signature === signature,
+  );
+}
+
 /** User bubble after send — including the ask-user answer transcript. */
 function looksLikeAutoContinuePrompt(text: string): boolean {
   const t = text.trim();
@@ -691,6 +702,25 @@ const ChatTranscript = memo(function ChatTranscript({
             )}
         </div>
       )}
+      {showPlanQuestions &&
+      pendingPlanQuestions &&
+      !transcriptCarriesQuestions(
+        messages,
+        liveParts,
+        pendingPlanQuestions.signature,
+      ) ? (
+        <div className="msg agent">
+          <div
+            className="plan-questions-chat-brief"
+            data-chat-text=""
+            key={pendingPlanQuestions.signature}
+          >
+            <MarkdownMessage
+              text={formatPlanQuestionsForChat(pendingPlanQuestions.questions)}
+            />
+          </div>
+        </div>
+      ) : null}
     </>
   );
 });
@@ -860,8 +890,16 @@ export function ThreadPanel({
         messages: thread.messages,
         liveParts,
         userReplied: Boolean(pendingUser),
+        agentBlock: thread.agentBlock,
+        dismissedQuestionSignature: thread.dismissedQuestionSignature,
       }),
-    [liveParts, thread.messages, pendingUser],
+    [
+      liveParts,
+      thread.messages,
+      pendingUser,
+      thread.agentBlock,
+      thread.dismissedQuestionSignature,
+    ],
   );
 
   const showPlanQuestions =

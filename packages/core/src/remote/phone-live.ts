@@ -1,7 +1,7 @@
 import type { AgentEvent, MessagePart } from '../types/thread.js';
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { outboundReplyFromTurn } from '../orchestrator/outbound-turn-reply.js';
-import { extractPendingPlanQuestions } from '../plan/ask-user.js';
+import { latestPendingPlanQuestions } from '../plan/ask-user.js';
 import { readThread } from '../store/thread-store.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import type { RemoteAskQuestion } from './protocol.js';
@@ -152,10 +152,17 @@ export function emitChatTurn(
     return;
   }
   const result = getOrchestrator().getTurnResult(thread.id);
-  const pending = extractPendingPlanQuestions(
-    [...thread.messages].reverse().find((m) => m.role === 'agent')?.parts,
-  );
-  if (result.taskState === 'input-required' && pending) {
+  const pending = latestPendingPlanQuestions({
+    messages: thread.messages,
+    agentBlock: thread.agentBlock,
+    dismissedQuestionSignature: thread.dismissedQuestionSignature,
+  });
+  if (
+    pending &&
+    result.taskState !== 'failed' &&
+    result.taskState !== 'canceled' &&
+    (result.taskState === 'input-required' || thread.agentBlock?.source === 'ask_user')
+  ) {
     emitControl(opts, {
       op: 'ask',
       chatId,

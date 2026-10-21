@@ -56,7 +56,9 @@ export function decisionBlockFromParts(
       : 'Waiting for an answer in that chat.';
     return {
       ...makeAgentBlock('ask_user', reason, at),
-      ...(pending ? { questionSignature: pending.signature } : {}),
+      ...(pending
+        ? { questionSignature: pending.signature, questions: pending.questions }
+        : {}),
     };
   }
   if (!planMode || last?.type !== 'tool') return null;
@@ -71,6 +73,23 @@ export function decisionBlockFromParts(
     title ? `Waiting for plan approval: ${title}` : 'Waiting for plan approval',
     at,
   );
+}
+
+/**
+ * A transcript ask_user with empty input still replaces the stamp. Keep the
+ * questions captured when the tool was called so the chat picker can render.
+ */
+function withStampedQuestions(
+  decision: AgentBlock,
+  existing: AgentBlock | null | undefined,
+): AgentBlock {
+  if (decision.source !== 'ask_user' || decision.questions?.length) return decision;
+  if (existing?.source !== 'ask_user' || !existing.questions?.length) return decision;
+  return {
+    ...decision,
+    questions: existing.questions,
+    questionSignature: decision.questionSignature ?? existing.questionSignature,
+  };
 }
 
 /**
@@ -90,10 +109,11 @@ export function agentBlockAfterTurn(input: {
   if (input.failed) return null;
   const decision = decisionBlockFromParts(input.parts, input.planMode);
   if (decision) {
-    if (isDismissedAskUserBlock(decision, input.dismissedQuestionSignature)) {
+    const next = withStampedQuestions(decision, input.existing);
+    if (isDismissedAskUserBlock(next, input.dismissedQuestionSignature)) {
       return input.existing?.source === 'reported' ? input.existing : null;
     }
-    return decision;
+    return next;
   }
   if (
     input.existing &&
@@ -160,7 +180,9 @@ export function settleAgentBlock(
     prev.source === next.source &&
     prev.reason === next.reason &&
     prev.at === next.at &&
-    prev.questionSignature === next.questionSignature
+    prev.questionSignature === next.questionSignature &&
+    planQuestionsSignature(prev.questions ?? []) ===
+      planQuestionsSignature(next.questions ?? [])
   ) {
     return;
   }
@@ -192,7 +214,13 @@ export function stampAskUserBlock(
   try {
     writeAgentBlock(
       resolveCaller().id,
-      parsed.length ? { ...block, questionSignature: planQuestionsSignature(parsed) } : block,
+      parsed.length
+        ? {
+            ...block,
+            questionSignature: planQuestionsSignature(parsed),
+            questions: parsed,
+          }
+        : block,
     );
   } catch {
     /* no thread — picker still returns */
