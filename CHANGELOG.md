@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.310] - 2026-10-21
+
+### Fixed
+
+- Behind a corporate TLS proxy (Zscaler), GitHub login could succeed while Settings → Remote stayed disconnected with `unable to get local issuer certificate`. The Mac relay socket now trusts Keychain CAs the same way Chromium does.
+
 ## [0.1.309] - 2026-10-21
 
 ### Fixed
