@@ -210,6 +210,16 @@ export function getMcpUiHost(): McpUiHost {
   return singleton;
 }
 
+/** Orchestrators stay unproxied. Worktree Claude talks to the loopback host. */
+export async function proxyClaudeUserMcp(
+  orchestrator: boolean,
+  projectDirs: Array<string | null | undefined>,
+): Promise<Record<string, Record<string, unknown>>> {
+  if (orchestrator) return {};
+  const dirs = projectDirs.filter((d): d is string => typeof d === 'string' && d.length > 0);
+  return getMcpUiHost().proxyEntries(listUserClaudeMcpServerEntries(homedir(), dirs), dirs);
+}
+
 export function closeMcpUiHost(): void {
   const host = singleton;
   singleton = undefined;

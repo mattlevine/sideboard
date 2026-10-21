@@ -42,20 +42,13 @@ vi.mock('./orch-mcp-isolation.js', async (importOriginal) => {
 });
 
 vi.mock('../mcp-ui/host.js', () => ({
-  getMcpUiHost: () => ({
-    proxyEntries: async (entries: Record<string, Record<string, unknown>>) => {
-      const out: Record<string, Record<string, unknown>> = {};
-      for (const name of Object.keys(entries)) {
-        out[name] = {
-          type: 'http',
-          url: `http://127.0.0.1:9/s/${encodeURIComponent(name)}`,
-          headers: { Authorization: 'Bearer t' },
-        };
-      }
-      return out;
-    },
-  }),
-  closeMcpUiHost: () => undefined,
+  proxyClaudeUserMcp: async (orchestrator: boolean) =>
+    orchestrator ? {} : Object.fromEntries(
+      Object.keys(userClaudeMcpEntries).map((name) => [
+        name,
+        { type: 'http', url: `http://127.0.0.1:9/s/${encodeURIComponent(name)}`, headers: { Authorization: 'Bearer t' } },
+      ]),
+    ),
 }));
 
 vi.mock('../git/run.js', () => ({

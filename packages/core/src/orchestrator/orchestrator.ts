@@ -1565,8 +1565,7 @@ export class Orchestrator {
     const injectedNoticeContext = formatInjectedNoticesForTurn(
       pendingInjectedNotices(thread.messages),
     );
-    // Standing reminders restate fresh-session directives via systemPrompt
-    // (Claude appends; other CLIs prepend them only on resumed turns).
+    // Standing reminders restate fresh-session directives via systemPrompt (Claude appends; others prepend on resume).
     const turnReminders =
       [
         worktreeReminder, claudeSubagentTurnReminder(thread),
@@ -1591,8 +1590,7 @@ export class Orchestrator {
       planModeTurnInstruction(thread.planMode),
       orchestrationReminder,
       prGateDirective,
-      injectedNoticeContext,
-      takeMcpAppModelContext(threadId),
+      injectedNoticeContext, takeMcpAppModelContext(threadId),
       expandedPrompt,
     ]
       .filter(Boolean)
