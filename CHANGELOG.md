@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.313] - 2026-10-21
+
+### Fixed
+
+- MCP App iframes stay visible after the agent continues; collapsing Worked no longer unmounts the guest.
+- A fresh Brightsy login is no longer overwritten after connecting.
+
 ## [0.1.312] - 2026-10-21
 
 ### Added
