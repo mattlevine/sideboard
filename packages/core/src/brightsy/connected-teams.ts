@@ -73,6 +73,38 @@ export function getConnectedBrightsyTeamsRaw(): ConnectedBrightsyTeam[] {
   return readStore();
 }
 
+function teamFromCliSession(
+  cfg: BrightsyLocalConfig,
+  current: ConnectedBrightsyTeam,
+): ConnectedBrightsyTeam {
+  return {
+    ...current,
+    access_token: cfg.access_token,
+    refresh_token: cfg.refresh_token ?? current.refresh_token,
+    expires_at: cfg.expires_at ?? current.expires_at,
+    endpoint: cfg.endpoint ?? current.endpoint,
+    oauth_client_id: cfg.oauth_client_id ?? current.oauth_client_id,
+    slug: cfg.account_slug || current.slug,
+  };
+}
+
+/**
+ * True when `a` is a live session that should replace `b` (fresh CLI login vs
+ * a stale Sideboard team-store copy). Missing expiry counts as stale.
+ */
+export function brightsySessionShouldReplace(
+  a: { access_token?: string; expires_at?: number },
+  b: { access_token?: string; expires_at?: number },
+): boolean {
+  if (!a.access_token) return false;
+  const aStale = brightsyAccessTokenNeedsRefresh(a.expires_at);
+  const bStale =
+    !b.access_token || brightsyAccessTokenNeedsRefresh(b.expires_at);
+  if (!aStale && bStale) return true;
+  if (aStale) return false;
+  return (a.expires_at ?? 0) > (b.expires_at ?? 0);
+}
+
 /** Point ~/.brightsy at a Sideboard-connected team (CLI + Brightsy agent). */
 export function applyConnectedTeamToCli(team: ConnectedBrightsyTeam): void {
   let base: Partial<BrightsyLocalConfig> = {};
@@ -176,18 +208,25 @@ export async function ensureConnectedBrightsyTeamTokens(opts?: {
     }
     next.push(refreshed);
   }
-  if (changed) writeStore(next);
-
-  // Keep ~/.brightsy aligned with the active connected team when possible.
+  // A fresh `brightsy login` / MCP OAuth writes ~/.brightsy/config.json. The
+  // team store used to win on any token mismatch and clobber that login,
+  // injecting expired tokens until the user signed in again.
   try {
     const cfg = loadBrightsyConfig();
-    const active = next.find((t) => t.id === cfg.account_id);
-    if (active && active.access_token !== cfg.access_token) {
-      applyConnectedTeamToCli(active);
+    const idx = next.findIndex((t) => t.id === cfg.account_id);
+    if (idx >= 0) {
+      const active = next[idx]!;
+      if (brightsySessionShouldReplace(cfg, active)) {
+        next[idx] = teamFromCliSession(cfg, active);
+        changed = true;
+      } else if (active.access_token !== cfg.access_token) {
+        applyConnectedTeamToCli(active);
+      }
     }
   } catch {
     // Not logged in.
   }
+  if (changed) writeStore(next);
 
   return next;
 }
@@ -204,7 +243,13 @@ export function ensureCliTeamTracked(meta?: {
   try {
     const cfg = loadBrightsyConfig();
     const existing = readStore();
-    if (existing.some((t) => t.id === cfg.account_id)) {
+    const idx = existing.findIndex((t) => t.id === cfg.account_id);
+    if (idx >= 0) {
+      const current = existing[idx]!;
+      if (brightsySessionShouldReplace(cfg, current)) {
+        existing[idx] = teamFromCliSession(cfg, current);
+        writeStore(existing);
+      }
       return listConnectedBrightsyTeams();
     }
     const team: ConnectedBrightsyTeam = {
