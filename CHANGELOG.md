@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.314] - 2026-10-22
+
+### Added
+
+- Chat shows a jump-to-bottom control when the transcript is scrolled up, including orchestration chats. Typing in the composer cancels it.
+
+### Fixed
+
+- Claude connector startup failures stay off the thinking row when that Sideboard connection is working. They show when the connection is missing or the Sideboard server failed, and agents use the Claude connector only in that case.
+
 ## [0.1.313] - 2026-10-21
 
 ### Fixed

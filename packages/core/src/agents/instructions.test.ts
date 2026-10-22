@@ -228,6 +228,8 @@ describe('formatIssueToolsDirective', () => {
     expect(text).toMatch(/github_comment/);
     expect(text).toMatch(/abletime_update_task/);
     expect(text).toMatch(/vendor issue MCP/);
+    expect(text).toMatch(/mcp_github_github/);
+    expect(text).toMatch(/when the Sideboard connection is working/);
     expect(text).toMatch(/ENG-9/);
     expect(text).toMatch(/Do not ask the user to `claude mcp login`/);
     expect(text).toMatch(/Do not call ask_user/);
@@ -251,6 +253,8 @@ describe('formatIssueToolsReminder', () => {
     expect(text).not.toMatch(/abletime_\*/);
     expect(text).toMatch(/#4/);
     expect(text).toMatch(/do not ask_user after it/);
+    expect(text).toMatch(/Claude connector/);
+    expect(text).toMatch(/when Sideboard covers it/);
     expect(text).toMatch(/type next steps/);
   });
 });
