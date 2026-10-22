@@ -327,7 +327,7 @@ function connectorAuthCaution(posthog: boolean, cliConnected: boolean): string {
     : 'If a Vercel, Supabase, or Sentry MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP.';
   const token = cliConnected ? ' CLI tokens are already in this process.' : '';
   const key = posthog ? ' Do not read a PostHog key from the environment.' : '';
-  return `${signIn}${token}${key}`;
+  return `${signIn}${token}${key} When this Sideboard connection works, ignore a Claude connector that failed to start. Use the Claude connector only when this connection is not set or the CLI call fails.`;
 }
 
 function connectorReminderBit(spec: OptionalServiceSpec, cli?: OptionalCliPresence): string {
@@ -373,8 +373,8 @@ export function formatOptionalServicesReminder(
     : '';
   const posthog = connected.some((spec) => spec.id === 'posthog');
   const auth = posthog
-    ? 'If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or `posthog_api`. Do not read a PostHog key from the environment.'
-    : 'If a Vercel, Supabase, or Sentry MCP needsAuth or is unauthorized, ignore it and use the CLI.';
+    ? 'If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or `posthog_api` while this Sideboard connection works. Use the Claude connector only when it is not set or the call fails. Do not read a PostHog key from the environment.'
+    : 'If a Vercel, Supabase, or Sentry MCP needsAuth or is unauthorized, ignore it and use the CLI while this Sideboard connection works. Use the Claude connector only when it is not set or the CLI call fails.';
   return `Settings → Connectors: ${tokenBit}${bits}. ${auth} Do not add vendor MCPs. Shell dumps from those CLIs go in \`.context/cli/\` — read a slice.`;
 }
 

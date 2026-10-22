@@ -267,7 +267,9 @@ export function linearTicketIdFromThread(
 
 /**
  * Fresh-session playbook: Account Linear / GitHub / AbleTime via Sideboard MCP.
- * Vendor issue MCPs need a separate login and should be ignored.
+ * A Claude connector is the fallback when that Account connection is unset or
+ * the Sideboard call fails. Do not narrate a connector startup failure while
+ * Sideboard covers the service.
  */
 export function formatIssueToolsDirective(opts: {
   linear: boolean;
@@ -280,7 +282,7 @@ export function formatIssueToolsDirective(opts: {
   if (!opts.linear && !opts.abletime && !github) return null;
   const lines = [
     'Issue tracking (Settings → Issues / Git — already signed in):',
-    '- Use Sideboard `linear_*` / `github_*` / `abletime_*` tools. Do not call Claude Linear MCP, vendor GitHub MCP, or any other vendor issue MCP — those need a separate login and hang. If a vendor namespace shows needsAuth, ignore it and keep going with Sideboard tools.',
+    '- Use Sideboard `linear_*` / `github_*` / `abletime_*` when that Account connection is set and the call works. If it is not set, or the Sideboard call fails because the connection is down, use the Claude connector for that service. Do not mention a Claude connector that failed to start (for example `mcp_github_github` or `plugin:github:github`) when the Sideboard connection is working. A vendor issue MCP that only needsAuth is noise — do not sign in to it while Sideboard covers that service.',
   ];
   if (opts.linear) {
     lines.push(
@@ -344,7 +346,7 @@ export function formatIssueToolsReminder(opts: {
   const ticketBit = ticket
     ? ` This ticket: ${ticket}${opts.ticketProvider ? ` (${opts.ticketProvider})` : ''} — get; comment/update review findings only after they ask. Spin-offs use parent=.`
     : ' get/comment/update/create (parent= for spin-offs).';
-  return `Issues: Sideboard ${names.join(' / ')} (Account). Ignore vendor issue MCP auth.${ticketBit} Review stays in chat — do not ask_user after it; they type next steps. Authors see comments immediately.`;
+  return `Issues: Sideboard ${names.join(' / ')} when that Account connection works. If it is not set or the call fails, use the Claude connector. Do not mention a Claude connector startup failure when Sideboard covers it.${ticketBit} Review stays in chat — do not ask_user after it; they type next steps. Authors see comments immediately.`;
 }
 
 /** @deprecated Use {@link formatIssueToolsReminder} */

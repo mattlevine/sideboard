@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs';
 import { run } from '../git/run.js';
+import { githubAgentAuthReady } from '../git/github-agent-auth.js';
 import {
   claudeChromeEnabled,
   isAbleTimeConnected,
   isLinearConnected, isPosthogConnected,
+  loadAppSettings,
   resolveClaudeExecutable,
 } from '../store/app-settings.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
@@ -346,9 +348,11 @@ type ClaudeMcpServerStatus = {
 
 /**
  * Claude Code `system/init` lists user + claude.ai MCP servers as `mcp_servers`
- * (array or map). Only paint a thinking line when it can hide a real hang:
- * Sideboard not connected, or a user stdio MCP that failed. Vendor / claude.ai
- * `needsAuth` is noise — agents ignore those and use Sideboard issue tools.
+ * (array or map). Paint a thinking line for Sideboard not connected, or a user
+ * stdio MCP that failed. A Claude connector that duplicates a working Sideboard
+ * connection (`mcp_github_github`, `plugin:github:github`, `claude.ai *`) is
+ * noise. Mention that connector only when Sideboard is not set or its MCP
+ * server failed.
  */
 export function mcpStatusThinkingFromClaudeInit(
   obj: Record<string, unknown>,
@@ -386,10 +390,31 @@ export function mcpStatusThinkingFromClaudeInit(
       }
     }
   }
-  const notable = servers.filter(isNotableMcpInitStatus);
+  const coverage = claudeConnectorCoverage();
+  const sideboardOk = sideboardMcpOk(servers);
+  const notable = servers.filter((server) =>
+    isNotableMcpInitStatus(server, sideboardOk, coverage),
+  );
   if (notable.length === 0) return null;
   return `MCP: ${notable.map((s) => `${s.name} ${s.status}`).join(', ')}`;
 }
+
+type SideboardConnectorService =
+  | 'github'
+  | 'linear'
+  | 'posthog'
+  | 'vercel'
+  | 'supabase'
+  | 'sentry';
+
+const SIDEBOARD_CONNECTOR_SERVICES: readonly SideboardConnectorService[] = [
+  'github',
+  'linear',
+  'posthog',
+  'vercel',
+  'supabase',
+  'sentry',
+];
 
 function isCleanMcpConnect(status: string): boolean {
   return /^(connected|ok|ready|success)$/i.test(status.trim());
@@ -409,11 +434,73 @@ function isVendorClaudeAiMcpName(name: string): boolean {
   return /^claude\.ai\b/i.test(name.trim()) || /^mcp__claude_ai_/i.test(name.trim());
 }
 
-function isNotableMcpInitStatus(server: ClaudeMcpServerStatus): boolean {
+function sideboardMcpOk(servers: ClaudeMcpServerStatus[]): boolean {
+  const row = servers.find((server) => isSideboardMcpName(server.name));
+  return Boolean(row && isCleanMcpConnect(row.status));
+}
+
+/**
+ * Official Claude connector ids that duplicate a Sideboard integration.
+ * `mcp_github_github` is the GitHub plugin (`plugin:github:github`). A bare
+ * user server named `linear` is not one of these.
+ */
+function sideboardServiceForClaudeConnector(name: string): SideboardConnectorService | null {
+  const raw = name.trim();
+  if (!raw || isSideboardMcpName(raw)) return null;
+  const pluginLike = /^(?:plugin[:_]|mcp__plugin_|claude\.ai\s|(?:mcp__)?claude_ai_)/i.test(raw);
+  const doubled = raw.match(/^mcp_([a-z0-9]+)_([a-z0-9]+)$/i);
+  if (!pluginLike && !(doubled && doubled[1]!.toLowerCase() === doubled[2]!.toLowerCase())) {
+    return null;
+  }
+  let body = raw;
+  if (/^claude\.ai\s+/i.test(body)) body = body.replace(/^claude\.ai\s+/i, '');
+  else if (/^(?:mcp__)?claude_ai_/i.test(body)) body = body.replace(/^(?:mcp__)?claude_ai_/i, '');
+  else if (/^mcp__plugin_/i.test(body)) body = body.slice('mcp__plugin_'.length);
+  else if (/^plugin_/i.test(body)) body = body.slice('plugin_'.length);
+  else if (/^plugin:/i.test(body)) body = body.slice('plugin:'.length);
+  else if (/^mcp_/i.test(body)) body = body.slice('mcp_'.length);
+  const head = body.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)[0];
+  if (!head || !(SIDEBOARD_CONNECTOR_SERVICES as readonly string[]).includes(head)) return null;
+  return head as SideboardConnectorService;
+}
+
+function claudeConnectorCoverage(): Record<SideboardConnectorService, boolean> {
+  let github = false;
+  try {
+    github = githubAgentAuthReady();
+  } catch {
+    github = false;
+  }
+  let linear = false;
+  let posthog = false;
+  let vercel = false;
+  let supabase = false;
+  let sentry = false;
+  try {
+    linear = isLinearConnected();
+    posthog = isPosthogConnected();
+    const integrations = loadAppSettings().integrations ?? {};
+    if (integrations.githubPat?.trim()) github = true;
+    vercel = Boolean(integrations.vercelToken?.trim());
+    supabase = Boolean(integrations.supabaseAccessToken?.trim());
+    sentry = Boolean(integrations.sentryAuthToken?.trim());
+  } catch {
+    /* settings unavailable — treat Sideboard connectors as unset */
+  }
+  return { github, linear, posthog, vercel, supabase, sentry };
+}
+
+function isNotableMcpInitStatus(
+  server: ClaudeMcpServerStatus,
+  sideboardOk: boolean,
+  coverage: Record<SideboardConnectorService, boolean>,
+): boolean {
   if (isCleanMcpConnect(server.status)) return false;
   if (isSideboardMcpName(server.name)) return true;
-  if (isVendorClaudeAiMcpName(server.name)) return false;
   if (isMcpAuthStatus(server.status)) return false;
+  const service = sideboardServiceForClaudeConnector(server.name);
+  if (service && sideboardOk && coverage[service]) return false;
+  if (isVendorClaudeAiMcpName(server.name)) return false;
   return true;
 }
 
