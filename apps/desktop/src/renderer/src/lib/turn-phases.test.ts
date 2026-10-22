@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { MessagePart } from '@sideboard-ai/core';
-import { phaseDurationMs, splitTurnPhases } from './turn-phases';
+import {
+  isVisibleMcpAppPart,
+  persistentTracePartIndexes,
+  phaseDurationMs,
+  splitTurnPhases,
+} from './turn-phases';
 
 describe('splitTurnPhases', () => {
   it('interleaves thought, mid-turn text, work, and the outcome', () => {
@@ -111,6 +116,46 @@ describe('splitTurnPhases', () => {
       type: 'tool',
       name: 'Compact',
     });
+  });
+});
+
+describe('persistentTracePartIndexes', () => {
+  const dice: MessagePart = {
+    type: 'tool',
+    id: 'toolu_1',
+    name: 'mcp__dice__roll',
+    status: 'done',
+  };
+  const read: MessagePart = {
+    type: 'tool',
+    id: 't1',
+    name: 'Read',
+    status: 'done',
+  };
+  const sideboard: MessagePart = {
+    type: 'tool',
+    id: 's1',
+    name: 'mcp__sideboard__get_chat',
+    status: 'done',
+  };
+
+  it('keeps finished Claude MCP Apps visible after later assistant text', () => {
+    const parts: MessagePart[] = [
+      { type: 'thinking', text: 'roll' },
+      dice,
+      read,
+      { type: 'text', text: 'You rolled a 6.' },
+    ];
+    expect(splitTurnPhases(parts).map((p) => p.kind)).toEqual(['trace', 'text']);
+    const trace = splitTurnPhases(parts)[0];
+    expect(trace?.kind).toBe('trace');
+    if (trace?.kind !== 'trace') return;
+    expect(persistentTracePartIndexes(trace.parts, 'claude')).toEqual([1]);
+    expect(isVisibleMcpAppPart(dice, 'claude')).toBe(true);
+    expect(isVisibleMcpAppPart(dice, 'cursor')).toBe(false);
+    expect(isVisibleMcpAppPart({ ...dice, status: 'running' }, 'claude')).toBe(false);
+    expect(isVisibleMcpAppPart(sideboard, 'claude')).toBe(false);
+    expect(isVisibleMcpAppPart(read, 'claude')).toBe(false);
   });
 });
 

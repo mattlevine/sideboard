@@ -3616,6 +3616,10 @@ mark.chat-search-hit.chat-search-current {
   cursor: pointer;
 }
 
+.turn-tool.chrome-off {
+  display: none;
+}
+
 .turn-tool > :first-child {
   flex-shrink: 0;
 }

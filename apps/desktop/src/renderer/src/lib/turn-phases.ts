@@ -14,6 +14,32 @@ export function isHiddenChatTool(name: string | undefined): boolean {
   return /present_plan$/i.test(n) || /ask_user|AskUserQuestion/i.test(n);
 }
 
+/** Claude MCP Apps (`mcp__server__tool`), excluding Sideboard's own injected tools. */
+export function isMcpAppToolName(name: string | undefined): boolean {
+  const n = name ?? '';
+  return n.startsWith('mcp__') && !n.startsWith('mcp__sideboard');
+}
+
+export function isVisibleMcpAppPart(
+  part: MessagePart,
+  agent: string | undefined,
+): part is Extract<MessagePart, { type: 'tool' }> {
+  return (
+    agent === 'claude' &&
+    part.type === 'tool' &&
+    part.status !== 'running' &&
+    isMcpAppToolName(part.name)
+  );
+}
+
+/** Keep MCP App iframes painted when the Worked/Thought accordion collapses. */
+export function persistentTracePartIndexes(
+  parts: readonly MessagePart[],
+  agent: string | undefined,
+): number[] {
+  return parts.flatMap((part, i) => (isVisibleMcpAppPart(part, agent) ? [i] : []));
+}
+
 function classify(part: MessagePart): 'thinking' | 'text' | 'work' | 'skip' {
   const nested =
     'parentId' in part && typeof part.parentId === 'string' && Boolean(part.parentId.trim());

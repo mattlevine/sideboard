@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentKind, MessagePart } from '@sideboard-ai/core';
+import { isVisibleMcpAppPart } from '../lib/turn-phases';
 import {
   agentTextToCallToolResult,
   embeddedMcpUiFromText,
@@ -53,7 +54,7 @@ export function ToolRowFooter({
   part: ToolPart;
   threadId?: string;
 }) {
-  const app = agent === 'claude' && part.status !== 'running' && part.name.startsWith('mcp__');
+  const app = isVisibleMcpAppPart(part, agent);
   if (!showTail && !app) return null;
   return (
     <>
@@ -110,12 +111,15 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
   const [height, setHeight] = useState(280);
   const viewRef = useRef<McpUiView | null>(null);
 
+  const resultRef = useRef(result);
+  resultRef.current = result;
+
   useEffect(() => {
     const frameId = mcpUiFrameId(toolCallId);
     cancelPreviewClear(frameId);
     if (!toolName.startsWith('mcp__')) return;
     let cancelled = false;
-    void loadView(toolName, result, threadId)
+    void loadView(toolName, resultRef.current, threadId)
       .then(async (view) => {
         if (cancelled || !view) return;
         viewRef.current = view;
@@ -131,7 +135,7 @@ export function McpAppFrame({ toolCallId, toolName, input, result, isError, thre
       );
       schedulePreviewClear(frameId);
     };
-  }, [toolCallId, toolName, result]);
+  }, [toolCallId, toolName, threadId]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
