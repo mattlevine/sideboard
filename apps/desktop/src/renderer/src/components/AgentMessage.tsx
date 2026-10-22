@@ -17,13 +17,7 @@ import { MarkdownMessage } from './MarkdownMessage';
 import { ActivityMark } from './ActivityMark';
 import { ToolDiffPopover } from './ToolDiffPopover';
 import { ToolRowFooter } from './McpAppFrame';
-import {
-  isHiddenChatTool,
-  isVisibleMcpAppPart,
-  persistentTracePartIndexes,
-  phaseDurationMs,
-  splitTurnPhases,
-} from '../lib/turn-phases';
+import { isHiddenChatTool, isVisibleMcpAppPart, persistentTracePartIndexes, phaseDurationMs, splitTurnPhases } from '../lib/turn-phases';
 
 type ToolPart = Extract<MessagePart, { type: 'tool' }>;
 
@@ -430,12 +424,7 @@ export function AgentMessage({
     );
   }
 
-  function renderToolRow(
-    part: ToolPart,
-    key: string,
-    kids: MessagePart[] = [],
-    opts?: { hideChrome?: boolean },
-  ) {
+  function renderToolRow(part: ToolPart, key: string, kids: MessagePart[] = [], hideChrome = false) {
     if (isHiddenChatTool(part.name)) return null;
     const clickable = hasCodeDiff(part);
     const isRunning = part.status === 'running';
@@ -450,38 +439,32 @@ export function AgentMessage({
       Boolean(part.result?.trim());
     return (
       <div key={key} className="turn-tool-block">
-        {!opts?.hideChrome && (
-          <button
-            type="button"
-            className={`turn-tool${isRunning ? ' running' : ''}${diffTool?.id === part.id ? ' active' : ''}`}
-            onClick={(e) => openInspector(part, e.currentTarget)}
-          >
-            {isRunning ? (
-              <ActivityMark tone="active" size="sm" />
-            ) : (
-              <span className="turn-icon term" aria-hidden>
-                ›_
-              </span>
-            )}
-            <span className="turn-tool-desc">{part.description ?? part.name}</span>
-            {detail && (
-              <span className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}>
-                {detail}
-              </span>
-            )}
-          </button>
-        )}
-        <ToolRowFooter showTail={showTail} result={part.result} agent={agent} part={part} threadId={threadId} />
+        <button
+          type="button"
+          hidden={hideChrome}
+          className={`turn-tool${isRunning ? ' running' : ''}${diffTool?.id === part.id ? ' active' : ''}${hideChrome ? ' chrome-off' : ''}`}
+          onClick={(e) => openInspector(part, e.currentTarget)}
+        >
+          {isRunning ? (
+            <ActivityMark tone="active" size="sm" />
+          ) : (
+            <span className="turn-icon term" aria-hidden>
+              ›_
+            </span>
+          )}
+          <span className="turn-tool-desc">{part.description ?? part.name}</span>
+          {detail && (
+            <span className={`turn-tool-pill${clickable ? ' clickable' : ''}${isRunning ? ' live' : ''}`}>
+              {detail}
+            </span>
+          )}
+        </button>
+        <ToolRowFooter key="footer" showTail={showTail} result={part.result} agent={agent} part={part} threadId={threadId} />
       </div>
     );
   }
 
-  function renderParts(
-    list: MessagePart[],
-    keyPrefix: string,
-    opts?: { mcpAppsOnly?: boolean },
-  ): ReactNode {
-    const mcpAppsOnly = Boolean(opts?.mcpAppsOnly);
+  function renderParts(list: MessagePart[], keyPrefix: string, mcpAppsOnly = false): ReactNode {
     return list.map((part, i) => {
       const key = part.type === 'tool' ? `${keyPrefix}-${part.id}` : `${keyPrefix}-${i}`;
       if (part.type === 'thinking') {
@@ -491,7 +474,7 @@ export function AgentMessage({
       if (part.type === 'tool') {
         if (mcpAppsOnly && !isVisibleMcpAppPart(part, agent)) return null;
         const kids = grouped.children.get(part.id) ?? [];
-        const row = renderToolRow(part, `${key}-row`, kids, { hideChrome: mcpAppsOnly });
+        const row = renderToolRow(part, `${key}-row`, kids, mcpAppsOnly);
         if (!row) return null;
         const showNested = !mcpAppsOnly && (kids.length > 0 || isSubagentToolName(part.name));
         if (!showNested) return row;
@@ -553,8 +536,7 @@ export function AgentMessage({
         }
         const live = Boolean(streaming && i === livePhaseIndex);
         const open = openPhases.has(i);
-        const keepMcpApps =
-          !open && persistentTracePartIndexes(phase.parts, agent).length > 0;
+        const keepMcpApps = !open && persistentTracePartIndexes(phase.parts, agent).length > 0;
         const header = traceHeader(
           phase.parts,
           live,
@@ -586,7 +568,7 @@ export function AgentMessage({
             </button>
             {(open || keepMcpApps) && (
               <div className="turn-details">
-                {renderParts(phase.parts, `trace-${i}`, { mcpAppsOnly: keepMcpApps })}
+                {renderParts(phase.parts, `trace-${i}`, keepMcpApps)}
               </div>
             )}
           </div>
