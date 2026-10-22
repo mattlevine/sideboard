@@ -168,42 +168,7 @@ import {
 import { visibleComposerAttachments } from '../lib/composer-attachments';
 import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
 import { useSpeechDictation } from '../lib/use-speech-dictation';
-
-/** Still "at the bottom" — new messages keep the transcript pinned. */
-const CHAT_PIN_THRESHOLD_PX = 80;
-
-function chatIsPinnedToBottom(el: HTMLElement): boolean {
-  return el.scrollHeight - el.scrollTop - el.clientHeight < CHAT_PIN_THRESHOLD_PX;
-}
-
-function ChatJumpBottomButton({
-  onClick,
-  onWheel,
-}: {
-  onClick: () => void;
-  onWheel: (deltaY: number, deltaX: number) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="chat-jump-bottom"
-      aria-label="Scroll to bottom"
-      onClick={onClick}
-      onWheel={(e) => onWheel(e.deltaY, e.deltaX)}
-    >
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-        <path
-          d="M3.5 6.25 8 10.75 12.5 6.25"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </button>
-  );
-}
+import { ChatJumpBottomButton, useChatStickToBottom } from './ChatJumpBottom';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -861,12 +826,17 @@ export function ThreadPanel({
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
     rightSession?.tabs[0] ??
     null;
-  const chatRef = useRef<HTMLDivElement>(null);
-  const stickToBottomRef = useRef(true);
-  /** Smooth jump in progress — keep following until we arrive, unless the user scrolls. */
-  const scrollJumpRef = useRef(false);
-  const [awayFromBottom, setAwayFromBottom] = useState(false);
   const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
+  const { chatRef, stickToBottomRef, awayFromBottom, scrollChatToLatest, scrollChatBy } =
+    useChatStickToBottom({
+      threadId: thread.id,
+      chatViewOpen,
+      messages: thread.messages,
+      queue: thread.queue,
+      liveOutput,
+      liveParts,
+      pendingUser,
+    });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
@@ -1150,85 +1120,6 @@ export function ThreadPanel({
       window.cancelAnimationFrame(frame);
     };
   }, [agentActive, thread.id]);
-
-  // Reset stick-to-bottom when switching chats (show latest for the newly opened thread).
-  useEffect(() => {
-    stickToBottomRef.current = true;
-    scrollJumpRef.current = false;
-    setAwayFromBottom(false);
-  }, [thread.id]);
-
-  useEffect(() => {
-    const el = chatRef.current;
-    if (!el || !chatViewOpen) return;
-    const sync = () => {
-      const pinned = chatIsPinnedToBottom(el);
-      if (scrollJumpRef.current) {
-        if (pinned) scrollJumpRef.current = false;
-        else {
-          stickToBottomRef.current = true;
-          setAwayFromBottom(true);
-          return;
-        }
-      }
-      stickToBottomRef.current = pinned;
-      setAwayFromBottom((away) => (away === !pinned ? away : !pinned));
-    };
-    const cancelJump = () => {
-      if (!scrollJumpRef.current) return;
-      scrollJumpRef.current = false;
-      // Assigning scrollTop stops an in-flight smooth scroll at the current position.
-      const top = el.scrollTop;
-      el.scrollTop = top;
-      const pinned = chatIsPinnedToBottom(el);
-      stickToBottomRef.current = pinned;
-      setAwayFromBottom((away) => (away === !pinned ? away : !pinned));
-    };
-    const cancelJumpOnKey = (event: KeyboardEvent) => {
-      if (
-        event.key === 'ArrowUp' ||
-        event.key === 'ArrowDown' ||
-        event.key === 'PageUp' ||
-        event.key === 'PageDown' ||
-        event.key === 'Home' ||
-        event.key === 'End' ||
-        event.key === ' '
-      ) {
-        cancelJump();
-      }
-    };
-    // Remounting the transcript (file tab closed) resets scroll to the top.
-    // If the user had unpinned, show the jump control without waiting for a scroll.
-    if (!stickToBottomRef.current) sync();
-    // Composer / queue height changes the viewport without a scroll event.
-    // Stay pinned when we were following; otherwise refresh the jump button.
-    const onResize = () => {
-      if (stickToBottomRef.current) el.scrollTop = el.scrollHeight;
-      sync();
-    };
-    const resize = new ResizeObserver(onResize);
-    resize.observe(el);
-    el.addEventListener('scroll', sync, { passive: true });
-    el.addEventListener('wheel', cancelJump, { passive: true });
-    el.addEventListener('pointerdown', cancelJump);
-    el.addEventListener('keydown', cancelJumpOnKey);
-    return () => {
-      resize.disconnect();
-      el.removeEventListener('scroll', sync);
-      el.removeEventListener('wheel', cancelJump);
-      el.removeEventListener('pointerdown', cancelJump);
-      el.removeEventListener('keydown', cancelJumpOnKey);
-    };
-  }, [thread.id, chatViewOpen]);
-
-  // Scroll only this chat's overflow container — never scrollIntoView (that
-  // yanks shared ancestors when another thread's live chunks re-render App).
-  useEffect(() => {
-    if (!stickToBottomRef.current) return;
-    const el = chatRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser, chatViewOpen]);
 
   useEffect(() => {
     explicitAskSkip.current = null;
@@ -2327,34 +2218,6 @@ export function ThreadPanel({
 
   const chrome = workspaceChromeLabels(thread);
   const triggerOpener = pickTriggerOpener(worktreeOpeners, lastWorktreeOpener);
-
-  function scrollChatToLatest() {
-    const el = chatRef.current;
-    if (!el) return;
-    if (chatIsPinnedToBottom(el)) {
-      scrollJumpRef.current = false;
-      stickToBottomRef.current = true;
-      setAwayFromBottom(false);
-      return;
-    }
-    scrollJumpRef.current = true;
-    stickToBottomRef.current = true;
-    const reduce =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el.scrollTo({ top: el.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
-  }
-
-  function scrollChatBy(deltaY: number, deltaX: number) {
-    const el = chatRef.current;
-    if (!el) return;
-    if (scrollJumpRef.current) {
-      scrollJumpRef.current = false;
-      const top = el.scrollTop;
-      el.scrollTop = top;
-    }
-    el.scrollBy({ top: deltaY, left: deltaX });
-  }
 
   return (
     <section className="panel thread-main">
