@@ -2754,13 +2754,72 @@ button.workspace-tag.is-selected:hover:not(:disabled) {
   flex-wrap: wrap;
 }
 
+.chat-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .chat {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Claude-style jump control: visible only after the transcript unpins. */
+.chat-jump-bottom {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 14px;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, var(--border));
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 8px 22px rgba(0, 0, 0, 0.4);
+  transform: translateX(-50%);
+  animation: chat-jump-bottom-in 140ms ease-out;
+}
+
+.chat-jump-bottom:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.chat-jump-bottom:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes chat-jump-bottom-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-jump-bottom {
+    animation: none;
+  }
 }
 
 .chat-search-bar {

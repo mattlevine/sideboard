@@ -168,6 +168,7 @@ import {
 import { visibleComposerAttachments } from '../lib/composer-attachments';
 import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
 import { useSpeechDictation } from '../lib/use-speech-dictation';
+import { ChatJumpBottomButton, useChatStickToBottom } from './ChatJumpBottom';
 
 /** Hide lastError when the last agent bubble already shows the same limit/auth failure. */
 function isRedundantLastError(thread: Thread): boolean {
@@ -825,8 +826,17 @@ export function ThreadPanel({
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
     rightSession?.tabs[0] ??
     null;
-  const chatRef = useRef<HTMLDivElement>(null);
-  const stickToBottomRef = useRef(true);
+  const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
+  const { chatRef, stickToBottomRef, awayFromBottom, scrollChatToLatest, scrollChatBy } =
+    useChatStickToBottom({
+      threadId: thread.id,
+      chatViewOpen,
+      messages: thread.messages,
+      queue: thread.queue,
+      liveOutput,
+      liveParts,
+      pendingUser,
+    });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const acRef = useRef<HTMLDivElement>(null);
   const composerBoxRef = useRef<HTMLDivElement>(null);
@@ -1110,31 +1120,6 @@ export function ThreadPanel({
       window.cancelAnimationFrame(frame);
     };
   }, [agentActive, thread.id]);
-
-  // Reset stick-to-bottom when switching chats (show latest for the newly opened thread).
-  useEffect(() => {
-    stickToBottomRef.current = true;
-  }, [thread.id]);
-
-  useEffect(() => {
-    const el = chatRef.current;
-    if (!el) return;
-    const onScroll = () => {
-      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-      stickToBottomRef.current = gap < 80;
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => el.removeEventListener('scroll', onScroll);
-  }, [thread.id]);
-
-  // Scroll only this chat's overflow container — never scrollIntoView (that
-  // yanks shared ancestors when another thread's live chunks re-render App).
-  useEffect(() => {
-    if (!stickToBottomRef.current) return;
-    const el = chatRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-  }, [thread.messages, thread.queue, liveOutput, liveParts, pendingUser]);
 
   useEffect(() => {
     explicitAskSkip.current = null;
@@ -1904,7 +1889,6 @@ export function ThreadPanel({
     `${thread.status}:${thread.messages.length}:${accountEpoch}`,
   );
 
-  const chatViewOpen = !openFilePath && !openUrl && !changesOpen && !prPageOpen;
   const [chatSearchHitCount, setChatSearchHitCount] = useState(0);
 
   function openChatSearch(seed?: string) {
@@ -2516,6 +2500,7 @@ export function ThreadPanel({
           onCodeReference={attachToChat}
         />
       ) : (
+        <div className="chat-scroll">
         <div className="chat" ref={chatRef}>
           {thread.messages.length === 0 &&
             !pendingUser &&
@@ -2648,6 +2633,10 @@ export function ThreadPanel({
               {thread.lastError}
             </div>
           )}
+        </div>
+        {awayFromBottom ? (
+          <ChatJumpBottomButton onClick={scrollChatToLatest} onWheel={scrollChatBy} />
+        ) : null}
         </div>
       )}
 
