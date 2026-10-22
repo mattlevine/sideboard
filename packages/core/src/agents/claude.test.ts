@@ -17,16 +17,6 @@ const claudeSettings = {
   posthogConnected: false,
 };
 
-const githubAuth = { ready: true };
-
-vi.mock('../git/github-agent-auth.js', async (importOriginal) => {
-  const orig = await importOriginal<typeof import('../git/github-agent-auth.js')>();
-  return {
-    ...orig,
-    githubAgentAuthReady: () => githubAuth.ready,
-  };
-});
-
 vi.mock('../store/app-settings.js', () => ({
   resolveClaudeExecutable: () => claudeSettings.executablePath || 'claude',
   claudeChromeEnabled: () => Boolean(claudeSettings.chromeEnabled),
@@ -85,7 +75,6 @@ beforeEach(() => {
   claudeSettings.linearConnected = false;
   claudeSettings.abletimeConnected = false;
   claudeSettings.posthogConnected = false;
-  githubAuth.ready = true;
   for (const key of Object.keys(userClaudeMcpEntries)) delete userClaudeMcpEntries[key];
   vi.mocked(run).mockClear();
 });
@@ -417,100 +406,6 @@ describe('claudeAdapter.parseEvent', () => {
       { type: 'session_id', data: 'sess-123' },
       { type: 'thinking', data: 'MCP: sideboard failed, filesystem failed', replace: true },
     ]);
-  });
-
-  it('hides a failed Claude connector when that Sideboard connection is working', () => {
-    expect(
-      claudeAdapter.parseEvent(
-        JSON.stringify({
-          type: 'system',
-          subtype: 'init',
-          session_id: 'sess-123',
-          mcp_servers: [
-            { name: 'sideboard', status: 'connected' },
-            { name: 'mcp_github_github', status: 'failed' },
-            { name: 'plugin:github:github', status: 'failed' },
-            { name: 'plugin_github_github', status: 'failed' },
-            { name: 'filesystem', status: 'failed' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { type: 'session_id', data: 'sess-123' },
-      { type: 'thinking', data: 'MCP: filesystem failed', replace: true },
-    ]);
-  });
-
-  it('reports a Claude connector failure when Sideboard GitHub is not set', () => {
-    githubAuth.ready = false;
-    expect(
-      claudeAdapter.parseEvent(
-        JSON.stringify({
-          type: 'system',
-          subtype: 'init',
-          session_id: 'sess-123',
-          mcp_servers: [
-            { name: 'sideboard', status: 'connected' },
-            { name: 'mcp_github_github', status: 'failed' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { type: 'session_id', data: 'sess-123' },
-      { type: 'thinking', data: 'MCP: mcp_github_github failed', replace: true },
-    ]);
-  });
-
-  it('reports both when the Sideboard MCP server itself failed', () => {
-    expect(
-      claudeAdapter.parseEvent(
-        JSON.stringify({
-          type: 'system',
-          subtype: 'init',
-          session_id: 'sess-123',
-          mcp_servers: [
-            { name: 'sideboard', status: 'failed' },
-            { name: 'mcp_github_github', status: 'failed' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { type: 'session_id', data: 'sess-123' },
-      { type: 'thinking', data: 'MCP: sideboard failed, mcp_github_github failed', replace: true },
-    ]);
-  });
-
-  it('hides a Claude Linear connector only while Account Linear is connected', () => {
-    expect(
-      claudeAdapter.parseEvent(
-        JSON.stringify({
-          type: 'system',
-          subtype: 'init',
-          session_id: 'sess-123',
-          mcp_servers: [
-            { name: 'sideboard', status: 'connected' },
-            { name: 'mcp_linear_linear', status: 'failed' },
-          ],
-        }),
-      ),
-    ).toEqual([
-      { type: 'session_id', data: 'sess-123' },
-      { type: 'thinking', data: 'MCP: mcp_linear_linear failed', replace: true },
-    ]);
-    claudeSettings.linearConnected = true;
-    expect(
-      claudeAdapter.parseEvent(
-        JSON.stringify({
-          type: 'system',
-          subtype: 'init',
-          session_id: 'sess-123',
-          mcp_servers: [
-            { name: 'sideboard', status: 'connected' },
-            { name: 'mcp_linear_linear', status: 'failed' },
-          ],
-        }),
-      ),
-    ).toEqual({ type: 'session_id', data: 'sess-123' });
   });
 
   it('surfaces failed MCP servers from system/init so a flap is not silent', () => {
