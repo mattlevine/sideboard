@@ -117,6 +117,7 @@ export async function createThread(
     model: input.model,
     effort: input.effort,
     fast: input.fast,
+    autonomy: input.autonomy,
   });
   await requireAgent(resolved.agent);
 
@@ -156,7 +157,7 @@ export async function createThread(
       worktreePath: repoPath,
       repoPath,
       agent: resolved.agent,
-      autonomy: input.autonomy ?? 'default',
+      autonomy: resolved.autonomy,
       model: resolved.model,
       effort: resolved.effort,
       fast: resolved.fast,
@@ -298,7 +299,7 @@ export async function createThread(
     worktreePath,
     repoPath,
     agent: resolved.agent,
-    autonomy: input.autonomy ?? 'default',
+    autonomy: resolved.autonomy,
     model: resolved.model,
     effort: resolved.effort,
     fast: resolved.fast,

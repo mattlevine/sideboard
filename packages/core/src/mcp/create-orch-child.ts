@@ -94,6 +94,7 @@ export async function createOrchChildThread(
         model: opts.model,
         effort: opts.effort,
         fast: opts.fast,
+        autonomy: opts.autonomy,
         repoPath: args.repoPath,
         title: args.title,
         parentThreadId: parentId || null,

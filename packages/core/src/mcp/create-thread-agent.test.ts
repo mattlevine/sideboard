@@ -20,6 +20,7 @@ function resolver(
     model: account.model ?? null,
     effort: account.effort ?? 'high',
     fast: account.fast ?? false,
+    autonomy: 'full' as const,
   };
   return (overrides) => ({
     agent: overrides.agent ?? defaults.agent,
@@ -27,6 +28,7 @@ function resolver(
       overrides.model !== undefined ? overrides.model : defaults.model,
     effort: defaults.effort,
     fast: defaults.fast,
+    autonomy: defaults.autonomy,
   });
 }
 

@@ -28,8 +28,8 @@ describe('phone board sync', () => {
     const base = board();
     const changed = board({
       defaults: {
-        orchestration: { agent: 'cursor', model: null, effort: 'high', fast: false },
-        worktree: { agent: 'codex', model: 'gpt-5', effort: 'low', fast: false },
+        orchestration: { agent: 'cursor', model: null, effort: 'high', fast: false, autonomy: 'full' },
+        worktree: { agent: 'codex', model: 'gpt-5', effort: 'low', fast: false, autonomy: 'full' },
       },
     });
     expect(phoneBoardKey(changed)).not.toBe(phoneBoardKey(base));

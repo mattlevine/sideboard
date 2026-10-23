@@ -129,7 +129,7 @@ export function ChatTabs({
   }>({
     agent: 'claude',
     model: null,
-    autonomy: 'default',
+    autonomy: 'full',
     effort: 'high',
     fast: false,
   });
@@ -164,7 +164,7 @@ export function ChatTabs({
     setNewTabDefaults({
       agent,
       model,
-      autonomy: 'default',
+      autonomy: defaults.autonomy,
       effort: defaults.effort,
       fast: defaults.fast,
     });

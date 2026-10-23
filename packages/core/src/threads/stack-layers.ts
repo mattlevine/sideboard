@@ -30,6 +30,7 @@ import {
   updateThread,
   writeThread,
 } from '../store/thread-store.js';
+import { getDefaultAutonomy } from '../store/app-settings.js';
 import { ensureWorkspace } from '../store/workspaces.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 import type {
@@ -40,7 +41,6 @@ import type {
   PrStackLayer,
   Thread,
 } from '../types/thread.js';
-
 export function stackIdFrom(stack: PrStack): string | null {
   if (stack.stackNumber != null) return `gh-stack-${stack.stackNumber}`;
   // Stable fallback when GitHub has not assigned a stack number yet.
@@ -192,7 +192,7 @@ export async function openStackLayer(
     worktreePath,
     repoPath,
     agent: input.agent,
-    autonomy: input.autonomy ?? 'default',
+    autonomy: input.autonomy ?? getDefaultAutonomy(),
     model: input.model ?? null,
     effort: input.effort ?? 'high',
     fast: Boolean(input.fast),

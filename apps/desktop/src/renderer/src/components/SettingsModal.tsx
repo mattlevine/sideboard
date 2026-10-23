@@ -227,23 +227,22 @@ function defaultAgentModelLabel(
   model: string | null,
   effort: ThinkingEffort,
   fast = false,
+  autonomy: Autonomy = 'full',
 ): string {
   const agentLabel = DEFAULT_AGENT_LABELS[agent] ?? agent;
   const thinking = thinkingEffortLabel(effort);
   const fastSuffix = agent === 'cursor' && fast ? ' · Fast' : '';
+  const autonomyLabel = autonomy === 'full' ? 'Full autonomy' : 'Default permissions';
+  let modelLabel = 'Auto';
   if (agent === 'claude') {
-    if (!model) return `${agentLabel} · Auto · ${thinking}`;
-    return `${agentLabel} · ${CLAUDE_DEFAULT_MODEL_LABELS[model] ?? model} · ${thinking}`;
-  }
-  if (agent === 'cursor') {
+    if (model) modelLabel = CLAUDE_DEFAULT_MODEL_LABELS[model] ?? model;
+  } else if (agent === 'cursor') {
     const m = (model ?? '').trim().toLowerCase();
-    if (!m || m === 'default' || m === 'auto') {
-      return `${agentLabel} · Auto · ${thinking}${fastSuffix}`;
-    }
-    return `${agentLabel} · ${model} · ${thinking}${fastSuffix}`;
+    if (m && m !== 'default' && m !== 'auto') modelLabel = model ?? 'Auto';
+  } else if (model) {
+    modelLabel = model;
   }
-  if (!model) return `${agentLabel} · Auto · ${thinking}`;
-  return `${agentLabel} · ${model} · ${thinking}`;
+  return `${agentLabel} · ${modelLabel} · ${thinking}${fastSuffix} · ${autonomyLabel}`;
 }
 
 interface Props {
@@ -613,12 +612,14 @@ export function SettingsModal({
     model?: string | null;
     effort?: ThinkingEffort | null;
     fast?: boolean | null;
+    autonomy?: Autonomy | null;
     notes?: string | null;
     orchestrator?: {
       agent?: AgentKind | null;
       model?: string | null;
       effort?: ThinkingEffort | null;
       fast?: boolean | null;
+      autonomy?: Autonomy | null;
     } | null;
   }) {
     setBusy(true);
@@ -742,12 +743,14 @@ export function SettingsModal({
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
   const defaultFast = settings.defaults?.fast === true;
+  const defaultAutonomy: Autonomy = settings.defaults?.autonomy === 'default' ? 'default' : 'full';
   const hasOrchDefaults = Boolean(settings.defaults?.orchestrator);
   const orchDefaults = orchestratorDefaultsFromSettings(settings);
   const orchAgent = orchDefaults.agent;
   const orchModel = orchDefaults.model;
   const orchEffort = orchDefaults.effort;
   const orchFast = orchDefaults.fast;
+  const orchAutonomy = orchDefaults.autonomy;
   const deferredHistoryQuery = useDeferredValue(historyQuery);
   const filteredArchived = useMemo(() => {
     const q = deferredHistoryQuery.trim().toLowerCase();
@@ -1017,19 +1020,14 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">Default agent, model &amp; effort</div>
+                      <div className="settings-section-title">Default agent, model, effort &amp; autonomy</div>
                       <p className="settings-hint">
                         Used for new workspace chats, chat tabs, and MCP-spawned worktrees (when
-                        agent/model are omitted). For Cursor, Fast is optional (~2× usage for Grok)
-                        and off by default.
+                        agent/model are omitted). Full autonomy is the default. Cursor Fast is
+                        optional (~2× usage for Grok) and off by default.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
-                        {defaultAgentModelLabel(
-                          defaultAgent,
-                          defaultModel,
-                          defaultEffort,
-                          defaultFast,
-                        )}
+                        {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort, defaultFast, defaultAutonomy)}
                       </p>
                     </div>
                     <button
@@ -1045,17 +1043,15 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">
-                        Default orchestrator agent, model &amp; effort
-                      </div>
+                      <div className="settings-section-title">Default orchestrator agent, model, effort &amp; autonomy</div>
                       <p className="settings-hint">
                         Used for Global chats, Slack and cloud coordinators, and new orchestration
-                        tabs. Unset inherits the defaults above.
+                        tabs. Unset inherits the defaults above, including autonomy.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
                         {hasOrchDefaults
-                          ? defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast)
-                          : `Same as default (${defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast)})`}
+                          ? defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast, orchAutonomy)
+                          : `Same as default (${defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast, orchAutonomy)})`}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
@@ -2436,15 +2432,16 @@ export function SettingsModal({
         value={{
           agent: defaultAgent,
           model: defaultModel,
-          autonomy: 'default' as Autonomy,
+          autonomy: defaultAutonomy,
           effort: defaultEffort,
           fast: defaultFast,
         }}
-        title="Default agent, model & effort"
+        title="Default agent, model, effort & autonomy"
         confirmLabel="Save"
         onClose={() => setDefaultsPickerOpen(false)}
         onLiveChange={(next) => {
           void saveDefaultsPatch({
+            autonomy: next.autonomy,
             effort: next.effort,
             fast: next.agent === 'cursor' ? next.fast : false,
           });
@@ -2453,6 +2450,7 @@ export function SettingsModal({
           void saveDefaultsPatch({
             agent: next.agent,
             model: next.model,
+            autonomy: next.autonomy,
             effort: next.effort,
             fast: next.agent === 'cursor' ? next.fast : false,
           });
@@ -2463,11 +2461,11 @@ export function SettingsModal({
         value={{
           agent: orchAgent,
           model: orchModel,
-          autonomy: 'default' as Autonomy,
+          autonomy: orchAutonomy,
           effort: orchEffort,
           fast: orchFast,
         }}
-        title="Default orchestrator agent, model & effort"
+        title="Default orchestrator agent, model, effort & autonomy"
         confirmLabel="Save"
         allowedAgents={ORCHESTRATOR_AGENT_KINDS}
         onClose={() => setOrchDefaultsPickerOpen(false)}
@@ -2476,6 +2474,7 @@ export function SettingsModal({
             orchestrator: {
               agent: next.agent,
               model: next.model,
+              autonomy: next.autonomy,
               effort: next.effort,
               fast: next.agent === 'cursor' ? next.fast : false,
             },
@@ -2486,6 +2485,7 @@ export function SettingsModal({
             orchestrator: {
               agent: next.agent,
               model: next.model,
+              autonomy: next.autonomy,
               effort: next.effort,
               fast: next.agent === 'cursor' ? next.fast : false,
             },
