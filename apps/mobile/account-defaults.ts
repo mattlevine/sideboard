@@ -6,6 +6,7 @@ export type PhoneAgentDefaults = {
   model: string | null;
   effort: string;
   fast: boolean;
+  autonomy?: 'default' | 'full';
 };
 
 export type PhoneAccountDefaults = {
@@ -40,6 +41,6 @@ export function composerOptionsFor(
     effort,
     fast: row?.fast === true,
     planMode: false,
-    autonomy: 'default',
+    autonomy: row?.autonomy === 'default' ? 'default' : 'full',
   };
 }

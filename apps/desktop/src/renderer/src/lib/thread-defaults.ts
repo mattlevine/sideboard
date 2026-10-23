@@ -1,5 +1,6 @@
 import type {
   AgentKind,
+  Autonomy,
   PublicAppSettings,
   ThinkingEffort,
 } from '@sideboard-ai/core';
@@ -12,10 +13,16 @@ export type ThreadDefaults = {
   effort: ThinkingEffort;
   /** Cursor Fast speed tier (account / orchestrator defaults). */
   fast: boolean;
+  /** Full autonomy unless Settings stores Default permissions. */
+  autonomy: Autonomy;
 };
 
+function autonomyFrom(value: unknown, fallback: Autonomy = 'full'): Autonomy {
+  return value === 'default' || value === 'full' ? value : fallback;
+}
+
 function fallbackDefaults(): ThreadDefaults {
-  return { agent: 'claude', model: null, effort: 'high', fast: false };
+  return { agent: 'claude', model: null, effort: 'high', fast: false, autonomy: 'full' };
 }
 
 function coerceOrchestratorAgent(agent: AgentKind): AgentKind {
@@ -33,6 +40,7 @@ export function threadDefaultsFromSettings(
     model: settings.defaults?.model?.trim() || null,
     effort: parseThinkingEffort(settings.defaults?.effort),
     fast: settings.defaults?.fast === true,
+    autonomy: autonomyFrom(settings.defaults?.autonomy),
   };
 }
 
@@ -56,6 +64,7 @@ export function orchestratorDefaultsFromSettings(
     model,
     effort: orch?.effort ? parseThinkingEffort(orch.effort) : account.effort,
     fast: orch?.fast === undefined ? account.fast : orch.fast === true,
+    autonomy: autonomyFrom(orch?.autonomy, account.autonomy),
   };
 }
 

@@ -104,7 +104,7 @@ export function WorktreeSidebarRow({
   }>({
     agent: 'claude',
     model: null,
-    autonomy: 'default',
+    autonomy: 'full',
     effort: 'high',
     fast: false,
   });
@@ -196,7 +196,7 @@ export function WorktreeSidebarRow({
     setAddDefaults({
       agent: defaults.agent,
       model: defaults.model,
-      autonomy: 'default',
+      autonomy: defaults.autonomy,
       effort: defaults.effort,
       fast: defaults.fast,
     });

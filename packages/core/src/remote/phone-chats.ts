@@ -681,6 +681,7 @@ function draftAgentOptions(draft: PhoneDraft | undefined, defaults: {
   model: string | null;
   effort: ThinkingEffort;
   fast: boolean;
+  autonomy: Autonomy;
 }) {
   return {
     agent: draft?.agent ?? defaults.agent,
@@ -688,7 +689,7 @@ function draftAgentOptions(draft: PhoneDraft | undefined, defaults: {
     effort: draft?.effort ?? defaults.effort,
     fast: draft?.fast ?? defaults.fast,
     planMode: Boolean(draft?.planMode),
-    autonomy: draft?.autonomy,
+    autonomy: draft?.autonomy ?? defaults.autonomy,
   };
 }
 

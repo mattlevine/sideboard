@@ -1,5 +1,5 @@
 import { isCursorApiKeyConfigured } from '../agents/cursor.js';
-import type { AgentKind } from '../types/thread.js';
+import type { AgentKind, Autonomy } from '../types/thread.js';
 import type { ThinkingEffort } from '../types/thinking-effort.js';
 
 export type ResolveNewThreadOptions = (overrides: {
@@ -10,6 +10,7 @@ export type ResolveNewThreadOptions = (overrides: {
   model: string | null;
   effort: ThinkingEffort;
   fast: boolean;
+  autonomy: Autonomy;
 };
 
 export type OrchCreateThreadResolution = {
@@ -17,6 +18,7 @@ export type OrchCreateThreadResolution = {
   model: string | null;
   effort: ThinkingEffort;
   fast: boolean;
+  autonomy: Autonomy;
   /** Requested agent that was dropped (parent echo or Cursor autofill). */
   ignoredAgent?: AgentKind;
   /** Codex child under a Codex orchestrator — coerced to a non-Codex agent. */

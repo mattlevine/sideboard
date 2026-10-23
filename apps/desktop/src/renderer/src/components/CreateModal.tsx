@@ -120,7 +120,7 @@ const DEFAULT_OPTIONS: ComposerDraftOptions = {
   effort: 'high',
   fast: false,
   planMode: false,
-  autonomy: 'default',
+  autonomy: 'full',
 };
 
 const AVATAR_COLORS = [
@@ -260,6 +260,7 @@ export function CreateModal({
             model: defaults.model,
             effort: defaults.effort,
             fast: defaults.fast,
+            autonomy: defaults.autonomy,
           },
           initialMode === 'orchestration' ? 'orchestration' : 'create',
         ),
@@ -378,6 +379,7 @@ export function CreateModal({
               model: defaults.model,
               effort: defaults.effort,
               fast: defaults.fast,
+              autonomy: defaults.autonomy,
             },
             next,
           ),

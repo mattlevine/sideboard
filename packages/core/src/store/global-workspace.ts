@@ -157,6 +157,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     model: opts.model,
     effort: opts.effort,
     fast: opts.fast,
+    autonomy: opts.autonomy,
   });
   const agent = assertOrchestratorCapableAgent(resolved.agent);
   const worktreePath = globalAgentCwd();
@@ -170,7 +171,7 @@ export function createGlobalChat(opts: CreateGlobalChatOpts): Thread {
     worktreePath,
     repoPath: GLOBAL_WORKSPACE_ID,
     agent,
-    autonomy: opts.autonomy ?? 'default',
+    autonomy: resolved.autonomy,
     model: resolved.model,
     effort: resolved.effort,
     fast: resolved.fast,
@@ -280,6 +281,7 @@ export function ensureSlackCoordinator(
         if (existing.model !== defaults.model) patch.model = defaults.model;
         if (existing.effort !== defaults.effort) patch.effort = defaults.effort;
         if (existing.fast !== defaults.fast) patch.fast = defaults.fast;
+        if (existing.autonomy !== defaults.autonomy) patch.autonomy = defaults.autonomy;
       }
       if (Object.keys(patch).length > 0) {
         return updateThread(existing.id, patch);
@@ -356,6 +358,7 @@ export function ensureCloudCoordinator(agent: AgentKind): Thread {
       if (existing.model !== defaults.model) patch.model = defaults.model;
       if (existing.effort !== defaults.effort) patch.effort = defaults.effort;
       if (existing.fast !== defaults.fast) patch.fast = defaults.fast;
+      if (existing.autonomy !== defaults.autonomy) patch.autonomy = defaults.autonomy;
     }
     if (Object.keys(patch).length > 0) {
       return updateThread(existing.id, patch);

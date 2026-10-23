@@ -6,7 +6,7 @@ import {
   coerceOrchestratorAgent,
   isOrchestratorCapableAgent,
 } from '../agents/orchestrator-capable.js';
-import type { AgentKind } from '../types/thread.js';
+import type { AgentKind, Autonomy } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { stripNestedElectronEnv } from '../hook/nested-electron-env.js';
 import {
@@ -79,11 +79,16 @@ export interface OrchestratorDefaultsSettings {
   model?: string;
   effort?: ThinkingEffort;
   fast?: boolean;
+  /**
+   * Permission mode for new orchestrator chats.
+   * Omitted inherits the account default (`full` when that is also unset).
+   */
+  autonomy?: Autonomy;
 }
 
 /**
  * App-level defaults for Create / new chat tabs (Settings → Agents).
- * Omitted fields fall back to Claude + Auto + High thinking at runtime.
+ * Omitted fields fall back to Claude + Auto + High thinking + full autonomy.
  */
 export interface DefaultsAppSettings {
   agent?: AgentKind;
@@ -97,6 +102,11 @@ export interface DefaultsAppSettings {
    */
   fast?: boolean;
   /**
+   * Permission mode for new chats. Omitted = full autonomy.
+   * `default` is the agent's normal permission prompts.
+   */
+  autonomy?: Autonomy;
+  /**
    * Account context (Settings → Agents): roles, tickets, review queues.
    * Project context (Settings → Projects) adds for that repo.
    */
@@ -106,8 +116,8 @@ export interface DefaultsAppSettings {
   /** @deprecated Folded into {@link DefaultsAppSettings.notes} on read. */
   role?: string;
   /**
-   * Orchestrator-only agent / model / effort (Global, Slack, cloud).
-   * Unset inherits {@link DefaultsAppSettings.agent} / model / effort.
+   * Orchestrator-only agent / model / effort / autonomy (Global, Slack, cloud).
+   * Unset inherits {@link DefaultsAppSettings.agent} / model / effort / autonomy.
    */
   orchestrator?: OrchestratorDefaultsSettings;
 }
@@ -851,6 +861,10 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   return out;
 }
 
+function normalizeAutonomy(value: unknown): Autonomy | undefined {
+  return value === 'default' || value === 'full' ? value : undefined;
+}
+
 function normalizeOrchestratorDefaults(
   raw: unknown,
 ): OrchestratorDefaultsSettings | undefined {
@@ -873,6 +887,8 @@ function normalizeOrchestratorDefaults(
   if (typeof source.fast === 'boolean') {
     out.fast = source.fast;
   }
+  const autonomy = normalizeAutonomy(source.autonomy);
+  if (autonomy) out.autonomy = autonomy;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -896,6 +912,8 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   if (typeof source.fast === 'boolean') {
     out.fast = source.fast;
   }
+  const autonomy = normalizeAutonomy(source.autonomy);
+  if (autonomy) out.autonomy = autonomy;
   const notes = foldLegacyRolesIntoNotes(source.roles, source.role, source.notes);
   if (notes) out.notes = notes;
   const orchestrator = normalizeOrchestratorDefaults(source.orchestrator);
@@ -1644,6 +1662,8 @@ export type DefaultsSettingsPatch = {
   /** Effort level, or Conductor's `normal` (stored as medium). */
   effort?: ThinkingEffort | 'normal' | null;
   fast?: boolean | null;
+  /** `null` clears the override (new chats use full autonomy). */
+  autonomy?: Autonomy | null;
   notes?: string | null;
   /**
    * Orchestrator defaults. `null` clears the override (inherit account defaults).
@@ -1654,6 +1674,7 @@ export type DefaultsSettingsPatch = {
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    autonomy?: Autonomy | null;
   } | null;
 };
 
@@ -1691,6 +1712,14 @@ function applyOrchestratorDefaultsPatch(
       next.fast = Boolean(patch.fast);
     }
   }
+  if ('autonomy' in patch) {
+    if (patch.autonomy == null) {
+      delete next.autonomy;
+    } else {
+      const autonomy = normalizeAutonomy(patch.autonomy);
+      if (autonomy) next.autonomy = autonomy;
+    }
+  }
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
@@ -1724,6 +1753,14 @@ export function updateDefaultsSettings(patch: DefaultsSettingsPatch): AppSetting
       delete defaults.fast;
     } else {
       defaults.fast = Boolean(patch.fast);
+    }
+  }
+  if ('autonomy' in patch) {
+    if (patch.autonomy == null) {
+      delete defaults.autonomy;
+    } else {
+      const autonomy = normalizeAutonomy(patch.autonomy);
+      if (autonomy) defaults.autonomy = autonomy;
     }
   }
   if ('notes' in patch) {
@@ -1812,6 +1849,13 @@ export function getDefaultFast(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return settings.defaults.fast === true;
+}
+
+/** Default permission mode for new chats. Unset means full autonomy. */
+export function getDefaultAutonomy(
+  settings: AppSettings = loadAppSettings(),
+): Autonomy {
+  return settings.defaults.autonomy === 'default' ? 'default' : 'full';
 }
 
 /** Resolved Create / new-chat agent + model + thinking defaults. */
@@ -1934,6 +1978,7 @@ export type ResolvedThreadDefaults = {
   model: string | null;
   effort: ThinkingEffort;
   fast: boolean;
+  autonomy: Autonomy;
 };
 
 export function resolveThreadDefaults(
@@ -1944,6 +1989,7 @@ export function resolveThreadDefaults(
     model: getDefaultModel(settings),
     effort: getDefaultEffort(settings),
     fast: getDefaultFast(settings),
+    autonomy: getDefaultAutonomy(settings),
   };
 }
 
@@ -1967,6 +2013,7 @@ export function resolveOrchestratorDefaults(
     model,
     effort: orch?.effort ?? account.effort,
     fast: orch?.fast ?? account.fast,
+    autonomy: orch?.autonomy ?? account.autonomy,
   };
 }
 
@@ -1977,6 +2024,7 @@ function mergeThreadOptionOverrides(
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    autonomy?: Autonomy | null;
   },
 ): ResolvedThreadDefaults {
   const effort =
@@ -2005,13 +2053,18 @@ function mergeThreadOptionOverrides(
       overrides.fast === undefined || overrides.fast === null
         ? defaults.fast
         : Boolean(overrides.fast),
+    autonomy:
+      overrides.autonomy === undefined || overrides.autonomy === null
+        ? defaults.autonomy
+        : (normalizeAutonomy(overrides.autonomy) ?? defaults.autonomy),
   };
 }
 
 /**
- * Resolve agent/model/effort/fast for a newly created thread.
+ * Resolve agent/model/effort/fast/autonomy for a newly created thread.
  * Omitted fields use Agents defaults (Settings → Agents).
  * Pass `model: null` explicitly to force Auto / agent-default.
+ * Omitted autonomy is full unless Settings stores Default permissions.
  */
 export function resolveNewThreadOptions(
   overrides: {
@@ -2019,6 +2072,7 @@ export function resolveNewThreadOptions(
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    autonomy?: Autonomy | null;
   } = {},
   settings: AppSettings = loadAppSettings(),
 ): ResolvedThreadDefaults {
@@ -2026,7 +2080,7 @@ export function resolveNewThreadOptions(
 }
 
 /**
- * Resolve agent/model/effort/fast for a new orchestrator chat.
+ * Resolve agent/model/effort/fast/autonomy for a new orchestrator chat.
  * Omitted fields use Settings → Default orchestrator (else account defaults).
  */
 export function resolveNewOrchestratorOptions(
@@ -2035,6 +2089,7 @@ export function resolveNewOrchestratorOptions(
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null;
+    autonomy?: Autonomy | null;
   } = {},
   settings: AppSettings = loadAppSettings(),
 ): ResolvedThreadDefaults {

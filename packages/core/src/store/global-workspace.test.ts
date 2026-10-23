@@ -44,6 +44,7 @@ describe('global-workspace', () => {
     expect(chat.branchName).toBe('global');
     expect(chat.worktreePath).toBe(join(dataDir, 'global'));
     expect(chat.title).toBe('Ship the feature');
+    expect(chat.autonomy).toBe('full');
     expect(isGlobalThread(chat)).toBe(true);
     expect(listGlobalThreads()).toHaveLength(1);
   });

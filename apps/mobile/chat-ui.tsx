@@ -46,7 +46,7 @@ export const DEFAULT_OPTIONS: ComposerOptions = {
   effort: 'medium',
   fast: false,
   planMode: false,
-  autonomy: 'default',
+  autonomy: 'full',
 };
 
 export type FileChip = PickedFile & { id: string };
