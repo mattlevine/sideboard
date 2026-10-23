@@ -199,15 +199,13 @@ export interface IpcApi extends McpUiIpc {
     agent?: AgentKind | null;
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
-    fast?: boolean | null;
-    autonomy?: Autonomy | null;
+    fast?: boolean | null; autonomy?: Autonomy | null;
     notes?: string | null;
     orchestrator?: {
       agent?: AgentKind | null;
       model?: string | null;
       effort?: ThinkingEffort | 'normal' | null;
-      fast?: boolean | null;
-      autonomy?: Autonomy | null;
+      fast?: boolean | null; autonomy?: Autonomy | null;
     } | null;
   }): Promise<PublicAppSettings>;
   updateProjectProfileSettings(

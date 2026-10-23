@@ -329,13 +329,11 @@ describe('app settings', () => {
     expect(mod.getDefaultModel()).toBeNull();
     expect(mod.getDefaultEffort()).toBe('high');
     expect(mod.getDefaultFast()).toBe(false);
-    expect(mod.getDefaultAutonomy()).toBe('full');
     expect(mod.resolveThreadDefaults()).toEqual({
       agent: 'claude',
       model: null,
       effort: 'high',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
 
     const saved = mod.updateDefaultsSettings({
@@ -355,8 +353,7 @@ describe('app settings', () => {
       agent: 'cursor',
       model: 'gpt-5',
       effort: 'xhigh',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
 
     const clearedModel = mod.updateDefaultsSettings({ model: null });
@@ -371,38 +368,6 @@ describe('app settings', () => {
     expect(reset.defaults).toEqual({});
     expect(mod.getDefaultAgent()).toBe('claude');
     expect(mod.getDefaultEffort()).toBe('high');
-    expect(mod.getDefaultAutonomy()).toBe('full');
-  });
-
-  it('defaults new-chat autonomy to full and round-trips an explicit choice', async () => {
-    const mod = await load();
-    expect(mod.getDefaultAutonomy()).toBe('full');
-    expect(mod.resolveThreadDefaults().autonomy).toBe('full');
-    expect(mod.resolveOrchestratorDefaults().autonomy).toBe('full');
-
-    const saved = mod.updateDefaultsSettings({ autonomy: 'default' });
-    expect(saved.defaults.autonomy).toBe('default');
-    expect(mod.getDefaultAutonomy()).toBe('default');
-    expect(mod.resolveNewThreadOptions({}).autonomy).toBe('default');
-
-    const orch = mod.updateDefaultsSettings({
-      orchestrator: { autonomy: 'full' },
-    });
-    expect(orch.defaults.orchestrator).toEqual({ autonomy: 'full' });
-    expect(mod.resolveOrchestratorDefaults().autonomy).toBe('full');
-    expect(mod.resolveThreadDefaults().autonomy).toBe('default');
-
-    const cleared = mod.updateDefaultsSettings({
-      autonomy: null,
-      orchestrator: { autonomy: null },
-    });
-    expect(cleared.defaults.autonomy).toBeUndefined();
-    expect(cleared.defaults.orchestrator).toBeUndefined();
-    expect(mod.getDefaultAutonomy()).toBe('full');
-    expect(mod.resolveOrchestratorDefaults().autonomy).toBe('full');
-
-    const ignored = mod.updateDefaultsSettings({ autonomy: 'bypass' as never });
-    expect(ignored.defaults.autonomy).toBeUndefined();
   });
 
   it('round-trips default orchestrator agent, model, and effort', async () => {
@@ -411,8 +376,7 @@ describe('app settings', () => {
       agent: 'claude',
       model: null,
       effort: 'high',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
 
     mod.updateDefaultsSettings({
@@ -425,8 +389,7 @@ describe('app settings', () => {
       agent: 'cursor',
       model: 'default',
       effort: 'low',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
 
     const saved = mod.updateDefaultsSettings({
@@ -441,31 +404,27 @@ describe('app settings', () => {
       agent: 'claude',
       model: 'opus',
       effort: 'xhigh',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
     // Worktree defaults stay on the account picker.
     expect(mod.resolveThreadDefaults()).toEqual({
       agent: 'cursor',
       model: 'default',
       effort: 'low',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
 
     expect(mod.resolveNewOrchestratorOptions({})).toEqual({
       agent: 'claude',
       model: 'opus',
       effort: 'xhigh',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
     expect(mod.resolveNewOrchestratorOptions({ model: null })).toEqual({
       agent: 'claude',
       model: null,
       effort: 'xhigh',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
 
     const cleared = mod.updateDefaultsSettings({ orchestrator: null });
@@ -474,8 +433,7 @@ describe('app settings', () => {
       agent: 'cursor',
       model: 'default',
       effort: 'low',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
   });
 
@@ -490,8 +448,7 @@ describe('app settings', () => {
       agent: 'claude',
       model: null,
       effort: 'high',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
   });
 
@@ -518,8 +475,7 @@ describe('app settings', () => {
       agent: 'claude',
       model: 'team-1',
       effort: 'high',
-      fast: false,
-      autonomy: 'full',
+      fast: false, autonomy: 'full',
     });
   });
 
@@ -851,23 +807,20 @@ describe('app settings', () => {
       agent: 'cursor',
       model: 'default',
       effort: 'high',
-      fast: true,
-      autonomy: 'full',
+      fast: true, autonomy: 'full',
     });
     expect(mod.resolveNewThreadOptions({ agent: 'claude', model: null })).toEqual({
       agent: 'claude',
       model: null,
       effort: 'high',
-      fast: true,
-      autonomy: 'full',
+      fast: true, autonomy: 'full',
     });
     // Cursor Auto ("default") must not ride along onto Codex/Claude children.
     expect(mod.resolveNewThreadOptions({ agent: 'codex' })).toEqual({
       agent: 'codex',
       model: null,
       effort: 'high',
-      fast: true,
-      autonomy: 'full',
+      fast: true, autonomy: 'full',
     });
   });
 

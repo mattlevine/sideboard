@@ -743,8 +743,7 @@ export function SettingsModal({
   const defaultModel = settings.defaults?.model?.trim() || null;
   const defaultEffort: ThinkingEffort = parseThinkingEffort(settings.defaults?.effort);
   const defaultFast = settings.defaults?.fast === true;
-  const defaultAutonomy: Autonomy =
-    settings.defaults?.autonomy === 'default' ? 'default' : 'full';
+  const defaultAutonomy: Autonomy = settings.defaults?.autonomy === 'default' ? 'default' : 'full';
   const hasOrchDefaults = Boolean(settings.defaults?.orchestrator);
   const orchDefaults = orchestratorDefaultsFromSettings(settings);
   const orchAgent = orchDefaults.agent;
@@ -1021,23 +1020,14 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">
-                        Default agent, model, effort &amp; autonomy
-                      </div>
+                      <div className="settings-section-title">Default agent, model, effort &amp; autonomy</div>
                       <p className="settings-hint">
                         Used for new workspace chats, chat tabs, and MCP-spawned worktrees (when
-                        agent/model are omitted). Full autonomy is on unless you choose Default
-                        permissions. For Cursor, Fast is optional (~2× usage for Grok) and off by
-                        default.
+                        agent/model are omitted). Full autonomy is the default. Cursor Fast is
+                        optional (~2× usage for Grok) and off by default.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
-                        {defaultAgentModelLabel(
-                          defaultAgent,
-                          defaultModel,
-                          defaultEffort,
-                          defaultFast,
-                          defaultAutonomy,
-                        )}
+                        {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort, defaultFast, defaultAutonomy)}
                       </p>
                     </div>
                     <button
@@ -1053,22 +1043,14 @@ export function SettingsModal({
                 <div className="settings-section settings-section-card">
                   <div className="settings-toggle-row">
                     <div>
-                      <div className="settings-section-title">
-                        Default orchestrator agent, model, effort &amp; autonomy
-                      </div>
+                      <div className="settings-section-title">Default orchestrator agent, model, effort &amp; autonomy</div>
                       <p className="settings-hint">
                         Used for Global chats, Slack and cloud coordinators, and new orchestration
                         tabs. Unset inherits the defaults above, including autonomy.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
                         {hasOrchDefaults
-                          ? defaultAgentModelLabel(
-                              orchAgent,
-                              orchModel,
-                              orchEffort,
-                              orchFast,
-                              orchAutonomy,
-                            )
+                          ? defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast, orchAutonomy)
                           : `Same as default (${defaultAgentModelLabel(orchAgent, orchModel, orchEffort, orchFast, orchAutonomy)})`}
                       </p>
                     </div>

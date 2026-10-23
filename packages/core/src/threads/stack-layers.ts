@@ -41,7 +41,6 @@ import type {
   PrStackLayer,
   Thread,
 } from '../types/thread.js';
-
 export function stackIdFrom(stack: PrStack): string | null {
   if (stack.stackNumber != null) return `gh-stack-${stack.stackNumber}`;
   // Stable fallback when GitHub has not assigned a stack number yet.
