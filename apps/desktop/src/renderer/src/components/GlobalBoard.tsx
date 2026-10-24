@@ -50,10 +50,7 @@ interface Props {
   onAddToBoard: () => void;
   onNewOrchestration: () => void;
   onRefresh: () => void;
-  onArchive: (
-    ids: string[],
-    meta?: { title?: string; removesWorktree?: boolean },
-  ) => void | Promise<void>;
+  onArchive: (ids: string[], meta?: { title?: string; removesWorktree?: boolean }) => void | Promise<void>;
   archivingIds?: Set<string>;
   worktreeSort?: WorktreeSortMode;
   onWorktreeSortChange?: (mode: WorktreeSortMode) => void;
