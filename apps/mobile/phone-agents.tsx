@@ -22,6 +22,7 @@ export type PhoneWorktree = {
   chats: PhoneChat[];
   tags?: string[];
   badge?: PhonePrBadge;
+  blockedBy?: string[];
 };
 
 export type PhoneProject = {
@@ -206,7 +207,7 @@ export function PhoneAgentsScreen({
                     style={[
                       styles.sectionRow,
                       styles.worktreeHead,
-                      worktree.tags?.length ? styles.worktreeHeadTagged : null,
+                      worktree.tags?.length || worktree.blockedBy?.length ? styles.worktreeHeadTagged : null,
                     ]}
                   >
                     <View style={styles.worktreeIdentity}>
@@ -217,6 +218,11 @@ export function PhoneAgentsScreen({
                         </Text>
                         {worktree.badge ? <PrBadge badge={worktree.badge} /> : null}
                       </View>
+                      {worktree.blockedBy?.length ? (
+                        <Text style={styles.blockedBy} numberOfLines={1}>
+                          {`Blocked by ${worktree.blockedBy.join(', ')}`}
+                        </Text>
+                      ) : null}
                       {worktree.tags?.length ? (
                         <View style={styles.tagRow}>
                           {worktree.tags.map((tag) => (

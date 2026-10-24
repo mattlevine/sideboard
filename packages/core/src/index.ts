@@ -243,6 +243,7 @@ export {
   worktreeAgentBlock,
   DEFAULT_WORKTREE_SORT,
 } from './board/home-board.js';
+export { refreshWorktreeIssueBlocked } from './board/issue-blocked-sync.js';
 export type {
   AddBoardPinInput,
   BoardPin,

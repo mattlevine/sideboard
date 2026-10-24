@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
-import { classifyWorktreeListBadges, groupHomeBoardWorktrees, visibleAgentBlock } from '../board/home-board.js';
+import { classifyWorktreeListBadges, groupHomeBoardWorktrees, issueBlockedByIds, visibleAgentBlock } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { workspaceTagsFromGroup, worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
 import type {
@@ -211,6 +211,7 @@ export interface PhoneWorktree {
   chats: PhoneChatSummary[];
   tags?: string[]; // shared labels; omitted when the workspace has none
   badge?: PhoneWorktreeBadge;
+  blockedBy?: string[]; // source-ticket blockers; omitted when the ticket is clear
 }
 
 export interface PhoneProject {
@@ -553,18 +554,14 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
       path,
       worktrees: groupHomeBoardWorktrees(repoThreads).map((group) => {
         const tags = workspaceTagsFromGroup(group);
-        const badge = classifyWorktreeListBadges(
-          group,
-          viewerLogin,
-          resolveProjectReviewLabel(settings, path),
-        )[0];
+        const badge = classifyWorktreeListBadges(group, viewerLogin, resolveProjectReviewLabel(settings, path))[0];
+        const blockedBy = issueBlockedByIds(group);
         return {
           label: worktreeDisplayLabelForGroup(group),
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
-          ...(badge
-            ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}) } }
-            : {}),
+          ...(blockedBy.length > 0 ? { blockedBy } : {}),
+          ...(badge ? { badge: { id: badge.id, label: badge.label, title: badge.title, ...(badge.conflict ? { conflict: true } : {}) } } : {}),
         };
       }),
     }));

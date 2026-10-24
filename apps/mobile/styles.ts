@@ -230,6 +230,7 @@ export const styles = StyleSheet.create({
   worktreeHeadTagged: { alignItems: 'flex-end' },
   worktreeIdentity: { flex: 1, minWidth: 0 },
   worktreeTitle: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  blockedBy: { color: '#f5a524', fontSize: 12, fontWeight: '500', marginTop: 2, marginLeft: 22 },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

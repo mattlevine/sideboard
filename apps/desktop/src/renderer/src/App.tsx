@@ -32,6 +32,7 @@ import {
   withoutLiveThreads,
 } from './lib/thread-refresh';
 import { newOpenPrSyncIds, openPrWorktreesFromKey } from './lib/follow-thread-pr';
+import { useTicketBlockerSync } from './lib/ticket-blocker-sync';
 import { projectReviewLabelsFromSettings } from './lib/project-review-labels';
 import { isAgentDoneSound, playAgentDoneSound } from './lib/agent-done-sound';
 import { applyChatTextScale, resolveChatTextScale } from './lib/chat-text-scale';
@@ -799,6 +800,8 @@ export function App() {
       window.clearInterval(interval);
     };
   }, [openPrSyncKey]);
+
+  useTicketBlockerSync(threads);
 
   const selected = useMemo(() => {
     if (!selectedId) return null;

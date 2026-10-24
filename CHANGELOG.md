@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.316] - 2026-10-23
+
+### Fixed
+
+- A worktree created from a Linear, GitHub, or AbleTime ticket loads that ticket's blockers, so the sidebar and Home show "Blocked by …". AbleTime organization keys read the dependency parent instead of storing a clear list.
+- The phone project list shows that same "Blocked by …" line under the workspace.
+- Clicking the workspace that is already open in the project list window closes that window.
+
 ## [0.1.315] - 2026-10-23
 
 ### Added

@@ -36,6 +36,18 @@ describe('phone board sync', () => {
     expect(phoneBoardKey(changed)).toBe(phoneBoardKey(changed));
   });
 
+  it('changes when a workspace source ticket becomes blocked', () => {
+    const tree = { label: 'matt/feature', chats: [chat()] };
+    const project = { name: 'sideboard', path: '/tmp/sideboard', worktrees: [tree] };
+    const blocked = {
+      ...project,
+      worktrees: [{ ...tree, blockedBy: ['ENG-88'] }],
+    };
+    expect(phoneBoardKey(board({ projects: [blocked] }))).not.toBe(
+      phoneBoardKey(board({ projects: [project] })),
+    );
+  });
+
   it('changes when only workspace tags change', () => {
     const tree = { label: 'matt/feature', chats: [chat()] };
     const project = { name: 'sideboard', path: '/tmp/sideboard', worktrees: [tree] };
