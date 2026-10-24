@@ -167,6 +167,7 @@ import {
   isSelfWrittenRecord,
   isUnclaimedRunScriptRequest,
   readThread,
+  refreshWorktreeIssueBlocked,
   invalidateThreadListCache,
   invalidateThreadRecord,
   slimThreadForUiList,
@@ -1579,6 +1580,7 @@ function registerIpc(): void {
   ipcMain.handle('initializeGit', (_e, ref: string) => orch.initializeGit(ref));
   ipcMain.handle('getPrChecks', (_e, ref: string) => orch.getPrChecks(ref));
   ipcMain.handle('getPrMeta', (_e, ref: string) => orch.getPrMeta(ref));
+  ipcMain.handle('refreshIssueBlocked', (_e, ref: string) => refreshWorktreeIssueBlocked(ref));
   ipcMain.handle('getPrStack', (_e, ref: string) => orch.getPrStack(ref));
   ipcMain.handle(
     'openPrStackLayers',

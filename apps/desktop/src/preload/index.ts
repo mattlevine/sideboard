@@ -163,6 +163,7 @@ const api: IpcApi = {
   initializeGit: (threadRef) => ipcRenderer.invoke('initializeGit', threadRef),
   getPrChecks: (threadRef) => ipcRenderer.invoke('getPrChecks', threadRef),
   getPrMeta: (threadRef) => ipcRenderer.invoke('getPrMeta', threadRef),
+  refreshIssueBlocked: (threadRef) => ipcRenderer.invoke('refreshIssueBlocked', threadRef),
   getPrStack: (threadRef) => ipcRenderer.invoke('getPrStack', threadRef),
   openPrStackLayers: (threadRef, opts) =>
     ipcRenderer.invoke('openPrStackLayers', threadRef, opts),

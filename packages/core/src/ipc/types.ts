@@ -391,10 +391,7 @@ export interface IpcApi extends McpUiIpc {
       path?: string;
     },
   ): Promise<DiffResult>;
-  /**
-   * Sidebar/board dirty glyph only — numstat vs HEAD + porcelain.
-   * Do not use getDiff for that path (merge-base / untracked walk).
-   */
+  /** Sidebar dirty glyph: numstat vs HEAD + porcelain, not getDiff. */
   getWorktreeDirtyStat(threadRef: string): Promise<WorktreeDirtyStat>;
   /** `git init` in the thread worktree when Changes has no Git repo (Cursor-style). */
   initializeGit(threadRef: string): Promise<void>;
@@ -402,6 +399,8 @@ export interface IpcApi extends McpUiIpc {
   getPrChecks(threadRef: string): Promise<PrCheckRun[] | null>;
   /** Lightweight PR fields for the sidebar pill (cheap GraphQL). */
   getPrMeta(threadRef: string): Promise<PrMeta | null>;
+  /** Source-ticket blockers. Null when there is no ticket or the lookup failed. */
+  refreshIssueBlocked(threadRef: string): Promise<string[] | null>;
   /** GitHub PR stack for the thread worktree, or null if not stacked. */
   getPrStack(threadRef: string): Promise<PrStack | null>;
   /** Open worktrees/threads for stack layers (all, or one 1-based position). */
