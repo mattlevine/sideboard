@@ -265,6 +265,14 @@ describe('phone orchestration chats', () => {
     expect(listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.tags).toEqual([
       'phone-sync',
     ]);
+    updateThread(thread.id, { issueBlockedBy: ['ENG-88', 'eng-88', ' ENG-91 '] });
+    expect(
+      listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.blockedBy,
+    ).toEqual(['ENG-88', 'ENG-91']);
+    updateThread(thread.id, { issueBlockedBy: [] });
+    expect(
+      listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0]?.blockedBy,
+    ).toBeUndefined();
     expect(openPhoneChat(thread.id)?.chat.id).toBe(thread.id);
     expect(archivePhoneChat(thread.id)).toBe(true);
     expect(listPhoneHistory().chats[0]).toMatchObject({

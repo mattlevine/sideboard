@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A worktree created from a Linear, GitHub, or AbleTime ticket loads that ticket's blockers, so the sidebar and Home show "Blocked by …".
+- The phone project list shows that same "Blocked by …" line under the workspace.
 
 ## [0.1.315] - 2026-10-23
 

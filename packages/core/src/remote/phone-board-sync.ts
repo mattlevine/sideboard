@@ -32,7 +32,7 @@ export function phoneBoardKey(sidebar: PhoneSidebar): string {
       const trees = project.worktrees
         .map(
           (tree) =>
-            `${tree.label}\t${tree.badge?.id ?? ''}\t${(tree.tags ?? []).join(',')}\t${tree.chats.map(chatKey).join('\n')}`,
+            `${tree.label}\t${tree.badge?.id ?? ''}\t${(tree.tags ?? []).join(',')}\t${(tree.blockedBy ?? []).join(',')}\t${tree.chats.map(chatKey).join('\n')}`,
         )
         .join('\n');
       return `${project.path}\t${project.name}\n${trees}`;
