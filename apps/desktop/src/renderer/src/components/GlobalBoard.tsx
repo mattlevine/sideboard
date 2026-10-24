@@ -38,7 +38,7 @@ import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { FleetActivityBar } from './FleetActivityBar';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
-import { WorktreePrBadges } from './WorktreePrBadges';
+import { IssueBlockedLine, WorktreePrBadges } from './WorktreePrBadges';
 import { WorkspaceTags } from './WorkspaceTags';
 interface Props {
   threads: Thread[];
@@ -50,10 +50,7 @@ interface Props {
   onAddToBoard: () => void;
   onNewOrchestration: () => void;
   onRefresh: () => void;
-  onArchive: (
-    ids: string[],
-    meta?: { title?: string; removesWorktree?: boolean },
-  ) => void | Promise<void>;
+  onArchive: (ids: string[], meta?: { title?: string; removesWorktree?: boolean }) => void | Promise<void>;
   archivingIds?: Set<string>;
   worktreeSort?: WorktreeSortMode;
   onWorktreeSortChange?: (mode: WorktreeSortMode) => void;
@@ -410,6 +407,7 @@ function WorktreeCard({
               reviewLabel={reviewLabel}
             />
           </div>
+          <IssueBlockedLine group={group} />
           <div className="thread-meta">
             {archiving
               ? 'Archiving…'

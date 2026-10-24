@@ -164,10 +164,7 @@ export interface Thread {
    * as Reviewing.
    */
   prReviewerLogins?: string[];
-  /**
-   * Cached GitHub `reviewDecision` from the last `getPrMeta`
-   * (`APPROVED` | `CHANGES_REQUESTED` | `REVIEW_REQUIRED`).
-   */
+  /** Cached GitHub reviewDecision (APPROVED, CHANGES_REQUESTED, or REVIEW_REQUIRED). */
   prReviewDecision?: string | null;
   /** Cached GitHub `mergeable` (`MERGEABLE` / `CONFLICTING` / `UNKNOWN`). */
   prMergeable?: string | null;
@@ -185,6 +182,8 @@ export interface Thread {
    * checks (or a merge-state heuristic) have landed.
    */
   prChecksFailed?: boolean;
+  /** Source-ticket blockers. Empty if none; absent until looked up. Not an agent block. */
+  issueBlockedBy?: string[];
   /**
    * When true, skip auto-archive if the PR is already MERGED (set on restore
    * so unarchiving a merged workspace does not immediately re-archive).

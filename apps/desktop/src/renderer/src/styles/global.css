@@ -5143,6 +5143,15 @@ button.worktree-hover-card-title:hover {
   color: var(--accent);
 }
 
+.worktree-hover-card-blocked {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--blocked);
+  overflow-wrap: anywhere;
+}
+
 .worktree-hover-card-preview {
   margin: 6px 0 0;
   font-size: 12px;
@@ -12486,6 +12495,65 @@ body:has(.update-banner) .team-toast-stack {
   padding: 16px;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.projects-browser-search {
+  width: 100%;
+  margin: 0 0 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.projects-browser-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-browser-count {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.projects-browser-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.projects-browser-header-actions .icon-btn {
+  margin-left: 0;
+}
+
+.projects-browser-modal .settings-main-header h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.projects-browser-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+.projects-browser-list .thread-blocked-reason {
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  overflow-wrap: anywhere;
 }
 
 .settings-lead {

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.315] - 2026-10-23
+
+### Added
+
+- New workspace chats, chat tabs, and orchestrator chats start at full autonomy unless Settings → Agents saves Default permissions.
+- A worktree whose source ticket is blocked shows the blocking issue ids under the workspace title. The sidebar hover card lists every id.
+- The Projects header has an expand control on the right that opens the project list in a larger window.
+
 ## [0.1.314] - 2026-10-22
 
 ### Added

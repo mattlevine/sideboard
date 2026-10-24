@@ -73,6 +73,20 @@ function normalizeRunScriptRequest(
   };
 }
 
+function sanitizeIssueBlockedBy(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const id = String(item ?? '').trim();
+    const key = id.toLowerCase();
+    if (!id || seen.has(key)) continue;
+    seen.add(key);
+    out.push(id);
+  }
+  return out;
+}
+
 export function normalizeThread(raw: Thread): Thread {
   return {
     ...raw,
@@ -100,6 +114,7 @@ export function normalizeThread(raw: Thread): Thread {
     prLabels: Array.isArray(raw.prLabels) ? raw.prLabels : [],
     prChecksFailed:
       typeof raw.prChecksFailed === 'boolean' ? raw.prChecksFailed : undefined,
+    issueBlockedBy: sanitizeIssueBlockedBy(raw.issueBlockedBy),
     skipAutoArchiveOnMerge: Boolean(raw.skipAutoArchiveOnMerge),
     cowboy: Boolean(raw.cowboy),
     stackId: raw.stackId ?? null,

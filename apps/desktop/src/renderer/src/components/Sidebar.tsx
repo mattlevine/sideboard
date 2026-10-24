@@ -25,6 +25,7 @@ import { useCaffeinateHold } from '../lib/caffeinate-tab';
 import { BrandMark } from './BrandMark';
 import { CaffeinateBadge } from './CaffeinateBadge';
 import type { NewChatTabOptions } from './ChatTabs';
+import { ProjectsBrowserModal, ProjectsExpandIcon } from './ProjectsBrowserModal';
 import { SidebarToggle } from './SidebarToggle';
 import { WorktreeSidebarRow } from './WorktreeSidebarRow';
 
@@ -109,6 +110,7 @@ export function Sidebar({
 }: Props) {
   const caffeinateHold = useCaffeinateHold();
   const [filterOpen, setFilterOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
   const [removeConfirm, setRemoveConfirm] = useState<{
@@ -361,6 +363,16 @@ export function Sidebar({
             >
               <span className="folder-plus-glyph" aria-hidden />
             </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title="View projects"
+              aria-label="View projects"
+              aria-haspopup="dialog"
+              onClick={() => setProjectsOpen(true)}
+            >
+              <ProjectsExpandIcon />
+            </button>
           </div>
         </div>
 
@@ -544,6 +556,36 @@ export function Sidebar({
         ))}
         </div>
       </div>
+
+      {projectsOpen ? (
+        <ProjectsBrowserModal
+          repos={visibleRepos}
+          selectedId={selectedId}
+          view={view}
+          multiSelected={multiSelected}
+          archivingIds={archivingIds}
+          githubLogin={githubLogin}
+          projectReviewLabels={projectReviewLabels}
+          tagFilters={tagFilters}
+          onClose={() => setProjectsOpen(false)}
+          onSelect={(id, multi) => {
+            onSelect(id, multi);
+            if (!multi) setProjectsOpen(false);
+          }}
+          onNew={(path) => {
+            setProjectsOpen(false);
+            onNew(path);
+          }}
+          onOpenPr={onOpenPr}
+          onMarkUnread={onMarkUnread}
+          onRenameChat={onRenameChat}
+          onCloseChat={onCloseChat}
+          onAddAgent={onAddAgent}
+          onSetWorkspaceTags={onSetWorkspaceTags}
+          onFilterTag={toggleTag}
+          onRequestArchive={onArchive ? runArchive : undefined}
+        />
+      ) : null}
 
       {removeConfirm && onRemoveWorkspace && (
         <div
