@@ -186,6 +186,12 @@ export interface Thread {
    */
   prChecksFailed?: boolean;
   /**
+   * Issues that block this worktree's source ticket (Linear/GitHub/AbleTime
+   * `blockedBy`). Empty after a lookup that found none. Absent until looked up.
+   * Separate from `agentBlock` (an agent waiting on a person).
+   */
+  issueBlockedBy?: string[];
+  /**
    * When true, skip auto-archive if the PR is already MERGED (set on restore
    * so unarchiving a merged workspace does not immediately re-archive).
    * Cleared when `prState` becomes a non-merged open state again.

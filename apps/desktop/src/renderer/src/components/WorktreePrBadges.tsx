@@ -1,5 +1,6 @@
 import {
   classifyWorktreeListBadges,
+  issueBlockedByIds,
   type WorktreeListBadgeThread,
 } from '@sideboard/home-board';
 
@@ -9,7 +10,7 @@ export function WorktreePrBadges({
   viewerLogin,
   reviewLabel,
 }: {
-  group: WorktreeListBadgeThread[];
+  group: Array<WorktreeListBadgeThread>;
   viewerLogin?: string | null;
   reviewLabel?: string | null;
 }) {
@@ -32,5 +33,21 @@ export function WorktreePrBadges({
         </span>
       ))}
     </>
+  );
+}
+
+/** Readable line under a worktree title when its source ticket is blocked. */
+export function IssueBlockedLine({
+  group,
+}: {
+  group: Array<{ issueBlockedBy?: string[] | null }>;
+}) {
+  const ids = issueBlockedByIds(group);
+  if (ids.length === 0) return null;
+  const text = `Blocked by ${ids.join(', ')}`;
+  return (
+    <div className="thread-blocked-reason" title={text}>
+      {text}
+    </div>
   );
 }

@@ -5143,6 +5143,15 @@ button.worktree-hover-card-title:hover {
   color: var(--accent);
 }
 
+.worktree-hover-card-blocked {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--blocked);
+  overflow-wrap: anywhere;
+}
+
 .worktree-hover-card-preview {
   margin: 6px 0 0;
   font-size: 12px;

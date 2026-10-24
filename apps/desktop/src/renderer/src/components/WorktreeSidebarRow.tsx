@@ -19,7 +19,7 @@ import type { NewChatTabOptions } from './ChatTabs';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { WorktreeEditCard } from './WorktreeEditCard';
 import { WorktreeNestedChats } from './WorktreeNestedChats';
-import { WorktreePrBadges } from './WorktreePrBadges';
+import { IssueBlockedLine, WorktreePrBadges } from './WorktreePrBadges';
 import { WorkspaceTagEditor, WorkspaceTags } from './WorkspaceTags';
 
 function TagIcon() {
@@ -264,6 +264,7 @@ export function WorktreeSidebarRow({
                 />
               )}
             </div>
+            <IssueBlockedLine group={group} />
             {block ? (
               <div className="thread-blocked-reason" title={block.reason}>
                 {block.reason}

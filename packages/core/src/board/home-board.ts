@@ -8,6 +8,7 @@ import {
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
 import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
+import { issueBlockedByIds } from './issue-blocked-view.js';
 import { isApprovedOpenPr, isMergedPrState, isOpenPrState } from './pr-state.js';
 import {
   DEFAULT_BOARD_OWNERSHIP,
@@ -268,6 +269,8 @@ export {
   type WorktreeListBadgeId,
   type WorktreeListBadgeThread,
 } from './worktree-list-badges.js';
+
+export { issueBlockedByIds, issueBlockedLabel } from './issue-blocked-view.js';
 
 export {
   sidebarParentSelectId,
@@ -984,6 +987,11 @@ export type HomeBoardThreadCard = {
   link: string;
   /** Live chat tabs on this checkout. Omitted when 1. */
   chatCount?: number; blockedReason?: string; blockedSource?: 'ask_user' | 'plan' | 'reported' | 'permission';
+  /**
+   * Issues blocking this workspace's source ticket. Omitted when it is not
+   * blocked. Separate from `blockedReason` (an agent waiting on a person).
+   */
+  issueBlockedBy?: string[];
   tags?: string[];
 };
 
@@ -1066,6 +1074,7 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
   const thread = group[0]!;
   const withPr = group.find((t) => t.prUrl?.trim()) ?? thread;
   const tags = workspaceTagsFromGroup(group);
+  const issueBlockedBy = issueBlockedByIds(group);
   return {
     kind: 'thread',
     id: thread.id,
@@ -1079,6 +1088,7 @@ function toThreadCard(group: Thread[]): HomeBoardThreadCard {
     link: `sideboard://chat/${thread.id}`,
     ...(group.length > 1 ? { chatCount: group.length } : {}),
     ...(threadCardBlockFields(group) ?? {}),
+    ...(issueBlockedBy.length > 0 ? { issueBlockedBy } : {}),
     ...(tags.length > 0 ? { tags } : {}),
   };
 }
@@ -1187,7 +1197,7 @@ export function assembleHomeBoard(input: {
 }
 
 export const HOME_BOARD_AGENT_HINT =
-  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Approved (approved, not merged) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. blockedReason means an agent on that card is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. Orchestration chats stay in the sidebar. Do not invent status.';
+  'Home is a Kanban of workspaces (one card per checkout; sibling chats on a card are separate agents). Do not create a second workspace for a ticket, PR, or named branch that already has a live checkout — create_workspace / start_board_card return that checkout (alreadyStarted) and its chats. Add another agent with fork_chat. Creating from the default branch still opens a new isolated workspace. Columns are the path to merge: New (no PR) → Draft (draft PR) → Review (open PR) → Approved (approved, not merged) → Merged. ownership=mine is PRs you authored (or WIP with no PR); ownership=reviewing is someone else\'s PR (or a review-requested checkout). Viewer login comes from gh, not a setting. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. blockedReason means an agent on that card is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. issueBlockedBy, when present, lists issues blocking that workspace\'s source ticket (the tracker dependency, not a person). Orchestration chats stay in the sidebar. Do not invent status.';
 
 export function formatHomeBoardSnapshot(snap: HomeBoardSnapshot): string {
   return JSON.stringify(

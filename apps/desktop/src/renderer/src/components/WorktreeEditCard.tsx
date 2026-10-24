@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { latestVisibleMessageText } from '@sideboard/home-board';
+import { issueBlockedByIds, latestVisibleMessageText } from '@sideboard/home-board';
 import type { Thread } from '@sideboard-ai/core';
 import { hidesLastErrorPreview } from '../lib/pane-progress';
 import {
@@ -153,6 +153,7 @@ export function WorktreeEditCard({
       ? String(prMeta.number)
       : prNumberFromUrl(prUrl ?? thread.prUrl);
   const preview = previewSnippet(thread);
+  const blockedBy = issueBlockedByIds(group);
   const spend = groupSpendLabel(group, showCost);
   const ok =
     thread.status === 'idle' ||
@@ -308,6 +309,11 @@ export function WorktreeEditCard({
       >
         {label}
       </button>
+      {blockedBy.length > 0 ? (
+        <p className="worktree-hover-card-blocked">
+          Blocked by {blockedBy.join(', ')}
+        </p>
+      ) : null}
       {preview ? (
         <p className="worktree-hover-card-preview">{preview}</p>
       ) : null}

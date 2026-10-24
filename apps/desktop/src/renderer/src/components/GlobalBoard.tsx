@@ -38,7 +38,7 @@ import { useWorktreeDirtyStat } from '../lib/worktree-diff-stat';
 import { FleetActivityBar } from './FleetActivityBar';
 import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
-import { WorktreePrBadges } from './WorktreePrBadges';
+import { IssueBlockedLine, WorktreePrBadges } from './WorktreePrBadges';
 import { WorkspaceTags } from './WorkspaceTags';
 interface Props {
   threads: Thread[];
@@ -410,6 +410,7 @@ function WorktreeCard({
               reviewLabel={reviewLabel}
             />
           </div>
+          <IssueBlockedLine group={group} />
           <div className="thread-meta">
             {archiving
               ? 'Archiving…'
