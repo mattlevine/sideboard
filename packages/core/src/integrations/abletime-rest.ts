@@ -170,10 +170,7 @@ function restTaskToRaw(
     const user = userDisplayName(comment);
     return {
       id: asString(comment.commentId) || asString(comment.id),
-      body:
-        textFromAbleTimeDoc(comment.content) ||
-        asString(comment.contentSanitized) ||
-        asString(comment.body),
+      body: textFromAbleTimeDoc(comment.content) || asString(comment.contentSanitized) || asString(comment.body),
       createdAt: asString(comment.createdAt) || asString(comment.lastUpdate),
       user: user?.name || asString(comment.username),
     };
@@ -190,6 +187,7 @@ function restTaskToRaw(
     projectId: asString(rec.projectId),
     categoryId: asString(rec.projectCategoryId) || asString(rec.categoryId),
     parentId: asString(rec.parentTaskId) || asString(rec.parentId),
+    depends_on: rec.dependencyParentTimeflowTaskId ?? null,
     tags: rec.tags,
     comments,
     attachments: rec.attachments ?? rec.files ?? rec.media,
