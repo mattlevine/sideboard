@@ -233,6 +233,7 @@ export function ProjectsBrowserModal({
                             activeChatId: active ? selectedId : null,
                           })}
                           onSelect={onSelect}
+                          onActiveClick={onClose}
                           onOpenPr={onOpenPr}
                           onMarkUnread={onMarkUnread}
                           onRenameChat={onRenameChat}

@@ -48,6 +48,7 @@ export function WorktreeSidebarRow({
   githubLogin,
   reviewLabel,
   onSelect,
+  onActiveClick,
   showArchive,
   onRequestArchive,
   onOpenPr,
@@ -73,6 +74,8 @@ export function WorktreeSidebarRow({
   githubLogin?: string | null;
   reviewLabel?: string | null;
   onSelect: (id: string, multi: boolean) => void;
+  /** Plain click on the workspace that is already open. */
+  onActiveClick?: () => void;
   showArchive?: boolean;
   onRequestArchive?: (chats: Thread[]) => void;
   onOpenPr?: (threadId: string) => void;
@@ -227,7 +230,8 @@ export function WorktreeSidebarRow({
           if (archiving) return;
           const additive = e.metaKey || e.ctrlKey || e.shiftKey;
           if (active && !additive) {
-            if (collapsedWhileSelected) setCollapsedWhileSelected(false);
+            if (onActiveClick) onActiveClick();
+            else if (collapsedWhileSelected) setCollapsedWhileSelected(false);
             return;
           }
           onSelect(sidebarParentSelectId(group, primary.id, { active }), additive);
