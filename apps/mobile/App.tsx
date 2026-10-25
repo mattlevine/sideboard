@@ -297,11 +297,7 @@ export default function App() {
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
       onOpen: () => (errorRef.current === RELAY_UNREACHABLE ? setError(null) : undefined),
-      onClose: () => {
-        attachedRef.current = false;
-        pairingCodeRef.current = null;
-        setPairing(false);
-      },
+      onClose: () => (attachedRef.current = false, pairingCodeRef.current = null, setPairing(false)),
       onNeedsRetry: () => {
         const tokens = screenRef.current === 'desktops' ? desktopsRef.current.map((row) => row.sessionToken) : [];
         if (tokens.length === 0) return;
@@ -727,8 +723,7 @@ export default function App() {
       const pending = pendingSendRef.current;
       pendingSendRef.current = null;
       setError(null);
-      pairingCodeRef.current = null;
-      setPairing(false);
+      pairingCodeRef.current = null; setPairing(false);
       if (pending) link.send(pending);
       if (screenRef.current === 'chat' && activeChatIdRef.current) {
         link.send(phoneCommand({ op: 'open', chatId: activeChatIdRef.current }));
@@ -799,8 +794,7 @@ export default function App() {
         pendingSendRef.current = null;
         link.cancelResume();
       }
-      pairingCodeRef.current = null;
-      setPairing(false);
+      pairingCodeRef.current = null; setPairing(false);
       if (screenRef.current === 'pair') setError(msg.message, true);
       else setError(msg.message);
     }
@@ -827,8 +821,7 @@ export default function App() {
     attachedRef.current = false;
     pendingTokenRef.current = null;
     sealMaterialRef.current = null;
-    pairingCodeRef.current = null;
-    setPairing(false);
+    pairingCodeRef.current = null; setPairing(false);
     activeIdRef.current = null;
     setActiveId(null);
     const tokens = desktopsRef.current.map((row) => row.sessionToken);
