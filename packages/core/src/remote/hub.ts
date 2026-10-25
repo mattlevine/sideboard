@@ -272,10 +272,8 @@ export class RemoteHub {
       send(socket, { type: 'error', message: 'Mac is offline' });
       return;
     }
-    // A scan already sends `pair`. The Pair button sends that same code again
-    // on this socket. A second `paired` restarts the handshake. Ignore that
-    // duplicate. A new code from the Mac, or a new socket, still pairs.
-    if (host.phone === socket && host.pairingCode === code) return;
+    // The phone suppresses a second tap while an attempt is in flight. A later
+    // `pair` means that attempt failed and the phone is asking to start again.
     this.attachPhone(socket, host, undefined, code);
   }
 

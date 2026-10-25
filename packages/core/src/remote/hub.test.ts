@@ -63,15 +63,25 @@ describe('RemoteHub', () => {
     hub.handleClientMessage(phone, JSON.stringify({ type: 'pair', code }));
     expect(last(phone).type).toBe('paired');
     expect(last(mac).type).toBe('phone_joined');
-    const sent = phone.messages.length;
-    const token = pairedToken(phone);
-    hub.handleClientMessage(phone, JSON.stringify({ type: 'pair', code }));
-    expect(phone.messages).toHaveLength(sent);
-    expect(pairedToken(phone)).toBe(token);
     hub.handleClientMessage(phone, JSON.stringify({ type: 'prompt', text: 'check CI' }));
     expect(last(mac)).toEqual({ type: 'inbound', text: 'check CI' });
     hub.handleClientMessage(mac, JSON.stringify({ type: 'assistant', text: 'CI is red' }));
     expect(last(phone)).toEqual({ type: 'assistant', text: 'CI is red' });
+  });
+
+  it('pairs again on the same socket after the handshake fails', () => {
+    const hub = new RemoteHub();
+    const mac = fakeSocket();
+    const phone = fakeSocket();
+    register(hub, mac, 'mac-1', 'Work');
+    const code = pairingCode(hub, mac);
+    hub.handleClientMessage(phone, JSON.stringify({ type: 'pair', code }));
+    hub.handleClientMessage(mac, JSON.stringify({ type: 'e2ee_fail' }));
+    expect(last(phone)).toEqual({ type: 'error', message: 'phone session expired — pair again' });
+    hub.handleClientMessage(phone, JSON.stringify({ type: 'pair', code }));
+    expect(last(phone).type).toBe('paired');
+    hub.handleClientMessage(phone, JSON.stringify({ type: 'prompt', text: 'retry' }));
+    expect(last(mac)).toEqual({ type: 'inbound', text: 'retry' });
   });
 
   it('lets a new socket use the same pairing code', () => {

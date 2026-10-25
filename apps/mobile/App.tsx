@@ -768,6 +768,7 @@ export default function App() {
     }
     if (msg.type === 'host_offline') {
       attachedRef.current = false;
+      pairingCodeRef.current = null; setPairing(false);
       if (screenRef.current === 'desktops' && checkingHostsRef.current) return;
       const token = pendingTokenRef.current;
       if (token) patchDesktop(token, { online: false });
