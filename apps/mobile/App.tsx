@@ -184,6 +184,7 @@ function decodePhoneReply(text: string): PhoneControl | null {
 export default function App() {
   const relay = useSavedRelayUrl(DEFAULT_URL);
   const [code, setCode] = useState('');
+  const [pairing, setPairing] = useState(false);
   const [desktops, setDesktops] = useState<Desktop[]>([]);
   const [screen, setScreen] = useState<Screen>('loading');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -280,6 +281,7 @@ export default function App() {
   const checkingHostsRef = useRef(false);
   const pendingSendRef = useRef<object | null>(null);
   const sealMaterialRef = useRef<SealMaterial | null>(null);
+  const pairingCodeRef = useRef<string | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
   desktopsRef.current = desktops;
@@ -295,7 +297,11 @@ export default function App() {
       onMessage: (raw) => onMessageRef.current(raw),
       onError: (message) => (checkingHostsRef.current = false, setError(message, message === RELAY_UNREACHABLE)),
       onOpen: () => (errorRef.current === RELAY_UNREACHABLE ? setError(null) : undefined),
-      onClose: () => (attachedRef.current = false),
+      onClose: () => {
+        attachedRef.current = false;
+        pairingCodeRef.current = null;
+        setPairing(false);
+      },
       onNeedsRetry: () => {
         const tokens = screenRef.current === 'desktops' ? desktopsRef.current.map((row) => row.sessionToken) : [];
         if (tokens.length === 0) return;
@@ -721,6 +727,8 @@ export default function App() {
       const pending = pendingSendRef.current;
       pendingSendRef.current = null;
       setError(null);
+      pairingCodeRef.current = null;
+      setPairing(false);
       if (pending) link.send(pending);
       if (screenRef.current === 'chat' && activeChatIdRef.current) {
         link.send(phoneCommand({ op: 'open', chatId: activeChatIdRef.current }));
@@ -791,7 +799,10 @@ export default function App() {
         pendingSendRef.current = null;
         link.cancelResume();
       }
-      setError(msg.message);
+      pairingCodeRef.current = null;
+      setPairing(false);
+      if (screenRef.current === 'pair') setError(msg.message, true);
+      else setError(msg.message);
     }
   };
 
@@ -802,7 +813,11 @@ export default function App() {
     setError(null);
     setCode(raw.trim());
     pendingTokenRef.current = null;
-    link.send({ type: 'pair', code: next.code });
+    if (pairingCodeRef.current !== next.code) {
+      pairingCodeRef.current = next.code;
+      setPairing(true);
+      link.send({ type: 'pair', code: next.code });
+    }
     return true;
   }
 
@@ -812,6 +827,8 @@ export default function App() {
     attachedRef.current = false;
     pendingTokenRef.current = null;
     sealMaterialRef.current = null;
+    pairingCodeRef.current = null;
+    setPairing(false);
     activeIdRef.current = null;
     setActiveId(null);
     const tokens = desktopsRef.current.map((row) => row.sessionToken);
@@ -1343,6 +1360,7 @@ export default function App() {
         relayUrl={relay.url}
         onChangeRelay={relay.setUrl}
         error={error}
+        pairing={pairing}
         onSubmit={submitPairing}
         onPasteInvalid={() => setError('Paste the pairing line from the Mac.')}
         onClearError={() => setError(null)}

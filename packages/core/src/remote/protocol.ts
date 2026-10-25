@@ -69,6 +69,8 @@ export type RemoteHostMessage =
       accountToken?: string;
     }
   | { type: 'host_pair' }
+  /** Encrypted handshake finished. The relay burns the code that paired this phone. */
+  | { type: 'pairing_done' }
   | { type: 'assistant'; text: string }
   | { type: 'ask_user'; text: string; questions: RemoteAskQuestion[] }
   | { type: 'e2ee_ready'; v: 1; desktopPublicKey: string; clientNonce: string; desktopNonce: string }
@@ -157,6 +159,7 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
   const msg = parsed as { type?: unknown };
   if (msg.type === 'ping') return { type: 'ping' };
   if (msg.type === 'host_pair') return { type: 'host_pair' };
+  if (msg.type === 'pairing_done') return { type: 'pairing_done' };
   if (msg.type === 'e2ee_fail') return { type: 'e2ee_fail' };
   if (msg.type === 'stop') return { type: 'stop' };
   if (msg.type === 'host_register') {

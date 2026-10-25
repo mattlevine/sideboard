@@ -22,6 +22,8 @@ type HostSession = {
   /** Survives the phone disconnecting so it can resume or switch away and back. */
   sessionToken: string | null;
   phone: RemoteSocket | null;
+  /** Code this socket already used. A repeat of it must not restart the handshake. */
+  pairingCode: string | null;
 };
 
 type RememberedHost = {
@@ -136,6 +138,10 @@ export class RemoteHub {
       this.issueCode(socket);
       return;
     }
+    if (msg.type === 'pairing_done') {
+      this.finishPairing(socket);
+      return;
+    }
     if (msg.type === 'pair') {
       this.pairPhone(socket, msg.code);
       return;
@@ -228,6 +234,7 @@ export class RemoteHub {
       socket,
       sessionToken,
       phone: existing?.socket === socket ? existing.phone : null,
+      pairingCode: existing && existing.socket === socket ? existing.pairingCode : null,
     };
     this.hosts.set(deviceId, host);
     this.remembered.set(deviceId, { hostSecret, sessionToken, deviceLabel });
@@ -265,8 +272,21 @@ export class RemoteHub {
       send(socket, { type: 'error', message: 'Mac is offline' });
       return;
     }
-    this.codes.delete(code);
-    this.attachPhone(socket, host);
+    // A scan already sends `pair`. The Pair button sends that same code again
+    // on this socket. A second `paired` restarts the handshake. Ignore that
+    // duplicate. A new code from the Mac, or a new socket, still pairs.
+    if (host.phone === socket && host.pairingCode === code) return;
+    this.attachPhone(socket, host, undefined, code);
+  }
+
+  /** The Mac accepted the phone. That QR must not replace the saved session. */
+  private finishPairing(socket: RemoteSocket): void {
+    const bound = this.bySocket.get(socket);
+    const host = bound?.role === 'host' ? this.hosts.get(bound.deviceId) : null;
+    if (!host || host.socket !== socket) return;
+    // Only the code this phone used. A QR the Mac showed afterward stays valid.
+    if (host.pairingCode) this.codes.delete(host.pairingCode);
+    host.pairingCode = null;
   }
 
   /** In-memory session, with the live Mac's label when that socket is up. */
@@ -347,7 +367,12 @@ export class RemoteHub {
     }
   }
 
-  private attachPhone(socket: RemoteSocket, host: HostSession, sessionToken?: string): void {
+  private attachPhone(
+    socket: RemoteSocket,
+    host: HostSession,
+    sessionToken?: string,
+    pairingCode?: string,
+  ): void {
     const bound = this.bySocket.get(socket);
     if (bound?.role === 'phone' && bound.deviceId !== host.deviceId) {
       this.releasePhoneSocket(socket);
@@ -369,6 +394,7 @@ export class RemoteHub {
     }
     host.sessionToken = token;
     host.phone = socket;
+    if (pairingCode) host.pairingCode = pairingCode;
     this.phonesByToken.set(token, { deviceId: host.deviceId, deviceLabel: host.deviceLabel });
     this.remembered.set(host.deviceId, {
       hostSecret: host.hostSecret,

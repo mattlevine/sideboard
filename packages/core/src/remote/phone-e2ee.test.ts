@@ -62,14 +62,17 @@ describe('phone session encryption', () => {
     expect(ctx.host.openFrame((prompt as { frame: string }).frame)).toBeNull();
   });
 
-  it('ignores a substituted Mac key and rejects a wrong phone token', () => {
+  it('rejects a substituted Mac key and a wrong phone token', () => {
     const ctx = pair();
     const started = ctx.phone.onRelayMessage(JSON.stringify({ type: 'paired' }));
     const hello = started.send[0] as { clientPublicKey: string; clientNonce: string };
     const other = new HostChannel(generateHostSecretKey(), () => true);
     const ready = other.readyFor({ v: 1, clientPublicKey: hello.clientPublicKey, clientNonce: hello.clientNonce });
     const ignored = ctx.phone.onRelayMessage(JSON.stringify({ type: 'e2ee_ready', ...ready }));
-    expect(ignored).toEqual({ forward: null, send: [] });
+    expect(JSON.parse(ignored.forward ?? '')).toMatchObject({
+      type: 'error',
+      message: 'This Mac changed. Show a new pairing code and scan it.',
+    });
 
     const good = handshake();
     const resumed = good.phone.onRelayMessage(JSON.stringify({ type: 'paired' }));
@@ -187,6 +190,45 @@ describe('phone session encryption', () => {
     });
     const accepted = ctx.phone.onRelayMessage(JSON.stringify({ type: 'e2ee_ready', ...ready }));
     expect(accepted.send[0]).toMatchObject({ type: 'e2ee' });
+  });
+
+  it('keeps the handshake when a second Pair tap is told the code expired', () => {
+    const ctx = pair();
+    const started = ctx.phone.onRelayMessage(
+      JSON.stringify({ type: 'paired', deviceId: 'mac', sessionToken: 'sess' }),
+    );
+    const hello = started.send[0] as { clientPublicKey: string; clientNonce: string };
+    expect(
+      ctx.phone.onRelayMessage(JSON.stringify({ type: 'error', message: 'pairing code expired' })),
+    ).toEqual({ forward: null, send: [] });
+    const ready = ctx.host.readyFor({
+      v: 1,
+      clientPublicKey: hello.clientPublicKey,
+      clientNonce: hello.clientNonce,
+    });
+    const accepted = ctx.phone.onRelayMessage(JSON.stringify({ type: 'e2ee_ready', ...ready }));
+    expect(accepted.send[0]).toMatchObject({ type: 'e2ee' });
+  });
+
+  it('tells the phone to scan again when the Mac key changed', () => {
+    const ctx = pair();
+    const started = ctx.phone.onRelayMessage(
+      JSON.stringify({ type: 'paired', deviceId: 'mac', sessionToken: 'sess' }),
+    );
+    const hello = started.send[0] as { clientNonce: string };
+    const forwarded = ctx.phone.onRelayMessage(
+      JSON.stringify({
+        type: 'e2ee_ready',
+        v: 1,
+        desktopPublicKey: hostPublicKey(generateHostSecretKey()),
+        clientNonce: hello.clientNonce,
+        desktopNonce: hello.clientNonce,
+      }),
+    );
+    expect(JSON.parse(forwarded.forward ?? '')).toMatchObject({
+      type: 'error',
+      message: 'This Mac changed. Show a new pairing code and scan it.',
+    });
   });
 
   it('drops a paired message for a Mac that is no longer selected', () => {

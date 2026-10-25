@@ -21,6 +21,7 @@ export function PairMacScreen({
   relayUrl,
   onChangeRelay,
   error,
+  pairing,
   onSubmit,
   onPasteInvalid,
   onClearError,
@@ -32,6 +33,7 @@ export function PairMacScreen({
   relayUrl: string;
   onChangeRelay: (value: string) => void;
   error: string | null;
+  pairing?: boolean;
   /** Return true when the line is valid and pairing has started. */
   onSubmit: (raw: string) => boolean;
   onPasteInvalid: () => void;
@@ -110,7 +112,7 @@ export function PairMacScreen({
               if (!onSubmit(code)) onPasteInvalid();
             }}
           >
-            <Text style={styles.primaryText}>Pair</Text>
+            <Text style={styles.primaryText}>{pairing ? 'Pairing…' : 'Pair'}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
