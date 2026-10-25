@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { classifyWorktreeListBadges, groupHomeBoardWorktrees, issueBlockedByIds, visibleAgentBlock } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
-import { workspaceTagsFromGroup, worktreeDisplayLabelForGroup } from '../git/worktree-labels.js';
+import { workspaceTagsFromGroup, worktreeAnchorLabel } from '../git/worktree-labels.js';
 import type {
   AgentKind,
   Autonomy,
@@ -557,7 +557,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
         const badge = classifyWorktreeListBadges(group, viewerLogin, resolveProjectReviewLabel(settings, path))[0];
         const blockedBy = issueBlockedByIds(group);
         return {
-          label: worktreeDisplayLabelForGroup(group),
+          label: phoneWorktreeLabel(group),
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(blockedBy.length > 0 ? { blockedBy } : {}),
@@ -652,12 +652,20 @@ function sameRepoPath(a: string, b: string): boolean {
   return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 }
 
+/** Desktop sidebar parent: PR, task, or checkout nickname — not the Review agent's title. */
+function phoneWorktreeLabel(
+  group: Parameters<typeof worktreeAnchorLabel>[0],
+): string {
+  if (group.length === 0) return 'Worktree';
+  return worktreeAnchorLabel(group).title;
+}
+
 function projectPlace(thread: Thread): PhonePlace {
   const group = threadsSharingWorktree(thread.worktreePath);
   return {
     kind: 'project',
     repoPath: thread.repoPath,
-    worktree: worktreeDisplayLabelForGroup(group.length > 0 ? group : [thread]),
+    worktree: phoneWorktreeLabel(group.length > 0 ? group : [thread]),
   };
 }
 

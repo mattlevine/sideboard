@@ -284,6 +284,29 @@ describe('phone orchestration chats', () => {
     expect(listPhoneSidebar().projects.some((row) => row.path === '/tmp/sideboard')).toBe(false);
   });
 
+  it('keeps the workspace name when a review agent is titled Review', () => {
+    const thread = createEmptyThread({
+      title: 'Review',
+      userSetTitle: true,
+      sourceType: 'pr',
+      sourceRef: '12',
+      branchName: 'ajax',
+      worktreePath: '/tmp/sideboard-ajax',
+      repoPath: '/tmp/sideboard',
+      agent: 'claude',
+      prTitle: 'Show the workspace on phone reviews',
+      prUrl: 'https://github.com/acme/app/pull/12',
+    });
+    writeThread(thread);
+    const worktree = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard')?.worktrees[0];
+    expect(worktree?.label).toBe('Show the workspace on phone reviews');
+    expect(worktree?.chats[0]).toMatchObject({ title: 'Review', agent: 'claude' });
+    expect(openPhoneChat(thread.id)?.place).toMatchObject({
+      kind: 'project',
+      worktree: 'Show the workspace on phone reviews',
+    });
+  });
+
   it('sends review and pending labels for pull requests in review', () => {
     updateProjectProfileSettings('/tmp/sideboard', { reviewLabel: 'eng-review' });
     const mine = createEmptyThread({

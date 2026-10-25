@@ -78,6 +78,24 @@ describe('workspaceChromeLabels', () => {
     });
   });
 
+  it('keeps the PR as the workspace when the open agent is a Review tab', () => {
+    expect(
+      workspaceChromeLabels({
+        repoPath: '/Users/me/Projects/sideboard',
+        worktreePath: '/wt/ajax',
+        title: 'Review',
+        userSetTitle: true,
+        sourceType: 'pr',
+        branchName: 'ajax',
+        prTitle: 'Show the workspace on phone reviews',
+      }),
+    ).toEqual({
+      project: 'sideboard',
+      task: 'Show the workspace on phone reviews',
+      agent: 'Review',
+    });
+  });
+
   it('keeps the worktree on the PR and the agent on its purpose', () => {
     expect(
       workspaceChromeLabels({
