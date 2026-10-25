@@ -124,6 +124,38 @@ describe('worktreeDisplayLabel', () => {
       }),
     ).toBe('Ajax 2');
   });
+
+  it('keeps the checkout name when a review tab is titled Review', () => {
+    expect(
+      worktreeDisplayLabel({
+        branchName: 'matt/phone-review-name',
+        worktreePath: '/wt/ajax',
+        title: 'Review',
+        userSetTitle: true,
+        prTitle: 'Show the workspace on phone reviews',
+      }),
+    ).toBe('Show the workspace on phone reviews');
+    expect(
+      worktreeDisplayLabel({
+        branchName: 'ajax',
+        worktreePath: '/wt/ajax',
+        title: 'Review',
+        userSetTitle: true,
+      }),
+    ).toBe('Ajax');
+  });
+
+  it('still prefers a real user-set title over the PR', () => {
+    expect(
+      worktreeDisplayLabel({
+        branchName: 'fix/panel-width',
+        worktreePath: '/wt/west-ham',
+        title: 'Panel width',
+        userSetTitle: true,
+        prTitle: 'Fix panel width persistence',
+      }),
+    ).toBe('Panel width');
+  });
 });
 
 describe('worktreeDisplayLabelForGroup', () => {
@@ -217,6 +249,33 @@ describe('worktreeAnchorLabel', () => {
         },
       ]),
     ).toEqual({ title: 'Lens', subtitle: null });
+  });
+
+  it('does not treat a Review agent as the workspace name', () => {
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'ajax',
+          worktreePath: '/wt/ajax',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          title: 'Review',
+          prTitle: 'Show the workspace on phone reviews',
+        },
+      ]),
+    ).toEqual({
+      title: 'Show the workspace on phone reviews',
+      subtitle: null,
+    });
+    expect(
+      worktreeAnchorLabel([
+        {
+          branchName: 'ajax',
+          worktreePath: '/wt/ajax',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          title: 'Review',
+        },
+      ]),
+    ).toEqual({ title: 'Ajax', subtitle: null });
   });
 
   it('uses a real git branch as the title when there is no PR', () => {

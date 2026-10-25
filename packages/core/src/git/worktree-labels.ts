@@ -1,3 +1,4 @@
+import { REVIEW_TAB_TITLE } from '../review/review-write-gate.js';
 import { soccerTokenFromTakenSlug, teamNameFromSlug, teamSlugFromName } from './teams.js';
 
 /** Canonical worktree path for grouping tabs (browser-safe, no node:path). */
@@ -156,11 +157,12 @@ export function branchDisplayLabel(branchName: string, worktreePath: string): st
 
 /**
  * Chat title that names the task. Soccer-club nicknames are placeholders, not
- * a description of the work.
+ * a description of the work. A Review tab is an agent on the checkout, not
+ * the checkout's name.
  */
 export function taskPurposeTitle(title: string | null | undefined): string | null {
   const trimmed = title?.trim() ?? '';
-  if (!trimmed || teamSlugFromName(trimmed)) return null;
+  if (!trimmed || teamSlugFromName(trimmed) || trimmed === REVIEW_TAB_TITLE) return null;
   return trimmed;
 }
 
@@ -179,7 +181,10 @@ export function threadDisplayLabel(thread: {
   prTitle?: string | null;
   userSetTitle?: boolean;
 }): string {
-  if (thread.userSetTitle && thread.title?.trim()) return thread.title.trim();
+  const titled = thread.title?.trim() ?? '';
+  // request_review stamps userSetTitle so the agent row stays "Review".
+  // That is not a rename of the checkout — keep the PR, branch, or nickname.
+  if (thread.userSetTitle && titled && titled !== REVIEW_TAB_TITLE) return titled;
   if (thread.prTitle?.trim()) return thread.prTitle.trim();
   if (isPlaceholderBranch(thread.branchName, thread.worktreePath)) {
     const purpose = taskPurposeTitle(thread.title);
