@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.318] - 2026-10-25
+
+### Fixed
+
+- A second Pair tap no longer restarts the phone handshake. A new pairing code from the Mac still pairs on the same phone, and that code is burned once the Mac accepts the phone.
+- If pairing fails or the Mac goes offline, Pair can be tapped again instead of staying on Pairing….
+
 ## [0.1.317] - 2026-10-25
 
 ### Fixed
