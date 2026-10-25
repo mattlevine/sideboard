@@ -113,7 +113,17 @@ export class PhoneChannel {
   onRelayMessage(raw: string): { forward: string | null; send: object[] } {
     const msg = parseJson(raw);
     if (!msg) return { forward: raw, send: [] };
-    if (msg.type === 'host_offline' || msg.type === 'error') {
+    if (msg.type === 'error') {
+      const message = typeof msg.message === 'string' ? msg.message : '';
+      // A duplicate Pair tap can race the handshake. Dropping that reply used
+      // to reset the session that was about to finish.
+      if (message === 'pairing code expired' && this.pairedRaw && !this.sealed) {
+        return { forward: null, send: [] };
+      }
+      this.reset();
+      return { forward: raw, send: [] };
+    }
+    if (msg.type === 'host_offline') {
       this.reset();
       return { forward: raw, send: [] };
     }
@@ -184,8 +194,20 @@ export class PhoneChannel {
         send: [],
       };
     }
-    if (!equalText(ready.desktopPublicKey, pin.hostPublicKey)) {
+    // A ready for an older hello (the Mac you just left) has a different nonce.
+    // Drop it. A ready for this hello with a different key means the Mac changed.
+    if (!this.session.matchesClientNonce(ready.clientNonce)) {
       return { forward: null, send: [] };
+    }
+    if (!equalText(ready.desktopPublicKey, pin.hostPublicKey)) {
+      this.reset();
+      return {
+        forward: JSON.stringify({
+          type: 'error',
+          message: 'This Mac changed. Show a new pairing code and scan it.',
+        }),
+        send: [],
+      };
     }
     if (!this.session.acceptReady(ready)) {
       return { forward: null, send: [] };
@@ -298,8 +320,12 @@ class DirectionalSeal {
     this.sendDirection = role === 'phone' ? 1 : 2;
   }
 
+  matchesClientNonce(clientNonce: string): boolean {
+    return clientNonce === this.hello.clientNonce;
+  }
+
   acceptReady(ready: HostReady, desktopNonceBytes?: Uint8Array): boolean {
-    if (ready.v !== 1 || ready.clientNonce !== this.hello.clientNonce) return false;
+    if (ready.v !== 1 || !this.matchesClientNonce(ready.clientNonce)) return false;
     const desktopNonce = desktopNonceBytes ?? b64urlToBytes(ready.desktopNonce);
     if (desktopNonce.length !== NONCE_BYTES) return false;
     let shared: Uint8Array;

@@ -293,6 +293,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         clientNonce: msg.clientNonce,
       });
       if (ready) send({ type: 'e2ee_ready', ...ready });
+      else send({ type: 'e2ee_fail' });
       return;
     }
     if (msg.type === 'e2ee') {
@@ -305,8 +306,13 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
       }
       if (opened.okFrame) {
         send({ type: 'e2ee', frame: opened.okFrame });
-        startBoardSync();
+        try {
+          startBoardSync();
+        } catch (err) {
+          log(`remote error: ${err instanceof Error ? err.message : err}`);
+        }
         opts.onPairingCode?.(null);
+        send({ type: 'pairing_done' });
         opts.onStatus?.({ connected: true, phoneConnected: true });
         log('phone joined');
         return;
