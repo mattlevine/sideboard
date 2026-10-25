@@ -557,7 +557,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
         const badge = classifyWorktreeListBadges(group, viewerLogin, resolveProjectReviewLabel(settings, path))[0];
         const blockedBy = issueBlockedByIds(group);
         return {
-          label: phoneWorktreeLabel(group),
+          label: worktreeAnchorLabel(group).title,
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(blockedBy.length > 0 ? { blockedBy } : {}),
@@ -652,20 +652,12 @@ function sameRepoPath(a: string, b: string): boolean {
   return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 }
 
-/** Desktop sidebar parent: PR, task, or checkout nickname — not the Review agent's title. */
-function phoneWorktreeLabel(
-  group: Parameters<typeof worktreeAnchorLabel>[0],
-): string {
-  if (group.length === 0) return 'Worktree';
-  return worktreeAnchorLabel(group).title;
-}
-
 function projectPlace(thread: Thread): PhonePlace {
   const group = threadsSharingWorktree(thread.worktreePath);
   return {
     kind: 'project',
     repoPath: thread.repoPath,
-    worktree: phoneWorktreeLabel(group.length > 0 ? group : [thread]),
+    worktree: worktreeAnchorLabel(group.length > 0 ? group : [thread]).title,
   };
 }
 
