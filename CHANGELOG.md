@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.317] - 2026-10-25
+
+### Fixed
+
+- The phone project list keeps the workspace name when an orchestration agent starts a PR review. The review chat stays titled Review.
+
 ## [0.1.316] - 2026-10-23
 
 ### Fixed
