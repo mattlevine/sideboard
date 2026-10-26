@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.319] - 2026-10-26
+
+### Fixed
+
+- A blocking issue that is completed, canceled, or closed no longer stays on the workspace Blocked by line. A missing state still counts as blocking.
+- A second message sent before the agent replies is joined onto the first prompt. Steer still interrupts once the agent is replying.
+- Plan answers, Implement plan, and Send now stay visible in the transcript while that send is in flight.
+
 ## [0.1.318] - 2026-10-25
 
 ### Fixed
