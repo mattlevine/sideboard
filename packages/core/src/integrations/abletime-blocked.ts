@@ -1,3 +1,4 @@
+import { ableTimeStateIsClosed } from './abletime.js';
 import { callAbleTimeTool } from './abletime-mcp.js';
 import { looksLikeAbleTimeUlid } from './abletime-rest.js';
 
@@ -32,6 +33,10 @@ function firstRecord(
   return null;
 }
 
+function taskState(record: Record<string, unknown> | null): string {
+  return firstString(record, ['state', 'board_state', 'boardState', 'status', 'taskState']);
+}
+
 function identifierFromUnknown(value: unknown): string[] {
   if (typeof value === 'string' || typeof value === 'number') {
     const id = String(value).trim();
@@ -43,6 +48,7 @@ function identifierFromUnknown(value: unknown): string[] {
   for (const key of ['nodes', 'data', 'tasks', 'items']) {
     if (Array.isArray(rec[key])) return identifierFromUnknown(rec[key]);
   }
+  if (ableTimeStateIsClosed(taskState(rec))) return [];
   const id = firstString(rec, ['identifier', 'reference', 'ref', 'key', 'code', 'number', 'id']);
   return id ? [id] : [];
 }
@@ -96,6 +102,8 @@ export async function getAbleTimeIssueBlockedBy(
       continue;
     }
     const parent = await callAbleTimeTool('get_task', { id: blockerId, task_id: blockerId }, opts);
+    const parentRecord = firstRecord(asRecord(parent), ['task', 'data']) ?? asRecord(parent);
+    if (ableTimeStateIsClosed(taskState(parentRecord))) continue;
     const ref = taskReference(parent);
     if (!ref || looksLikeAbleTimeUlid(ref)) {
       throw new Error(`AbleTime blocker has no reference: ${blockerId}`);

@@ -29,6 +29,26 @@ describe('githubBlockedByIdentifiers', () => {
       }),
     ).toEqual(['#8', '#4']);
   });
+
+  it('drops a closed blocker and keeps an open one', () => {
+    expect(
+      githubBlockedByIdentifiers({
+        data: {
+          repository: {
+            issue: {
+              blockedBy: {
+                nodes: [
+                  { number: 8, state: 'CLOSED' },
+                  { number: 4, state: 'OPEN' },
+                  { number: 2 },
+                ],
+              },
+            },
+          },
+        },
+      }),
+    ).toEqual(['#4', '#2']);
+  });
 });
 
 describe('getGitHubIssueBlockedBy', () => {
@@ -46,5 +66,6 @@ describe('getGitHubIssueBlockedBy', () => {
     const args = gh.mock.calls[0]?.[0] as string[];
     expect(args.slice(0, 2)).toEqual(['api', 'graphql']);
     expect(args.join(' ')).toContain('blockedBy');
+    expect(args.join(' ')).toContain('number state');
   });
 });

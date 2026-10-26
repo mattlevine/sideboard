@@ -200,8 +200,11 @@ import { readWorktreeFileTail } from '../diff/read-worktree-tail.js';
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
 import { expandComposerPrompt } from '../composer/expand.js';
 import {
-  appendQueuedItem,
-  consumeComposerAttachments,
+  enqueueThreadSend,
+  promptForJoinedSteer,
+  reuseJoinedUserBubble,
+} from './enqueue-thread-send.js';
+import {
   moveQueuedItemToFront,
   prependQueuedItem,
   removeQueuedItem,
@@ -317,23 +320,7 @@ export async function waitForPidExit(
   return true;
 }
 
-/**
- * Desktop/CLI pass follow-up explicitly. Internal sends (child-halt
- * "Sideboard: …" notices, Slack, schedules) omit it — orchestrators then
- * use Settings → Follow-up behavior (default steer) so those do not sit
- * in the queue while the user asked to interrupt.
- *
- * Orchestrator → worktree talk (`send_to_chat`, `ask_git`) must
- * pass {@link resolveOrchChildFollowUp} so those prompts steer by default.
- * Create/reuse first prompts still queue unless the caller opts in.
- */
-export function resolveSendFollowUp(
-  thread: Pick<Thread, 'sourceType' | 'repoPath'>,
-  requested?: FollowUpBehavior,
-): FollowUpBehavior {
-  if (requested === 'steer' || requested === 'queue') return requested;
-  return isOrchestratorThread(thread) ? followUpBehavior() : 'queue';
-}
+export { resolveSendFollowUp } from './enqueue-thread-send.js';
 
 /** Settings follow-up for orchestrator prompts to worktree agents (default steer). */
 export function resolveOrchChildFollowUp(
@@ -387,6 +374,13 @@ export class Orchestrator {
   private readonly draining = new Set<string>();
   /** Threads past setStatus(running) but not yet in activeTurns (spawn in flight). */
   private readonly startingTurns = new Set<string>();
+  /**
+   * Prompt for the turn that has not been answered yet. Steer follow-ups before
+   * any agent output are joined onto this text instead of starting a second bubble.
+   */
+  private readonly openSteerPrompt = new Map<string, { text: string; spawned: boolean }>();
+  /** Next runTurn should keep the user bubble already rewritten to this prompt. */
+  private readonly reusedUserPrompt = new Set<string>();
   /** Last sync thread-file read for false-stop heal (throttled per thread). */
   private readonly lastReconcileHealAt = new Map<string, number>();
   /** Per-repo timestamp of the last `reconcile(repo, { light: true })`. */
@@ -1160,64 +1154,31 @@ export class Orchestrator {
     prompt: string,
     opts?: { followUp?: FollowUpBehavior; attachments?: Thread['attachments'] },
   ): Promise<Thread> {
-    const thread = this.requireThread(threadRef);
-    if (thread.status === 'archived') {
-      throw new Error(`Thread is archived: ${thread.id}`);
+    const sent = await enqueueThreadSend(
+      {
+        activeTurns: this.activeTurns,
+        startingTurns: this.startingTurns,
+        openSteerPrompt: this.openSteerPrompt,
+        reusedUserPrompt: this.reusedUserPrompt,
+        crashContinued: this.crashContinued,
+        jobContinueCount: this.jobContinueCount,
+        jobContinueNudged: this.jobContinueNudged,
+        haltDrain: this.haltDrain,
+        emit: (event) => this.emit(event),
+        armDrain: (id) => this.armDrain(id),
+        requireThread: (ref) => this.requireThread(ref),
+        pidAlive: (pid) => isPidAlive(pid),
+      },
+      threadRef,
+      prompt,
+      opts,
+    );
+    if (sent.shouldSteer && sent.thread.queue.length > 0) {
+      return this.sendQueuedMessageNow(sent.thread.id, sent.thread.queue.length - 1);
     }
-    let shouldSteer = false;
-    const sent = await withThreadLock(thread.id, async () => {
-      const current = this.requireThread(thread.id);
-      if (current.status === 'archived') {
-        throw new Error(`Thread is archived: ${thread.id}`);
-      }
-      const followUp = resolveSendFollowUp(current, opts?.followUp);
-      // [] is this turn's files. Omitting attachments takes chips staged on the Mac.
-      const explicit = opts?.attachments;
-      const consumed = explicit !== undefined ? { attachments: current.attachments, consumed: explicit } : consumeComposerAttachments(current);
-      const queued = appendQueuedItem(
-        current.queue,
-        current.queueAttachments,
-        prompt,
-        consumed.consumed,
-      );
-      this.crashContinued.delete(thread.id);
-      this.jobContinueCount.delete(thread.id);
-      this.jobContinueNudged.delete(thread.id);
-      this.haltDrain.delete(thread.id);
-      const inFlight =
-        this.activeTurns.has(thread.id) ||
-        this.startingTurns.has(thread.id) ||
-        current.status === 'running';
-      // Skip the inbox (in-flight turn or already-parked follow-ups).
-      shouldSteer = followUp === 'steer' && (inFlight || current.queue.length > 0);
-      const patch: Parameters<typeof updateThread>[1] = queued;
-      if (explicit === undefined && consumed.consumed.length > 0) {
-        patch.attachments = consumed.attachments;
-      }
-      if (!inFlight) patch.status = 'queued';
-      // Stale agentPid from a dead MCP/desktop child can pin drainQueue forever.
-      const pid = current.agentPid;
-      if (typeof pid === 'number' && pid > 0 && !isPidAlive(pid)) {
-        patch.agentPid = null;
-      }
-      updateThread(thread.id, patch);
-      this.emit({ type: 'queue_changed', threadId: thread.id, queue: queued.queue });
-      if (!inFlight) {
-        this.emit({ type: 'status_changed', threadId: thread.id, status: 'queued' });
-      }
-      // MCP/CLI enqueue only while the board is alive — otherwise the turn
-      // runs in a stdio child with no renderer IPC (blank worktree chat).
-      // Steer promotes via sendQueuedMessageNow after the lock.
-      if (thisProcessShouldDrainAgentQueues() && !shouldSteer) {
-        this.armDrain(thread.id);
-      }
-      return this.requireThread(thread.id);
-    });
-    if (shouldSteer && sent.queue.length > 0) {
-      return this.sendQueuedMessageNow(sent.id, sent.queue.length - 1);
-    }
-    return sent;
+    return sent.thread;
   }
+
 
   async fanOut(
     threadRefs: string[],
@@ -1402,6 +1363,10 @@ export class Orchestrator {
     this.emit({ type: 'turn_started', threadId, prompt });
 
     try {
+    this.openSteerPrompt.set(threadId, {
+      text: typeof prompt === 'string' ? prompt : '',
+      spawned: false,
+    });
     // Pre-spawn work (queue shape, git slug, directives) used to sit outside
     // this try/finally. A throw there left startingTurns set forever, so
     // later worktree sends spun in drainQueue and never spawned Claude.
@@ -1435,20 +1400,24 @@ export class Orchestrator {
       thread = this.requireThread(threadId);
     }
 
-    const promptText = typeof prompt === 'string' ? prompt : '';
+    const promptText =
+      this.openSteerPrompt.get(threadId)?.text ?? (typeof prompt === 'string' ? prompt : '');
     const autoContinue =
       isJobContinuePrompt(promptText) ||
       promptText.startsWith('The previous agent process ended before it finished.');
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
     if (!autoContinue) clearAgentBlock(threadId);
-    appendMessage(threadId, {
-      role: 'user',
-      text: promptText,
-      ...(sentAttachments ? { attachments: sentAttachments } : {}),
-      ...(autoContinue ? { origin: 'continue' as const } : {}),
-      ts: new Date().toISOString(),
-    });
+    const lastShown = this.requireThread(threadId).messages.at(-1);
+    if (!reuseJoinedUserBubble(this.reusedUserPrompt, threadId, lastShown, promptText)) {
+      appendMessage(threadId, {
+        role: 'user',
+        text: promptText,
+        ...(sentAttachments ? { attachments: sentAttachments } : {}),
+        ...(autoContinue ? { origin: 'continue' as const } : {}),
+        ts: new Date().toISOString(),
+      });
+    }
     if (!autoContinue) {
       const live = this.requireThread(threadId);
       const stamp = agentPurposeStamp({
@@ -1747,11 +1716,22 @@ export class Orchestrator {
 
       const stderrTail: string[] = [];
       traceTurn('runTurn.beforeSpawn', { threadId, agent: fresh.agent });
+      const steerDraft = this.openSteerPrompt.get(threadId);
+      if (steerDraft) steerDraft.spawned = true;
+      const promptForAgent = promptForJoinedSteer({
+        threadId,
+        promptText,
+        latestPrompt: steerDraft?.text ?? promptText,
+        agentPrompt,
+        expandedPrompt,
+        worktreePath: fresh.worktreePath,
+        attachments: autoContinue ? [] : (sentAttachments ?? []),
+      });
       const handle = await spawnAgentTurn(
         fresh,
         {
           cachedPrefix,
-          prompt: agentPrompt,
+          prompt: promptForAgent,
           systemPrompt: turnReminders,
           isolateCodexPlugins: fresh.isolateCodexPlugins === true,
         },
@@ -1944,7 +1924,7 @@ export class Orchestrator {
           retryThread,
           {
             cachedPrefix: retryPrefix,
-            prompt: agentPrompt,
+            prompt: promptForAgent,
             systemPrompt: turnReminders,
             isolateCodexPlugins:
               isolateCodexPluginRetry || retryThread.isolateCodexPlugins === true,
@@ -2137,6 +2117,7 @@ export class Orchestrator {
     } finally {
       this.startingTurns.delete(threadId);
       this.activeTurns.delete(threadId);
+      this.openSteerPrompt.delete(threadId);
       this.processes.delete(`${threadId}:agent`);
       this.stoppedTurns.delete(threadId);
       this.runningCount = Math.max(0, this.runningCount - 1);

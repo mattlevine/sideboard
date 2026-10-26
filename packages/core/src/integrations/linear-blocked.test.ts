@@ -4,6 +4,7 @@ import {
   getLinearIssueBlockedBy,
   linearBlockedByIdentifiers,
   linearBlockedByRelations,
+  linearBlockerStillBlocks,
 } from './linear-blocked.js';
 
 vi.mock('./linear.js', async (importOriginal) => {
@@ -32,6 +33,32 @@ describe('linearBlockedByRelations', () => {
       ),
     ).toEqual(['ENG-2']);
   });
+
+  it('drops a blocker that is completed, canceled, or a duplicate', () => {
+    expect(linearBlockerStillBlocks({ state: { type: 'completed' } })).toBe(false);
+    expect(linearBlockerStillBlocks({ state: { type: 'canceled' } })).toBe(false);
+    expect(linearBlockerStillBlocks({ state: { type: 'duplicate' } })).toBe(false);
+    expect(linearBlockerStillBlocks({ state: { type: 'started' } })).toBe(true);
+    expect(linearBlockerStillBlocks({})).toBe(true);
+    expect(
+      linearBlockedByIdentifiers(
+        linearBlockedByRelations({
+          inverseRelations: {
+            nodes: [
+              {
+                type: 'blocks',
+                issue: { identifier: 'ENG-2', state: { type: 'completed' } },
+              },
+              {
+                type: 'blocks',
+                issue: { identifier: 'ENG-8', state: { type: 'started' } },
+              },
+            ],
+          },
+        }),
+      ),
+    ).toEqual(['ENG-8']);
+  });
 });
 
 describe('getLinearIssueBlockedBy', () => {
@@ -48,6 +75,7 @@ describe('getLinearIssueBlockedBy', () => {
     await expect(getLinearIssueBlockedBy('ENG-9')).resolves.toEqual(['ENG-2']);
     const query = String(graphql.mock.calls[0]?.[0] ?? '');
     expect(query).toContain('inverseRelations');
+    expect(query).toContain('state { type }');
     expect(query).not.toContain('comments');
   });
 });

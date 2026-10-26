@@ -1,6 +1,24 @@
 import { flipLinearRelationType, linearGraphql } from './linear.js';
 
-type IssueRef = { identifier?: string | null; id?: string | null };
+type IssueRef = {
+  identifier?: string | null;
+  id?: string | null;
+  state?: { type?: string | null } | null;
+};
+
+/**
+ * Linear keeps the blocks relation after the blocker is done. The product
+ * stops treating it as blocking once the state is completed, canceled, or
+ * duplicate. A missing state still blocks so a partial payload cannot clear
+ * the sidebar.
+ */
+const RESOLVED_LINEAR_STATE = new Set(['completed', 'canceled', 'cancelled', 'duplicate']);
+
+export function linearBlockerStillBlocks(issue?: IssueRef | null): boolean {
+  const type = (issue?.state?.type ?? '').trim().toLowerCase();
+  if (!type) return true;
+  return !RESOLVED_LINEAR_STATE.has(type);
+}
 
 type RelationNode = {
   type?: string | null;
@@ -19,10 +37,10 @@ query SideboardIssueBlockedBy($id: String!) {
   issue(id: $id) {
     identifier
     relations(first: 25) {
-      nodes { id type relatedIssue { id identifier } }
+      nodes { id type relatedIssue { id identifier state { type } } }
     }
     inverseRelations(first: 25) {
-      nodes { id type issue { id identifier } }
+      nodes { id type issue { id identifier state { type } } }
     }
   }
 }
@@ -37,6 +55,7 @@ export function linearBlockedByIdentifiers(
   for (const rel of relations) {
     const type = (rel.type ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
     if (type !== 'blockedby' && type !== 'blocked') continue;
+    if (!linearBlockerStillBlocks(rel.issue)) continue;
     const id = (rel.issue?.identifier || rel.issue?.id || '').trim();
     const key = id.toLowerCase();
     if (!id || seen.has(key)) continue;
