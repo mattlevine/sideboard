@@ -12,13 +12,14 @@
 <meta property="og:image" content="https://www.sideboard.cloud/board.png?v=3">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.png">
-<link rel="stylesheet" href="/styles.css?v=20261025-2">
+<link rel="stylesheet" href="/styles.css?v=20261025-3">
 </head>
 <body>
 <header class="nav">
   <div class="nav-inner">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
-    <nav class="nav-links">
+    <button class="nav-burger" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Open menu"><span class="nav-burger-bars" aria-hidden="true"></span></button>
+    <nav class="nav-links" id="site-nav">
       <a href="#product">Product</a>
       <a href="/docs/">Docs</a>
       <a href="/docs/remote/">Phone</a>
@@ -327,5 +328,6 @@ sideboard land &lt;thread&gt;</pre>
   </div>
 </footer>
 <script src="/site.js"></script>
+<script src="/nav.js?v=20261025-3" defer></script>
 </body>
 </html>
