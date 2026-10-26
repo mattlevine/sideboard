@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { extraPendingFollowUps, joinSteerPrompt, splitTurnQueue, unlandedUserTexts } from './visible-follow-up-queue';
+import {
+  extraPendingFollowUps,
+  joinSteerPrompt,
+  pendingTranscriptTexts,
+  splitTurnQueue,
+  unlandedUserTexts,
+} from './visible-follow-up-queue';
 
 describe('splitTurnQueue', () => {
   it('treats a lone queued prompt as the current turn while idle', () => {
@@ -91,6 +97,44 @@ describe('unlandedUserTexts', () => {
         ],
       ),
     ).toEqual([{ text: 'same', seen: 1 }]);
+  });
+});
+
+describe('pendingTranscriptTexts', () => {
+  it('keeps a plan answer that only set pendingUser', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [],
+        messages: [{ role: 'agent', text: 'Which issue?' }],
+        currentTurnPrompt: null,
+        pendingUser: 'Issue A',
+        pendingInTranscript: true,
+      }),
+    ).toEqual(['Issue A']);
+  });
+
+  it('does not duplicate a composer send already tracked as optimistic', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [{ text: 'Work on issue A\nAnd B', seen: 0 }],
+        messages: [],
+        currentTurnPrompt: null,
+        pendingUser: 'Work on issue A\nAnd B',
+        pendingInTranscript: true,
+      }),
+    ).toEqual(['Work on issue A\nAnd B']);
+  });
+
+  it('hides the pending bubble once that user message lands', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [],
+        messages: [{ role: 'user', text: 'Issue A' }],
+        currentTurnPrompt: null,
+        pendingUser: 'Issue A',
+        pendingInTranscript: true,
+      }),
+    ).toEqual([]);
   });
 });
 

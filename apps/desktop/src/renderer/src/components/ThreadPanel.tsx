@@ -162,6 +162,7 @@ import {
 } from '../lib/panel-widths';
 import {
   extraPendingFollowUps,
+  pendingTranscriptTexts,
   splitTurnQueue,
   unlandedUserTexts,
   type OptimisticUserSend,
@@ -1428,19 +1429,13 @@ export function ThreadPanel({
       ? pendingUser
       : null;
 
-  /**
-   * Every send that has not landed in the transcript yet. A second message
-   * must not replace the first bubble while that prompt is still in flight.
-   */
-  const unlandedSends = unlandedUserTexts(optimisticUsers, thread.messages).map(
-    (item) => item.text,
-  );
-  const pendingTranscripts =
-    currentTurnFromQueue &&
-    !unlandedSends.includes(currentTurnFromQueue) &&
-    !thread.messages.some((m) => m.role === 'user' && m.text === currentTurnFromQueue)
-      ? [currentTurnFromQueue, ...unlandedSends]
-      : unlandedSends;
+  const pendingTranscripts = pendingTranscriptTexts({
+    optimistic: optimisticUsers,
+    messages: thread.messages,
+    currentTurnPrompt: currentTurnFromQueue,
+    pendingUser,
+    pendingInTranscript,
+  });
   const shownInTranscript = new Set(pendingTranscripts);
 
   /** Follow-up while a turn is in flight (or already queued behind one). */

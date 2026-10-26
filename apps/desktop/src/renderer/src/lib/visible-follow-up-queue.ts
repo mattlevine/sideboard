@@ -61,6 +61,39 @@ export function unlandedUserTexts<T extends OptimisticUserSend>(
   return out;
 }
 
+/**
+ * Transcript bubbles for sends that have not landed yet.
+ * Composer sends are in `optimistic`. Plan answers, Implement plan, and Send
+ * now only set `pendingUser`, so that text is included while it is in flight.
+ */
+export function pendingTranscriptTexts(input: {
+  optimistic: OptimisticUserSend[];
+  messages: Array<{ role: string; text?: string; origin?: string }>;
+  currentTurnPrompt: string | null;
+  pendingUser: string | null;
+  pendingInTranscript: boolean;
+}): string[] {
+  const texts = unlandedUserTexts(input.optimistic, input.messages).map((item) => item.text);
+  const landed = (text: string) =>
+    input.messages.some((message) => message.role === 'user' && message.text === text);
+  if (
+    input.currentTurnPrompt &&
+    !texts.includes(input.currentTurnPrompt) &&
+    !landed(input.currentTurnPrompt)
+  ) {
+    texts.unshift(input.currentTurnPrompt);
+  }
+  if (
+    input.pendingInTranscript &&
+    input.pendingUser &&
+    !texts.includes(input.pendingUser) &&
+    !landed(input.pendingUser)
+  ) {
+    texts.push(input.pendingUser);
+  }
+  return texts;
+}
+
 export function extraPendingFollowUps(
   followUps: string[],
   pending: PendingFollowUp[],
