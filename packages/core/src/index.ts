@@ -101,6 +101,7 @@ export {
   LONG_RUNNING_SKILL_COMMAND,
 } from './skills/bundled/long-running.js';
 export * from './composer/expand.js';
+export * from './composer/agent-has-replied.js';
 export * from './composer/diff-comment.js';
 export * from './composer/code-ref.js';
 export * from './composer/stage-files.js';

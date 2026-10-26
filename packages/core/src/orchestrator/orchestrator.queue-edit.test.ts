@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readThread, createEmptyThread, writeThread } from '../store/thread-store.js';
+import { clearTurnLive, noteTurnLiveEvent } from '../store/turn-live.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import { updateAdvancedSettings } from '../store/app-settings.js';
 import { Orchestrator, resolveOrchChildFollowUp, resolveSendFollowUp } from './orchestrator.js';
@@ -35,6 +36,11 @@ describe('Orchestrator queued-message editing', () => {
     });
     writeThread(thread);
     return thread;
+  }
+
+  /** Visible agent output — steer may interrupt only after this. */
+  function markAgentReplying(threadId: string) {
+    noteTurnLiveEvent(threadId, { type: 'stdout', data: 'On it' });
   }
 
   function seedOrch(queue: string[] = []) {
@@ -417,11 +423,13 @@ describe('Orchestrator queued-message editing', () => {
       kill,
       done: new Promise(() => {}),
     });
+    markAgentReplying(thread.id);
 
     const updated = await orch.send(
       thread.id,
       'Sideboard: child worktree [Fix](sideboard://chat/abc) stopped before finishing (status=stopped).',
     );
+    clearTurnLive(thread.id);
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue[0]).toMatch(/^Sideboard:/);
     expect(updated.queue).toContain('later');
@@ -496,10 +504,12 @@ describe('Orchestrator queued-message editing', () => {
       kill,
       done: new Promise(() => {}),
     });
+    markAgentReplying(thread.id);
 
     const updated = await orch.send(thread.id, 'from orch', {
       followUp: resolveOrchChildFollowUp(),
     });
+    clearTurnLive(thread.id);
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue[0]).toBe('from orch');
     expect(updated.queue).toContain('later');
@@ -525,11 +535,89 @@ describe('Orchestrator queued-message editing', () => {
       kill,
       done: new Promise(() => {}),
     });
+    markAgentReplying(thread.id);
 
     const updated = await orch.send(thread.id, 'steer now', { followUp: 'steer' });
+    clearTurnLive(thread.id);
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue[0]).toBe('steer now');
     expect(updated.queue).toContain('later');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
+  it('joins a steer follow-up onto a queued prompt the agent has not started', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread(['Work on issue A']);
+    const queued = readThread(thread.id)!;
+    queued.status = 'queued';
+    writeThread(queued);
+    const orch = new Orchestrator();
+    const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+
+    const updated = await orch.send(thread.id, 'And B', { followUp: 'steer' });
+    expect(updated.queue).toEqual(['Work on issue A\nAnd B']);
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
+  it('joins a steer follow-up onto the prompt before the agent process starts', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread([]);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      startingTurns: Set<string>;
+      openSteerPrompt: Map<string, { text: string; spawned: boolean }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.startingTurns.add(thread.id);
+    internal.openSteerPrompt.set(thread.id, { text: 'Work on issue A', spawned: false });
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'And B', { followUp: 'steer' });
+    expect(kill).not.toHaveBeenCalled();
+    expect(updated.queue).toEqual([]);
+    expect(internal.openSteerPrompt.get(thread.id)?.text).toBe('Work on issue A\nAnd B');
+  });
+
+  it('steers the joined prompt when the agent process already started but has not replied', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread(['later']);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    live.messages = [{ role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' }];
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      openSteerPrompt: Map<string, { text: string; spawned: boolean }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    internal.openSteerPrompt.set(thread.id, { text: 'Work on issue A', spawned: true });
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'And B', { followUp: 'steer' });
+    expect(kill).toHaveBeenCalledOnce();
+    expect(updated.queue[0]).toBe('Work on issue A\nAnd B');
+    expect(updated.queue).toContain('later');
+    expect(readThread(thread.id)?.messages.at(-1)?.text).toBe('Work on issue A\nAnd B');
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
@@ -565,12 +653,14 @@ describe('Orchestrator queued-message editing', () => {
       live.status = 'running';
       live.agentPid = child.pid!;
       writeThread(live);
+      markAgentReplying(thread.id);
       const orch = new Orchestrator();
       const internal = orch as unknown as { drainQueue: (id: string) => Promise<void> };
       const drainQueue = vi.fn().mockResolvedValue(undefined);
       internal.drainQueue = drainQueue;
 
       const updated = await orch.send(thread.id, 'steer now', { followUp: 'steer' });
+      clearTurnLive(thread.id);
       expect(updated.queue).toEqual(['steer now', 'later']);
       expect(updated.status).toBe('running');
       expect(updated.steerRequest?.requestId).toBeTruthy();

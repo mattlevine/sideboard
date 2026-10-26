@@ -37,6 +37,10 @@ export function githubBlockedByIdentifiers(payload: unknown): string[] {
         : null;
     const number = Number(rec?.number ?? node);
     if (!Number.isFinite(number) || number <= 0) continue;
+    // A closed issue no longer blocks. Missing state still counts so an older
+    // payload cannot clear a real blocker.
+    const state = String(rec?.state ?? '').trim().toUpperCase();
+    if (state === 'CLOSED') continue;
     const id = `#${number}`;
     const key = id.toLowerCase();
     if (seen.has(key)) continue;
@@ -50,7 +54,7 @@ const GITHUB_BLOCKED_BY_QUERY = `
 query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
-      blockedBy(first: 25) { nodes { number } }
+      blockedBy(first: 25) { nodes { number state } }
     }
   }
 }

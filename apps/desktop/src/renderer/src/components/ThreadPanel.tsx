@@ -162,7 +162,10 @@ import {
 } from '../lib/panel-widths';
 import {
   extraPendingFollowUps,
+  joinSteerPrompt,
   splitTurnQueue,
+  unlandedUserTexts,
+  type OptimisticUserSend,
   type PendingFollowUp,
 } from '../lib/visible-follow-up-queue';
 import { visibleComposerAttachments } from '../lib/composer-attachments';
@@ -335,7 +338,7 @@ const ChatTranscript = memo(function ChatTranscript({
   presentedPlanSource,
   showPlanQuestions,
   pendingPlanQuestions,
-  pendingTranscript,
+  pendingTranscripts,
   pendingAttachments,
   liveOutput,
   liveParts,
@@ -363,7 +366,7 @@ const ChatTranscript = memo(function ChatTranscript({
   presentedPlanSource?: string;
   showPlanQuestions: boolean;
   pendingPlanQuestions: ReturnType<typeof latestPendingPlanQuestions>;
-  pendingTranscript: string | null;
+  pendingTranscripts: string[];
   pendingAttachments: ThreadAttachment[];
   liveOutput: string;
   liveParts: MessagePart[];
@@ -578,10 +581,11 @@ const ChatTranscript = memo(function ChatTranscript({
           </div>
         );
       })}
-      {pendingTranscript && !looksLikeAutoContinuePrompt(pendingTranscript) && (
-        <div className="msg user pending" data-chat-search-key="pending">
+      {pendingTranscripts.map((text, i) =>
+        looksLikeAutoContinuePrompt(text) ? null : (
+          <div className="msg user pending" data-chat-search-key={`pending-${i}`} key={`pending-${i}`}>
             <div className="msg-user-body">
-              {pendingAttachments.length > 0 && (
+              {i === pendingTranscripts.length - 1 && pendingAttachments.length > 0 && (
                 <ComposerAttachmentChips
                   attachments={pendingAttachments}
                   className="msg-attachments"
@@ -589,20 +593,19 @@ const ChatTranscript = memo(function ChatTranscript({
                   onOpen={h.onSelectFile}
                 />
               )}
-              {pendingTranscript ? (
-                <UserMessageText
-                  text={pendingTranscript}
-                  threadId={threadId}
-                  worktreePath={worktreePath}
-                  knownFilePaths={filePaths}
-                  onOpenFile={h.onSelectFile}
-                  onRevealDirectory={h.onRevealDirectory}
-                  onThreadLinkClick={h.onOpenThreadLink}
-                  onArtifactLinkClick={openArtifactLink}
-                />
-              ) : null}
+              <UserMessageText
+                text={text}
+                threadId={threadId}
+                worktreePath={worktreePath}
+                knownFilePaths={filePaths}
+                onOpenFile={h.onSelectFile}
+                onRevealDirectory={h.onRevealDirectory}
+                onThreadLinkClick={h.onOpenThreadLink}
+                onArtifactLinkClick={openArtifactLink}
+              />
             </div>
-        </div>
+          </div>
+        ),
       )}
       {showStreaming && (
         <div
@@ -725,8 +728,10 @@ export function ThreadPanel({
   const showCost = useShowCost();
   const followUpBehavior = useFollowUpBehavior();
   const [prompt, setPrompt] = useState(() => getComposerDraft(thread.id));
+  const promptRef = useRef(prompt);
+  promptRef.current = prompt;
   const dictation = useSpeechDictation({
-    getValue: () => prompt,
+    getValue: () => promptRef.current,
     setValue: setPrompt,
     resetKey: thread.id,
   });
@@ -737,6 +742,7 @@ export function ThreadPanel({
   const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [pendingInTranscript, setPendingInTranscript] = useState(false);
+  const [optimisticUsers, setOptimisticUsers] = useState<OptimisticUserSend[]>([]);
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const [editingQueueIndex, setEditingQueueIndex] = useState<number | null>(null);
   const [queueEditText, setQueueEditText] = useState('');
@@ -748,6 +754,9 @@ export function ThreadPanel({
   } | null>(null);
   const sendGateRef = useRef(createUsageSendGate());
   const sendGate = sendGateRef.current;
+  const pendingSendsRef = useRef<string[]>([]);
+  /** Steer prompt still waiting for an agent reply. Follow-ups join this text. */
+  const openPromptRef = useRef<string | null>(null);
   const [plusOpen, setPlusOpen] = useState(false);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
   const [brightsyTargets, setBrightsyTargets] = useState<BrightsyChatTargets | null>(null);
@@ -1126,6 +1135,8 @@ export function ThreadPanel({
     setDismissedPlanQuestionsId(null);
     setPendingUser(null);
     setPendingInTranscript(false);
+    setOptimisticUsers([]);
+    openPromptRef.current = null;
     setPendingFollowUps([]);
     setPendingAttachments([]);
     setChatSearchOpen(false);
@@ -1169,6 +1180,14 @@ export function ThreadPanel({
     liveParts,
     turnStartedAt,
   ]);
+
+  useEffect(() => {
+    setOptimisticUsers((prev) => {
+      if (prev.length === 0) return prev;
+      const stillPending = unlandedUserTexts(prev, thread.messages);
+      return stillPending.length === prev.length ? prev : stillPending;
+    });
+  }, [thread.messages]);
 
   useEffect(() => {
     if (editingQueueIndex === null) return;
@@ -1409,20 +1428,20 @@ export function ThreadPanel({
       ? pendingUser
       : null;
 
-  /** Idle send (empty follow-up queue, agent not streaming) → transcript. */
-  const pendingTranscript =
-    pendingInTranscript &&
-    pendingUser &&
-    !thread.messages.some((m) => m.role === 'user' && m.text === pendingUser)
-      ? pendingUser
-      : currentTurnFromQueue &&
-          !thread.messages.some(
-            (m) => m.role === 'user' && m.text === currentTurnFromQueue,
-          )
-        ? currentTurnFromQueue
-        : !turnBusy && pendingNotLanded
-          ? pendingNotLanded
-          : null;
+  /**
+   * Every send that has not landed in the transcript yet. A second message
+   * must not replace the first bubble while that prompt is still in flight.
+   */
+  const unlandedSends = unlandedUserTexts(optimisticUsers, thread.messages).map(
+    (item) => item.text,
+  );
+  const pendingTranscripts =
+    currentTurnFromQueue &&
+    !unlandedSends.includes(currentTurnFromQueue) &&
+    !thread.messages.some((m) => m.role === 'user' && m.text === currentTurnFromQueue)
+      ? [currentTurnFromQueue, ...unlandedSends]
+      : unlandedSends;
+  const shownInTranscript = new Set(pendingTranscripts);
 
   /** Follow-up while a turn is in flight (or already queued behind one). */
   const pendingQueue =
@@ -1440,7 +1459,9 @@ export function ThreadPanel({
     pendingFollowUps,
   );
   const showQueueDock =
-    followUpQueue.length > 0 || Boolean(pendingQueue) || optimisticFollowUps.length > 0;
+    followUpQueue.some((text) => !shownInTranscript.has(text)) ||
+    Boolean(pendingQueue && !shownInTranscript.has(pendingQueue)) ||
+    optimisticFollowUps.some((item) => !shownInTranscript.has(item.text));
 
   function pickAutocomplete(item: AutocompleteItem) {
     if (!acQuery) return;
@@ -1463,9 +1484,13 @@ export function ThreadPanel({
     turnBusy ||
     thread.queue.length > 0 ||
     followUpQueue.length > 0 ||
-    pendingFollowUps.length > 0;
-  /** Steer skips the composer queue and lands in the transcript immediately. */
-  const steeringFollowUp = followUpBehavior === 'steer' && followUpBusy;
+    pendingFollowUps.length > 0 ||
+    optimisticUsers.length > 0;
+  /** Agent text, thinking, or a tool — not merely "turn started". */
+  const agentReplying = Boolean(liveOutput.trim()) || liveParts.length > 0;
+  if (agentReplying) openPromptRef.current = null;
+  /** Steer skips the composer queue once the agent has actually replied. */
+  const steeringFollowUp = followUpBehavior === 'steer' && followUpBusy && agentReplying;
 
   const explicitAskSkip = useRef<string | null>(null);
   function skipAskUser(signature: string) {
@@ -1487,15 +1512,90 @@ export function ThreadPanel({
     setDismissedPlanQuestionsId((cur) => (cur == null ? cur : null));
   }, [pendingFollowUps.length, pendingUser, thread.dismissedQuestionSignature, thread.queue.length]);
 
+  function rememberOptimistic(text: string) {
+    if (followUpBehavior === 'steer' && !agentReplying && openPromptRef.current != null) {
+      const combined = joinSteerPrompt(openPromptRef.current, text);
+      openPromptRef.current = combined;
+      setOptimisticUsers((prev) => {
+        if (prev.length === 0) return [{ text: combined, seen: 0 }];
+        const next = prev.slice();
+        const last = next[next.length - 1]!;
+        next[next.length - 1] = { ...last, text: combined };
+        return next;
+      });
+      setPendingUser(combined);
+      setPendingInTranscript(true);
+      return;
+    }
+    const seen = thread.messages.reduce(
+      (count, message) =>
+        count +
+        (message.role === 'user' && message.origin !== 'continue' && message.text === text
+          ? 1
+          : 0),
+      0,
+    );
+    if (followUpBehavior === 'steer' && !agentReplying) openPromptRef.current = text;
+    setOptimisticUsers((prev) => [...prev, { text, seen }]);
+  }
+
+  function forgetOptimistic(text: string) {
+    let restored: string | null = null;
+    let clearOpen = false;
+    setOptimisticUsers((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.text === text) {
+        clearOpen = openPromptRef.current === text;
+        return prev.slice(0, -1);
+      }
+      const suffix = `\n${text}`;
+      if (last?.text.endsWith(suffix)) {
+        restored = last.text.slice(0, -suffix.length);
+        const next = prev.slice();
+        next[next.length - 1] = { ...last, text: restored };
+        return next;
+      }
+      const idx = prev.map((item) => item.text).lastIndexOf(text);
+      if (idx < 0) return prev;
+      return prev.filter((_, i) => i !== idx);
+    });
+    if (clearOpen) openPromptRef.current = null;
+    if (restored != null) {
+      openPromptRef.current = restored;
+      setPendingUser(restored);
+    }
+  }
+
+  function clearComposerIfUnchanged(sent: string) {
+    if (promptRef.current.trim() !== sent) return;
+    setPrompt('');
+    setCursor(0);
+  }
+
+  function restoreComposerIfEmpty(text: string) {
+    setPrompt((current) => (current.trim() ? current : text));
+  }
+
   function beginPendingSend(text: string, attachments: ThreadAttachment[] = []) {
     if (pendingPlanQuestions) setDismissedPlanQuestionsId(pendingPlanQuestions.signature);
-    const queueing = followUpBusy && !steeringFollowUp;
+    if (
+      followUpBehavior === 'steer' &&
+      !agentReplying &&
+      openPromptRef.current &&
+      openPromptRef.current !== text
+    ) {
+      if (attachments.length > 0) setPendingAttachments(attachments);
+      return;
+    }
+    // A second send before the agent replies must not replace the first bubble.
+    const preserveInFlight =
+      pendingInTranscript && pendingUser != null && pendingUser !== text && !agentReplying;
+    const queueing = (followUpBusy && !steeringFollowUp) || preserveInFlight;
     if (queueing) {
       setPendingFollowUps((prev) => [
         ...prev,
         { id: crypto.randomUUID(), text },
       ]);
-      setPendingInTranscript(false);
       return;
     }
     setPendingUser(text);
@@ -1535,42 +1635,98 @@ export function ThreadPanel({
     });
   }
 
-  async function send() {
-    const dictated = await dictation.stop();
-    const text = (dictated ?? prompt).trim();
-    if (!text) return;
-    const queueing = followUpBusy && !steeringFollowUp;
-    if (!followUpBusy && busy) return;
+  async function deliverSend(text: string): Promise<'ok' | 'cancel' | 'error'> {
+    const preserveInFlight =
+      pendingInTranscript && pendingUser != null && pendingUser !== text && !agentReplying;
+    const queueing = (followUpBusy && !steeringFollowUp) || preserveInFlight;
+    if (!(await confirmSendDespiteClaudeUsage())) {
+      forgetOptimistic(text);
+      restoreComposerIfEmpty(text);
+      return 'cancel';
+    }
+    const snapshotAttachments = [...(thread.attachments ?? [])];
+    beginPendingSend(text, snapshotAttachments);
+    clearComposerIfUnchanged(text);
+    suppressArtifactAutoOpen.current = false;
+    if (!followUpBusy) setBusy(true);
+    try {
+      await window.sideboard.sendToThread(thread.id, text);
+      onRefresh();
+      return 'ok';
+    } catch (err) {
+      if (queueing) {
+        setPendingFollowUps((prev) => {
+          const idx = [...prev].reverse().findIndex((p) => p.text === text);
+          if (idx < 0) return prev;
+          const i = prev.length - 1 - idx;
+          return prev.filter((_, j) => j !== i);
+        });
+      } else {
+        clearPendingSend();
+      }
+      forgetOptimistic(text);
+      restoreComposerIfEmpty(text);
+      window.alert(err instanceof Error ? err.message : String(err));
+      return 'error';
+    } finally {
+      if (!followUpBusy) setBusy(false);
+    }
+  }
+
+  function dropQueuedSends() {
+    for (const extra of pendingSendsRef.current.splice(0).reverse()) forgetOptimistic(extra);
+  }
+
+  async function flushPendingSends() {
+    if (pendingSendsRef.current.length === 0) return;
     if (!sendGate.tryBegin()) return;
     try {
-      if (!(await confirmSendDespiteClaudeUsage())) return;
-      const snapshotAttachments = [...(thread.attachments ?? [])];
-      beginPendingSend(text, snapshotAttachments);
-      setPrompt('');
-      setCursor(0);
-      suppressArtifactAutoOpen.current = false;
-      if (!followUpBusy) setBusy(true);
-      try {
-        await window.sideboard.sendToThread(thread.id, text);
-        onRefresh();
-      } catch (err) {
-        if (queueing) {
-          setPendingFollowUps((prev) => {
-            const idx = [...prev].reverse().findIndex((p) => p.text === text);
-            if (idx < 0) return prev;
-            const i = prev.length - 1 - idx;
-            return prev.filter((_, j) => j !== i);
-          });
-        } else {
-          clearPendingSend();
+      while (pendingSendsRef.current.length > 0) {
+        const next = pendingSendsRef.current.shift()!;
+        const result = await deliverSend(next);
+        if (result === 'cancel') {
+          dropQueuedSends();
+          break;
         }
-        setPrompt(text);
-        window.alert(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!followUpBusy) setBusy(false);
+        if (result === 'error') break;
       }
     } finally {
       sendGate.end();
+      if (pendingSendsRef.current.length > 0) void flushPendingSends();
+    }
+  }
+
+  async function send() {
+    const dictated = await dictation.stop();
+    const text = (dictated ?? promptRef.current).trim();
+    if (!text) return;
+    rememberOptimistic(text);
+    clearComposerIfUnchanged(text);
+    // A second Enter while the first IPC or usage confirm is in flight used to
+    // return here, then the first send cleared the composer and the text was gone.
+    if ((!followUpBusy && busy) || !sendGate.tryBegin()) {
+      pendingSendsRef.current.push(text);
+      return;
+    }
+    try {
+      const result = await deliverSend(text);
+      if (result === 'cancel') {
+        dropQueuedSends();
+        return;
+      }
+      if (result === 'error') return;
+      while (pendingSendsRef.current.length > 0) {
+        const next = pendingSendsRef.current.shift()!;
+        const nextResult = await deliverSend(next);
+        if (nextResult === 'cancel') {
+          dropQueuedSends();
+          break;
+        }
+        if (nextResult === 'error') break;
+      }
+    } finally {
+      sendGate.end();
+      if (pendingSendsRef.current.length > 0) void flushPendingSends();
     }
   }
 
@@ -1941,7 +2097,7 @@ export function ThreadPanel({
     chatSearchQuery,
     chatViewOpen,
     liveOutput,
-    pendingTranscript,
+    pendingTranscripts.join('\n'),
     showStreaming,
     thread.messages,
     thread.compactedMessages,
@@ -2504,7 +2660,7 @@ export function ThreadPanel({
         <div className="chat" ref={chatRef}>
           {thread.messages.length === 0 &&
             !pendingUser &&
-            !pendingTranscript &&
+            pendingTranscripts.length === 0 &&
             !showStreaming &&
             !(thread.lastError && !isRedundantLastError(thread)) && (
               <div className="chat-empty">
@@ -2600,7 +2756,7 @@ export function ThreadPanel({
             presentedPlanSource={presentedPlan?.source}
             showPlanQuestions={showPlanQuestions}
             pendingPlanQuestions={pendingPlanQuestions}
-            pendingTranscript={pendingTranscript}
+            pendingTranscripts={pendingTranscripts}
             pendingAttachments={pendingAttachments}
             liveOutput={liveOutput}
             liveParts={liveParts}
@@ -2655,13 +2811,7 @@ export function ThreadPanel({
             <div className="queued-messages-list">
               {followUpQueue.map((text, i) => {
                 const queueIndex = i + queueIndexOffset;
-                if (
-                  pendingInTranscript &&
-                  pendingUser === text &&
-                  i === followUpQueue.indexOf(pendingUser)
-                ) {
-                  return null;
-                }
+                if (shownInTranscript.has(text)) return null;
                 return (
                 <div
                   key={`queued-${queueIndex}`}
@@ -2763,7 +2913,7 @@ export function ThreadPanel({
                 </div>
                 );
               })}
-              {pendingQueue && (
+              {pendingQueue && !shownInTranscript.has(pendingQueue) && (
                 <div className="queued-msg pending">
                   {pendingAttachments.length > 0 && (
                     <ComposerAttachmentChips
@@ -2776,7 +2926,9 @@ export function ThreadPanel({
                   <div className="queued-msg-text">{pendingQueue}</div>
                 </div>
               )}
-              {optimisticFollowUps.map((item) => (
+              {optimisticFollowUps
+                .filter((item) => !shownInTranscript.has(item.text))
+                .map((item) => (
                 <div key={item.id} className="queued-msg pending">
                   <div className="queued-msg-text">{item.text}</div>
                 </div>
@@ -2978,7 +3130,7 @@ export function ThreadPanel({
               <button
                 type="button"
                 className="send-btn"
-                disabled={!prompt.trim() || (busy && !agentActive)}
+                disabled={!prompt.trim()}
                 title="Send"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -3144,7 +3296,7 @@ export function ThreadPanel({
                 <button
                   type="button"
                   className="send-btn"
-                  disabled={!prompt.trim() || (busy && !agentActive)}
+                  disabled={!prompt.trim()}
                   title={
                   agentActive
                     ? followUpBehavior === 'steer'

@@ -239,9 +239,14 @@ export function issueAttachmentForAbleTimeTask(task: AbleTimeTask): ThreadAttach
   };
 }
 
+/** Done, canceled, and archived tasks no longer block a workspace. */
+export function ableTimeStateIsClosed(state: string | null | undefined): boolean {
+  const value = (state ?? '').trim().toLowerCase();
+  return Boolean(value && CLOSED_STATES.has(value));
+}
+
 function isOpenTask(task: AbleTimeTask): boolean {
-  const state = (task.state ?? '').toLowerCase();
-  return !state || !CLOSED_STATES.has(state);
+  return !ableTimeStateIsClosed(task.state);
 }
 
 export async function getAbleTimeOrientation(opts?: {
