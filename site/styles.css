@@ -105,6 +105,44 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   white-space: nowrap;
   flex-shrink: 0;
 }
+.nav-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  flex: none;
+}
+.nav-burger:hover { background: rgba(255, 255, 255, 0.06) }
+.nav-burger-bars,
+.nav-burger-bars::before,
+.nav-burger-bars::after {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  transition: transform 160ms ease, top 160ms ease, background-color 160ms ease;
+}
+.nav-burger-bars { position: relative }
+.nav-burger-bars::before,
+.nav-burger-bars::after {
+  content: "";
+  position: absolute;
+  left: 0;
+}
+.nav-burger-bars::before { top: -6px }
+.nav-burger-bars::after { top: 6px }
+.nav-open .nav-burger-bars { background: transparent }
+.nav-open .nav-burger-bars::before { top: 0; transform: rotate(45deg) }
+.nav-open .nav-burger-bars::after { top: 0; transform: rotate(-45deg) }
 
 .btn {
   display: inline-flex;
@@ -741,7 +779,30 @@ article th { color: var(--text); background: var(--card) }
 .btn-blue { display: inline-flex; align-items: center }
 
 /* A phone cannot install the Mac app. Hide every download link on a
-   narrow window and on touch screens (including phone landscape). */
+   narrow window and on touch screens (including phone landscape).
+   Those same screens use a hamburger instead of the link row. */
 @media (max-width: 720px), ((hover: none) and (pointer: coarse)) {
   a[href*="Sideboard-latest-arm64.dmg"] { display: none }
+  .nav-burger { display: inline-flex }
+  .nav-links {
+    display: none;
+    flex: 1 0 100%;
+    flex-direction: column;
+    align-items: stretch;
+    align-self: stretch;
+    gap: 0;
+    width: 100%;
+    padding: 6px 0 8px;
+  }
+  .nav-open .nav-links { display: flex }
+  .nav-links a {
+    padding: 14px 2px;
+    font-size: 16px;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-burger-bars,
+  .nav-burger-bars::before,
+  .nav-burger-bars::after { transition: none }
 }
