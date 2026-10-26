@@ -738,29 +738,10 @@ article th { color: var(--text); background: var(--card) }
   .compare { min-width: 560px }
 }
 
-/* Phone: brand and download share a row; links sit under them so the
-   pill stays one line. */
-@media (max-width: 720px) {
-  .nav-inner {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "brand cta"
-      "links links";
-    align-items: center;
-    column-gap: 12px;
-    row-gap: 10px;
-    padding: 12px 16px;
-  }
-  .brand { grid-area: brand; margin-right: 0; min-width: 0 }
-  .nav-links {
-    grid-area: links;
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-  .nav-inner > .btn {
-    grid-area: cta;
-    justify-self: end;
-    padding: 8px 12px;
-  }
+.btn-blue { display: inline-flex; align-items: center }
+
+/* A phone cannot install the Mac app. Hide every download link on a
+   narrow window and on touch screens (including phone landscape). */
+@media (max-width: 720px), ((hover: none) and (pointer: coarse)) {
+  a[href*="Sideboard-latest-arm64.dmg"] { display: none }
 }
