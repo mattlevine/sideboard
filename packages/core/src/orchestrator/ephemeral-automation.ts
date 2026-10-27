@@ -43,13 +43,31 @@ export async function archiveEphemeralAutomationIfReady(
   threadId: string,
   archive: (id: string) => Promise<unknown>,
 ): Promise<void> {
-  const automationId = await withThreadLock(threadId, async () => {
+  const keep = await withThreadLock(threadId, async () => {
     const thread = readThread(threadId);
     if (!thread || !ephemeralRunReadyToArchive(thread)) return null;
+    const automationId = thread.ephemeralAutomationId?.trim();
+    if (!automationId) return null;
     await archive(thread.id);
-    return thread.ephemeralAutomationId?.trim() || null;
+    // A failover sibling that already archived owns the run. Keeping this chat
+    // would delete that sibling on the way out.
+    return {
+      automationId,
+      keepId: archivedContinuationId(automationId, threadId) ?? threadId,
+    };
   });
-  if (automationId) forgetOlderEphemeralRuns(automationId, threadId);
+  if (keep) forgetOlderEphemeralRuns(keep.automationId, keep.keepId);
+}
+
+/** Failover sibling that already archived this one-off. */
+function archivedContinuationId(automationId: string, sourceId: string): string | null {
+  for (const thread of listThreads({ includeArchived: true })) {
+    if (thread.id === sourceId || thread.status !== 'archived') continue;
+    if (thread.ephemeralAutomationId !== automationId) continue;
+    if (thread.quotaContinuedFromId !== sourceId) continue;
+    return thread.id;
+  }
+  return null;
 }
 
 /** History restore keeps the chat. A later drain must not archive it again. */

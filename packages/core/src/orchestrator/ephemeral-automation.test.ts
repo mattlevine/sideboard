@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createEmptyThread, readThread } from '../store/thread-store.js';
-import { writeThread } from '../store/thread-store.js';
+import { createEmptyThread, readThread, updateThread, writeThread } from '../store/thread-store.js';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import type { Thread } from '../types/thread.js';
 import {
+  archiveEphemeralAutomationIfReady,
   ephemeralRunReadyToArchive,
   forgetOlderEphemeralRuns,
 } from './ephemeral-automation.js';
@@ -77,6 +77,52 @@ describe('forgetOlderEphemeralRuns', () => {
     expect(readThread('old')).toBeNull();
     expect(readThread('other')?.id).toBe('other');
     expect(readThread('live')?.id).toBe('live');
+  });
+});
+
+describe('failover continuation owns the one-off', () => {
+  const prevData = process.env.SIDEBOARD_APP_DATA;
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-eph-failover-'));
+    process.env.SIDEBOARD_APP_DATA = dataDir;
+    process.env.SIDEBOARD_SECRET_VAULT = 'plain';
+  });
+
+  afterEach(() => {
+    if (prevData === undefined) delete process.env.SIDEBOARD_APP_DATA;
+    else process.env.SIDEBOARD_APP_DATA = prevData;
+    delete process.env.SIDEBOARD_SECRET_VAULT;
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  async function archive(id: string): Promise<void> {
+    updateThread(id, { status: 'archived' });
+  }
+
+  it('keeps the continuation after the original drain archives', async () => {
+    writeThread(chat({ id: 'orig' }));
+    writeThread(chat({ id: 'next', quotaContinuedFromId: 'orig' }));
+
+    await archiveEphemeralAutomationIfReady('orig', archive);
+    expect(readThread('orig')?.status).toBe('archived');
+    expect(readThread('orig')?.ephemeralAutomationId).toBe('auto-1');
+    expect(readThread('next')?.status).toBe('idle');
+
+    await archiveEphemeralAutomationIfReady('next', archive);
+    expect(readThread('next')?.status).toBe('archived');
+    expect(readThread('next')?.ephemeralAutomationId).toBe('auto-1');
+    expect(readThread('orig')).toBeNull();
+  });
+
+  it('does not drop a continuation that archived before the original', async () => {
+    writeThread(chat({ id: 'next', status: 'archived', quotaContinuedFromId: 'orig' }));
+    writeThread(chat({ id: 'orig' }));
+
+    await archiveEphemeralAutomationIfReady('orig', archive);
+    expect(readThread('next')?.ephemeralAutomationId).toBe('auto-1');
+    expect(readThread('orig')).toBeNull();
   });
 });
 

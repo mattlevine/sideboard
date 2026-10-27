@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
+import { createEmptyThread, readThread, writeThread } from '../store/thread-store.js';
 import type { Thread } from '../types/thread.js';
 import {
+  createQuotaFailoverChat,
   isolateQuotaFailover,
   planOrchestrationQuotaFailover,
 } from './quota-failover.js';
@@ -141,6 +146,47 @@ describe('planOrchestrationQuotaFailover', () => {
     expect(
       planOrchestrationQuotaFailover(orchThread(), 'Prompt is too long'),
     ).toBeNull();
+  });
+});
+
+describe('createQuotaFailoverChat', () => {
+  const prevData = process.env.SIDEBOARD_APP_DATA;
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-quota-failover-'));
+    process.env.SIDEBOARD_APP_DATA = dataDir;
+    process.env.SIDEBOARD_SECRET_VAULT = 'plain';
+  });
+
+  afterEach(() => {
+    if (prevData === undefined) delete process.env.SIDEBOARD_APP_DATA;
+    else process.env.SIDEBOARD_APP_DATA = prevData;
+    delete process.env.SIDEBOARD_SECRET_VAULT;
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('copies a one-off automation onto the continuation', () => {
+    const source = createEmptyThread({
+      title: 'Standup',
+      sourceType: 'orchestration',
+      sourceRef: 'go',
+      branchName: 'global',
+      worktreePath: '/tmp/global',
+      repoPath: GLOBAL_WORKSPACE_ID,
+      agent: 'claude',
+      status: 'error',
+    });
+    const from = { ...source, ephemeralAutomationId: 'auto-1', userSetTitle: true };
+    writeThread(from);
+
+    const next = createQuotaFailoverChat(from, 'cursor', LIMIT);
+
+    expect(next.ephemeralAutomationId).toBe('auto-1');
+    expect(next.title).toBe('Standup');
+    expect(next.agent).toBe('cursor');
+    expect(next.quotaContinuedFromId).toBe(from.id);
+    expect(readThread(from.id)?.ephemeralAutomationId).toBe('auto-1');
   });
 });
 

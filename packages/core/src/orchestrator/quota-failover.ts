@@ -237,17 +237,23 @@ export function createQuotaFailoverChat(
   limitText: string,
   opts?: { accountId?: string | null; accountLabel?: string },
 ): Thread {
+  const ephemeralAutomationId = from.ephemeralAutomationId?.trim();
+  const ephemeralTitle = ephemeralAutomationId ? from.title.trim() : '';
   const handoff = buildQuotaHandoffAttachment(from, limitText, fallbackAgent);
   const tab = createChatTab({
     fromThreadId: from.id,
     agent: fallbackAgent,
     model: null,
     attachments: [handoff],
+    ...(ephemeralTitle ? { title: ephemeralTitle } : {}),
     ...(opts && 'accountId' in opts ? { accountId: opts.accountId } : {}),
   });
   const patch: Partial<Thread> = {
     quotaContinuedFromId: from.id,
     sourceRef: from.sourceRef,
+    // The original drain archives as idle. This sibling has to carry the one-off
+    // so it archives when the continued turn finishes and History keeps it.
+    ...(ephemeralAutomationId ? { ephemeralAutomationId } : {}),
   };
   if (isOrchestratorThread(from)) {
     patch.parentThreadId = from.id;
