@@ -86,3 +86,24 @@ export async function cursorIdentityFromReceipt(
     emailVerified: Boolean(email),
   };
 }
+
+/** Relay registry entry. The desktop stores a Sideboard credential, not this receipt. */
+export function cursorGitHostEntry() {
+  return {
+    label: 'Cursor',
+    requiresClientSecret: false,
+    credentialParam: 'confirmation_receipt' as const,
+    authorizeUrl(client: { clientId: string }, redirectUri: string, state: string) {
+      return cursorAuthorizeUrl(client.clientId, redirectUri, state);
+    },
+    fetchIdentity(
+      client: { clientId: string },
+      receipt: string,
+      _redirectUri: string,
+      state: string,
+      fetchImpl: typeof fetch,
+    ) {
+      return cursorIdentityFromReceipt(receipt, { clientId: client.clientId, state }, fetchImpl);
+    },
+  };
+}

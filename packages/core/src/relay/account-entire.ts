@@ -144,3 +144,31 @@ export async function entireIdentityFromCode(
     emailVerified,
   };
 }
+
+/** Relay registry entry. Public clients use PKCE; the client id may be a metadata-document URL. */
+export function entireGitHostEntry() {
+  return {
+    label: 'Entire',
+    requiresClientSecret: false,
+    credentialParam: 'code' as const,
+    authorizeUrl(
+      client: { clientId: string },
+      redirectUri: string,
+      state: string,
+      ctx: { codeVerifier: string | null },
+    ) {
+      if (!ctx.codeVerifier) throw new Error('Entire sign-in could not start.');
+      return entireAuthorizeUrl(client.clientId, redirectUri, state, entireCodeChallenge(ctx.codeVerifier));
+    },
+    fetchIdentity(
+      client: { clientId: string; clientSecret?: string },
+      code: string,
+      redirectUri: string,
+      _state: string,
+      fetchImpl: typeof fetch,
+      ctx: { codeVerifier: string | null; issuer: string | null },
+    ) {
+      return entireIdentityFromCode(client, code, redirectUri, ctx, fetchImpl);
+    },
+  };
+}

@@ -33,6 +33,7 @@ import {
   stopLiveSpeechDictate,
   transcribeWavFile,
 } from './speech-dictate';
+import { registerGitHostIpc } from './git-host-ipc';
 import { formatUpdaterCheckError } from './updater-error';
 import {
   bindPhoneOpenFile,
@@ -118,11 +119,6 @@ import {
   removeBoardPin,
   type AddBoardPinInput,
   getGitHubStatus,
-  getCursorGitStatus,
-  loginCursorGit,
-  setupCursorGit,
-  getEntireGitStatus,
-  loginEntireGit,
   listSlackWorkspaces,
   connectSlackToken,
   disconnectSlackWorkspace,
@@ -1128,11 +1124,7 @@ function registerIpc(): void {
     ) => toPublicAppSettings(updateProjectProfileSettings(repoPath, patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
-  ipcMain.handle('getCursorGitStatus', () => getCursorGitStatus());
-  ipcMain.handle('loginCursorGit', () => loginCursorGit());
-  ipcMain.handle('setupCursorGit', () => setupCursorGit());
-  ipcMain.handle('getEntireGitStatus', () => getEntireGitStatus());
-  ipcMain.handle('loginEntireGit', () => loginEntireGit());
+  registerGitHostIpc();
   ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());
   ipcMain.handle('connectSlackToken', async (_e, token: string) => {
     await connectSlackToken(token);

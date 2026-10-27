@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Thread } from '../types/thread.js';
 
+vi.mock('../git/pr-write.js', () => ({
+  createOrUpdatePr: vi.fn(),
+}));
+
 vi.mock('../git/worktree.js', () => ({
   commitAll: vi.fn(async () => true),
-  createOrUpdatePr: vi.fn(),
   currentBranch: vi.fn(async () => 'main'),
   isDirty: vi.fn(async () => true),
   pushBranch: vi.fn(async () => undefined),
@@ -22,7 +25,8 @@ vi.mock('./pr-metadata.js', () => ({
   })),
 }));
 
-import { commitAll, createOrUpdatePr, pushBranch } from '../git/worktree.js';
+import { createOrUpdatePr } from '../git/pr-write.js';
+import { commitAll, pushBranch } from '../git/worktree.js';
 import { confirmLand, previewLand } from './land.js';
 
 const cowboyThread = {

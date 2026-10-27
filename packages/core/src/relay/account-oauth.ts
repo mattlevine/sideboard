@@ -5,13 +5,8 @@ import {
   type RelayAccountStore,
   type RelaySignInIdentity,
 } from './accounts.js';
-import { cursorAuthorizeUrl, cursorIdentityFromReceipt } from './account-cursor.js';
-import {
-  entireAuthorizeUrl,
-  entireCodeChallenge,
-  entireIdentityFromCode,
-  newEntireCodeVerifier,
-} from './account-entire.js';
+import { cursorGitHostEntry } from './account-cursor.js';
+import { entireGitHostEntry, newEntireCodeVerifier } from './account-entire.js';
 
 /**
  * Git hosts that can sign a Mac into the relay. A Mac's projects do not all
@@ -144,34 +139,8 @@ const GIT_HOST_AUTH: Record<RelayGitHost, GitHostAuth> = {
     authorizeUrl: (client, redirectUri, state) => githubAuthorizeUrl(client, redirectUri, state),
     fetchIdentity: fetchGithubIdentity,
   },
-  cursor: {
-    label: 'Cursor',
-    requiresClientSecret: false,
-    credentialParam: 'confirmation_receipt',
-    authorizeUrl: (client, redirectUri, state) => cursorAuthorizeUrl(client.clientId, redirectUri, state),
-    fetchIdentity: (client, receipt, redirectUri, state, fetchImpl) => {
-      void redirectUri;
-      return cursorIdentityFromReceipt(receipt, { clientId: client.clientId, state }, fetchImpl);
-    },
-  },
-  entire: {
-    label: 'Entire',
-    requiresClientSecret: false,
-    credentialParam: 'code',
-    authorizeUrl: (client, redirectUri, state, ctx) => {
-      if (!ctx.codeVerifier) throw new Error('Entire sign-in could not start.');
-      return entireAuthorizeUrl(
-        client.clientId,
-        redirectUri,
-        state,
-        entireCodeChallenge(ctx.codeVerifier),
-      );
-    },
-    fetchIdentity: (client, code, redirectUri, state, fetchImpl, ctx) => {
-      void state;
-      return entireIdentityFromCode(client, code, redirectUri, ctx, fetchImpl);
-    },
-  },
+  cursor: cursorGitHostEntry(),
+  entire: entireGitHostEntry(),
 };
 
 function githubAuthorizeUrl(client: RelayOAuthClient, redirectUri: string, state: string): string {

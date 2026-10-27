@@ -7,12 +7,11 @@ import type {
   PublicAppSettings,
 } from '@sideboard-ai/core';
 import { sanitizeGitBranchPrefix } from '@sideboard/branch-prefix';
+import { CursorGitCliPanel, EntireGitCliPanel } from './GitHostCliPanels';
 import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
 
 export type GitSettingsPanel = 'github' | 'cursor' | 'entire';
 
-const CURSOR_GIT_DOCS = 'https://cursor.com/docs';
-const ENTIRE_GIT_DOCS = 'https://docs.entire.com/quickstart';
 
 export function GitSettings({
   settings,
@@ -263,144 +262,33 @@ export function GitSettings({
       ) : null}
 
       {panel === 'cursor' ? (
-        <div className="settings-section settings-section-card">
-          <div className="settings-toggle-row">
-            <div>
-              <div className="settings-section-title">Origin CLI</div>
-              <p className="settings-hint">
-                Cursor repos use <code>origin</code> the way GitHub repos use <code>gh</code>.
-                Log in opens Terminal for <code>origin auth login</code>. Configure git runs{' '}
-                <code>origin auth setup-git</code> so pushes to origin.cursor.com authenticate.
-                Worktree agents on a Cursor origin are told to use <code>origin pr</code>, not{' '}
-                <code>gh</code>.
-              </p>
-              {cursorStatus?.connected ? (
-                <p className="settings-status-text" style={{ marginTop: 8 }}>
-                  <span
-                    className="settings-dot ok"
-                    style={{ display: 'inline-block', marginRight: 8 }}
-                  />
-                  Connected
-                  {cursorStatus.account ? ` · ${cursorStatus.account}` : ''}
-                  {cursorStatus.authMethod ? ` · ${cursorStatus.authMethod}` : ''}
-                </p>
-              ) : (
-                <p className="settings-hint" style={{ marginTop: 8 }}>
-                  {cursorStatus?.reason ?? 'Not signed in'}
-                </p>
-              )}
-              {cursorNote ? (
-                <p className="settings-hint" style={{ marginTop: 8 }}>
-                  {cursorNote}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className="settings-actions">
-            <button
-              type="button"
-              disabled={cursorBusy}
-              onClick={() => {
-                void refreshHosts().catch((err) =>
-                  setError(err instanceof Error ? err.message : String(err)),
-                );
-              }}
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={cursorBusy || cursorStatus?.installed === false}
-              onClick={() => void runCursorLogin()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-            >
-              <CursorMark />
-              {cursorBusy ? 'Working…' : 'Log in'}
-            </button>
-            <button
-              type="button"
-              disabled={cursorBusy || cursorStatus?.installed === false}
-              onClick={() => void runCursorSetupGit()}
-            >
-              Configure git
-            </button>
-            <button
-              type="button"
-              disabled={cursorBusy}
-              onClick={() => void window.sideboard.openExternal(CURSOR_GIT_DOCS)}
-            >
-              Docs
-            </button>
-          </div>
-        </div>
+        <CursorGitCliPanel
+          status={cursorStatus}
+          note={cursorNote}
+          busy={cursorBusy}
+          onRefresh={() => {
+            void refreshHosts().catch((err) =>
+              setError(err instanceof Error ? err.message : String(err)),
+            );
+          }}
+          onLogin={() => void runCursorLogin()}
+          onSetupGit={() => void runCursorSetupGit()}
+        />
       ) : null}
 
       {panel === 'entire' ? (
-        <div className="settings-section settings-section-card">
-          <div className="settings-toggle-row">
-            <div>
-              <div className="settings-section-title">Entire CLI</div>
-              <p className="settings-hint">
-                Entire repos use <code>entire</code> the way GitHub repos use <code>gh</code>.
-                Log in opens Terminal for <code>entire login</code>. That login is what{' '}
-                <code>git</code> uses for <code>entire://</code> remotes. Work on an Entire origin
-                is a Trail (<code>entire trail</code>), not a GitHub pull request.
-              </p>
-              {entireStatus?.connected ? (
-                <p className="settings-status-text" style={{ marginTop: 8 }}>
-                  <span
-                    className="settings-dot ok"
-                    style={{ display: 'inline-block', marginRight: 8 }}
-                  />
-                  Connected
-                  {entireStatus.account ? ` · ${entireStatus.account}` : ''}
-                </p>
-              ) : (
-                <p className="settings-hint" style={{ marginTop: 8 }}>
-                  {entireStatus?.reason ?? 'Not signed in'}
-                </p>
-              )}
-              {entireNote ? (
-                <p className="settings-hint" style={{ marginTop: 8 }}>
-                  {entireNote}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <div className="settings-actions">
-            <button
-              type="button"
-              disabled={entireBusy}
-              onClick={() => {
-                void refreshHosts().catch((err) =>
-                  setError(err instanceof Error ? err.message : String(err)),
-                );
-              }}
-            >
-              Refresh
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={entireBusy || entireStatus?.installed === false}
-              onClick={() => void runEntireLogin()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-            >
-              <EntireMark />
-              {entireBusy ? 'Working…' : 'Log in'}
-            </button>
-            <button
-              type="button"
-              disabled={entireBusy}
-              onClick={() => void window.sideboard.openExternal(ENTIRE_GIT_DOCS)}
-            >
-              Docs
-            </button>
-          </div>
-        </div>
+        <EntireGitCliPanel
+          status={entireStatus}
+          note={entireNote}
+          busy={entireBusy}
+          onRefresh={() => {
+            void refreshHosts().catch((err) =>
+              setError(err instanceof Error ? err.message : String(err)),
+            );
+          }}
+          onLogin={() => void runEntireLogin()}
+        />
       ) : null}
-
       {panel === 'github' ? (
       <div className="settings-section settings-section-card">
         <div className="settings-toggle-row">

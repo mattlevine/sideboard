@@ -51,6 +51,7 @@ export * from './git/run.js';
 export * from './git/gh-errors.js';
 export * from './git/git-auth-mode.js';
 export * from './git/worktree.js';
+export * from './git/pr-write.js';
 export * from './git/stack.js';
 export {
   examplePrefixedBranch,

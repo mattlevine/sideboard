@@ -79,7 +79,6 @@ export function CreateFromPicker({
   const [ticketScope, setTicketScope] = useState<TicketScope>('assigned');
   const [viewerLogin, setViewerLogin] = useState('');
   const [issuesUnavailable, setIssuesUnavailable] = useState<string | null>(null);
-
   const applyIssueResult = (result: ListIssuesResult) => {
     setIssues(result.issues);
     setIssueSource(result.source);
@@ -89,7 +88,6 @@ export function CreateFromPicker({
     setViewerLogin(result.viewer?.login || result.viewer?.name || '');
     setIssuesUnavailable(result.unavailableReason ?? null);
   };
-
   const loadIssues = async (assignee?: string) => {
     setLoading(true);
     setError(null);
@@ -109,14 +107,12 @@ export function CreateFromPicker({
       setLoading(false);
     }
   };
-
   const setLinearScope = (scope: TicketScope) => {
     setTicketScope(scope);
     const assignee =
       scope === 'unassigned' ? 'unassigned' : scope === 'all' || scope === 'cycle' ? 'all' : 'me';
     void loadIssues(assignee);
   };
-
   useEffect(() => {
     if (!open || !repoPath) return;
     let cancelled = false;

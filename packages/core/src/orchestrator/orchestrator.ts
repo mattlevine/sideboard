@@ -1457,9 +1457,7 @@ export class Orchestrator {
     // Git-button phrases and PR-goal detection must see the raw user text.
     // Composer expansion appends attachments / @files / skills and would
     // both miss exact phrases and false-trigger on skill/file mentions of CI.
-    const turnOrigin = thread.worktreePath?.trim()
-      ? await resolveOriginRemote(thread.worktreePath).catch(() => null)
-      : null;
+    const turnOrigin = thread.worktreePath?.trim() ? await resolveOriginRemote(thread.worktreePath).catch(() => null) : null;
     const gitPrompt = expandCanonicalGitRequest(promptText, { forge: turnOrigin?.forge });
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
@@ -1606,14 +1604,7 @@ export class Orchestrator {
       isBrightsy || isOrchestration
         ? null
         : formatWorktreeDirective(fresh, {
-            githubSlug:
-              turnOrigin?.forge === 'github'
-                ? turnOrigin.slug
-                : await withTimeout(
-                    resolveGithubRepoSlug(fresh.worktreePath),
-                    8_000,
-                    'resolveGithubRepoSlug',
-                  ).catch(() => null),
+            githubSlug: turnOrigin?.forge === 'github' ? turnOrigin.slug : await withTimeout(resolveGithubRepoSlug(fresh.worktreePath), 8_000, 'resolveGithubRepoSlug').catch(() => null),
             originForge: turnOrigin?.forge ?? null,
             originSlug: turnOrigin?.slug ?? null,
             gitAuthMode,

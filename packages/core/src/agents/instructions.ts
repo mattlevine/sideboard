@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
 import type { GitForge } from '../git/remote-forge.js';
+import { formatCursorGitDirective, formatEntireGitDirective } from './forge-git-directives.js';
 import { examplePrefixedBranch, sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
   isPlaceholderBranch,
@@ -14,6 +15,8 @@ import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
 import type { DevPreview } from '../hook/dev-preview.js';
 import type { ActiveRun, Thread } from '../types/thread.js';
+
+export { formatCursorGitDirective, formatEntireGitDirective };
 
 function normPath(p: string): string {
   return p.replace(/\/+$/, '');
@@ -97,30 +100,6 @@ export function formatDevAccessHint(
     return `This worktree's Dev apps: ${bits}. preview=url → open the URL; preview=window → Electron window is the app. MCP \`get_run_log\` reads the Run-tab terminal. Do not guess :3000.`;
   }
   return 'To open a project Dev app: MCP `run_dev_script` (same as the desktop Dev button; pass `name` for one script — several can run at once, each with its own port) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `get_run_log` reads that script’s Run-tab terminal (tail). `stop_dev_script` stops one script; omit name to stop all.';
-}
-
-/** Worktree prompt when origin is Cursor. GitHub checkouts keep {@link formatGitAuthModeDirective}. */
-export function formatCursorGitDirective(slug: string | null | undefined): string {
-  const repo = slug?.trim() || '<origin-owner/name>';
-  return [
-    `Git host (Settings → Git → Cursor): this checkout is on Cursor (\`origin.cursor.com\`, \`${repo}\`).`,
-    '- Use the `origin` CLI, not `gh`. Where commands overlap, flags follow `gh` (`origin <command> --help`).',
-    '- `origin` already authenticates from `CURSOR_AUTH_TOKEN`, then `CURSOR_API_KEY`, then the login stored in Settings → Git → Cursor. Do not read those values, set them, or run `origin auth login` from this turn.',
-    '- Push with `git push -u origin HEAD`. If git asks for credentials, tell the user to open Settings → Git → Cursor and choose Configure git (`origin auth setup-git`). Do not wait for a Keychain dialog.',
-    '- Origin has no issue tracker. Tickets for this repo come from Linear or AbleTime via `list_issues`. Do not use `gh issue`.',
-  ].join('\n');
-}
-
-/** Worktree prompt when origin is Entire. Trails replace pull requests. */
-export function formatEntireGitDirective(slug: string | null | undefined): string {
-  const repo = slug?.trim() || '<origin-owner/name>';
-  return [
-    `Git host (Settings → Git → Entire): this checkout is on Entire (\`${repo}\`).`,
-    '- Use the `entire` CLI, not `gh` or `origin`. Trails replace pull requests and GitHub issues.',
-    '- `entire` uses the login from Settings → Git → Entire. Do not read tokens, set `ENTIRE_TOKEN`, or run `entire login` from this turn.',
-    '- Push with `git push -u origin HEAD`. If git asks for credentials, tell the user to open Settings → Git → Entire and log in. Do not wait for a Keychain dialog.',
-    '- Tickets for this repo are Trails (`entire trail list` / `entire trail show`). Do not use `gh issue`.',
-  ].join('\n');
 }
 
 /**

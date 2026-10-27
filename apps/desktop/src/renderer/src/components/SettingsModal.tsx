@@ -37,6 +37,7 @@ import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
 import { GitSettings, type GitSettingsPanel } from './GitSettings';
+import { GitSettingsNav } from './GitSettingsNav';
 import { IssuesSettings } from './IssuesSettings';
 import { ManagedAccountsPanel } from './ManagedAccountsPanel';
 import { RemoteSettings } from './RemoteSettings';
@@ -332,11 +333,7 @@ export function SettingsModal({
   const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
   const [gitPanel, setGitPanel] = useState<GitSettingsPanel | null>(null);
-  const [gitHostReady, setGitHostReady] = useState({
-    github: false,
-    cursor: false,
-    entire: false,
-  });
+  const [gitHostReady, setGitHostReady] = useState({ github: false, cursor: false, entire: false });
   const [historyQuery, setHistoryQuery] = useState('');
   const [settings, setSettings] = useState<PublicAppSettings>(emptyAppSettings);
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
@@ -823,42 +820,21 @@ export function SettingsModal({
             >
               Projects
             </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'git' && !gitPanel ? ' active' : ''}`}
-              onClick={() => {
+            <GitSettingsNav
+              active={nav === 'git'}
+              panel={gitPanel}
+              ready={gitHostReady}
+              onOpenList={() => {
                 setNav('git');
                 setAgentPanel(null);
                 setGitPanel(null);
               }}
-            >
-              Git
-            </button>
-            {nav === 'git' && (
-              <div className="settings-nav-sub">
-                {(
-                  [
-                    { id: 'github' as const, label: 'GitHub' },
-                    { id: 'cursor' as const, label: 'Cursor' },
-                    { id: 'entire' as const, label: 'Entire' },
-                  ]
-                ).map((host) => (
-                  <button
-                    key={host.id}
-                    type="button"
-                    className={`settings-nav-sub-btn${gitPanel === host.id ? ' active' : ''}`}
-                    onClick={() => {
-                      setNav('git');
-                      setAgentPanel(null);
-                      setGitPanel(host.id);
-                    }}
-                  >
-                    <span>{host.label}</span>
-                    <span className={`settings-dot${gitHostReady[host.id] ? ' ok' : ''}`} />
-                  </button>
-                ))}
-              </div>
-            )}
+              onOpenPanel={(id) => {
+                setNav('git');
+                setAgentPanel(null);
+                setGitPanel(id);
+              }}
+            />
             <button
               type="button"
               className={`settings-nav-btn${nav === 'issues' ? ' active' : ''}`}

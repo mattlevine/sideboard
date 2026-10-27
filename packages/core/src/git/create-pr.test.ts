@@ -8,13 +8,8 @@ vi.mock('./run.js', () => ({
 }));
 
 import { gh, git } from './run.js';
-import {
-  createOrUpdatePr,
-  ghHeadRef,
-  ghPrCreateAssigneeArgs,
-  ghRepoSelectArgs,
-  parseGithubSlugFromRemoteUrl,
-} from './worktree.js';
+import { createOrUpdatePr, ghPrCreateAssigneeArgs } from './pr-write.js';
+import { ghHeadRef, ghRepoSelectArgs, parseGithubSlugFromRemoteUrl } from './worktree.js';
 
 const ghMock = vi.mocked(gh);
 const gitMock = vi.mocked(git);
