@@ -1,8 +1,10 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import {
+  normalizeWorktreePath,
   threadDisplayLabel,
   toggleWorkspaceTagFilter,
   workspaceMatchesTagFilter,
+  workspaceSearchText,
   workspaceTagChoices,
   workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
@@ -149,12 +151,25 @@ export function Sidebar({
   }, [threads, q]);
 
   const byRepo = useMemo(() => {
+    const byCheckout = new Map<string, Thread[]>();
+    for (const t of threads) {
+      if (!isProjectPath(t.repoPath)) continue;
+      const key = normalizeWorktreePath(t.worktreePath);
+      const list = byCheckout.get(key) ?? [];
+      list.push(t);
+      byCheckout.set(key, list);
+    }
+    const workspaceSearch = new Map<string, string>();
+    for (const [path, group] of byCheckout) {
+      workspaceSearch.set(path, workspaceSearchText(group).toLowerCase());
+    }
     const map = new Map<string, Thread[]>();
     for (const t of threads) {
       if (!isProjectPath(t.repoPath)) continue;
       if (q) {
+        const workspace = workspaceSearch.get(normalizeWorktreePath(t.worktreePath)) ?? '';
         const hay =
-          `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)} ${(t.tags ?? []).join(' ')}`.toLowerCase();
+          `${threadDisplayLabel(t)} ${t.title} ${t.branchName} ${t.agent} ${repoName(t.repoPath)} ${(t.tags ?? []).join(' ')} ${workspace}`.toLowerCase();
         if (!hay.includes(q)) continue;
       }
       const list = map.get(t.repoPath) ?? [];
@@ -269,14 +284,6 @@ export function Sidebar({
           <button type="button" className="sidebar-nav-btn" onClick={() => onNew(repoPath || undefined)}>
             <span className="nav-glyph plus" aria-hidden />
             Create
-          </button>
-          <button
-            type="button"
-            className={`sidebar-nav-btn${filterOpen ? ' active' : ''}`}
-            onClick={() => setFilterOpen((v) => !v)}
-          >
-            <span className="nav-glyph search" aria-hidden />
-            Search
           </button>
         </nav>
       </div>

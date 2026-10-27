@@ -11,6 +11,7 @@ import {
   agentNicknameFromWorktreePath,
   isWorktreeIdentityTitle,
   workspaceNameLabel,
+  workspaceSearchText,
   ticketSlugForBranch,
   worktreeAnchorLabel,
   worktreeSlugForTicket,
@@ -355,6 +356,40 @@ describe('workspaceNameLabel', () => {
         sourceType: 'branch',
       }),
     ).toBeNull();
+  });
+});
+
+describe('workspaceSearchText', () => {
+  it('keeps the checkout nickname after the row shows the branch', () => {
+    const text = workspaceSearchText([
+      {
+        branchName: 'matt/remove-sidebar-create-search',
+        worktreePath: '/Users/me/sideboard/workspaces/sideboard/real-salt-lake',
+        repoPath: '/Users/me/Projects/sideboard',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        title: 'Take create and search out',
+        userSetTitle: true,
+      },
+    ]);
+    expect(text).toContain('Real Salt Lake');
+    expect(text).toContain('matt/remove-sidebar-create-search');
+  });
+
+  it('includes the PR row title when a chat title would hide it', () => {
+    const text = workspaceSearchText([
+      {
+        branchName: 'fix/panel-width',
+        worktreePath: '/wt/west-ham',
+        repoPath: '/wt/app',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        title: 'Panel width',
+        userSetTitle: true,
+        prTitle: 'Fix panel width persistence',
+      },
+    ]);
+    expect(text).toContain('Fix panel width persistence');
+    expect(text).toContain('West Ham');
+    expect(text).not.toContain('Panel width');
   });
 });
 

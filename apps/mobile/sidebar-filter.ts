@@ -12,6 +12,8 @@ export type SidebarChat = {
 
 export type SidebarWorktree<C extends SidebarChat = SidebarChat> = {
   label: string;
+  /** Checkout nickname, when the row title is a PR or renamed branch. */
+  workspace?: string | null;
   tags?: readonly string[] | null;
   chats: C[];
 };
@@ -68,7 +70,7 @@ function chatHay<C extends SidebarChat>(
   worktree: SidebarWorktree<C>,
   chat: C,
 ): string {
-  return `${worktree.label} ${chat.title} ${chat.agent ?? ''} ${chat.preview ?? ''} ${projectName} ${(worktree.tags ?? []).join(' ')}`.toLowerCase();
+  return `${worktree.label} ${worktree.workspace ?? ''} ${chat.title} ${chat.agent ?? ''} ${chat.preview ?? ''} ${projectName} ${(worktree.tags ?? []).join(' ')}`.toLowerCase();
 }
 
 export function filterPhoneOrchestration<T extends SidebarChat>(
@@ -115,7 +117,7 @@ export function filterPhoneProjects<
       }
       const chats = worktree.chats.filter((chat) => chatHay(project.name, worktree, chat).includes(q));
       if (chats.length === 0) {
-        const bare = `${project.name} ${worktree.label} ${(worktree.tags ?? []).join(' ')}`.toLowerCase();
+        const bare = `${project.name} ${worktree.label} ${worktree.workspace ?? ''} ${(worktree.tags ?? []).join(' ')}`.toLowerCase();
         if (bare.includes(q)) worktrees.push(worktree);
         else changed = true;
         continue;

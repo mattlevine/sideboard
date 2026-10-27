@@ -298,6 +298,28 @@ export function workspaceNameLabel(thread: {
   return agentNicknameFromWorktreePath(path) ?? dir;
 }
 
+/**
+ * Text the left-sidebar project filter matches for one checkout.
+ * Includes the row title (PR, task, or branch) and the workspace nickname,
+ * which stays searchable after the row shows a PR or a renamed branch.
+ */
+export function workspaceSearchText(
+  threads: {
+    branchName: string;
+    worktreePath: string;
+    createdAt: string;
+    title?: string | null;
+    prTitle?: string | null;
+    repoPath?: string | null;
+    sourceType?: string | null;
+  }[],
+): string {
+  if (threads.length === 0) return '';
+  const anchor = worktreeAnchorLabel(threads);
+  const named = workspaceNameLabel(threads[0]!);
+  return [anchor.title, anchor.subtitle, named].filter((part) => part?.trim()).join(' ');
+}
+
 /** PR / real git branch / parent row — never the nested agent’s own name. */
 export function worktreeIdentityTitles(
   thread: {
