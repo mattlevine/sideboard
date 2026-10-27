@@ -46,7 +46,7 @@ import { CreateModal } from './components/CreateModal';
 import { CreateProcessingOverlay } from './components/CreateProcessingOverlay';
 import { ConnectedOrchestratorBar, OrchestratorPanel } from './components/OrchestratorPanel';
 import { GlobalBoard } from './components/GlobalBoard';
-import { SchedulesSettings } from './components/SchedulesSettings';
+import { AutomationsView } from './components/AutomationsView';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
@@ -1147,11 +1147,6 @@ export function App() {
     setSelectedId(null);
   }
 
-  function showAutomations() {
-    setView('automations');
-    setSelectedId(null);
-  }
-
   function openThreadByRef(threadRef: string) {
     const ref = threadRef.trim();
     if (!ref) return;
@@ -1221,7 +1216,7 @@ export function App() {
             repoPath={repoPath}
             workspaces={workspaces}
             onShowBoard={showBoard}
-            onShowAutomations={showAutomations}
+            onShowAutomations={() => { setView('automations'); setSelectedId(null); }}
             onSelect={onSelect}
             onNew={(path, mode) => openCreate(path, mode ?? 'quick')}
             onPickRepo={() =>
@@ -1307,22 +1302,7 @@ export function App() {
           }
         />
       )}
-
-      {view === 'automations' && (
-        <section className="panel board automations-panel">
-          {!leftSidebarOpen && (
-            <div className="board-chrome">
-              <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />
-              <div className="board-chrome-spacer" />
-            </div>
-          )}
-          <div className="panel-header">
-            <h2>Automations</h2>
-          </div>
-          <SchedulesSettings />
-        </section>
-      )}
-
+      {view === 'automations' && <AutomationsView leftSidebarOpen={leftSidebarOpen} onToggleLeftSidebar={toggleLeftSidebar} />}
       {view === 'thread' && selected && !holdCreateOverlay && (
         <div
           className={`thread-workspace${

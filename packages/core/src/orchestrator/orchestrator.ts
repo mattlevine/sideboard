@@ -126,8 +126,9 @@ import {
 import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
 import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
-  ephemeralRunReadyToArchive,
-  forgetOlderEphemeralRuns,
+  archiveEphemeralAutomationIfReady,
+  clearEphemeralAutomation,
+  markEphemeralAutomation,
 } from './ephemeral-automation.js';
 import {
   isJobContinuePrompt,
@@ -1342,21 +1343,7 @@ export class Orchestrator {
     } finally {
       this.draining.delete(threadId);
     }
-    await this.archiveEphemeralAutomationIfReady(threadId);
-  }
-
-  /**
-   * A one-off automation chat leaves the sidebar when its run is finished.
-   * Held until the queue is empty and the agent is not waiting on a person.
-   */
-  private async archiveEphemeralAutomationIfReady(threadId: string): Promise<void> {
-    const automationId = await withThreadLock(threadId, async () => {
-      const thread = readThread(threadId);
-      if (!thread || !ephemeralRunReadyToArchive(thread)) return null;
-      await this.archive(thread.id);
-      return thread.ephemeralAutomationId?.trim() || null;
-    });
-    if (automationId) forgetOlderEphemeralRuns(automationId, threadId);
+    await archiveEphemeralAutomationIfReady(threadId, (id) => this.archive(id));
   }
 
   private async runTurn(threadId: string, prompt: string): Promise<void> {
@@ -3735,11 +3722,7 @@ export class Orchestrator {
     if (thread.status !== 'archived') {
       throw new Error('Thread is not archived');
     }
-    // One-off automation runs leave the sidebar when they finish. Restore
-    // means the user wants this chat to stay.
-    if (thread.ephemeralAutomationId?.trim()) {
-      updateThread(thread.id, { ephemeralAutomationId: undefined });
-    }
+    clearEphemeralAutomation(thread.id);
     if (isGlobalThread(thread)) {
       const { globalAgentCwd } = await import('../store/paths.js');
       updateThread(thread.id, { worktreePath: globalAgentCwd() });
@@ -3835,21 +3818,6 @@ export function getOrchestrator(): Orchestrator {
     singleton = new Orchestrator();
   }
   return singleton;
-}
-
-function markEphemeralAutomation(
-  threadId: string,
-  opts: { ephemeralAutomationId?: string; ephemeralTitle?: string },
-): Thread {
-  const id = opts.ephemeralAutomationId?.trim();
-  const current = readThread(threadId);
-  if (!current) throw new Error(`Thread not found: ${threadId}`);
-  if (!id) return current;
-  const title = opts.ephemeralTitle?.trim();
-  return updateThread(threadId, {
-    ephemeralAutomationId: id,
-    ...(title ? { title, userSetTitle: true } : {}),
-  });
 }
 
 export async function startOrchestration(opts: {

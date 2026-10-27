@@ -1,5 +1,11 @@
 import type { Thread } from '../types/thread.js';
-import { deleteThreadRecord, listThreads } from '../store/thread-store.js';
+import {
+  deleteThreadRecord,
+  listThreads,
+  readThread,
+  updateThread,
+  withThreadLock,
+} from '../store/thread-store.js';
 
 /** Fresh automation chat with no continuing target. */
 export function ephemeralRunReadyToArchive(
@@ -14,6 +20,43 @@ export function ephemeralRunReadyToArchive(
   if (thread.agentBlock?.reason?.trim()) return false;
   if (thread.quotaResumeAt) return false;
   return true;
+}
+
+/** Stamp a fresh automation chat and use the automation name as its title. */
+export function markEphemeralAutomation(
+  threadId: string,
+  opts: { ephemeralAutomationId?: string; ephemeralTitle?: string },
+): Thread {
+  const id = opts.ephemeralAutomationId?.trim();
+  const current = readThread(threadId);
+  if (!current) throw new Error(`Thread not found: ${threadId}`);
+  if (!id) return current;
+  const title = opts.ephemeralTitle?.trim();
+  return updateThread(threadId, {
+    ephemeralAutomationId: id,
+    ...(title ? { title, userSetTitle: true } : {}),
+  });
+}
+
+/** Archive a finished one-off run and drop older archived runs of that automation. */
+export async function archiveEphemeralAutomationIfReady(
+  threadId: string,
+  archive: (id: string) => Promise<unknown>,
+): Promise<void> {
+  const automationId = await withThreadLock(threadId, async () => {
+    const thread = readThread(threadId);
+    if (!thread || !ephemeralRunReadyToArchive(thread)) return null;
+    await archive(thread.id);
+    return thread.ephemeralAutomationId?.trim() || null;
+  });
+  if (automationId) forgetOlderEphemeralRuns(automationId, threadId);
+}
+
+/** History restore keeps the chat. A later drain must not archive it again. */
+export function clearEphemeralAutomation(threadId: string): void {
+  const thread = readThread(threadId);
+  if (!thread?.ephemeralAutomationId?.trim()) return;
+  updateThread(threadId, { ephemeralAutomationId: undefined });
 }
 
 /** Drop earlier archived runs of the same automation. Keeps `keepId`. */
