@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { classifyWorktreeListBadges, groupHomeBoardWorktrees, issueBlockedByIds, visibleAgentBlock } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
-import { workspaceNameLabel, workspaceTagsFromGroup, worktreeAnchorLabel } from '../git/worktree-labels.js';
+import { workspaceRowLabel, workspaceTagsFromGroup, worktreeAnchorLabel } from '../git/worktree-labels.js';
 import type {
   AgentKind,
   Autonomy,
@@ -208,7 +208,6 @@ export interface PhoneWorktreeBadge {
 
 export interface PhoneWorktree {
   label: string;
-  /** Checkout nickname, when the row title is a PR or renamed branch. */
   workspace?: string;
   chats: PhoneChatSummary[];
   tags?: string[]; // shared labels; omitted when the workspace has none
@@ -558,11 +557,8 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
         const tags = workspaceTagsFromGroup(group);
         const badge = classifyWorktreeListBadges(group, viewerLogin, resolveProjectReviewLabel(settings, path))[0];
         const blockedBy = issueBlockedByIds(group);
-        const label = worktreeAnchorLabel(group).title;
-        const named = workspaceNameLabel(group[0]!);
         return {
-          label,
-          ...(named && named !== label ? { workspace: named } : {}),
+          ...workspaceRowLabel(group),
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(blockedBy.length > 0 ? { blockedBy } : {}),
