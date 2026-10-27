@@ -44,6 +44,8 @@ interface Props {
   variant?: 'default' | 'create';
   /** Limit agents in the picker (orchestration excludes Brightsy). */
   allowedAgents?: readonly AgentKind[];
+  /** ⌘U attach and ⌘I link issue, for composers that are not a live chat. */
+  bindShortcuts?: boolean;
 }
 
 function attachmentIconLabel(kind: ThreadAttachment['kind']): string {
@@ -243,6 +245,7 @@ export function ComposerOptionsToolbar({
   rightSlot,
   variant = 'default',
   allowedAgents,
+  bindShortcuts = false,
 }: Props) {
   const isCreate = variant === 'create';
   const [plusOpen, setPlusOpen] = useState(false);
@@ -336,6 +339,28 @@ export function ComposerOptionsToolbar({
     if (files.length === 0) return;
     onAttachmentsChange([...attachments, ...files]);
   }
+
+  useEffect(() => {
+    if (!bindShortcuts) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+      const key = e.key.toLowerCase();
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (key === 'u') {
+        e.preventDefault();
+        void addAttachmentsFromPicker();
+        return;
+      }
+      if (key === 'i' && repoPath) {
+        e.preventDefault();
+        setPlusOpen(false);
+        setWorkspacePickerOpen(false);
+        setIssuePickerOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [bindShortcuts, repoPath, attachments, onAttachmentsChange]);
 
   function appendAttachments(extra: ThreadAttachment[]) {
     if (extra.length === 0) return;

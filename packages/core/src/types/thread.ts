@@ -211,6 +211,12 @@ export interface Thread {
   updatedAt: string;
   /** When this chat was archived. History age uses this, not later row updates. */
   archivedAt?: string;
+  /**
+   * Automation that created this chat as a one-off run (no continuing target).
+   * Archived when the run finishes. History keeps the latest run for this id
+   * and does not count it against the shared archive cap.
+   */
+  ephemeralAutomationId?: string;
   messages: ThreadMessage[];
   /**
    * Prose-only turns dropped by auto-compact (user text + agent answers).

@@ -50,7 +50,7 @@ function parseWhen(args: {
 export function registerScheduleTools(server: McpServer): void {
   server.tool(
     'list_schedules',
-    'List local Sideboard schedules that trigger a chat when due. Jobs fire only while Sideboard.app is running on this Mac (sleep skips until wake).',
+    'List local Sideboard automations that trigger a chat when due. Jobs fire only while Sideboard.app is running on this Mac (sleep skips until wake). Shown in the sidebar after Board.',
     {},
     async () => {
       try {
@@ -63,9 +63,9 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'create_schedule',
-    'Create a local schedule that, when due, sends a prompt to an existing chat (chatId) or starts a new Global orchestration chat (omit chatId). Pass chatId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without chatId open a new Global chat each run. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
+    'Create a local automation that, when due, sends a prompt to an existing chat (chatId) or starts a new Global orchestration chat (omit chatId). Pass chatId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), or cron (5-field). Recurring jobs without chatId open a new Global chat each run and archive it when that run finishes. History keeps the latest run for that automation. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while automations are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
     {
-      prompt: z.string().describe('User message / goal queued when the schedule fires'),
+      prompt: z.string().describe('User message / goal queued when the automation fires'),
       name: z.string().optional(),
       at: z.string().optional().describe('ISO datetime for a one-shot'),
       every: z.string().optional().describe('Interval such as 15m, 1h, 6h, 1d'),
@@ -111,8 +111,8 @@ export function registerScheduleTools(server: McpServer): void {
         return text({
           schedule,
           hint: scheduleNeedsCaffeinate(schedule)
-            ? 'Fires while Sideboard.app is running. Recurring jobs without chatId create a new orchestration chat each run. Caffeinate while schedules are enabled is now on so the Mac can stay awake until this job is due.'
-            : 'Fires while Sideboard.app is running. Recurring jobs without chatId create a new orchestration chat each run.',
+            ? 'Fires while Sideboard.app is running. Recurring jobs without chatId create a new orchestration chat each run and archive it when that run finishes (History keeps the latest). Caffeinate while automations are enabled is now on so the Mac can stay awake until this job is due.'
+            : 'Fires while Sideboard.app is running. Recurring jobs without chatId create a new orchestration chat each run and archive it when that run finishes (History keeps the latest).',
         });
       } catch (err) {
         return fail(err);
@@ -122,7 +122,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'update_schedule',
-    'Update a local schedule (prompt, cadence, target chat, enabled). Pass id from list_schedules.',
+    'Update a local automation (prompt, cadence, target chat, enabled). Pass id from list_schedules.',
     {
       id: z.string(),
       prompt: z.string().optional(),
@@ -186,7 +186,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'delete_schedule',
-    'Delete a local schedule. Pass id from list_schedules.',
+    'Delete a local automation. Pass id from list_schedules.',
     { id: z.string() },
     async ({ id }) => {
       try {
@@ -200,12 +200,12 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'run_schedule',
-    'Fire a schedule now (does not wait for nextRunAt). Queues the prompt on the target chat or starts a new Global chat. If Sideboard.app is running, the desktop drains the turn.',
+    'Fire an automation now (does not wait for nextRunAt). Queues the prompt on the target chat or starts a new Global chat. If Sideboard.app is running, the desktop drains the turn.',
     { id: z.string() },
     async ({ id }) => {
       try {
         if (!getSchedule(id)) {
-          return fail(new Error(`Schedule not found: ${id}`));
+          return fail(new Error(`Automation not found: ${id}`));
         }
         const schedule = await fireSchedule(id);
         return text({ schedule });

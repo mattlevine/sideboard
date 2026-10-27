@@ -41,6 +41,34 @@ function orchThread(over: Partial<Thread> = {}): Thread {
   } as Thread;
 }
 
+describe('scheduleOptionsAfterRefusedAgentSwitch', () => {
+  it('keeps effort and plan but drops the other agent’s model', async () => {
+    const { scheduleOptionsAfterRefusedAgentSwitch } = await import('./schedule-runner.js');
+    expect(
+      scheduleOptionsAfterRefusedAgentSwitch({
+        agent: 'cursor',
+        model: 'grok',
+        effort: 'max',
+        fast: true,
+        planMode: true,
+        autonomy: 'full',
+      }),
+    ).toEqual({
+      effort: 'max',
+      fast: true,
+      planMode: true,
+      autonomy: 'full',
+    });
+    expect(
+      scheduleOptionsAfterRefusedAgentSwitch({
+        agent: 'claude',
+        model: null,
+        effort: 'high',
+      }),
+    ).toEqual({ effort: 'high' });
+  });
+});
+
 describe('schedule runner', () => {
   const prevData = process.env.SIDEBOARD_APP_DATA;
   let dataDir: string;
@@ -102,12 +130,14 @@ describe('schedule runner', () => {
   it('creates a new Global chat when threadId is omitted', async () => {
     const { store, runner } = await load();
     const created: string[] = [];
+    const ephemeral: string[] = [];
     const thread = orchThread({ id: 'new-orch' });
     runner.setScheduleFireHooks({
       findThread: () => null,
       send: async () => thread,
-      startOrchestration: async ({ goal }) => {
+      startOrchestration: async ({ goal, ephemeralAutomationId, ephemeralTitle }) => {
         created.push(goal);
+        ephemeral.push(`${ephemeralAutomationId ?? ''}:${ephemeralTitle ?? ''}`);
         return thread;
       },
     });
@@ -119,6 +149,7 @@ describe('schedule runner', () => {
     const after = await runner.fireSchedule(schedule.id);
     expect(created).toHaveLength(1);
     expect(created[0]).toContain('[Scheduled: Triage Linear]');
+    expect(ephemeral).toEqual([`${schedule.id}:Triage Linear`]);
     expect(after.lastThreadId).toBe('new-orch');
     expect(after.enabled).toBe(true);
   });
@@ -127,13 +158,17 @@ describe('schedule runner', () => {
     const { store, runner } = await load();
     const sent: string[] = [];
     const created = orchThread({ id: 'fallback-orch' });
+    let ephemeral: string | undefined = 'unset';
     runner.setScheduleFireHooks({
       findThread: () => null,
       send: async (id, prompt) => {
         sent.push(`${id}:${prompt}`);
         return created;
       },
-      startOrchestration: async () => created,
+      startOrchestration: async (opts) => {
+        ephemeral = opts.ephemeralAutomationId;
+        return created;
+      },
     });
     const schedule = store.createSchedule({
       prompt: 'Ping',
@@ -147,6 +182,7 @@ describe('schedule runner', () => {
     expect(after.lastError).toBeNull();
     expect(after.enabled).toBe(true);
     expect(store.getSchedule(schedule.id)?.threadId).toBe('fallback-orch');
+    expect(ephemeral).toBeUndefined();
   });
 
   it('opens a new Global chat when the target is archived', async () => {
@@ -206,5 +242,94 @@ describe('schedule runner', () => {
     expect(sent[0]).toContain('Retry the flaky test');
     expect(after.lastThreadId).toBe('wt-1');
     expect(after.lastError).toBeNull();
+  });
+
+  it('passes composer files and agent settings into a new chat', async () => {
+    const { store, runner } = await load();
+    const thread = orchThread({ id: 'new-orch' });
+    let captured: {
+      agent?: string;
+      model?: string | null;
+      effort?: string;
+      fast?: boolean;
+      planMode?: boolean;
+      autonomy?: string;
+      attachments?: Thread['attachments'];
+    } = {};
+    runner.setScheduleFireHooks({
+      findThread: () => null,
+      send: async () => thread,
+      startOrchestration: async (opts) => {
+        captured = opts;
+        return thread;
+      },
+    });
+    const file = {
+      id: 'file-1',
+      name: 'note.txt',
+      kind: 'file' as const,
+      content: 'hello',
+    };
+    const schedule = store.createSchedule({
+      prompt: 'Look at this',
+      when: { kind: 'every', every: '1h' },
+      agent: 'cursor',
+      model: 'grok',
+      effort: 'max',
+      fast: true,
+      planMode: true,
+      autonomy: 'full',
+      attachments: [file],
+      createdBy: 'ui',
+    });
+    expect(store.getSchedule(schedule.id)?.attachments).toEqual([file]);
+    await runner.fireSchedule(schedule.id);
+    expect(captured.agent).toBe('cursor');
+    expect(captured.model).toBe('grok');
+    expect(captured.effort).toBe('max');
+    expect(captured.fast).toBe(true);
+    expect(captured.planMode).toBe(true);
+    expect(captured.autonomy).toBe('full');
+    expect(captured.attachments).toEqual([file]);
+  });
+
+  it('sends composer files and options to an existing chat', async () => {
+    const { store, runner } = await load();
+    const worktree = orchThread({ id: 'wt-1' });
+    let sentOpts: { attachments?: Thread['attachments']; options?: { agent?: string; effort?: string; planMode?: boolean } } | undefined;
+    runner.setScheduleFireHooks({
+      findThread: () => worktree,
+      send: async (_id, _prompt, opts) => {
+        sentOpts = opts;
+        return worktree;
+      },
+      startOrchestration: async () => orchThread(),
+    });
+    const file = {
+      id: 'file-2',
+      name: 'shot.png',
+      kind: 'file' as const,
+      content: 'Image attached: shot.png',
+      previewDataUrl: 'data:image/png;base64,aGk=',
+    };
+    const schedule = store.createSchedule({
+      prompt: 'Check the screenshot',
+      when: { kind: 'once', at: '2099-01-01T00:00:00.000Z' },
+      threadId: worktree.id,
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      planMode: true,
+      attachments: [file],
+      createdBy: 'ui',
+    });
+    await runner.fireSchedule(schedule.id);
+    expect(sentOpts?.attachments).toEqual([file]);
+    expect(sentOpts?.options).toMatchObject({
+      agent: 'claude',
+      model: null,
+      effort: 'high',
+      planMode: true,
+    });
   });
 });

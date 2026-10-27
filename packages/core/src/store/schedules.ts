@@ -7,7 +7,11 @@ import {
   isOrchestratorCapableAgent,
   type OrchestratorAgentKind,
 } from '../agents/orchestrator-capable.js';
-import type { AgentKind } from '../types/thread.js';
+import type { AgentKind, Autonomy, ThreadAttachment } from '../types/thread.js';
+import {
+  normalizeThinkingEffort,
+  type ThinkingEffort,
+} from '../types/thinking-effort.js';
 import { appDataDir } from './paths.js';
 import { writePrivateFile } from './private-file.js';
 import {
@@ -32,6 +36,16 @@ export interface ScheduledTask {
   threadId: string | null;
   agent: OrchestratorAgentKind | null;
   model: string | null;
+  /**
+   * Composer choices for the run. Null means "leave the chat / account default"
+   * so older jobs do not reset a target chat.
+   */
+  effort: ThinkingEffort | null;
+  fast: boolean | null;
+  planMode: boolean | null;
+  autonomy: Autonomy | null;
+  /** Files, issues, and workspace links staged on the prompt. */
+  attachments: ThreadAttachment[];
   nextRunAt: string;
   lastRunAt: string | null;
   lastThreadId: string | null;
@@ -48,6 +62,11 @@ export interface CreateScheduledTaskInput {
   threadId?: string | null;
   agent?: AgentKind | null;
   model?: string | null;
+  effort?: ThinkingEffort | null;
+  fast?: boolean | null;
+  planMode?: boolean | null;
+  autonomy?: Autonomy | null;
+  attachments?: ThreadAttachment[];
   enabled?: boolean;
   createdBy: ScheduleCreatedBy;
 }
@@ -62,6 +81,11 @@ export type UpdateScheduledTaskPatch = Partial<
     | 'threadId'
     | 'agent'
     | 'model'
+    | 'effort'
+    | 'fast'
+    | 'planMode'
+    | 'autonomy'
+    | 'attachments'
   >
 >;
 
@@ -88,7 +112,7 @@ export function parseDurationMs(every: string): number | null {
 
 export function defaultScheduleName(prompt: string): string {
   const line = prompt.trim().split(/\r?\n/, 1)[0]?.trim() ?? '';
-  if (!line) return 'Untitled schedule';
+  if (!line) return 'Untitled automation';
   return line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line;
 }
 
@@ -176,6 +200,49 @@ function normalizeWhen(raw: unknown): ScheduleWhen {
   throw new Error('Schedule `when` must be once, every, or cron');
 }
 
+const ATTACHMENT_KINDS = new Set<ThreadAttachment['kind']>([
+  'transcript',
+  'file',
+  'issue',
+  'workspace',
+  'diff-comment',
+  'code-ref',
+]);
+
+function normalizeOptionalBool(raw: unknown): boolean | null {
+  if (raw === true || raw === false) return raw;
+  return null;
+}
+
+function normalizeAutonomy(raw: unknown): Autonomy | null {
+  return raw === 'default' || raw === 'full' ? raw : null;
+}
+
+function normalizeAttachments(raw: unknown): ThreadAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ThreadAttachment[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as ThreadAttachment;
+    if (typeof row.id !== 'string' || !row.id.trim()) continue;
+    if (typeof row.name !== 'string' || !row.name) continue;
+    if (typeof row.content !== 'string') continue;
+    if (!ATTACHMENT_KINDS.has(row.kind)) continue;
+    const next: ThreadAttachment = {
+      id: row.id,
+      name: row.name,
+      kind: row.kind,
+      content: row.content,
+    };
+    if (typeof row.path === 'string' && row.path) next.path = row.path;
+    if (typeof row.previewDataUrl === 'string' && row.previewDataUrl) {
+      next.previewDataUrl = row.previewDataUrl;
+    }
+    out.push(next);
+  }
+  return out;
+}
+
 function normalizeTask(raw: ScheduledTask): ScheduledTask {
   const when = normalizeWhen(raw.when);
   const agent =
@@ -191,6 +258,11 @@ function normalizeTask(raw: ScheduledTask): ScheduledTask {
     threadId: raw.threadId?.trim() || null,
     agent,
     model: raw.model?.trim() || null,
+    effort: normalizeThinkingEffort(raw.effort),
+    fast: normalizeOptionalBool(raw.fast),
+    planMode: normalizeOptionalBool(raw.planMode),
+    autonomy: normalizeAutonomy(raw.autonomy),
+    attachments: normalizeAttachments(raw.attachments),
     nextRunAt: raw.nextRunAt,
     lastRunAt: raw.lastRunAt ?? null,
     lastThreadId: raw.lastThreadId ?? null,
@@ -246,6 +318,11 @@ function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
     threadId: input.threadId?.trim() || null,
     agent,
     model: input.model?.trim() || null,
+    effort: input.effort != null ? normalizeThinkingEffort(input.effort) : null,
+    fast: normalizeOptionalBool(input.fast),
+    planMode: normalizeOptionalBool(input.planMode),
+    autonomy: normalizeAutonomy(input.autonomy),
+    attachments: normalizeAttachments(input.attachments),
     nextRunAt,
     lastRunAt: null,
     lastThreadId: null,
@@ -276,7 +353,7 @@ export function scheduleNeedsCaffeinate(
   return at.getTime() > now.getTime();
 }
 
-/** Creating/enabling a future job turns on Settings → Advanced → Caffeinate while schedules are enabled. */
+/** Creating/enabling a future job turns on Settings → Advanced → Caffeinate while automations are enabled. */
 function ensureCaffeinateForFutureSchedule(task: ScheduledTask): void {
   if (!scheduleNeedsCaffeinate(task)) return;
   if (caffeinateWhileSchedulesEnabled()) return;
@@ -308,7 +385,7 @@ export function updateSchedule(
 ): ScheduledTask {
   const rows = readAll();
   const idx = rows.findIndex((row) => row.id === id || (id.length >= 8 && row.id.startsWith(id)));
-  if (idx < 0) throw new Error(`Schedule not found: ${id}`);
+  if (idx < 0) throw new Error(`Automation not found: ${id}`);
   const prev = rows[idx];
   const when = patch.when ? normalizeWhen(patch.when) : prev.when;
   const prompt = patch.prompt !== undefined ? patch.prompt.trim() : prev.prompt;
@@ -333,6 +410,21 @@ export function updateSchedule(
         : prev.agent,
     model:
       patch.model !== undefined ? patch.model?.trim() || null : prev.model,
+    effort:
+      patch.effort !== undefined ? normalizeThinkingEffort(patch.effort) : prev.effort,
+    fast: patch.fast !== undefined ? normalizeOptionalBool(patch.fast) : prev.fast,
+    planMode:
+      patch.planMode !== undefined
+        ? normalizeOptionalBool(patch.planMode)
+        : prev.planMode,
+    autonomy:
+      patch.autonomy !== undefined
+        ? normalizeAutonomy(patch.autonomy)
+        : prev.autonomy,
+    attachments:
+      patch.attachments !== undefined
+        ? normalizeAttachments(patch.attachments)
+        : prev.attachments,
     nextRunAt: whenChanged ? computeNextRunAt(when).toISOString() : prev.nextRunAt,
     lastError: whenChanged ? null : prev.lastError,
     updatedAt: nowIso(),
@@ -348,7 +440,7 @@ export function deleteSchedule(id: string): void {
   const next = rows.filter(
     (row) => row.id !== id && !(id.length >= 8 && row.id.startsWith(id)),
   );
-  if (next.length === rows.length) throw new Error(`Schedule not found: ${id}`);
+  if (next.length === rows.length) throw new Error(`Automation not found: ${id}`);
   writeAll(next);
 }
 
@@ -362,7 +454,7 @@ export function recordScheduleRun(
 ): ScheduledTask {
   const rows = readAll();
   const idx = rows.findIndex((row) => row.id === id);
-  if (idx < 0) throw new Error(`Schedule not found: ${id}`);
+  if (idx < 0) throw new Error(`Automation not found: ${id}`);
   const prev = rows[idx];
   const firedAt = result.firedAt ?? new Date();
   const next: ScheduledTask = {

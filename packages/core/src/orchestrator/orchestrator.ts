@@ -126,6 +126,10 @@ import {
 import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
 import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
+  ephemeralRunReadyToArchive,
+  forgetOlderEphemeralRuns,
+} from './ephemeral-automation.js';
+import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
   planJobContinue,
@@ -1338,6 +1342,21 @@ export class Orchestrator {
     } finally {
       this.draining.delete(threadId);
     }
+    await this.archiveEphemeralAutomationIfReady(threadId);
+  }
+
+  /**
+   * A one-off automation chat leaves the sidebar when its run is finished.
+   * Held until the queue is empty and the agent is not waiting on a person.
+   */
+  private async archiveEphemeralAutomationIfReady(threadId: string): Promise<void> {
+    const automationId = await withThreadLock(threadId, async () => {
+      const thread = readThread(threadId);
+      if (!thread || !ephemeralRunReadyToArchive(thread)) return null;
+      await this.archive(thread.id);
+      return thread.ephemeralAutomationId?.trim() || null;
+    });
+    if (automationId) forgetOlderEphemeralRuns(automationId, threadId);
   }
 
   private async runTurn(threadId: string, prompt: string): Promise<void> {
@@ -3716,6 +3735,11 @@ export class Orchestrator {
     if (thread.status !== 'archived') {
       throw new Error('Thread is not archived');
     }
+    // One-off automation runs leave the sidebar when they finish. Restore
+    // means the user wants this chat to stay.
+    if (thread.ephemeralAutomationId?.trim()) {
+      updateThread(thread.id, { ephemeralAutomationId: undefined });
+    }
     if (isGlobalThread(thread)) {
       const { globalAgentCwd } = await import('../store/paths.js');
       updateThread(thread.id, { worktreePath: globalAgentCwd() });
@@ -3813,6 +3837,21 @@ export function getOrchestrator(): Orchestrator {
   return singleton;
 }
 
+function markEphemeralAutomation(
+  threadId: string,
+  opts: { ephemeralAutomationId?: string; ephemeralTitle?: string },
+): Thread {
+  const id = opts.ephemeralAutomationId?.trim();
+  const current = readThread(threadId);
+  if (!current) throw new Error(`Thread not found: ${threadId}`);
+  if (!id) return current;
+  const title = opts.ephemeralTitle?.trim();
+  return updateThread(threadId, {
+    ephemeralAutomationId: id,
+    ...(title ? { title, userSetTitle: true } : {}),
+  });
+}
+
 export async function startOrchestration(opts: {
   goal: string;
   agent: AgentKind;
@@ -3824,6 +3863,13 @@ export async function startOrchestration(opts: {
   fast?: boolean;
   planMode?: boolean;
   attachments?: Thread['attachments'];
+  /**
+   * One-off automation run. The chat is archived when the turn finishes, and
+   * History keeps only the latest run for this id.
+   */
+  ephemeralAutomationId?: string;
+  /** Sidebar / History label. Defaults to the soccer nickname. */
+  ephemeralTitle?: string;
 }): Promise<Thread> {
   const repoPath = opts.repoPath?.trim();
   const goal = opts.goal.trim();
@@ -3842,10 +3888,11 @@ export async function startOrchestration(opts: {
       planMode: opts.planMode,
       attachments: opts.attachments,
     });
+    const ready = markEphemeralAutomation(thread.id, opts);
     if (goal) {
-      return orch.send(thread.id, goal);
+      return orch.send(ready.id, goal);
     }
-    return thread;
+    return ready;
   }
 
   // Legacy: pinned-repo orchestration (real worktree). Prefer Global for new work.
@@ -3883,9 +3930,10 @@ export async function startOrchestration(opts: {
     sourceType: 'orchestration',
     sourceRef: goal,
   });
+  const ready = markEphemeralAutomation(updated.id, opts);
   if (goal) {
-    return orch.send(updated.id, goal);
+    return orch.send(ready.id, goal);
   }
-  return updated;
+  return ready;
 }
 

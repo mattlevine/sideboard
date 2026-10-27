@@ -17,7 +17,7 @@ A serious local orchestration tier would compete with that upsell. Sideboard is 
 | Where agents run | Free: your Mac. Paid: cloud sandbox, off-VPN | Always this Mac — inside the corporate VPN |
 | Orchestration | Human-oriented local board; programmatic control is the Cloud API | MCP + Global board, on this Mac |
 | Team / remote | Cloud multiplayer and shared workspaces | Phone app paired to this Mac; you pick which desktop to open |
-| Away from the laptop | Cloud sandbox keeps running | The phone and schedules reach this Mac while Sideboard.app or `sideboard serve` is the host, and the Mac is awake (opt-in caffeinate). |
+| Away from the laptop | Cloud sandbox keeps running | The phone and automations reach this Mac while Sideboard.app or `sideboard serve` is the host, and the Mac is awake (opt-in caffeinate). |
 | Session data | Cloud: Conductor’s servers. Local: your disk | Your Mac. Relay routes phone chat only |
 | Work on `main` in the project folder | Always a sidecar worktree | Opt-in cowboy (Settings → Advanced; off by default) |
 | Lock-in | Sessions live in the app | `attach` / `adopt` — move in and out of native CLIs |

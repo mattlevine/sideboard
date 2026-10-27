@@ -23,7 +23,7 @@ const LABELS: Record<CaffeinateReason, string> = {
   chat: 'orchestration chat',
   running: 'agents running',
   slack: 'phone remote',
-  schedules: 'scheduled tasks',
+  schedules: 'automations',
 };
 
 export function caffeinateIndicatorTooltip(reasons: CaffeinateReason[]): string {

@@ -21,5 +21,5 @@ Product / user docs (not required for every change):
 - [../remote-integrations.md](../remote-integrations.md) — Settings map, Slack listen / destinations, Linear, connectors
 - [../self-hosted-relay.md](../self-hosted-relay.md) — deploy the phone relay only, then point the Mac and phone at it
 - [../COMPARE.md](../COMPARE.md) — vs Conductor / other boards
-- [../../README.md](../../README.md) — product overview, [process skills](../../README.md#process-skills), [scheduled orchestration](../../README.md#scheduled-orchestration)
+- [../../README.md](../../README.md) — product overview, [process skills](../../README.md#process-skills), [automations](../../README.md#automations)
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) — PR checklist

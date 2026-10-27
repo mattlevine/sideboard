@@ -134,6 +134,10 @@ export function normalizeThread(raw: Thread): Thread {
       typeof raw.archivedAt === 'string' && raw.archivedAt.trim()
         ? raw.archivedAt.trim()
         : undefined,
+    ephemeralAutomationId:
+      typeof raw.ephemeralAutomationId === 'string' && raw.ephemeralAutomationId.trim()
+        ? raw.ephemeralAutomationId.trim()
+        : undefined,
     compactedMessages: Array.isArray(raw.compactedMessages)
       ? raw.compactedMessages
       : undefined,
@@ -460,6 +464,11 @@ export function updateThread(
       nowIso();
   } else {
     delete next.archivedAt;
+  }
+  // Empty means "not a one-off run" — drop the key so a later drain cannot
+  // archive a chat History just restored.
+  if (!next.ephemeralAutomationId?.trim()) {
+    delete next.ephemeralAutomationId;
   }
   writeThread(next);
   return next;

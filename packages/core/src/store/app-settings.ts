@@ -381,8 +381,8 @@ export interface AdvancedAppSettings {
    */
   caffeinateWhileSlackListen?: boolean;
   /**
-   * Keep the Mac awake with `caffeinate` while any local schedule is enabled
-   * (so a due job can fire). Creating or enabling a future schedule turns this
+   * Keep the Mac awake with `caffeinate` while any automation is enabled
+   * (so a due job can fire). Creating or enabling a future automation turns this
    * on. Default off until then.
    */
   caffeinateWhileSchedules?: boolean;

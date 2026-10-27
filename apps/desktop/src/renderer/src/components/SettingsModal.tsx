@@ -41,7 +41,6 @@ import { IssuesSettings } from './IssuesSettings';
 import { ManagedAccountsPanel } from './ManagedAccountsPanel';
 import { RemoteSettings } from './RemoteSettings';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
-import { SchedulesSettings } from './SchedulesSettings';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
 
 export type SettingsNavId =
@@ -52,7 +51,6 @@ export type SettingsNavId =
   | 'remote'
   | 'connectors'
   | 'environment'
-  | 'schedules'
   | 'advanced'
   | 'history';
 
@@ -63,7 +61,6 @@ const SETTINGS_NAV_TITLES: Record<Exclude<SettingsNavId, 'agents'>, string> = {
   remote: 'Remote',
   connectors: 'Connectors',
   environment: 'Environment',
-  schedules: 'Schedules',
   advanced: 'Advanced',
   history: 'History',
 };
@@ -869,16 +866,6 @@ export function SettingsModal({
               }}
             >
               Environment
-            </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'schedules' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('schedules');
-                setAgentPanel(null);
-              }}
-            >
-              Schedules
             </button>
             <button
               type="button"
@@ -1797,11 +1784,11 @@ export function SettingsModal({
                   <div className="settings-toggle-row">
                     <div>
                       <div className="settings-section-title">
-                        Caffeinate while schedules are enabled
+                        Caffeinate while automations are enabled
                       </div>
                       <p className="settings-hint">
                         Keep the Mac awake so due jobs can fire (macOS only). Creating
-                        or enabling a future schedule turns this on. You can turn it
+                        or enabling a future automation turns this on. You can turn it
                         off anytime. Lid-close may still sleep on battery.
                       </p>
                     </div>
@@ -2220,8 +2207,6 @@ export function SettingsModal({
                 </div>
               </div>
             )}
-
-            {nav === 'schedules' && <SchedulesSettings />}
 
             {nav === 'history' && (
               <div className="settings-body">

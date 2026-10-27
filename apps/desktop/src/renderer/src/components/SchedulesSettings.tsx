@@ -1,13 +1,47 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentKind,
+  Autonomy,
   CreateScheduledTaskInput,
   ScheduledTask,
   ScheduleWhen,
+  ThinkingEffort,
   Thread,
+  ThreadAttachment,
 } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
+import {
+  applyAutocomplete,
+  autocompleteItemsFromQuery,
+  ComposerAutocomplete,
+  consumeAutocompleteKeyDown,
+  getAutocompleteQuery,
+  type AutocompleteItem,
+  type AutocompleteSkill,
+} from './ComposerAutocomplete';
+import {
+  ComposerAttachmentChips,
+  ComposerOptionsToolbar,
+  type ComposerDraftOptions,
+} from './ComposerOptionsToolbar';
+import { DictationMicButton } from './DictationMicButton';
+import { DictationPermissionDialog } from './DictationPermissionDialog';
+import {
+  absolutePathsFromFiles,
+  buffersFromFiles,
+  canAcceptComposerFileDrop,
+  preventComposerFileDrag,
+  snapshotComposerDrop,
+} from '../lib/composer-file-drop';
+import { GLOBAL_WORKSPACE_ID } from '../lib/global-workspace';
+import { attachmentsFromLargePaste } from '../lib/paste-attachment';
+import { worktreePathToFile } from '../lib/sideboard-file-drag';
+import { useSpeechDictation } from '../lib/use-speech-dictation';
+import {
+  loadOrchestratorDefaults,
+  type ThreadDefaults,
+} from '../lib/thread-defaults';
 
 type CadenceKind = ScheduleWhen['kind'];
 
@@ -41,6 +75,14 @@ function formatNext(iso: string): string {
 
 const EVERY_OPTIONS = ['15m', '1h', '6h', '1d'] as const;
 
+const FALLBACK_DEFAULTS: ThreadDefaults = {
+  agent: 'claude',
+  model: null,
+  effort: 'high',
+  fast: false,
+  autonomy: 'full',
+};
+
 interface FormState {
   name: string;
   prompt: string;
@@ -50,11 +92,38 @@ interface FormState {
   cron: string;
   tz: string;
   threadId: string;
-  agent: AgentKind | '';
+  agent: AgentKind;
+  model: string | null;
+  effort: ThinkingEffort;
+  fast: boolean;
+  planMode: boolean;
+  autonomy: Autonomy;
+  attachments: ThreadAttachment[];
   enabled: boolean;
 }
 
-function emptyForm(): FormState {
+function composerFrom(
+  defaults: ThreadDefaults,
+  row?: ScheduledTask,
+): Pick<
+  FormState,
+  'agent' | 'model' | 'effort' | 'fast' | 'planMode' | 'autonomy' | 'attachments'
+> {
+  const agent = row?.agent ?? defaults.agent;
+  return {
+    agent: (ORCHESTRATOR_AGENT_KINDS as readonly string[]).includes(agent)
+      ? agent
+      : 'claude',
+    model: row ? row.model : defaults.model,
+    effort: row?.effort ?? defaults.effort,
+    fast: row?.fast ?? defaults.fast,
+    planMode: row?.planMode ?? false,
+    autonomy: row?.autonomy ?? defaults.autonomy,
+    attachments: row?.attachments ?? [],
+  };
+}
+
+function emptyForm(defaults: ThreadDefaults = FALLBACK_DEFAULTS): FormState {
   return {
     name: '',
     prompt: '',
@@ -64,12 +133,12 @@ function emptyForm(): FormState {
     cron: '0 9 * * *',
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     threadId: '',
-    agent: '',
     enabled: true,
+    ...composerFrom(defaults),
   };
 }
 
-function formFromTask(row: ScheduledTask): FormState {
+function formFromTask(row: ScheduledTask, defaults: ThreadDefaults): FormState {
   return {
     name: row.name,
     prompt: row.prompt,
@@ -82,9 +151,15 @@ function formFromTask(row: ScheduledTask): FormState {
         ? row.when.tz
         : Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     threadId: row.threadId ?? '',
-    agent: row.agent ?? '',
     enabled: row.enabled,
+    ...composerFrom(defaults, row),
   };
+}
+
+function linkRepoPath(thread: Thread | undefined): string | undefined {
+  const path = thread?.repoPath?.trim();
+  if (!path || path === GLOBAL_WORKSPACE_ID || path === '/' || path === '.') return undefined;
+  return path;
 }
 
 function whenFromForm(form: FormState): ScheduleWhen {
@@ -101,10 +176,30 @@ export function SchedulesSettings() {
   const [rows, setRows] = useState<ScheduledTask[]>([]);
   const [targetThreads, setTargetThreads] = useState<Thread[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [defaults, setDefaults] = useState<ThreadDefaults>(FALLBACK_DEFAULTS);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [skills, setSkills] = useState<AutocompleteSkill[]>([]);
+  const [cursor, setCursor] = useState(0);
+  const [acIndex, setAcIndex] = useState(0);
+  const [acSuppressed, setAcSuppressed] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [filePaths, setFilePaths] = useState<string[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const promptRef = useRef('');
+  promptRef.current = form.prompt;
+  const dictation = useSpeechDictation({
+    getValue: () => promptRef.current,
+    setValue: (next) => {
+      promptRef.current = next;
+      setForm((f) => ({ ...f, prompt: next }));
+      setCursor(next.length);
+    },
+    resetKey: editingId ?? 'new',
+    disabled: busy || !showForm,
+  });
 
   const reload = useCallback(async () => {
     const [schedules, threads] = await Promise.all([
@@ -125,6 +220,10 @@ export function SchedulesSettings() {
   }, []);
 
   useEffect(() => {
+    void loadOrchestratorDefaults().then(setDefaults).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     void reload().catch((err) => {
       setError(err instanceof Error ? err.message : String(err));
     });
@@ -142,22 +241,31 @@ export function SchedulesSettings() {
     };
   }, [targetThreads]);
 
-  function openCreate() {
+  async function openCreate() {
+    const next = await loadOrchestratorDefaults().catch(() => defaults);
+    setDefaults(next);
     setEditingId(null);
-    setForm(emptyForm());
+    setForm(emptyForm(next));
+    setCursor(0);
+    setAcSuppressed(false);
     setShowForm(true);
     setError(null);
   }
 
-  function openEdit(row: ScheduledTask) {
+  async function openEdit(row: ScheduledTask) {
+    const next = await loadOrchestratorDefaults().catch(() => defaults);
+    setDefaults(next);
     setEditingId(row.id);
-    setForm(formFromTask(row));
+    setForm(formFromTask(row, next));
+    setCursor(row.prompt.length);
+    setAcSuppressed(false);
     setShowForm(true);
     setError(null);
   }
 
   async function save() {
-    const prompt = form.prompt.trim();
+    const dictated = dictation.listening ? await dictation.stop() : undefined;
+    const prompt = (dictated ?? form.prompt).trim();
     if (!prompt) {
       setError('Prompt is required');
       return;
@@ -171,7 +279,13 @@ export function SchedulesSettings() {
         prompt,
         when,
         threadId: form.threadId || null,
-        agent: form.agent || null,
+        agent: form.agent,
+        model: form.model,
+        effort: form.effort,
+        fast: form.fast,
+        planMode: form.planMode,
+        autonomy: form.autonomy,
+        attachments: form.attachments,
         enabled: form.enabled,
       };
       if (editingId) {
@@ -229,38 +343,142 @@ export function SchedulesSettings() {
     }
   }
 
-  const recurringNewChat =
-    showForm && form.kind !== 'once' && !form.threadId;
+  const freshChat = showForm && !form.threadId;
+  const targetThread = targetThreads.find((t) => t.id === form.threadId);
+  const repoPath = linkRepoPath(targetThread);
+  const composerOptions: ComposerDraftOptions = {
+    agent: form.agent,
+    model: form.model,
+    effort: form.effort,
+    fast: form.fast,
+    planMode: form.planMode,
+    autonomy: form.autonomy,
+  };
+  const acQuery = useMemo(
+    () => (showForm ? getAutocompleteQuery(form.prompt, cursor) : null),
+    [showForm, form.prompt, cursor],
+  );
+  const acItems: AutocompleteItem[] = useMemo(
+    () =>
+      autocompleteItemsFromQuery(acQuery, {
+        suppressed: acSuppressed,
+        skills,
+        filePaths,
+      }),
+    [acQuery, acSuppressed, skills, filePaths],
+  );
+
+  useEffect(() => {
+    setAcIndex(0);
+    setAcSuppressed(false);
+  }, [acQuery?.kind, acQuery?.query]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    let cancelled = false;
+    void window.sideboard
+      .listSkillsForRepo(repoPath ?? '')
+      .then((list) => {
+        if (!cancelled) setSkills(list);
+      })
+      .catch(() => {
+        if (!cancelled) setSkills([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, repoPath]);
+
+  useEffect(() => {
+    if (!showForm || !form.threadId) {
+      setFilePaths([]);
+      return;
+    }
+    let cancelled = false;
+    void window.sideboard
+      .listFiles(form.threadId)
+      .then((list) => {
+        if (!cancelled) setFilePaths(list);
+      })
+      .catch(() => {
+        if (!cancelled) setFilePaths([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, form.threadId]);
+
+  function patchOptions(patch: Partial<ComposerDraftOptions>) {
+    setForm((f) => ({ ...f, ...patch }));
+  }
+
+  function pickAutocomplete(item: AutocompleteItem) {
+    if (!acQuery) return;
+    const next = applyAutocomplete(form.prompt, acQuery.start, acQuery.end, item.insert);
+    setForm((f) => ({ ...f, prompt: next.value }));
+    setCursor(next.cursor);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
+
+  async function stageDroppedSnapshot(snap: ReturnType<typeof snapshotComposerDrop>) {
+    if (busy) return;
+    const dragged = snap.sideboard;
+    if (dragged?.paths.length && dragged.threadId) {
+      const files = await Promise.all(
+        dragged.paths.map((path) => worktreePathToFile(dragged.threadId!, path)),
+      );
+      await attachDroppedFiles(files);
+      return;
+    }
+    await attachDroppedFiles(snap.files);
+  }
+
+  async function attachDroppedFiles(files: File[]) {
+    if (busy || files.length === 0) return;
+    const buffers = await buffersFromFiles(files, { includePathed: true });
+    const staged =
+      buffers.length > 0
+        ? await window.sideboard.attachmentsFromBuffers(buffers)
+        : await window.sideboard.attachmentsFromPaths(absolutePathsFromFiles(files));
+    if (staged.length) {
+      setForm((f) => ({ ...f, attachments: [...f.attachments, ...staged] }));
+    }
+  }
 
   return (
+    <>
     <div className="settings-body">
       <p className="settings-lead">
         Jobs that send a prompt to a chat (Global orchestration or a worktree),
         or start a new Global chat. Sideboard must be running. Creating or
         enabling a future job turns on{' '}
-        <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong>{' '}
+        <strong>Settings → Advanced → Caffeinate while automations are enabled</strong>{' '}
         so the Mac can stay awake until due. A sleeping Mac skips until wake.
       </p>
       {error && <div className="settings-error" style={{ margin: '0 0 12px' }}>{error}</div>}
 
       <div className="settings-section settings-section-card">
-        <div className="settings-toggle-row">
-          <div className="settings-section-title">Schedules</div>
-          <button type="button" className="primary" disabled={busy} onClick={openCreate}>
+        <div className="automations-toolbar">
+          <button type="button" className="primary" disabled={busy} onClick={() => void openCreate()}>
             New
           </button>
         </div>
         <div className="settings-history-list" role="list">
           {rows.length === 0 ? (
-            <div className="settings-empty">No schedules yet.</div>
+            <div className="settings-empty">No automations yet.</div>
           ) : (
             rows.map((row) => (
               <div key={row.id} className="settings-history-row" role="listitem">
                 <button
                   type="button"
                   className="settings-history-open"
-                  onClick={() => openEdit(row)}
-                  title="Edit schedule"
+                  onClick={() => void openEdit(row)}
+                  title="Edit automation"
                 >
                   <span className="settings-history-title">
                     {row.enabled ? row.name : `${row.name} (off)`}
@@ -304,7 +522,7 @@ export function SchedulesSettings() {
       {showForm && (
         <div className="settings-section settings-section-card">
           <div className="settings-section-title">
-            {editingId ? 'Edit schedule' : 'New schedule'}
+            {editingId ? 'Edit automation' : 'New automation'}
           </div>
           <label className="settings-field">
             Name
@@ -315,16 +533,144 @@ export function SchedulesSettings() {
               placeholder="Optional — defaults to the prompt"
             />
           </label>
-          <label className="settings-field">
+          <div className="settings-field">
             Prompt
-            <textarea
-              className="settings-history-search"
-              rows={4}
-              value={form.prompt}
-              onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
-              placeholder="What the agent should do when this fires"
-            />
-          </label>
+            <div
+              className={`composer-box automations-composer${dragOver ? ' drag-over' : ''}`}
+              onDragEnter={(e) => {
+                if (!preventComposerFileDrag(e)) return;
+                setDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                const next = e.relatedTarget as Node | null;
+                if (next && e.currentTarget.contains(next)) return;
+                setDragOver(false);
+              }}
+              onDragOver={(e) => {
+                if (!canAcceptComposerFileDrop(e.dataTransfer)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'copy';
+                setDragOver(true);
+              }}
+              onDrop={(e) => {
+                if (!preventComposerFileDrag(e)) return;
+                setDragOver(false);
+                const snap = snapshotComposerDrop(e.dataTransfer);
+                void stageDroppedSnapshot(snap).catch((err) => {
+                  setError(err instanceof Error ? err.message : String(err));
+                });
+              }}
+            >
+              <ComposerAttachmentChips
+                attachments={form.attachments}
+                onRemove={(id) =>
+                  setForm((f) => ({
+                    ...f,
+                    attachments: f.attachments.filter((a) => a.id !== id),
+                  }))
+                }
+              />
+              <div className="composer-input-row">
+                {acItems.length > 0 && (
+                  <ComposerAutocomplete
+                    items={acItems}
+                    activeIndex={Math.min(acIndex, acItems.length - 1)}
+                    onHover={setAcIndex}
+                    onPick={pickAutocomplete}
+                  />
+                )}
+                <textarea
+                  ref={textareaRef}
+                  value={form.prompt}
+                  rows={4}
+                  disabled={busy}
+                  placeholder={
+                    form.threadId
+                      ? 'What the agent should do when this fires. @ files, / for skills'
+                      : 'What the agent should do when this fires. Type / for skills'
+                  }
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, prompt: e.target.value }));
+                    setCursor(e.target.selectionStart);
+                  }}
+                  onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
+                  onClick={(e) => setCursor(e.currentTarget.selectionStart)}
+                  onKeyUp={(e) => setCursor(e.currentTarget.selectionStart)}
+                  onPaste={(e) => {
+                    if (busy) return;
+                    const pasted = e.clipboardData?.files;
+                    if (pasted && pasted.length > 0) {
+                      e.preventDefault();
+                      void attachDroppedFiles(Array.from(pasted)).catch((err) => {
+                        setError(err instanceof Error ? err.message : String(err));
+                      });
+                      return;
+                    }
+                    void attachmentsFromLargePaste(e, form.attachments)
+                      .then((files) => {
+                        if (files?.length) {
+                          setForm((f) => ({
+                            ...f,
+                            attachments: [...f.attachments, ...files],
+                          }));
+                        }
+                      })
+                      .catch((err) => {
+                        setError(err instanceof Error ? err.message : String(err));
+                      });
+                  }}
+                  onKeyDown={(e) => {
+                    if (busy) return;
+                    if (
+                      consumeAutocompleteKeyDown(e, {
+                        items: acItems,
+                        activeIndex: acIndex,
+                        onIndex: setAcIndex,
+                        onPick: pickAutocomplete,
+                        onSuppress: () => setAcSuppressed(true),
+                      })
+                    ) {
+                      e.stopPropagation();
+                    }
+                  }}
+                />
+              </div>
+              {form.planMode && (
+                <div className="composer-plan-banner">
+                  Plan mode stays on until you turn it off (no file edits).
+                </div>
+              )}
+              <ComposerOptionsToolbar
+                options={composerOptions}
+                attachments={form.attachments}
+                onPatchOptions={patchOptions}
+                onAttachmentsChange={(attachments) =>
+                  setForm((f) => ({ ...f, attachments }))
+                }
+                repoPath={repoPath}
+                menuPlacement="auto"
+                allowedAgents={ORCHESTRATOR_AGENT_KINDS}
+                bindShortcuts
+                rightSlot={
+                  <DictationMicButton
+                    listening={dictation.listening}
+                    supported={dictation.supported}
+                    error={dictation.error}
+                    disabled={busy}
+                    onStart={dictation.start}
+                    onStop={() => {
+                      void dictation.stop();
+                    }}
+                  />
+                }
+              />
+            </div>
+            <p className="settings-hint">
+              Files, issues, workspaces, and the agent settings on this prompt
+              are sent with every run.
+            </p>
+          </div>
           <label className="settings-field">
             Cadence
             <select
@@ -407,25 +753,6 @@ export function SchedulesSettings() {
               ))}
             </select>
           </label>
-          {!form.threadId && (
-            <label className="settings-field">
-              Agent for new chats
-              <select
-                className="settings-select"
-                value={form.agent}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, agent: e.target.value as AgentKind | '' }))
-                }
-              >
-                <option value="">Agents default</option>
-                {ORCHESTRATOR_AGENT_KINDS.map((agent) => (
-                  <option key={agent} value={agent}>
-                    {agent}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <label className="settings-check-row">
             <input
               type="checkbox"
@@ -434,10 +761,11 @@ export function SchedulesSettings() {
             />
             Enabled
           </label>
-          {recurringNewChat && (
+          {freshChat && (
             <p className="settings-hint">
-              Recurring jobs with no target chat open a new Global orchestration
-              agent each run.
+              {form.kind === 'once'
+                ? 'A one-shot with no target chat opens a new Global orchestration agent and archives it when that run finishes. History keeps that run.'
+                : 'Recurring jobs with no target chat open a new Global orchestration agent each run and archive it when that run finishes. History keeps the latest run for this automation.'}
             </p>
           )}
           <div className="settings-actions">
@@ -448,6 +776,7 @@ export function SchedulesSettings() {
               type="button"
               disabled={busy}
               onClick={() => {
+                if (dictation.listening) void dictation.stop();
                 setShowForm(false);
                 setError(null);
               }}
@@ -458,5 +787,7 @@ export function SchedulesSettings() {
         </div>
       )}
     </div>
+    <DictationPermissionDialog error={dictation.error} onDismiss={dictation.clearError} />
+    </>
   );
 }
