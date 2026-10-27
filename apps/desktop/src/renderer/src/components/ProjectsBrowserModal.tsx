@@ -77,7 +77,7 @@ export function ProjectsBrowserModal({
 }: {
   repos: ProjectsBrowserRepo[];
   selectedId: string | null;
-  view: 'board' | 'thread';
+  view: 'board' | 'thread' | 'automations';
   multiSelected: Set<string>;
   archivingIds: Set<string>;
   githubLogin?: string | null;

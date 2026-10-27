@@ -53,6 +53,23 @@ describe('planHistoryRetention', () => {
     expect(plan.purgeIds).toEqual([]);
   });
 
+  it('does not count one-off automation runs against the shared cap', () => {
+    const plan = planHistoryRetention(
+      [
+        {
+          ...archived({ id: 'real', updatedAt: '2026-01-01T00:00:00.000Z' }),
+        },
+        {
+          ...archived({ id: 'run', updatedAt: '2026-04-01T00:00:00.000Z' }),
+          ephemeralAutomationId: 'auto-1',
+        },
+      ],
+      { maxCount: 1, maxDays: 0 },
+    );
+    expect(plan.stripIds).toEqual([]);
+    expect(plan.purgeIds).toEqual([]);
+  });
+
   it('purges overflow that is already a retention stub', () => {
     const stub = archived({
       id: 'stub',

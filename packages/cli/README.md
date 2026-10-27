@@ -15,4 +15,4 @@ Also installs `side` as a short alias. The MCP server is available as `sideboard
 
 The phone app is the remote. Pair it from Settings → Remote on the Mac, then pick that desktop in the app. Agents stay on the Mac. Details: [README — Phone](../../README.md#phone).
 
-Schedules (Settings, CLI, or MCP `create_schedule`) fire only while Sideboard.app is running. Overnight: Settings → Advanced → Caffeinate while schedules are enabled. Details: [README — Scheduled orchestration](../../README.md#scheduled-orchestration).
+Automations (sidebar after Board, CLI `sideboard schedule`, or MCP `create_schedule`) fire only while Sideboard.app is running. Overnight: Settings → Advanced → Caffeinate while automations are enabled. Details: [README — Automations](../../README.md#automations).

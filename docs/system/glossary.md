@@ -62,4 +62,4 @@ Do not call this Slack. Sideboard no longer uses a Slack app. The public page at
 | New chat on the same workspace | `fork_chat` |
 | This agent's orchestrator | `get_orchestrator` (worktree agents) |
 | Parent orchestration chat | `parentChatId` (legacy `parentThreadId` still accepted) |
-| Schedule target | `chatId` or `chatId=self` (legacy `threadId` still accepted) |
+| Automation target | `chatId` or `chatId=self` (legacy `threadId` still accepted) |

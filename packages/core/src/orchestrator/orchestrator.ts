@@ -126,6 +126,11 @@ import {
 import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
 import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
+  archiveEphemeralAutomationIfReady,
+  clearEphemeralAutomation,
+  markEphemeralAutomation,
+} from './ephemeral-automation.js';
+import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
   planJobContinue,
@@ -1338,6 +1343,7 @@ export class Orchestrator {
     } finally {
       this.draining.delete(threadId);
     }
+    await archiveEphemeralAutomationIfReady(threadId, (id) => this.archive(id));
   }
 
   private async runTurn(threadId: string, prompt: string): Promise<void> {
@@ -3716,6 +3722,7 @@ export class Orchestrator {
     if (thread.status !== 'archived') {
       throw new Error('Thread is not archived');
     }
+    clearEphemeralAutomation(thread.id);
     if (isGlobalThread(thread)) {
       const { globalAgentCwd } = await import('../store/paths.js');
       updateThread(thread.id, { worktreePath: globalAgentCwd() });
@@ -3824,6 +3831,13 @@ export async function startOrchestration(opts: {
   fast?: boolean;
   planMode?: boolean;
   attachments?: Thread['attachments'];
+  /**
+   * One-off automation run. The chat is archived when the turn finishes, and
+   * History keeps only the latest run for this id.
+   */
+  ephemeralAutomationId?: string;
+  /** Sidebar / History label. Defaults to the soccer nickname. */
+  ephemeralTitle?: string;
 }): Promise<Thread> {
   const repoPath = opts.repoPath?.trim();
   const goal = opts.goal.trim();
@@ -3842,10 +3856,11 @@ export async function startOrchestration(opts: {
       planMode: opts.planMode,
       attachments: opts.attachments,
     });
+    const ready = markEphemeralAutomation(thread.id, opts);
     if (goal) {
-      return orch.send(thread.id, goal);
+      return orch.send(ready.id, goal);
     }
-    return thread;
+    return ready;
   }
 
   // Legacy: pinned-repo orchestration (real worktree). Prefer Global for new work.
@@ -3883,9 +3898,10 @@ export async function startOrchestration(opts: {
     sourceType: 'orchestration',
     sourceRef: goal,
   });
+  const ready = markEphemeralAutomation(updated.id, opts);
   if (goal) {
-    return orch.send(updated.id, goal);
+    return orch.send(ready.id, goal);
   }
-  return updated;
+  return ready;
 }
 

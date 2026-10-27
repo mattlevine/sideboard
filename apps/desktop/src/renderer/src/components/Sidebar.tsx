@@ -32,12 +32,13 @@ import { WorktreeSidebarRow } from './WorktreeSidebarRow';
 interface Props {
   threads: Thread[];
   selectedId: string | null;
-  view: 'board' | 'thread';
+  view: 'board' | 'thread' | 'automations';
   multiSelected: Set<string>;
   repoPath: string;
   /** Registered workspaces (show even with zero threads). */
   workspaces?: Array<{ path: string; name: string }>;
   onShowBoard: () => void;
+  onShowAutomations: () => void;
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
   onPickRepo: () => void;
@@ -87,6 +88,7 @@ export function Sidebar({
   repoPath,
   workspaces = [],
   onShowBoard,
+  onShowAutomations,
   onSelect,
   onNew,
   onPickRepo,
@@ -255,6 +257,14 @@ export function Sidebar({
               </span>
             </span>
             Board
+          </button>
+          <button
+            type="button"
+            className={`sidebar-nav-btn${view === 'automations' ? ' active' : ''}`}
+            onClick={onShowAutomations}
+          >
+            <span className="nav-glyph clock" aria-hidden />
+            Automations
           </button>
           <button type="button" className="sidebar-nav-btn" onClick={() => onNew(repoPath || undefined)}>
             <span className="nav-glyph plus" aria-hidden />

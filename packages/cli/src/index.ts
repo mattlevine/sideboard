@@ -688,7 +688,7 @@ async function main(): Promise<void> {
 
   program
     .command('serve')
-    .description('Keep schedules and the phone relay running after the desktop window quits')
+    .description('Keep automations and the phone relay running after the desktop window quits')
     .option('--lan', 'Also listen on this Mac so the phone can use ws://<lan-ip>:<port>/remote')
     .action(async (opts: { lan?: boolean }) => {
       const ac = new AbortController();
@@ -720,16 +720,16 @@ async function main(): Promise<void> {
   const scheduleCmd = program
     .command('schedule')
     .description(
-      'Local jobs that trigger a chat (Sideboard.app or `sideboard serve` must be running to fire)',
+      'Automations that trigger a chat (Sideboard.app or `sideboard serve` must be running to fire)',
     );
 
   scheduleCmd
     .command('ls')
-    .description('List schedules')
+    .description('List automations')
     .action(() => {
       const rows = listSchedules();
       if (rows.length === 0) {
-        console.log(chalk.dim('No schedules'));
+        console.log(chalk.dim('No automations'));
         return;
       }
       for (const row of rows) {
@@ -779,7 +779,7 @@ async function main(): Promise<void> {
       }
       const agent = opts.agent ? parseAgent(String(opts.agent)) : undefined;
       if (agent === 'brightsy') {
-        throw new Error('schedules cannot use brightsy — pick claude, cursor, codex, or opencode');
+        throw new Error('automations cannot use brightsy — pick claude, cursor, codex, or opencode');
       }
       const row = createSchedule({
         name: opts.name,
@@ -792,13 +792,13 @@ async function main(): Promise<void> {
       if (!row.threadId && row.when.kind !== 'once') {
         console.log(
           chalk.yellow(
-            'Recurring schedule has no --thread: each run opens a new orchestration chat.',
+            'Recurring automation has no --thread: each run opens a new orchestration chat.',
           ),
         );
       }
       console.log(
         chalk.green(
-          `Scheduled ${row.id.slice(0, 8)}  ${formatScheduleWhen(row.when)}  next ${row.nextRunAt}`,
+          `Automation ${row.id.slice(0, 8)}  ${formatScheduleWhen(row.when)}  next ${row.nextRunAt}`,
         ),
       );
       console.log(chalk.dim('Fires while Sideboard.app is running on this Mac.'));
@@ -825,7 +825,7 @@ async function main(): Promise<void> {
     .argument('<id>', 'schedule id')
     .action((id) => {
       const row = getSchedule(id);
-      if (!row) throw new Error(`Schedule not found: ${id}`);
+      if (!row) throw new Error(`Automation not found: ${id}`);
       deleteSchedule(row.id);
       console.log(chalk.yellow(`Removed ${row.id.slice(0, 8)}`));
     });

@@ -102,7 +102,7 @@ args = ["mcp"]</pre>
   "command": ["sideboard","mcp"] } } }</pre>
 </div>
 </div>
-<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_projects</code>, <code style="color:#8cc8f5">list_chats</code>), worktree chats (<code style="color:#8cc8f5">create_workspace</code>, <code style="color:#8cc8f5">send_to_chat</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_workspace</code>), schedules (<code style="color:#8cc8f5">create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">create_workspace cowboy=true</code> (and CLI <code style="color:#8cc8f5">--cowboy</code>) needs Settings → Advanced → Cowboy mode first — then the child works in the project folder on the default branch. <code style="color:#8cc8f5">send_to_chat</code> steers (Settings → Follow-up, default interrupt now). <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> and <code style="color:#8cc8f5">taskState</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
+<p style="font-size:15px;line-height:1.65;color:#8b949c;margin-top:20px;max-width:760px">Agents then get discovery (<code style="color:#8cc8f5">list_projects</code>, <code style="color:#8cc8f5">list_chats</code>), worktree chats (<code style="color:#8cc8f5">create_workspace</code>, <code style="color:#8cc8f5">send_to_chat</code>, <code style="color:#8cc8f5">wait_for_turn</code>, <code style="color:#8cc8f5">fork_workspace</code>), automations (<code style="color:#8cc8f5">create_schedule</code>), structure panes, setup/run scripts, diffs, review and <code style="color:#8cc8f5">ask_git</code>. <code style="color:#8cc8f5">create_workspace cowboy=true</code> (and CLI <code style="color:#8cc8f5">--cowboy</code>) needs Settings → Advanced → Cowboy mode first — then the child works in the project folder on the default branch. <code style="color:#8cc8f5">send_to_chat</code> steers (Settings → Follow-up, default interrupt now). <code style="color:#8cc8f5">wait_for_turn</code> returns within ~45s with <code style="color:#8cc8f5">stillRunning</code> and <code style="color:#8cc8f5">taskState</code> while the child is still working — call it again; do not assume a hang. Ready-for-review land and purge stay human-only. Orchestrators may tell a worktree agent to merge (<code style="color:#8cc8f5">ask_git</code>) only when the user explicitly asked.</p>
 </section>
 
 <section id="settings" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
@@ -135,7 +135,7 @@ args = ["mcp"]</pre>
 </div>
 <div style="padding:24px;border-radius:24px;background:#202226;border:1px solid #2c3036">
 <h4 style="font-weight:700;font-size:18px;margin:0 0 8px">The rest</h4>
-<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Environment injects extra env. Schedules are local jobs. Advanced covers cowboy, caffeinate, show cost, and one usage/session-limit policy (keep going, confirm, switch agent, or wait for reset). History is archived chats.</p>
+<p style="margin:0;font-size:15px;line-height:1.55;color:#b3bcc4">Environment injects extra env. Automations sit in the sidebar after Board. Advanced covers cowboy, caffeinate, show cost, and one usage/session-limit policy (keep going, confirm, switch agent, or wait for reset). History is archived chats.</p>
 </div>
 </div>
 </section>
@@ -157,13 +157,13 @@ args = ["mcp"]</pre>
 </section>
 
 <section id="schedules" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
-<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Scheduled orchestration</h2>
+<h2 style="font-weight:700;font-size:36px;letter-spacing:-.02em;margin:0 0 8px">Automations</h2>
 <p style="font-size:17px;line-height:1.6;color:#b3bcc4;max-width:680px;margin:0 0 24px">Local jobs that send a prompt to an existing Global chat, or start a new one. Sideboard.app or <code style="color:#8cc8f5">sideboard serve</code> must be the host. A sleeping Mac skips until wake.</p>
 <pre style="margin:0 0 20px;padding:30px;border-radius:26px;background:#0e0f11;border:1px solid #2c3036;color:#dfe5ea;font-size:15px;line-height:1.9;overflow-x:auto">sideboard schedule ls
 sideboard schedule add --prompt "Triage open PRs" --every 1h --thread &lt;id&gt;
 sideboard schedule add --prompt "Morning standup" --cron "0 9 * * *" --tz America/Los_Angeles
 sideboard schedule run &lt;id&gt;</pre>
-<p style="font-size:15.5px;line-height:1.65;color:#b3bcc4;max-width:720px;margin:0">Same jobs from <strong>Settings → Schedules</strong> or orchestration MCP (<code style="color:#8cc8f5">create_schedule</code>, <code style="color:#8cc8f5">threadId=self</code> to continue this coordinator). Overnight: <strong>Settings → Advanced → Caffeinate while schedules are enabled</strong> (off by default so a 9am cron does not pin the Mac awake), or <code style="color:#8cc8f5">set_caffeinate</code> from a chat. Recurring jobs with no target chat open a new Global chat each run.</p>
+<p style="font-size:15.5px;line-height:1.65;color:#b3bcc4;max-width:720px;margin:0">Same jobs from <strong>Automations</strong> in the sidebar (after Board), or orchestration MCP (<code style="color:#8cc8f5">create_schedule</code>, <code style="color:#8cc8f5">threadId=self</code> to continue this coordinator). Overnight: <strong>Settings → Advanced → Caffeinate while automations are enabled</strong> (off by default so a 9am cron does not pin the Mac awake), or <code style="color:#8cc8f5">set_caffeinate</code> from a chat. Recurring jobs with no target chat open a new Global chat each run.</p>
 </section>
 
 <section id="guides" style="max-width:1180px;margin:0 auto;padding:80px 40px 0">
@@ -178,7 +178,7 @@ sideboard schedule run &lt;id&gt;</pre>
 <p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Account and project context so the orchestrator is aware when listing tickets and review PRs — or starting them. Agents can update that text after you confirm.</p>
 </a>
 <a href="#schedules" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">
-<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Schedules</h4>
+<h4 style="font-weight:700;font-size:19px;margin:0 0 8px">Automations</h4>
 <p style="margin:0;font-size:15px;line-height:1.55;color:#8b949c">Local jobs that wake an orchestration chat. Opt-in caffeinate so overnight runs can fire.</p>
 </a>
 <a href="/docs/relay/" style="display:block;padding:26px;border-radius:24px;background:#202226;border:1px solid #2c3036;text-decoration:none;color:#edf0f3" class="card-link">

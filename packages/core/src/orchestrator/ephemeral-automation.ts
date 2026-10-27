@@ -1,0 +1,97 @@
+import type { Thread } from '../types/thread.js';
+import {
+  deleteThreadRecord,
+  listThreads,
+  readThread,
+  updateThread,
+  withThreadLock,
+} from '../store/thread-store.js';
+
+/** Fresh automation chat with no continuing target. */
+export function ephemeralRunReadyToArchive(
+  thread: Pick<
+    Thread,
+    'ephemeralAutomationId' | 'status' | 'queue' | 'agentBlock' | 'quotaResumeAt'
+  >,
+): boolean {
+  if (!thread.ephemeralAutomationId?.trim()) return false;
+  if (thread.status !== 'idle' && thread.status !== 'error') return false;
+  if (thread.queue.length > 0) return false;
+  if (thread.agentBlock?.reason?.trim()) return false;
+  if (thread.quotaResumeAt) return false;
+  return true;
+}
+
+/** Stamp a fresh automation chat and use the automation name as its title. */
+export function markEphemeralAutomation(
+  threadId: string,
+  opts: { ephemeralAutomationId?: string; ephemeralTitle?: string },
+): Thread {
+  const id = opts.ephemeralAutomationId?.trim();
+  const current = readThread(threadId);
+  if (!current) throw new Error(`Thread not found: ${threadId}`);
+  if (!id) return current;
+  const title = opts.ephemeralTitle?.trim();
+  return updateThread(threadId, {
+    ephemeralAutomationId: id,
+    ...(title ? { title, userSetTitle: true } : {}),
+  });
+}
+
+/** Archive a finished one-off run and drop older archived runs of that automation. */
+export async function archiveEphemeralAutomationIfReady(
+  threadId: string,
+  archive: (id: string) => Promise<unknown>,
+): Promise<void> {
+  const keep = await withThreadLock(threadId, async () => {
+    const thread = readThread(threadId);
+    if (!thread || !ephemeralRunReadyToArchive(thread)) return null;
+    const automationId = thread.ephemeralAutomationId?.trim();
+    if (!automationId) return null;
+    await archive(thread.id);
+    // A failover sibling that already archived owns the run. Keeping this chat
+    // would delete that sibling on the way out.
+    return {
+      automationId,
+      keepId: archivedContinuationId(automationId, threadId) ?? threadId,
+    };
+  });
+  if (keep) forgetOlderEphemeralRuns(keep.automationId, keep.keepId);
+}
+
+/** Failover sibling that already archived this one-off. */
+function archivedContinuationId(automationId: string, sourceId: string): string | null {
+  for (const thread of listThreads({ includeArchived: true })) {
+    if (thread.id === sourceId || thread.status !== 'archived') continue;
+    if (thread.ephemeralAutomationId !== automationId) continue;
+    if (thread.quotaContinuedFromId !== sourceId) continue;
+    return thread.id;
+  }
+  return null;
+}
+
+/** History restore keeps the chat. A later drain must not archive it again. */
+export function clearEphemeralAutomation(threadId: string): void {
+  const thread = readThread(threadId);
+  if (!thread?.ephemeralAutomationId?.trim()) return;
+  updateThread(threadId, { ephemeralAutomationId: undefined });
+}
+
+/** Drop earlier archived runs of the same automation. Keeps `keepId`. */
+export function forgetOlderEphemeralRuns(automationId: string, keepId: string): string[] {
+  const id = automationId.trim();
+  if (!id || !keepId) return [];
+  const removed: string[] = [];
+  for (const thread of listThreads({ includeArchived: true })) {
+    if (thread.id === keepId) continue;
+    if (thread.status !== 'archived') continue;
+    if (thread.ephemeralAutomationId !== id) continue;
+    try {
+      deleteThreadRecord(thread.id);
+      removed.push(thread.id);
+    } catch {
+      // Next archive retries.
+    }
+  }
+  return removed;
+}

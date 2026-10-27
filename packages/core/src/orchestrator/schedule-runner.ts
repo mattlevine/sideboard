@@ -11,18 +11,33 @@ import {
   updateSchedule,
   type ScheduledTask,
 } from '../store/schedules.js';
+import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { findThreadByRef } from '../store/thread-store.js';
-import type { AgentKind, Thread } from '../types/thread.js';
+import type { AgentKind, Thread, ThreadOptionsPatch } from '../types/thread.js';
 
 const SET_TIMEOUT_MAX = 2_147_483_647;
 
+export interface ScheduleSendOpts {
+  attachments?: Thread['attachments'];
+  /** Applied to an existing chat before the prompt is queued. */
+  options?: ThreadOptionsPatch;
+}
+
 export interface ScheduleFireDeps {
   findThread: (id: string) => Thread | null;
-  send: (id: string, prompt: string) => Promise<Thread>;
+  send: (id: string, prompt: string, opts?: ScheduleSendOpts) => Promise<Thread>;
   startOrchestration: (opts: {
     goal: string;
     agent: AgentKind;
     model?: string | null;
+    autonomy?: Thread['autonomy'];
+    effort?: Thread['effort'];
+    fast?: boolean;
+    planMode?: boolean;
+    attachments?: Thread['attachments'];
+    /** Archive this new chat when the run finishes. Omit to keep the chat. */
+    ephemeralAutomationId?: string;
+    ephemeralTitle?: string;
   }) => Promise<Thread>;
 }
 
@@ -50,9 +65,58 @@ async function defaultDeps(): Promise<ScheduleFireDeps> {
   const orch = getOrchestrator();
   return {
     findThread: (id) => findThreadByRef(id),
-    send: (id, prompt) => orch.send(id, prompt),
+    send: async (id, prompt, opts) => {
+      if (opts?.options && Object.keys(opts.options).length > 0) {
+        try {
+          orch.setThreadOptions(id, opts.options);
+        } catch {
+          // Mid-chat provider switches are refused. Model belongs to that agent.
+          const rest = scheduleOptionsAfterRefusedAgentSwitch(opts.options);
+          if (Object.keys(rest).length > 0) {
+            try {
+              orch.setThreadOptions(id, rest);
+            } catch {
+              // The prompt still sends with the chat's current options.
+            }
+          }
+        }
+      }
+      const thread = findThreadByRef(id);
+      const attachments = thread
+        ? persistPendingFileAttachments(thread.worktreePath, opts?.attachments ?? [])
+        : (opts?.attachments ?? []);
+      return orch.send(id, prompt, { attachments });
+    },
     startOrchestration: (opts) => startOrchestration(opts),
   };
+}
+
+/**
+ * Drop agent and model after a mid-chat provider switch is refused.
+ * Model ids are agent-specific; Auto (`null`) would still reset the chat.
+ */
+export function scheduleOptionsAfterRefusedAgentSwitch(
+  options: ThreadOptionsPatch,
+): ThreadOptionsPatch {
+  const { agent: _agent, model: _model, ...rest } = options;
+  return rest;
+}
+
+/** Composer choices to apply on an existing chat. Omitted fields stay as they are. */
+export function scheduleSendOptions(schedule: ScheduledTask): ThreadOptionsPatch | undefined {
+  const patch: ThreadOptionsPatch = {};
+  if (schedule.agent) {
+    patch.agent = schedule.agent;
+    // Null model is Auto, and only when the composer saved an agent.
+    patch.model = schedule.model;
+  } else if (schedule.model) {
+    patch.model = schedule.model;
+  }
+  if (schedule.effort) patch.effort = schedule.effort;
+  if (schedule.fast != null) patch.fast = schedule.fast;
+  if (schedule.planMode != null) patch.planMode = schedule.planMode;
+  if (schedule.autonomy) patch.autonomy = schedule.autonomy;
+  return Object.keys(patch).length > 0 ? patch : undefined;
 }
 
 function pickAgent(schedule: ScheduledTask): OrchestratorAgentKind {
@@ -66,7 +130,7 @@ function pickAgent(schedule: ScheduledTask): OrchestratorAgentKind {
  */
 export async function fireSchedule(id: string): Promise<ScheduledTask> {
   const schedule = getSchedule(id);
-  if (!schedule) throw new Error(`Schedule not found: ${id}`);
+  if (!schedule) throw new Error(`Automation not found: ${id}`);
   if (firing.has(schedule.id)) return schedule;
   firing.add(schedule.id);
   try {
@@ -74,20 +138,32 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
     const prompt = formatScheduledPrompt(schedule.name, schedule.prompt);
     const target = schedule.threadId ? deps.findThread(schedule.threadId) : null;
     if (target && target.status !== 'archived') {
-      const sent = await deps.send(target.id, prompt);
+      const sent = await deps.send(target.id, prompt, {
+        attachments: schedule.attachments,
+        options: scheduleSendOptions(schedule),
+      });
       return recordScheduleRun(schedule.id, {
         lastThreadId: sent.id,
         lastError: null,
       });
     }
+    // A named recurring chat that disappeared should keep using the replacement.
+    // Every other fresh chat is one run: archive it when that run finishes.
+    const pinReplacement = Boolean(schedule.threadId) && schedule.when.kind !== 'once';
     const created = await deps.startOrchestration({
       goal: prompt,
       agent: pickAgent(schedule),
       model: schedule.model,
+      ...(schedule.effort ? { effort: schedule.effort } : {}),
+      ...(schedule.fast != null ? { fast: schedule.fast } : {}),
+      ...(schedule.planMode != null ? { planMode: schedule.planMode } : {}),
+      ...(schedule.autonomy ? { autonomy: schedule.autonomy } : {}),
+      attachments: schedule.attachments,
+      ...(pinReplacement
+        ? {}
+        : { ephemeralAutomationId: schedule.id, ephemeralTitle: schedule.name }),
     });
-    // Recurring jobs that lost their chat should keep using the replacement,
-    // not open a new Global chat on every later tick.
-    if (schedule.threadId && schedule.when.kind !== 'once') {
+    if (pinReplacement) {
       updateSchedule(schedule.id, { threadId: created.id });
     }
     return recordScheduleRun(schedule.id, {

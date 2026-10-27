@@ -288,13 +288,13 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   }
   if (/get_orchestrator$/i.test(name)) return 'Get orchestrator'; else if (/notify_orchestrator$/i.test(name)) return 'Notify orchestrator'; else if (/set_workspace_tags$/i.test(name)) return 'Set workspace tags';
   if (/(?:list|set|delete)_env$/i.test(name)) return /list_env$/i.test(name) ? 'List env vars' : /set_env$/i.test(name) ? 'Set env var' : 'Delete env var';
-  if (/list_schedules$/i.test(name)) return 'List schedules';
+  if (/list_schedules$/i.test(name)) return 'List automations';
   if (/create_schedule$/i.test(name)) {
-    return str(input?.name) ? `Schedule ${str(input?.name)}` : 'Create schedule';
+    return str(input?.name) ? `Automation ${str(input?.name)}` : 'Create automation';
   }
-  if (/update_schedule$/i.test(name)) return 'Update schedule';
-  if (/delete_schedule$/i.test(name)) return 'Delete schedule';
-  if (/run_schedule$/i.test(name)) return 'Run schedule';
+  if (/update_schedule$/i.test(name)) return 'Update automation';
+  if (/delete_schedule$/i.test(name)) return 'Delete automation';
+  if (/run_schedule$/i.test(name)) return 'Run automation';
   if (isSkillToolName(name)) {
     const cmd = skillCommandFromInput(input);
     return cmd ? `Using /${cmd}` : 'Using skill';

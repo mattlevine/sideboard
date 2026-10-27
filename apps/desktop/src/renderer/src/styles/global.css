@@ -2131,6 +2131,51 @@ body.resizing-panels webview {
   transform: rotate(45deg);
 }
 
+.nav-glyph.clock {
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.nav-glyph.clock::before,
+.nav-glyph.clock::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: 1.5px;
+  background: currentColor;
+  transform-origin: bottom center;
+  border-radius: 1px;
+}
+
+.nav-glyph.clock::before {
+  height: 4px;
+  transform: translateX(-50%);
+}
+
+.nav-glyph.clock::after {
+  height: 3px;
+  transform: translateX(-50%) rotate(110deg);
+}
+
+.automations-panel .settings-body {
+  max-width: 880px;
+}
+
+.automations-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.automations-composer textarea {
+  min-height: 96px;
+  resize: none;
+}
+
 .projects-header {
   display: flex;
   align-items: center;

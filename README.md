@@ -12,7 +12,7 @@ Sideboard started as a local port when Conductor moved that tier into a paid clo
 
 `attach` / `adopt` remain the door back to the native harness — move in and out of Sideboard as you choose.
 
-Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for the phone to reach it, and for scheduled jobs to fire — opt in from Settings → Advanced.
+Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for the phone to reach it, and for automations to fire — opt in from Settings → Advanced.
 
 ![Sideboard desktop — chat with a log preview, worktree files, and the run panel](docs/assets/sideboard-desktop-review-v7.png)
 
@@ -37,7 +37,7 @@ Spawning worktrees is the shared primitive. When Conductor moved fleet orchestra
 | Stay on the corporate VPN | Cloud sandboxes leave it | Agents run as you, on this laptop’s network |
 | Away from the desk | Product cloud / shared sandbox | Phone app paired to this Mac; pick which desktop to open |
 | Keep going when you step away | Cloud sandbox keeps running | The phone reaches this Mac only while it is awake (caffeinate while the phone remote is connected) |
-| Run work on a schedule | Cloud cron / always-on sandbox | Local jobs on this Mac; opt-in caffeinate so due jobs can fire |
+| Run work on a schedule | Cloud cron / always-on sandbox | Local automations on this Mac; opt-in caffeinate so due jobs can fire |
 | See the whole fleet as one board | App-locked or thin | First-class global board |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
 | Recurring process guides | Locked in the product, or chat memory | Committed `.claude/skills` — Claude Code and `attach` load them |
@@ -61,7 +61,7 @@ Also true, and useful on the way:
 - **Local-first / phone-remote** — agents stay on this Mac (VPN, private git, internal APIs); the phone app is how you reach them ([pair it](#phone))
 - **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Phone](#phone) · [Scheduled orchestration](#scheduled-orchestration)
+Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Phone](#phone) · [Automations](#automations)
 
 Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.cloud` is the phone remote). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
@@ -299,10 +299,10 @@ Once connected, agents get tools to:
 - **Worktree chats** — `create_workspace` → `send_to_chat` → `wait_for_turn` / `get_turn_result` (from a Sideboard orchestration chat, omit `parentChatId` — MCP binds the child to that chat; do not invent uuids). A ticket, PR, or named branch has one checkout — `create_workspace` returns it (`alreadyStarted`) and `chats` for every agent on it, instead of a second checkout. Add another agent with `fork_chat`.; default-branch create still opens a new isolated worktree. `wait_for_turn` returns within ~45s with `stillRunning`, `taskState` (submitted / working / input-required / completed / failed / canceled), and live `progress` while the child is still working — call it again; do not assume a hang. `fork_workspace` / `fork_chat` (optional agent; Auto model unless pinned via `list_models`; `fork_chat` also forks Global orchestration chats); `stop_chat` force-stops (kills in-flight turn and clears the prompt queue); `send_to_chat` steers (Settings → Follow-up, default interrupt now) and accepts optional `force_stop` to clear the inbox first; `archive_chat`, `restore_chat`
 - **Present structure (desktop)** — `present_artifact` (HTML/SVG/MD), `present_schema` (JSON Schema → table/form; agent can invent the schema), `present_files` (file manager); tabs beside chat, git repo stays on the far right
 - **Ask the user** — `ask_user` (composer multiple-choice when work is blocked on a concrete choice — not greetings or “what next?” menus). Agents explain options in chat first; Sideboard shows the picker and mirrors questions in the transcript. On a worktree child, `ask_user` also wakes the parent Global chat (`notify_orchestrator`, `input-required`) so the coordinator does not have to poll. Worktree agents can call `notify_orchestrator` themselves when blocked without a picker.
-- **Schedules** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration and worktree). `threadId=self` continues this chat; omit `threadId` to start a new Global chat when due. Jobs fire only while Sideboard.app is running. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled**. Orchestration chats can also `set_caffeinate`.
+- **Automations** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration and worktree). `threadId=self` continues this chat; omit `threadId` to start a new Global chat when due. Jobs fire only while Sideboard.app is running. The desktop lists them in the sidebar after **Board**. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while automations are enabled**. Orchestration chats can also `set_caffeinate`.
 - **Setup / run** — `run_setup` (also runs automatically on new worktrees), `list_run_scripts`, `run_dev_script`, `stop_dev_script`, `get_run_log`
 - **Inspect / review / PRs** — `get_diff`; `get_pr_checks` (snapshot); `request_review` (opens a Review chat tab on a worktree thread). The review stays in chat so you can read it and type next steps before the PR or ticket author is notified — no immediate Post/Keep picker. `ask_git` (commit & push, draft PR, ready for review, resolve conflicts, merge — same prompts as the desktop git buttons). If a goal is given (Greptile 5/5, CI green), the worktree agent watch-fix-pushes until it lands. Merge only when the user explicitly asked.
-- **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while the phone remote is connected, and while schedules are enabled.
+- **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while the phone remote is connected, and while automations are enabled.
 
 Ready-for-review land (`confirm_land`) and `purge_chat` stay human-only. Coordinators commit, push, and open PRs by asking the worktree agent. They merge only when the user explicitly asked.
 
@@ -319,8 +319,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Remote** | Phone app — pair this Mac, then pick it on the phone |
 | **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
 | **Environment** | Extra env vars injected into agent runs |
-| **Schedules** | Local jobs that wake an orchestration chat |
-| **Advanced** | Cowboy mode, caffeinate, show cost, on usage/session limit (keep going, confirm, switch agent, or wait for reset), Brightsy MCP inject |
+| **Advanced** | Cowboy mode, caffeinate (including while automations are enabled), show cost, on usage/session limit (keep going, confirm, switch agent, or wait for reset), Brightsy MCP inject |
 | **History** | Archived chats |
 
 Ask the orchestrator **find me some work** to list matching tickets (`list_issues`) and review PRs (`list_prs queue=review`) from that profile. **Find me work and start it** lists, then creates the worktrees. Same split for reviews. The orchestrator stays contextually aware of that profile in every chat.
@@ -378,7 +377,7 @@ The Sideboard phone app is the remote surface for the **same local orchestrator*
 The phone reaches this Mac while Sideboard.app is open, or while `sideboard serve` owns the host after you quit the window. It cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
 
 ```bash
-sideboard serve          # schedules + phone relay; exits if the app is already the host
+sideboard serve          # automations + phone relay; exits if the app is already the host
 sideboard serve --lan    # also print ws://<lan-ip>:<port>/remote for the phone's Relay field
 ```
 
@@ -413,11 +412,13 @@ More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 
 Tokens stay in the Mac vault. Disconnect from the same panel. If `vercel`, `supabase`, or `sentry-cli` is missing, **Install CLI** runs `npm i -g` (opens Terminal if npm needs sudo). Sideboard does not auto-install on Connect. Agents write CLI/HTTP dumps to `.context/cli/` (local scratch; not composer drops in `.context/attachments/`) and read a slice — never raw `--json` / `--expand` into the tool result. The phone remote is **Settings → Remote**, not here.
 
-## Scheduled orchestration
+<a id="scheduled-orchestration"></a>
 
-Local jobs that send a prompt to an existing chat (Global or worktree), or start a new Global chat. Sideboard.app or `sideboard serve` must be the host on this Mac; a sleeping machine skips until wake. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while schedules are enabled** (you can turn it off anytime). Orchestration chats can also call `set_caffeinate`.
+## Automations
 
-**Settings → Schedules**, MCP (`list_schedules` / `create_schedule` / `run_schedule` — orchestration and worktree agents), or:
+Local jobs that send a prompt to an existing chat (Global or worktree), or start a new Global chat. Sideboard.app or `sideboard serve` must be the host on this Mac; a sleeping machine skips until wake. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while automations are enabled** (you can turn it off anytime). Orchestration chats can also call `set_caffeinate`.
+
+**Automations** in the desktop sidebar (after Board), MCP (`list_schedules` / `create_schedule` / `run_schedule` — orchestration and worktree agents), or:
 
 ```bash
 sideboard schedule ls
@@ -427,7 +428,7 @@ sideboard schedule add --prompt "One-shot reminder" --at 2026-08-21T18:00:00-07:
 sideboard schedule run <id>
 ```
 
-Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs will open a new chat each run). Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. If the target chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
+Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs open a new chat each run and archive it when that run finishes; History keeps the latest run). Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. If the target chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
 
 ## Also: Brightsy
 

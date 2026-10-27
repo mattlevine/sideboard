@@ -211,6 +211,7 @@ export interface Thread {
   updatedAt: string;
   /** When this chat was archived. History age uses this, not later row updates. */
   archivedAt?: string;
+  ephemeralAutomationId?: string;
   messages: ThreadMessage[];
   /**
    * Prose-only turns dropped by auto-compact (user text + agent answers).

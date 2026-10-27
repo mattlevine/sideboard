@@ -87,7 +87,11 @@ function sortArchivedOldestFirst<
  * Age-expired rows are purged. Count overflow is stripped first (keep the
  * searchable row) and purged on a later pass once it is already a stub.
  */
-export function planHistoryRetention<T extends Pick<Thread, 'id' | 'updatedAt' | 'createdAt' | 'archivedAt' | 'messages' | 'attachments'>>(
+export function planHistoryRetention<
+  T extends Pick<Thread, 'id' | 'updatedAt' | 'createdAt' | 'archivedAt' | 'messages' | 'attachments'> & {
+    ephemeralAutomationId?: string;
+  },
+>(
   archived: T[],
   thresholds: HistoryRetentionThresholds = {},
 ): HistoryRetentionPlan {
@@ -104,7 +108,11 @@ export function planHistoryRetention<T extends Pick<Thread, 'id' | 'updatedAt' |
     }
   }
 
-  const remaining = oldestFirst.filter((t) => !expiredIds.has(t.id));
+  // One-off automation runs are capped per automation (latest only). They must
+  // not occupy the shared History slots or push real archives out.
+  const remaining = oldestFirst.filter(
+    (t) => !expiredIds.has(t.id) && !t.ephemeralAutomationId?.trim(),
+  );
   const overflow = remaining.length > maxCount ? remaining.slice(0, remaining.length - maxCount) : [];
 
   const stripIds: string[] = [];

@@ -46,6 +46,7 @@ import { CreateModal } from './components/CreateModal';
 import { CreateProcessingOverlay } from './components/CreateProcessingOverlay';
 import { ConnectedOrchestratorBar, OrchestratorPanel } from './components/OrchestratorPanel';
 import { GlobalBoard } from './components/GlobalBoard';
+import { AutomationsView } from './components/AutomationsView';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
@@ -144,7 +145,7 @@ export function App() {
   /** Full transcripts for the open chat (list IPC is preview-only). */
   const fullByIdRef = useRef(new Map<string, Thread>());
   const [selectedRev, setSelectedRev] = useState(0);
-  const [view, setView] = useState<'board' | 'thread'>('board');
+  const [view, setView] = useState<'board' | 'thread' | 'automations'>('board');
   const [worktreeSort, setWorktreeSort] = useState<WorktreeSortMode>(readWorktreeSort);
   const [worktreeOwnership, setWorktreeOwnership] =
     useState<BoardOwnershipFilter>(readWorktreeOwnership);
@@ -1215,6 +1216,7 @@ export function App() {
             repoPath={repoPath}
             workspaces={workspaces}
             onShowBoard={showBoard}
+            onShowAutomations={() => { setView('automations'); setSelectedId(null); }}
             onSelect={onSelect}
             onNew={(path, mode) => openCreate(path, mode ?? 'quick')}
             onPickRepo={() =>
@@ -1300,7 +1302,7 @@ export function App() {
           }
         />
       )}
-
+      {view === 'automations' && <AutomationsView leftSidebarOpen={leftSidebarOpen} onToggleLeftSidebar={toggleLeftSidebar} />}
       {view === 'thread' && selected && !holdCreateOverlay && (
         <div
           className={`thread-workspace${

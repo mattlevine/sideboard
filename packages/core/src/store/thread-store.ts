@@ -134,6 +134,10 @@ export function normalizeThread(raw: Thread): Thread {
       typeof raw.archivedAt === 'string' && raw.archivedAt.trim()
         ? raw.archivedAt.trim()
         : undefined,
+    ephemeralAutomationId:
+      typeof raw.ephemeralAutomationId === 'string' && raw.ephemeralAutomationId.trim()
+        ? raw.ephemeralAutomationId.trim()
+        : undefined,
     compactedMessages: Array.isArray(raw.compactedMessages)
       ? raw.compactedMessages
       : undefined,
@@ -461,6 +465,7 @@ export function updateThread(
   } else {
     delete next.archivedAt;
   }
+  if (!next.ephemeralAutomationId?.trim()) delete next.ephemeralAutomationId;
   writeThread(next);
   return next;
 }
