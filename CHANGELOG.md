@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.321] - 2026-10-27
+
+### Added
+
+- Project search matches a workspace nickname and the row title, so a renamed branch or pull request still comes up under that name. The phone sidebar uses the same match.
+- This Mac can sign into the relay with Cursor or Entire as well as GitHub. Worktrees open review on that forge.
+
+### Changed
+
+- Search is no longer a left-sidebar item. Create stays. Filtering stays on the projects control.
+
+### Fixed
+
+- Cursor Origin review queues and merge gates include labels, reviewers, conflicts, and a required review.
+
 ## [0.1.320] - 2026-10-27
 
 ### Added
