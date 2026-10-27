@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.320] - 2026-10-27
+
+### Added
+
+- Automations live in the sidebar after Board. The composer can set agent, model, effort, plan, files, issues, and workspaces.
+
+### Fixed
+
+- A one-off automation with no target chat archives when the run finishes. History keeps the latest run for that automation, and restoring it leaves the chat in the sidebar.
+- Sending an automation into an existing chat does not replace that chat's model when the agent cannot be switched.
+- A session-limit failover of a one-off keeps the continuation on the same run, so that chat archives when the continued turn finishes.
+
 ## [0.1.319] - 2026-10-26
 
 ### Fixed
