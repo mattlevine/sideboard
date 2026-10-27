@@ -12671,6 +12671,21 @@ body:has(.update-banner) .team-toast-stack {
   background: var(--bg-hover);
 }
 
+.settings-agent-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  color: var(--text);
+}
+
+.settings-agent-copy {
+  flex: 1;
+  min-width: 0;
+}
+
 .settings-agent-name {
   font-weight: 600;
   font-size: 14px;

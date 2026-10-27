@@ -36,7 +36,7 @@ import {
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ConnectorsSettings } from './ConnectorsSettings';
-import { GitSettings } from './GitSettings';
+import { GitSettings, type GitSettingsPanel } from './GitSettings';
 import { IssuesSettings } from './IssuesSettings';
 import { ManagedAccountsPanel } from './ManagedAccountsPanel';
 import { RemoteSettings } from './RemoteSettings';
@@ -331,6 +331,12 @@ export function SettingsModal({
 }: Props) {
   const [nav, setNav] = useState<NavId>(initialNav);
   const [agentPanel, setAgentPanel] = useState<AgentPanel | null>(null);
+  const [gitPanel, setGitPanel] = useState<GitSettingsPanel | null>(null);
+  const [gitHostReady, setGitHostReady] = useState({
+    github: false,
+    cursor: false,
+    entire: false,
+  });
   const [historyQuery, setHistoryQuery] = useState('');
   const [settings, setSettings] = useState<PublicAppSettings>(emptyAppSettings);
   const [statuses, setStatuses] = useState<AgentStatus[]>([]);
@@ -819,14 +825,40 @@ export function SettingsModal({
             </button>
             <button
               type="button"
-              className={`settings-nav-btn${nav === 'git' ? ' active' : ''}`}
+              className={`settings-nav-btn${nav === 'git' && !gitPanel ? ' active' : ''}`}
               onClick={() => {
                 setNav('git');
                 setAgentPanel(null);
+                setGitPanel(null);
               }}
             >
               Git
             </button>
+            {nav === 'git' && (
+              <div className="settings-nav-sub">
+                {(
+                  [
+                    { id: 'github' as const, label: 'GitHub' },
+                    { id: 'cursor' as const, label: 'Cursor' },
+                    { id: 'entire' as const, label: 'Entire' },
+                  ]
+                ).map((host) => (
+                  <button
+                    key={host.id}
+                    type="button"
+                    className={`settings-nav-sub-btn${gitPanel === host.id ? ' active' : ''}`}
+                    onClick={() => {
+                      setNav('git');
+                      setAgentPanel(null);
+                      setGitPanel(host.id);
+                    }}
+                  >
+                    <span>{host.label}</span>
+                    <span className={`settings-dot${gitHostReady[host.id] ? ' ok' : ''}`} />
+                  </button>
+                ))}
+              </div>
+            )}
             <button
               type="button"
               className={`settings-nav-btn${nav === 'issues' ? ' active' : ''}`}
@@ -960,6 +992,9 @@ export function SettingsModal({
             {nav === 'git' && (
               <GitSettings
                 settings={settings}
+                panel={gitPanel}
+                onOpenPanel={setGitPanel}
+                onHostStatus={setGitHostReady}
                 applySettings={applySettings}
                 busy={busy}
                 setBusy={setBusy}

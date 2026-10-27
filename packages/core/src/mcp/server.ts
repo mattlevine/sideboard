@@ -8,7 +8,7 @@ import { needsCoordinatorAction } from '../orchestrator/task-state.js';
 import {
   listBranches,
   listPrs,
-  resolveGithubRepoSlug,
+  resolveProjectRemoteTag,
   canonicalizeRepoPath,
   resolveRepoRoot,
 } from '../git/worktree.js';
@@ -177,13 +177,13 @@ export async function startMcpServer(): Promise<void> {
   if (!worktreeProfile) {
   server.tool(
     'list_projects',
-    'List registered projects (git repos). Each line is name, path, github:owner/repo when resolvable, and project context when set — use path as repoPath for list_board/list_branches/list_prs/list_issues/create_workspace. Account / project context (Settings → Agents / Projects) says which tickets and review PRs belong to the user.',
+    'List registered projects (git repos). Each line is name, path, that repo\'s origin as host:owner/repo (github:, cursor:, entire:, or another hostname), and project context when set. Projects do not share one git host. Use path as repoPath for list_board/list_branches/list_prs/list_issues/create_workspace. Account / project context (Settings → Agents / Projects) says which tickets and review PRs belong to the user.',
     {},
     async () => {
       const workspaces = orch.listWorkspaces();
       const lines = await Promise.all(
         workspaces.map(async (w) => {
-          const slug = await resolveGithubRepoSlug(w.path).catch(() => null);
+          const tag = await resolveProjectRemoteTag(w.path).catch(() => null);
           let profile;
           try {
             profile = resolveViewerProfileForRepo(w.path);
@@ -191,8 +191,8 @@ export async function startMcpServer(): Promise<void> {
             profile = resolveViewerProfile();
           }
           const suffix = formatWorkspaceProfileSuffix(profile);
-          return slug
-            ? `${w.name}  ${w.path}  github:${slug}${suffix}`
+          return tag
+            ? `${w.name}  ${w.path}  ${tag}${suffix}`
             : `${w.name}  ${w.path}${suffix}`;
         }),
       );
@@ -1270,7 +1270,7 @@ export async function startMcpServer(): Promise<void> {
             action,
             lastError: message,
             hint: /body is too long/i.test(message)
-              ? 'Branch is already pushed. send_to_chat so the worktree agent runs gh pr create --draft --assignee @me -R <origin> --body-file <short.md>. Keep the description short.'
+              ? 'Branch is already pushed. send_to_chat so the worktree agent retries with a short body (GitHub: gh pr create --draft --assignee @me -R <slug>; Cursor: origin pr create --draft --push -R <slug>; Entire: entire trail create --title with a short --body). Keep the description short.'
               : undefined,
           },
           true,
@@ -1628,7 +1628,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_issues',
-    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Pass updatedSince for new/updated tickets and new comments (“any updates since yesterday?”). Then create_workspace with sourceType=ticket.',
+    'List or search issues (Linear, AbleTime, or GitHub; falls back to GitHub). Cursor Origin has no issue tracker — a Cursor repo returns unavailableReason unless Linear or AbleTime is the source. Entire tickets are Trails (`entire trail`), not GitHub Issues, so an Entire repo does the same unless Linear or AbleTime is the source. Use Settings → Agents / Projects notes and roles to pick tickets relevant to the viewer (query + assignee=me or unassigned as the notes say). Default 40; pass query and/or limit (max 250) when truncated. assignee: me (Linear default), unassigned, all, or a user id. Pass updatedSince for new/updated tickets and new comments (“any updates since yesterday?”). Then create_workspace with sourceType=ticket.',
     {
       repoPath: z.string(),
       query: z.string().optional().describe('Search title, identifier, or description'),

@@ -64,6 +64,8 @@ export {
 } from './git/agent-git-actions.js';
 export type { AgentGitAction, SidebarGitAction } from './git/agent-git-actions.js';
 export * from './integrations/github.js';
+export * from './integrations/cursor-git.js';
+export * from './integrations/entire-git.js';
 export * from './integrations/linear.js';
 export * from './integrations/linear-oauth.js';
 export * from './integrations/github-issues.js';

@@ -53,7 +53,9 @@ export function IssuesSettings({
     <div className="settings-body">
       <p className="settings-lead">
         Preferred tracker for Create-from and Home. Falls back to GitHub Issues if the preferred
-        one is not connected.
+        one is not connected and the project’s origin is GitHub. Cursor Origin has no issue
+        tracker. Entire uses Trails (`entire trail`), not GitHub Issues. Linear or AbleTime still
+        apply to those repos when connected.
       </p>
 
       <div className="settings-section settings-section-card">

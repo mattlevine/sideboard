@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveGithubRepoSlug } from '../git/worktree.js';
+import { formatRemoteTag } from '../git/remote-forge.js';
+import { resolveGithubRepoSlug, resolveOriginRemote } from '../git/worktree.js';
 import {
   formatAccountProfilePlaybookLine,
   formatProjectProfilePlaybookLines,
@@ -15,8 +16,10 @@ import { globalAgentCwd, sideboardReposDir } from '../store/paths.js';
 import { listWorkspaces, type Workspace } from '../store/workspaces.js';
 
 export type WorkspaceInventoryEntry = Workspace & {
-  /** Best-effort GitHub `owner/repo` from remote / gh. */
+  /** Set when origin is GitHub, or when origin is missing and `gh` resolved one. */
   githubSlug?: string | null;
+  /** Origin forge. Projects on one Mac can use different hosts. */
+  originRemote?: { forge: 'github' | 'cursor' | 'entire' | 'other'; host: string; slug: string } | null;
 };
 
 /** Sync formatter — include `githubSlug` when already resolved. */
@@ -26,7 +29,11 @@ export function formatWorkspaceInventory(
   if (workspaces.length === 0) return '(no registered workspaces)';
   return workspaces
     .map((w) => {
-      const slug = w.githubSlug?.trim() ? `  github:${w.githubSlug.trim()}` : '';
+      const slug = w.originRemote
+        ? `  ${formatRemoteTag(w.originRemote)}`
+        : w.githubSlug?.trim()
+          ? `  github:${w.githubSlug.trim()}`
+          : '';
       const profile = formatWorkspaceProfileSuffix(safeViewerProfile(w.path));
       return `- ${w.name}: ${w.path}${slug}${profile}`;
     })
@@ -39,8 +46,13 @@ export async function enrichWorkspacesWithGithub(
 ): Promise<WorkspaceInventoryEntry[]> {
   return Promise.all(
     workspaces.map(async (w) => {
-      const githubSlug = await resolveGithubRepoSlug(w.path).catch(() => null);
-      return { ...w, githubSlug };
+      const originRemote = await resolveOriginRemote(w.path).catch(() => null);
+      const githubSlug = originRemote
+        ? originRemote.forge === 'github'
+          ? originRemote.slug
+          : null
+        : await resolveGithubRepoSlug(w.path).catch(() => null);
+      return { ...w, githubSlug, originRemote };
     }),
   );
 }
@@ -53,8 +65,8 @@ export function coordinatorGreenfieldPlaybook(reposDir: string): string {
     '- Examples:',
     `  - Clone: \`git clone <url> ${reposDir}/<name>\``,
     `  - New GitHub repo: \`gh repo create <owner>/<name> --private --clone -- ${reposDir}/<name>\` (or mkdir + git init + gh repo create + remote add + push)`,
-    '- Then: add_project with that absolute path → create_workspace (repoPath + parentChatId) → send_to_chat (build) → wait_for_turn (loop while stillRunning) → ask_git create-draft (or send_to_chat `gh pr create --draft --assignee @me -R <origin-owner/name>`).',
-    '- Always target the child worktree\'s **origin** (`github:` slug from list_projects / `git remote get-url origin` in that worktree). Never open PRs against `upstream`.',
+    '- Then: add_project with that absolute path → create_workspace (repoPath + parentChatId) → send_to_chat (build) → wait_for_turn (loop while stillRunning) → ask_git create-draft (GitHub: `gh pr create --draft --assignee @me -R <slug>`; Cursor: `origin pr create --draft --push -R <slug>`; Entire: `entire trail create --title`).',
+    '- Always target the child worktree\'s **origin** (`github:`, `cursor:`, or `entire:` from list_projects / `git remote get-url origin` in that worktree). Never open PRs against `upstream`.',
     '- Do coding work in the child worktree thread, not by editing files in this home cwd.',
   ].join('\n');
 }
@@ -63,9 +75,9 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   'Role: you oversee Sideboard workspaces across registered repos. A workspace is one isolated checkout and can have many agent chats on those same files. You do not live inside one of those worktrees. Do not treat a workspace as one agent.',
   'Sideboard MCP (fleet control — prefer these for status and orchestration):',
   'Discover:',
-  '- list_projects — registered repos (path + github slug + project context when set). Use account / project context to pick the right repo for tickets or reviews.',
+  '- list_projects — registered repos (path + that repo\'s origin host:owner/repo, such as github:, cursor:, or entire:, and project context when set). Projects do not share one git host. Use account / project context to pick the right repo for tickets or reviews.',
   '- list_board — Home Kanban of workspaces (New / Draft / Review / Approved / Merged; one card per checkout). Sibling chats on a card are separate agents, not one agent. Path to merge: no PR → draft PR → open PR → approved → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind, column, limit.',
-  '- list_branches / list_prs / list_issues — pass repoPath from list_projects. Review is PRs (the surface for assigned ticket work), not the tickets: "Get me N tickets to review" → list_prs(queue=review, limit=N) then create_workspace sourceType=pr. That is open non-draft PRs labeled with this project\'s ready-for-review GitHub label (Settings → Projects; default eng-review) with no individual user reviewer yet. A team request (engineering-team) is not a claim — the viewer is on that team and can pick it up; claimed means an individual account is the reviewer. Bots ignored. Use Settings → Agents / Projects context (roles, teams, labels — freeform text; project adds to account) to prefer the right queues. queue=mine is review-requested:@me; queue=approved|changes uses those labels. Also: state, label, reviewer=me|unassigned|login, query, limit default 40 max 250; raise limit or tighten when truncated. list_issues (query, assignee=me|unassigned|all|user, limit default 40 max 250) lists Linear, AbleTime, or GitHub tickets — do not use it for that review-inbox ask. When they ask for tickets to work on, follow their context (assignee=me or unassigned as it says).',
+  '- list_branches / list_prs / list_issues — pass repoPath from list_projects. Review is PRs (the surface for assigned ticket work), not the tickets: "Get me N tickets to review" → list_prs(queue=review, limit=N) then create_workspace sourceType=pr. That is open non-draft PRs labeled with this project\'s ready-for-review GitHub label (Settings → Projects; default eng-review) with no individual user reviewer yet. A team request (engineering-team) is not a claim — the viewer is on that team and can pick it up; claimed means an individual account is the reviewer. Bots ignored. Use Settings → Agents / Projects context (roles, teams, labels — freeform text; project adds to account) to prefer the right queues. queue=mine is review-requested:@me; queue=approved|changes uses those labels. Also: state, label, reviewer=me|unassigned|login, query, limit default 40 max 250; raise limit or tighten when truncated. list_issues (query, assignee=me|unassigned|all|user, limit default 40 max 250) lists Linear, AbleTime, or GitHub tickets. Cursor Origin has no issues; a Cursor repo uses Linear or AbleTime (unavailableReason otherwise) — do not use it for that review-inbox ask. Entire tickets are Trails (`entire trail`), not GitHub Issues. When they ask for tickets to work on, follow their context (assignee=me or unassigned as it says).',
   '- Find work: when they ask to find work, pick up tickets, or list reviews, use Settings → Agents (account) plus Settings → Projects (per-repo) context. Tickets → Sideboard list_issues / linear_* (Account Linear). Reviews → list_prs(queue=review). Do not call Claude Linear MCP or any other vendor Linear MCP — those HTTP connectors hang or flap on the first turn. If a vendor MCP is down or reconnecting, ignore it and keep going with Sideboard tools. A failed Claude connector is not a Sideboard outage — do not mention it when the Account connection works. Show the options — do not create_workspace or start unless they also asked to start (e.g. “find me work and start it”). Do not start this unprompted. To change that context, show the proposed text, ask_user (Save this context / Do not save), wait, then update_viewer_context with confirmed=true. Never write it without confirmation.',
   '- Ticket updates: list_issues / linear_search_issues / github_search_issues with updatedSince (yesterday, 2d, or ISO). One call returns new assignments, ticket edits, and new comments — do not get_issue every ticket just to check for comments. kind=created vs updated distinguishes new tickets from existing ones.',
   '- linear_* (when Linear is connected) — list_teams for team key/states; linear_list_projects for project names; get/search include the project a ticket is on; get/create/update/comment with ENG-123. Worktree agents have the same Account tools — prefer they comment, update status, and create spin-offs (parent=) on their own ticket when they were asked to do the work. When reviewing a PR or ticket, do not comment or update until the user types a next step — they should work through the feedback in chat first. Do not tell the child to ask_user after the review. Scope errors: reconnect Linear in Account settings. Prefer these over any Linear MCP the CLI may still list. Worktree agents use the Claude Linear connector only when Account Linear is not set or the Sideboard call fails, and they do not mention that connector startup failure when Sideboard works.',
@@ -102,11 +114,11 @@ export const COORDINATOR_TOOL_PLAYBOOK = [
   '- list_run_scripts / run_dev_script / stop_dev_script / get_run_log — start/stop named run scripts and read the Run-tab terminal (tail). Pass name so desktop and mobile (or any pair) can run at once; each gets its own port. run_dev_script returns {url, port, preview} (SIDEBOARD_PORT). preview=url → tell the worktree agent to open that URL; preview=window → Electron: the native window is the app (url is renderer/HMR only). Never localhost:3000. list_run_scripts active[].url if already running.',
   'Inspect / review / PRs:',
   '- get_diff — compact diff summary',
-  '- get_pr_checks — snapshot of a worktree thread\'s PR checks (null = no PR). Use this to inspect status. If the user gave a goal, the worktree agent watches with `gh pr checks --watch` — do not poll for the human.',
+  '- get_pr_checks — snapshot of a worktree thread\'s PR checks (null = no PR). Use this to inspect status. If the user gave a goal, the worktree agent watches with `gh pr checks --watch` on GitHub, `origin pr watch` on Cursor, or `entire trail watch` on Entire — do not poll for the human.',
   '- request_review — run a Review on a worktree thread. Reuses the only unused idle agent when the checkout has a single chat with no messages; otherwise opens a Review tab (attaches .claude/skills/review/SKILL.md when present, else .context/review.md copied from .sideboard/review.md / stock; sends "Review changes in this workspace."); then wait_for_turn (loop while stillRunning) / get_turn_result on the returned id. The review stays in that chat so they can read it and type next steps — do not tell the child to comment or update the PR or ticket.',
   '- ask_git — commit & push, open a draft PR, mark ready for review, resolve conflicts, or merge — same prompts as the desktop git buttons (Resolve, Create PR, …). Always steers the worktree agent; then wait_for_turn (loop while stillRunning). Prefer this over paraphrasing. If the user gave a goal (Greptile 5/5, CI green), send_to_chat that goal so the worktree agent enters the watch-fix-push loop — do not tell the human to poll.',
   '- Merge (`ask_git` action=merge / send_to_chat "Merge PR.") only when the user explicitly asked to merge that PR. Do not merge because the work looks done, CI is green, or a typical flow includes it.',
-  '- Or send_to_chat with those exact phrases: "Commit and push.", "Commit, push, and open a draft PR.", "Ready for review.", "Merge PR." Prefer ask_git resolve-conflicts (it names the actual PR base — not always main) over paraphrasing. (draft PRs: `gh pr create --draft --assignee @me -R <origin-owner/name>` using the workspace `github:` slug — never upstream). Never run git/gh from this orchestration cwd, and never merge the PR yourself.',
+  '- Or send_to_chat with those exact phrases: "Commit and push.", "Commit, push, and open a draft PR.", "Ready for review.", "Merge PR." Prefer ask_git resolve-conflicts (it names the actual PR base — not always main) over paraphrasing. Draft PRs follow that workspace origin: GitHub (`github:`) uses `gh pr create --draft --assignee @me -R <slug>`; Cursor (`cursor:`) uses `origin pr create --draft --push -R <slug>`; Entire (`entire:`) uses `entire trail create --title` (Trails have no draft state). Never upstream. Never run git, gh, origin, or entire from this orchestration cwd, and never merge the PR yourself.',
   'Process guides:',
   '- Long child jobs (pack, test, deploy, anything that may run more than ~30s): workers always have `/long-running` (Sideboard product skill). Tell them to detach and wait; they may `stop_job` if it hangs or is doing the wrong thing; do not ask the human to poll.',
   '- Recurring multi-item / fan-out: if the child worktree has `.claude/skills/graph-engineering/SKILL.md`, tell the worker to follow it (`/graph-engineering`). Judge first; state on disk; grow the rulebook; do not patch three threads.',

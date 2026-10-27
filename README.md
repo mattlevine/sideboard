@@ -316,7 +316,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 | **Projects** | Per-repo context that adds to account context. Agents can update either after you confirm. |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |
-| **Remote** | Phone app — pair this Mac, then pick it on the phone |
+| **Remote** | Phone app — sign in with GitHub, Cursor, or Entire, then pair this Mac |
 | **Connectors** | Optional project services: Vercel, Supabase, PostHog, Sentry |
 | **Environment** | Extra env vars injected into agent runs |
 | **Advanced** | Cowboy mode, caffeinate (including while automations are enabled), show cost, on usage/session limit (keep going, confirm, switch agent, or wait for reset), Brightsy MCP inject |
@@ -326,7 +326,9 @@ Ask the orchestrator **find me some work** to list matching tickets (`list_issue
 
 ## Git
 
-**Settings → Git.** Pick how Sideboard and worktree agents authenticate GitHub on this Mac:
+**Settings → Git.** Git hosts are listed like agents. Each registered project still uses its own origin. GitHub is how this Mac authenticates github.com. Cursor is the Origin CLI for origin.cursor.com. Entire is the Entire CLI for entire.io. Branch prefix applies to every host.
+
+**GitHub**
 
 - **Auto** (recommended) — HTTPS in the agent process using this Mac’s `gh` login
 - **gh CLI auth** — rewrite `git@github.com` remotes to HTTPS; git/gh use a Sideboard credential file
@@ -334,6 +336,10 @@ Ask the orchestrator **find me some work** to list matching tickets (`list_issue
 - **Personal access token** — store a PAT on this Mac (not in the agent environment)
 
 If git/gh fail with auth errors, run `gh auth login` on this Mac or set a PAT here. Agents should not wait for a Keychain dialog.
+
+**Cursor.** Open Settings → Git → Cursor and sign in with `origin auth login`, then **Configure git** (`origin auth setup-git`) so pushes to origin.cursor.com authenticate. Worktree agents on a Cursor origin are told to use `origin pr`, not `gh`. Origin has pull requests and labels, not an issue tracker. Tickets for a Cursor repo come from Linear or AbleTime.
+
+**Entire.** Open Settings → Git → Entire and sign in with `entire login`. That login is what `git` uses for `entire://` remotes. Work on an Entire origin is a Trail (`entire trail create`), not a GitHub pull request. Entire does not use GitHub Issues. Linear or AbleTime still apply when that source is selected.
 
 ## Linear
 
@@ -385,7 +391,7 @@ A chat waiting on a permission, an ask, or a reported block shows **Needs you** 
 
 ### Pair
 
-1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Set **Relay** if this Mac should use a relay you run. Name this Mac if you want.
+1. Open Sideboard on the Mac. **Settings → Remote** should show Relay connected. Set **Relay** if this Mac should use a relay you run. Sign in with GitHub, Cursor, or Entire. Name this Mac if you want.
 2. **Show pairing code.** A QR code appears under it.
 3. In the phone app, set **Relay** to the same address, then scan that code. Paste the line under the code if you can’t scan. The next messages open a Global chat titled Phone.
 

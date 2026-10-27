@@ -66,6 +66,39 @@ describe('expandCanonicalGitRequest', () => {
     expect(expandCanonicalGitRequest('Ready for review.')).toMatch(/gh pr ready/);
   });
 
+  it('uses the origin CLI when the checkout is Cursor', () => {
+    const forge = { forge: 'cursor' as const };
+    expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.', forge)).toMatch(
+      /origin pr create --draft --push/,
+    );
+    expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.', forge)).not.toMatch(
+      /gh pr create/,
+    );
+    expect(expandCanonicalGitRequest('Ready for review.', forge)).toMatch(/origin pr ready/);
+    expect(expandCanonicalGitRequest('Merge PR.', forge)).toMatch(/origin stack merge/);
+    expect(expandCanonicalGitRequest('Address review comments.', forge)).toMatch(
+      /origin pr view --comments/,
+    );
+    expect(expandCanonicalGitRequest('Fix CI: lint.', forge)).toMatch(/origin pr checks/);
+  });
+
+  it('uses entire trail when the checkout is Entire', () => {
+    const forge = { forge: 'entire' as const };
+    expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.', forge)).toMatch(
+      /entire trail create --title/,
+    );
+    expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.', forge)).not.toMatch(
+      /gh pr create/,
+    );
+    expect(expandCanonicalGitRequest('Ready for review.', forge)).toMatch(/entire trail update/);
+    expect(expandCanonicalGitRequest('Ready for review.', forge)).not.toMatch(/entire trail approve/);
+    expect(expandCanonicalGitRequest('Merge PR.', forge)).toMatch(/entire trail merge/);
+    expect(expandCanonicalGitRequest('Address review comments.', forge)).toMatch(
+      /entire trail finding list/,
+    );
+    expect(expandCanonicalGitRequest('Fix CI: lint.', forge)).toMatch(/entire trail merge --dry-run/);
+  });
+
   it('names the base when resolving conflicts', () => {
     const out = expandCanonicalGitRequest(agentGitPrompt('resolve-conflicts', { prBase: 'main' }));
     expect(out).toMatch(/Fetch the PR base \(`main`\)/);

@@ -184,7 +184,6 @@ export async function signInRemoteAccount(
   provider: RelayAccountProvider,
   openUrl: (url: string) => void | Promise<void>,
 ): Promise<PublicAppSettings> {
-  if (provider !== 'github') throw new Error('Sign in with the git host.');
   remoteAccountAbort?.abort();
   const ac = new AbortController();
   remoteAccountAbort = ac;

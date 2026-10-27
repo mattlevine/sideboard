@@ -51,6 +51,28 @@ describe('coordinator-prompt', () => {
         '- brightsy-ai: /Users/me/brightsy-ai',
       ].join('\n'),
     );
+    expect(
+      formatWorkspaceInventory([
+        {
+          name: 'sideboard',
+          path: '/Users/me/sideboard',
+          addedAt: '2026-01-01T00:00:00.000Z',
+          githubSlug: 'acme/sideboard',
+          originRemote: { forge: 'github', host: 'github.com', slug: 'acme/sideboard' },
+        },
+        {
+          name: 'notes',
+          path: '/Users/me/notes',
+          addedAt: '2026-01-01T00:00:00.000Z',
+          originRemote: { forge: 'cursor', host: 'origin.cursor.com', slug: 'acme/notes' },
+        },
+      ]),
+    ).toBe(
+      [
+        '- sideboard: /Users/me/sideboard  github:acme/sideboard',
+        '- notes: /Users/me/notes  cursor:acme/notes',
+      ].join('\n'),
+    );
   });
 
   it('appends project context on workspace inventory lines', async () => {

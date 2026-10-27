@@ -1,4 +1,4 @@
-import { resolveGithubRepoSlug } from '../git/worktree.js';
+import { resolveGithubRepoSlug, resolveOriginRemote } from '../git/worktree.js';
 import { gh } from '../git/run.js';
 import {
   isAbleTimeConnected,
@@ -41,6 +41,28 @@ export interface ListIssuesOptions {
   updatedSince?: string;
 }
 
+/**
+ * Origin’s public API has repos, pull requests, and labels. There is no issues route
+ * (`GET /v1/origin/issues` is 404). Tickets for a Cursor repo come from Linear or AbleTime.
+ */
+export const CURSOR_ISSUES_UNAVAILABLE =
+  'Cursor Origin has no issue tracker. Tickets for this repo come from Linear or AbleTime (Settings → Issues).';
+
+export const ENTIRE_ISSUES_ARE_TRAILS =
+  'Entire does not use GitHub Issues. Tickets for this repo are Trails (`entire trail list`). Linear or AbleTime still work when selected in Settings → Issues.';
+
+/** Set when this checkout’s origin is Cursor or Entire and the effective tracker is GitHub Issues. */
+export async function cursorIssuesUnavailableReason(repoPath: string): Promise<string | null> {
+  try {
+    const remote = await resolveOriginRemote(repoPath);
+    if (remote?.forge === 'cursor') return CURSOR_ISSUES_UNAVAILABLE;
+    if (remote?.forge === 'entire') return ENTIRE_ISSUES_ARE_TRAILS;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface ListIssuesResult {
   source: IssueSource;
   /** Preference before fallback (useful for “Set up Linear / AbleTime” UI). */
@@ -48,6 +70,8 @@ export interface ListIssuesResult {
   linearConnected: boolean;
   abletimeConnected: boolean;
   issues: IssueInfo[];
+  /** This checkout’s git host has no issue tracker for the effective source. */
+  unavailableReason?: string;
   /** Linear viewer name or GitHub login — used for “assigned to me”. */
   viewer?: { login?: string; name?: string };
   /** Parsed UTC ISO when `updatedSince` was passed. */
@@ -198,7 +222,8 @@ async function githubViewerLogin(repoPath: string): Promise<string> {
 /**
  * Unified issue list for Create-from / Link issue / Home / MCP / CLI.
  * Uses Sideboard Account connections — Linear GraphQL, AbleTime hosted MCP,
- * or GitHub Issues via `gh`.
+ * or GitHub Issues via `gh`. A Cursor origin has no issues: Linear and AbleTime
+ * still apply, and the GitHub fallback returns {@link CURSOR_ISSUES_UNAVAILABLE}.
  */
 export async function listIssues(
   repoPath: string,
@@ -269,6 +294,18 @@ export async function listIssues(
       ...(since
         ? { since, comments: commentsFromAbleTimeIssues(tasks, issues, since) }
         : {}),
+    };
+  }
+
+  const unavailableReason = await cursorIssuesUnavailableReason(repoPath);
+  if (unavailableReason) {
+    return {
+      source,
+      preferredSource,
+      linearConnected,
+      abletimeConnected,
+      issues: [],
+      unavailableReason,
     };
   }
 

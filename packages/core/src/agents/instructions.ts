@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
+import type { GitForge } from '../git/remote-forge.js';
 import { examplePrefixedBranch, sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
   isPlaceholderBranch,
@@ -98,6 +99,30 @@ export function formatDevAccessHint(
   return 'To open a project Dev app: MCP `run_dev_script` (same as the desktop Dev button; pass `name` for one script — several can run at once, each with its own port) returns `{url, port, preview}` (`SIDEBOARD_PORT`, not 3000). preview=url → open that URL (browser, curl, Playwright). preview=window → Electron: the native window is the app; url is renderer/HMR only (no preload/IPC in a browser). If already running, `list_run_scripts` `active[].url`. `get_run_log` reads that script’s Run-tab terminal (tail). `stop_dev_script` stops one script; omit name to stop all.';
 }
 
+/** Worktree prompt when origin is Cursor. GitHub checkouts keep {@link formatGitAuthModeDirective}. */
+export function formatCursorGitDirective(slug: string | null | undefined): string {
+  const repo = slug?.trim() || '<origin-owner/name>';
+  return [
+    `Git host (Settings → Git → Cursor): this checkout is on Cursor (\`origin.cursor.com\`, \`${repo}\`).`,
+    '- Use the `origin` CLI, not `gh`. Where commands overlap, flags follow `gh` (`origin <command> --help`).',
+    '- `origin` already authenticates from `CURSOR_AUTH_TOKEN`, then `CURSOR_API_KEY`, then the login stored in Settings → Git → Cursor. Do not read those values, set them, or run `origin auth login` from this turn.',
+    '- Push with `git push -u origin HEAD`. If git asks for credentials, tell the user to open Settings → Git → Cursor and choose Configure git (`origin auth setup-git`). Do not wait for a Keychain dialog.',
+    '- Origin has no issue tracker. Tickets for this repo come from Linear or AbleTime via `list_issues`. Do not use `gh issue`.',
+  ].join('\n');
+}
+
+/** Worktree prompt when origin is Entire. Trails replace pull requests. */
+export function formatEntireGitDirective(slug: string | null | undefined): string {
+  const repo = slug?.trim() || '<origin-owner/name>';
+  return [
+    `Git host (Settings → Git → Entire): this checkout is on Entire (\`${repo}\`).`,
+    '- Use the `entire` CLI, not `gh` or `origin`. Trails replace pull requests and GitHub issues.',
+    '- `entire` uses the login from Settings → Git → Entire. Do not read tokens, set `ENTIRE_TOKEN`, or run `entire login` from this turn.',
+    '- Push with `git push -u origin HEAD`. If git asks for credentials, tell the user to open Settings → Git → Entire and log in. Do not wait for a Keychain dialog.',
+    '- Tickets for this repo are Trails (`entire trail list` / `entire trail show`). Do not use `gh issue`.',
+  ].join('\n');
+}
+
 /**
  * Mandatory Sideboard isolation + landing guidance — agents must edit the thread
  * worktree and open PRs whose titles/bodies describe the *purpose of the changes*.
@@ -107,6 +132,9 @@ export function formatWorktreeDirective(
     Partial<Pick<Thread, 'title' | 'prUrl'>>,
   opts?: {
     githubSlug?: string | null;
+    /** This worktree's origin forge. Cursor uses `origin`. Entire uses `entire trail`. */
+    originForge?: GitForge | null;
+    originSlug?: string | null;
     gitAuthMode?: GithubGitAuthMode;
     activeRuns?: readonly DevAccessRun[] | null;
   },
@@ -136,16 +164,40 @@ export function formatWorktreeDirective(
   lines.push(
     '- Always use this worktree\'s `origin` remote (`git remote get-url origin` from this cwd). Never push to or open PRs against `upstream` (template remotes).',
   );
-  lines.push(formatGitAuthModeDirective(opts?.gitAuthMode ?? 'auto'));
+  const cursorRepo = opts?.originForge === 'cursor';
+  const entireRepo = opts?.originForge === 'entire';
+  if (cursorRepo) {
+    lines.push(formatCursorGitDirective(opts?.originSlug));
+  } else if (entireRepo) {
+    lines.push(formatEntireGitDirective(opts?.originSlug));
+  } else {
+    lines.push(formatGitAuthModeDirective(opts?.gitAuthMode ?? 'auto'));
+  }
   lines.push(
     '- PR title/body and commit messages state what the change does and why (inspect the diff/commits and the user request) — never the worktree nickname or placeholder branch. Concise imperative title (Conventional Commits when it fits: feat:/fix:/chore:/docs:); body = intent, key changes, test notes.',
   );
   lines.push(
-    '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
+    cursorRepo
+      ? '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via Origin from this worktree (`origin pr merge` / `origin stack merge`).'
+      : entireRepo
+        ? '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge only when this turn is a Merge PR request or the user explicitly asked — via Entire from this worktree (`entire trail merge`).'
+        : '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
   if (thread.prUrl) {
     lines.push(
       `- A PR already exists (${thread.prUrl}). Update it (push + edit title/body if the purpose drifted) instead of opening a duplicate.`,
+    );
+  } else if (entireRepo) {
+    lines.push(
+      '- Prefer a Trail: `entire trail create --title "<title>" --body "<short>"`. Take the URL from `--json`. If this branch already has a trail, `entire trail update` instead of creating another. Trails have no draft state. Do not use `gh` or `origin`.',
+    );
+  } else if (cursorRepo) {
+    const slug = opts?.originSlug?.trim() || '<origin-owner/name>';
+    const resolve = opts?.originSlug?.trim()
+      ? ''
+      : ' Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree.';
+    lines.push(
+      `- Prefer a draft PR first: \`origin pr create --draft --push -R ${slug}\` (update via \`origin pr edit -R ${slug}\`). Take the URL from \`--json url\` — do not build it. Do not use \`gh\`.${resolve} Mark ready only when asked (\`origin pr ready\`). If the body is too long, retry with a short \`--body-file\`.`,
     );
   } else {
     const slug = opts?.githubSlug ?? '<origin-owner/name>';

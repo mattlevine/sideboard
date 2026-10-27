@@ -118,6 +118,11 @@ import {
   removeBoardPin,
   type AddBoardPinInput,
   getGitHubStatus,
+  getCursorGitStatus,
+  loginCursorGit,
+  setupCursorGit,
+  getEntireGitStatus,
+  loginEntireGit,
   listSlackWorkspaces,
   connectSlackToken,
   disconnectSlackWorkspace,
@@ -1123,6 +1128,11 @@ function registerIpc(): void {
     ) => toPublicAppSettings(updateProjectProfileSettings(repoPath, patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
+  ipcMain.handle('getCursorGitStatus', () => getCursorGitStatus());
+  ipcMain.handle('loginCursorGit', () => loginCursorGit());
+  ipcMain.handle('setupCursorGit', () => setupCursorGit());
+  ipcMain.handle('getEntireGitStatus', () => getEntireGitStatus());
+  ipcMain.handle('loginEntireGit', () => loginEntireGit());
   ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());
   ipcMain.handle('connectSlackToken', async (_e, token: string) => {
     await connectSlackToken(token);

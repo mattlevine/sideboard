@@ -25,6 +25,18 @@ import {
   resolveGithubAgentToken,
 } from './git-auth-mode.js';
 import { gh, git } from './run.js';
+import { formatRemoteTag, parseRemoteRepo, type RemoteRepo } from './remote-forge.js';
+import {
+  cursorPrChecks,
+  cursorViewToPrMeta,
+  createOrUpdateCursorPr,
+  fetchCursorPrHead,
+  listCursorPrs,
+  mergeCursorPr,
+  readyCursorPr,
+  viewCursorPr,
+  CURSOR_PR_VIEW_FIELDS,
+} from './cursor-pr.js';
 import {
   applyPrListResponse,
   buildGhPrListArgs,
@@ -125,33 +137,45 @@ export function canonicalizeRepoPath(path: string): string {
 }
 
 /**
- * Parse `owner/name` from a git remote URL (SSH, HTTPS, or SSH host aliases).
+ * Parse GitHub `owner/name` from a git remote URL (SSH, HTTPS, or `github.com-*` aliases).
+ * A Cursor, Entire, or other origin returns null so it is not treated as GitHub.
  */
 export function parseGithubSlugFromRemoteUrl(url: string): string | null {
-  const trimmed = url.trim().replace(/\.git$/i, '');
-  if (!trimmed) return null;
-
-  // github.com HTTPS / SSH / ssh://
-  const github = trimmed.match(/github\.com[:/]([^/]+)\/([^/]+)$/i);
-  if (github?.[1] && github[2]) return `${github[1]}/${github[2]}`;
-
-  // SSH host aliases: git@github.com-work:owner/repo
-  const sshAlias = trimmed.match(/^git@[^:]+:([^/]+)\/([^/]+)$/i);
-  if (sshAlias?.[1] && sshAlias[2]) return `${sshAlias[1]}/${sshAlias[2]}`;
-
-  return null;
+  const parsed = parseRemoteRepo(url);
+  return parsed?.forge === 'github' ? parsed.slug : null;
 }
 
-async function slugFromGitRemote(
-  repoPath: string,
-  remote: string,
-): Promise<string | null> {
+async function remoteUrl(repoPath: string, remote: string): Promise<string | null> {
   const result = await git(['remote', 'get-url', remote], repoPath, {
     reject: false,
     timeoutMs: 5_000,
   });
   if (result.exitCode !== 0 || !result.stdout.trim()) return null;
-  return parseGithubSlugFromRemoteUrl(result.stdout);
+  return result.stdout.trim();
+}
+
+async function slugFromGitRemote(repoPath: string, remote: string): Promise<string | null> {
+  const url = await remoteUrl(repoPath, remote);
+  if (!url) return null;
+  return parseGithubSlugFromRemoteUrl(url);
+}
+
+/** The checkout's origin, including hosts that are not GitHub. */
+export async function resolveOriginRemote(repoPath: string): Promise<RemoteRepo | null> {
+  const url = await remoteUrl(repoPath, 'origin');
+  if (!url) return null;
+  return parseRemoteRepo(url);
+}
+
+/**
+ * Tag for inventories: `github:owner/repo`, `cursor:owner/repo`, `entire:owner/repo`,
+ * or `host:owner/repo`. Falls back to GitHub only when origin itself is missing.
+ */
+export async function resolveProjectRemoteTag(repoPath: string): Promise<string | null> {
+  const origin = await resolveOriginRemote(repoPath);
+  if (origin) return formatRemoteTag(origin);
+  const slug = await resolveGithubRepoSlug(repoPath);
+  return slug ? `github:${slug}` : null;
 }
 
 /**
@@ -166,8 +190,11 @@ async function slugFromGitRemote(
 export async function resolveGithubRepoSlug(
   repoPath: string,
 ): Promise<string | null> {
-  const fromOrigin = await slugFromGitRemote(repoPath, 'origin');
-  if (fromOrigin) return fromOrigin;
+  const originUrl = await remoteUrl(repoPath, 'origin');
+  if (originUrl) {
+    const parsed = parseRemoteRepo(originUrl);
+    return parsed?.forge === 'github' ? parsed.slug : null;
+  }
 
   const hasAlt =
     Boolean(await slugFromGitRemote(repoPath, 'upstream')) ||
@@ -249,6 +276,8 @@ export async function originGhRepoEnv(
     mode?: GithubGitAuthMode;
   },
 ): Promise<Record<string, string>> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'cursor') return { ORIGIN_REPO: origin.slug };
   await ensureGhPreferOrigin(cwd);
   const slug = await resolveGithubRepoSlug(cwd);
   const mode = opts?.mode ?? getGithubGitAuthMode();
@@ -401,10 +430,20 @@ export async function listBranches(
 
 export type { ListPrsOptions } from './list-prs.js';
 
+function entireUsesTrails(): Error {
+  return new Error(
+    'This checkout is on Entire. Trails replace pull requests — use `entire trail` (Settings → Git → Entire), not `gh`.',
+  );
+}
+
 export async function listPrs(
   repoPath: string,
   opts?: ListPrsOptions,
 ): Promise<PrInfo[]> {
+  const origin = await resolveOriginRemote(repoPath);
+  if (origin?.forge === 'entire') return [];
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) return listCursorPrs(repoPath, cursorSlug, opts);
   const slug = await resolveGithubRepoSlug(repoPath);
   const resolved = resolveListPrsOptions(opts);
   const limit = resolved.limit ?? 200;
@@ -455,6 +494,18 @@ export async function getPr(
   repoPath: string,
   number: number,
 ): Promise<PrInfo | null> {
+  const origin = await resolveOriginRemote(repoPath);
+  if (origin?.forge === 'entire') return null;
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) {
+    const view = await viewCursorPr(
+      repoPath,
+      cursorSlug,
+      String(number),
+      'number,title,headRefName,url,author,isDraft,state',
+    );
+    return view ? prInfoFromGhView(view) : null;
+  }
   const slug = await resolveGithubRepoSlug(repoPath);
   const args = [
     'pr',
@@ -556,6 +607,14 @@ export async function getPrForHeadBranch(
 ): Promise<PrInfo | null> {
   const head = normalizeGitBranchName(branch);
   if (!head || isDefaultishSourceRef(head)) return null;
+
+  const origin = await resolveOriginRemote(repoPath);
+  if (origin?.forge === 'entire') return null;
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) {
+    const rows = await listCursorPrs(repoPath, cursorSlug, { state: 'open', limit: 5 }, head);
+    return rows[0] ?? null;
+  }
 
   const slug = await resolveGithubRepoSlug(repoPath);
   const listHead = slug ? ghHeadRef(slug, head) : head;
@@ -785,6 +844,10 @@ export async function getPrChecks(
   cwd: string,
   selector: string,
 ): Promise<PrCheckRun[] | null> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'entire') return null;
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) return cursorPrChecks(cwd, cursorSlug, selector);
   const slug = await resolveGithubRepoSlug(cwd);
   const args = [
     'pr',
@@ -858,6 +921,18 @@ export async function getPrMeta(
   cwd: string,
   selector: string,
 ): Promise<PrMeta | null> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'entire') return null;
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) {
+    const view = await viewCursorPr(
+      cwd,
+      cursorSlug,
+      selector,
+      'number,title,url,state,isDraft,reviewDecision,baseRefName,headRefName,author,labels,mergeability',
+    );
+    return view ? cursorViewToPrMeta(view) : null;
+  }
   const slug = await resolveGithubRepoSlug(cwd);
   const viewArgs = [
     'pr',
@@ -1032,6 +1107,13 @@ export async function getPrDetails(
   cwd: string,
   selector: string,
 ): Promise<PrDetails | null> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'entire') return null;
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) {
+    const view = await viewCursorPr(cwd, cursorSlug, selector, CURSOR_PR_VIEW_FIELDS);
+    return view ? parsePrDetailsView(view) : null;
+  }
   const slug = await resolveGithubRepoSlug(cwd);
   const viewArgs = ['pr', 'view', selector, '--json', PR_DETAILS_JSON_FIELDS];
   if (slug) viewArgs.push('--repo', slug);
@@ -1059,6 +1141,13 @@ export async function fetchPrHead(
   number: number,
   localBranch: string,
 ): Promise<void> {
+  const origin = await resolveOriginRemote(repoPath);
+  if (origin?.forge === 'entire') throw entireUsesTrails();
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) {
+    await fetchCursorPrHead(repoPath, cursorSlug, number, localBranch);
+    return;
+  }
   const slug = await resolveGithubRepoSlug(repoPath);
   const refspec = `+pull/${number}/head:${localBranch}`;
   const errors: string[] = [];
@@ -1801,6 +1890,86 @@ export async function pushBranch(
   throw new Error(httpsErr || sshErr || `git push origin ${branchName} failed`);
 }
 
+async function markCursorPrReady(
+  cwd: string,
+  slug: string,
+  selector: string,
+): Promise<{ url: string; state: string; isDraft: boolean }> {
+  const view = await viewCursorPr(cwd, slug, selector, 'url,state,isDraft');
+  if (!view) throw new Error('Could not load the Cursor pull request');
+  const url = String(view.url ?? '');
+  const state = String(view.state ?? '').toUpperCase();
+  const isDraft = Boolean(view.isDraft);
+  if (state === 'MERGED' || state === 'CLOSED') {
+    return { url, state, isDraft: false };
+  }
+  if (isDraft) {
+    if (await isDirty(cwd)) {
+      throw new Error(
+        'Commit and push local work before marking the pull request ready for review.',
+      );
+    }
+    const unpushed = await countUnpushedVsOrigin(cwd);
+    if (unpushed > 0) {
+      throw new Error(
+        'Push this branch to origin before marking the pull request ready for review.',
+      );
+    }
+    await readyCursorPr(cwd, slug, selector);
+  }
+  return { url, state: state || 'OPEN', isDraft: false };
+}
+
+async function mergeCursorPullRequest(
+  cwd: string,
+  slug: string,
+  selector: string,
+  method: 'merge' | 'squash' | 'rebase',
+): Promise<{ url: string; state: string }> {
+  const view = await viewCursorPr(cwd, slug, selector, 'url,state,isDraft');
+  if (!view) throw new Error('Could not load the Cursor pull request');
+  const url = String(view.url ?? '');
+  if (String(view.state ?? '').toUpperCase() === 'MERGED') return { url, state: 'MERGED' };
+  if (view.isDraft) await readyCursorPr(cwd, slug, selector);
+  await mergeCursorPr(cwd, slug, selector, method);
+  return { url, state: 'MERGED' };
+}
+
+async function createCursorPullRequest(
+  worktreePath: string,
+  slug: string,
+  opts: {
+    title: string;
+    body?: string;
+    base: string;
+    head: string;
+    draft?: boolean;
+    web?: boolean;
+  },
+): Promise<string> {
+  const bodyText = (opts.body ?? opts.title).trim() || opts.title;
+  const bodyFile = join(
+    tmpdir(),
+    `sideboard-pr-body-${process.pid}-${randomBytes(6).toString('hex')}.md`,
+  );
+  writeFileSync(bodyFile, bodyText.endsWith('\n') ? bodyText : `${bodyText}\n`, 'utf8');
+  try {
+    return await createOrUpdateCursorPr(worktreePath, slug, {
+      title: opts.title,
+      bodyFile,
+      base: opts.base,
+      head: opts.head,
+      draft: opts.draft,
+    });
+  } finally {
+    try {
+      unlinkSync(bodyFile);
+    } catch {
+      // temp file
+    }
+  }
+}
+
 async function runPrReady(
   cwd: string,
   selector: string,
@@ -1823,6 +1992,10 @@ export async function markPrReady(
   cwd: string,
   selector: string,
 ): Promise<{ url: string; state: string; isDraft: boolean }> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'entire') throw entireUsesTrails();
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) return markCursorPrReady(cwd, cursorSlug, selector);
   const slug = await resolveGithubRepoSlug(cwd);
   const viewArgs = ['pr', 'view', selector, '--json', 'url,state,isDraft'];
   if (slug) viewArgs.push('--repo', slug);
@@ -1873,6 +2046,10 @@ export async function mergePr(
   selector: string,
   opts?: { method?: 'merge' | 'squash' | 'rebase' },
 ): Promise<{ url: string; state: string }> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'entire') throw entireUsesTrails();
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) return mergeCursorPullRequest(cwd, cursorSlug, selector, opts?.method ?? 'squash');
   const slug = await resolveGithubRepoSlug(cwd);
   const viewArgs = ['pr', 'view', selector, '--json', 'url,state,isDraft,number'];
   if (slug) viewArgs.push('--repo', slug);
@@ -1975,6 +2152,10 @@ export async function createOrUpdatePr(
     assignee?: string | null;
   },
 ): Promise<string> {
+  const origin = await resolveOriginRemote(worktreePath);
+  if (origin?.forge === 'entire') throw entireUsesTrails();
+  const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
+  if (cursorSlug) return createCursorPullRequest(worktreePath, cursorSlug, opts);
   // Prefer origin over `gh`'s inferred repo — Makerkit-style checkouts with
   // origin + upstream otherwise create PRs against the template upstream.
   await ensureGhPreferOrigin(worktreePath);

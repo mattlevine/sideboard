@@ -48,6 +48,8 @@ describe('parseGithubSlugFromRemoteUrl', () => {
     expect(
       parseGithubSlugFromRemoteUrl('git@github.com-work:acme/widgets.git'),
     ).toBe('acme/widgets');
+    expect(parseGithubSlugFromRemoteUrl('https://origin.cursor.com/acme/widgets.git')).toBeNull();
+    expect(parseGithubSlugFromRemoteUrl('git@gitlab.com:acme/widgets.git')).toBeNull();
   });
 });
 
@@ -90,6 +92,16 @@ describe('resolveGithubRepoSlug', () => {
     await expect(resolveGithubRepoSlug('/tmp/storycycle')).resolves.toBe(
       'mattlevine/storycycle-ai',
     );
+    expect(ghMock).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a Cursor origin as GitHub', async () => {
+    gitMock.mockResolvedValue({
+      stdout: 'https://origin.cursor.com/acme/widgets.git',
+      stderr: '',
+      exitCode: 0,
+    });
+    await expect(resolveGithubRepoSlug('/tmp/repo')).resolves.toBeNull();
     expect(ghMock).not.toHaveBeenCalled();
   });
 

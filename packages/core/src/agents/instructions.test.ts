@@ -452,6 +452,44 @@ describe('formatWorktreeDirective', () => {
     expect(text).not.toMatch(/Permission denied \(publickey\)/);
     expect(text).not.toMatch(/GitHub app/i);
   });
+
+  it('tells a Cursor checkout to use origin instead of gh', () => {
+    const text = formatWorktreeDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        repoPath: '/Users/me/Projects/app',
+        branchName: 'thread/paris',
+      },
+      { originForge: 'cursor', originSlug: 'acme/notes' },
+    );
+    expect(text).toContain('origin pr create --draft --push -R acme/notes');
+    expect(text).toMatch(/Settings → Git → Cursor/);
+    expect(text).toMatch(/origin pr merge/);
+    expect(text).toMatch(/origin auth setup-git/);
+    expect(text).toMatch(/no issue tracker/);
+    expect(text).not.toMatch(/gh pr create/);
+    expect(text).not.toMatch(/Git authentication \(Settings → Git mode/);
+    expect(text.length).toBeLessThan(4_400);
+  });
+
+  it('tells an Entire checkout to open a trail instead of a GitHub PR', () => {
+    const text = formatWorktreeDirective(
+      {
+        worktreePath: '/tmp/sideboard/workspaces/app/paris',
+        repoPath: '/Users/me/Projects/app',
+        branchName: 'thread/paris',
+      },
+      { originForge: 'entire', originSlug: 'acme/notes' },
+    );
+    expect(text).toContain('entire trail create --title');
+    expect(text).toMatch(/Settings → Git → Entire/);
+    expect(text).toMatch(/entire trail merge/);
+    expect(text).toMatch(/Trails replace pull requests/);
+    expect(text).not.toMatch(/gh pr create/);
+    expect(text).not.toMatch(/origin pr create/);
+    expect(text).not.toMatch(/Git authentication \(Settings → Git mode/);
+    expect(text.length).toBeLessThan(4_400);
+  });
 });
 
 describe('formatRenameBranchDirective', () => {

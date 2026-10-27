@@ -52,6 +52,8 @@ import type {
 } from '../agents/install.js';
 import type { BrightsySession } from '../brightsy/accounts.js';
 import type { GitHubStatus } from '../integrations/github.js';
+import type { CursorGitStatus } from '../integrations/cursor-git.js';
+import type { EntireGitStatus } from '../integrations/entire-git.js';
 import type { CaffeinateHoldState } from '../store/caffeinate-hold.js';
 import type { SetupLogSnapshot } from '../store/setup-log.js';
 import type { RunLogSnapshot } from '../store/run-log.js';
@@ -214,6 +216,16 @@ export interface IpcApi extends McpUiIpc {
   ): Promise<PublicAppSettings>;
   /** Machine-global GitHub status via `gh`. */
   getGitHubStatus(): Promise<GitHubStatus>;
+  /** This Mac’s Origin CLI login for Cursor git (`origin auth status`). */
+  getCursorGitStatus(): Promise<CursorGitStatus>;
+  /** Open `origin auth login` in Terminal. */
+  loginCursorGit(): Promise<AgentSetupActionResult>;
+  /** Run `origin auth setup-git` so pushes to origin.cursor.com authenticate. */
+  setupCursorGit(): Promise<AgentSetupActionResult>;
+  /** This Mac’s Entire CLI login (`entire auth contexts`). */
+  getEntireGitStatus(): Promise<EntireGitStatus>;
+  /** Open `entire login` in Terminal. */
+  loginEntireGit(): Promise<AgentSetupActionResult>;
   /** Connected Slack workspaces (no tokens). */
   getSlackWorkspaces(): Promise<SlackWorkspaceInfo[]>;
   /** Add a workspace from a pasted bot (xoxb-) or user (xoxp-) token. */
@@ -277,6 +289,7 @@ export interface IpcApi extends McpUiIpc {
   /**
    * Unified issues for Create-from / Link issue (Linear, AbleTime MCP, or
    * GitHub Issues, based on Account preference with GitHub fallback).
+   * A Cursor origin has no issue tracker; that fallback sets unavailableReason.
    */
   listIssues(repoPath: string, opts?: ListIssuesOptions): Promise<ListIssuesResult>;
   /**
