@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { reviewLabelForRepo } from '@sideboard/home-board';
-import { worktreeDisplayLabelForGroup } from '@sideboard/worktree-labels';
+import { workspaceSearchText, worktreeDisplayLabelForGroup } from '@sideboard/worktree-labels';
 import type { Thread } from '@sideboard-ai/core';
 import { isGroupUnread } from '../lib/unread-worktrees';
 import { pickWorktreeChat } from '../lib/worktree-tabs';
@@ -109,8 +109,7 @@ export function ProjectsBrowserModal({
         const name = repoName(repo.path).toLowerCase();
         if (name.includes(q)) return repo;
         const groups = repo.groups.filter((group) => {
-          const label = worktreeDisplayLabelForGroup(group).toLowerCase();
-          if (label.includes(q)) return true;
+          if (workspaceSearchText(group).toLowerCase().includes(q)) return true;
           return group.some((thread) =>
             `${thread.title} ${thread.branchName} ${thread.agent} ${(thread.tags ?? []).join(' ')}`
               .toLowerCase()

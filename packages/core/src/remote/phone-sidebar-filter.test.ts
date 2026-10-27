@@ -71,6 +71,26 @@ describe('phone sidebar filter', () => {
     expect(filterPhoneProjects(projects, 'missing', [])).toEqual([]);
   });
 
+  it('matches a checkout nickname that is not the row label', () => {
+    const named = [
+      {
+        name: 'sideboard',
+        path: '/sb',
+        worktrees: [
+          {
+            label: 'matt/remove-sidebar-create-search',
+            workspace: 'Real Salt Lake',
+            tags: [],
+            chats: [{ title: 'Notes', agent: 'cursor', preview: '' }],
+          },
+        ],
+      },
+    ];
+    expect(filterPhoneProjects(named, 'salt lake', []).flatMap((project) => project.worktrees.map((worktree) => worktree.label))).toEqual([
+      'matt/remove-sidebar-create-search',
+    ]);
+  });
+
   it('filters orchestration chats and keeps the section when the query names it', () => {
     const chats = [{ title: 'Planner', agent: 'claude', preview: 'board' }];
     expect(filterPhoneOrchestration(chats, 'planner')).toEqual(chats);

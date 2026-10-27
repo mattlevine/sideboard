@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { classifyWorktreeListBadges, groupHomeBoardWorktrees, issueBlockedByIds, visibleAgentBlock } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
-import { workspaceTagsFromGroup, worktreeAnchorLabel } from '../git/worktree-labels.js';
+import { workspaceRowLabel, workspaceTagsFromGroup, worktreeAnchorLabel } from '../git/worktree-labels.js';
 import type {
   AgentKind,
   Autonomy,
@@ -208,6 +208,7 @@ export interface PhoneWorktreeBadge {
 
 export interface PhoneWorktree {
   label: string;
+  workspace?: string;
   chats: PhoneChatSummary[];
   tags?: string[]; // shared labels; omitted when the workspace has none
   badge?: PhoneWorktreeBadge;
@@ -557,7 +558,7 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
         const badge = classifyWorktreeListBadges(group, viewerLogin, resolveProjectReviewLabel(settings, path))[0];
         const blockedBy = issueBlockedByIds(group);
         return {
-          label: worktreeAnchorLabel(group).title,
+          ...workspaceRowLabel(group),
           chats: group.map(summarize),
           ...(tags.length > 0 ? { tags } : {}),
           ...(blockedBy.length > 0 ? { blockedBy } : {}),
