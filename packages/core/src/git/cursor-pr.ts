@@ -1,9 +1,19 @@
 import { git, originCli } from './run.js';
 import { parseRemoteRepo } from './remote-forge.js';
-import { applyPrListResponse, labelNames, type ListPrsOptions } from './list-prs.js';
+import {
+  applyPrListResponse,
+  labelNames,
+  prListFetchLimit,
+  resolveListPrsOptions,
+  type ListPrsOptions,
+} from './list-prs.js';
+import { buildMergeGateChecks, type PrMergeGate } from './pr-gates.js';
 import type { PrCheckRun, PrInfo, PrMeta } from '../types/thread.js';
 
-const LIST_FIELDS = 'number,title,headRefName,url,author,state,isDraft';
+/** Plain `origin pr list` cannot return labels or review requests. */
+const PLAIN_LIST_FIELDS = 'number,title,headRefName,url,author,state,isDraft,reviewDecision';
+/** Search serializer (`--label` / `--search`) is what carries the review-queue fields. */
+const SEARCH_LIST_FIELDS = `${PLAIN_LIST_FIELDS},labels,reviewRequests`;
 const VIEW_FIELDS =
   'number,title,body,url,state,isDraft,reviewDecision,author,createdAt,baseRefName,headRefName,additions,deletions,changedFiles,commits,comments,reviews,labels,mergeability';
 
@@ -37,12 +47,36 @@ function cursorMergeFields(value: unknown): { mergeable: string | null; mergeSta
   }
   if (value && typeof value === 'object') {
     const row = value as Record<string, unknown>;
-    const status = String(row.status ?? row.state ?? row.mergeable ?? '')
-      .trim()
-      .toUpperCase();
+    const conflictState = String(row.mergeConflictState ?? '').trim().toUpperCase();
+    if ('hasMergeConflicts' in row || conflictState) {
+      if (conflictState.includes('PENDING')) {
+        return { mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' };
+      }
+      const conflicting =
+        row.hasMergeConflicts === true ||
+        (conflictState.includes('CONFLICT') && !conflictState.includes('CLEAN'));
+      if (conflicting) return { mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' };
+      if (row.hasMergeConflicts === false || conflictState.includes('CLEAN')) {
+        return { mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' };
+      }
+    }
+    const verdict = String(row.verdict ?? row.verdictKind ?? '').trim().toUpperCase();
+    if (verdict === 'BLOCKED') return { mergeable: null, mergeStateStatus: 'BLOCKED' };
+    if (verdict === 'MERGEABLE') return { mergeable: 'MERGEABLE', mergeStateStatus: 'CLEAN' };
+    const status = String(row.status ?? row.state ?? row.mergeable ?? '').trim().toUpperCase();
     return { mergeable: status || null, mergeStateStatus: status || null };
   }
   return { mergeable: null, mergeStateStatus: null };
+}
+
+/** Origin says `required` / `changes_requested`; the Checks tab reads GitHub's names. */
+function cursorReviewDecision(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim().toUpperCase().replace(/[\s-]+/g, '_') : '';
+  if (!raw) return null;
+  if (raw === 'REQUIRED' || raw === 'REVIEW_REQUIRED') return 'REVIEW_REQUIRED';
+  if (raw === 'CHANGES_REQUESTED') return 'CHANGES_REQUESTED';
+  if (raw === 'APPROVED') return 'APPROVED';
+  return raw;
 }
 
 export function cursorViewToPrMeta(view: Record<string, unknown>): PrMeta {
@@ -54,8 +88,7 @@ export function cursorViewToPrMeta(view: Record<string, unknown>): PrMeta {
     url: String(view.url ?? ''),
     state: String(view.state ?? ''),
     isDraft: Boolean(view.isDraft),
-    reviewDecision:
-      typeof view.reviewDecision === 'string' && view.reviewDecision ? view.reviewDecision : null,
+    reviewDecision: cursorReviewDecision(view.reviewDecision),
     baseRefName: String(view.baseRefName ?? ''),
     headRefName: String(view.headRefName ?? ''),
     isInMergeQueue: false,
@@ -101,7 +134,35 @@ export function normalizeOriginPr(raw: Record<string, unknown>): Record<string, 
     author,
     body: raw.body ?? raw.description ?? '',
     isCrossRepository: false,
+    reviewDecision: cursorReviewDecision(raw.reviewDecision),
+    reviewRequests: originReviewRequests(raw.reviewRequests),
   };
+}
+
+/** Origin reviewers are `{kind,name,slug}`, not GitHub `{login}` / `{slug,__typename}`. */
+function originReviewRequests(raw: unknown): unknown {
+  if (!Array.isArray(raw)) return raw;
+  return raw.map(originReviewer).filter((row) => row != null);
+}
+
+function originReviewer(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw === 'string' && raw.trim()) return { login: raw.trim() };
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (typeof row.login === 'string' && row.login.trim()) return row;
+  const kind = String(row.kind ?? row.__typename ?? '').toLowerCase();
+  const slug = typeof row.slug === 'string' ? row.slug.trim() : '';
+  const name = typeof row.name === 'string' ? row.name.trim() : '';
+  const id = typeof row.id === 'string' ? row.id.trim() : '';
+  if (kind.includes('team') || kind.includes('group') || (slug.includes('/') && !row.login)) {
+    return { __typename: 'Team', slug: slug || name, name };
+  }
+  if (kind.includes('service') || kind.includes('bot')) {
+    const login = name || id || 'cursor-bot';
+    return { __typename: 'Bot', login: login.toLowerCase().endsWith('[bot]') ? login : `${login}[bot]` };
+  }
+  const login = name || id;
+  return login ? { login } : null;
 }
 
 export function originChecksToRuns(stdout: string): PrCheckRun[] {
@@ -153,11 +214,10 @@ export function originChecksToRuns(stdout: string): PrCheckRun[] {
   });
 }
 
-function listState(opts?: ListPrsOptions): string {
-  if (opts?.draft === true) return 'draft';
-  const state = opts?.state?.toString().toLowerCase();
-  if (state === 'closed' || state === 'merged' || state === 'all' || state === 'draft') return state;
-  return 'open';
+function listedHasLabels(pr: PrInfo, labels: string[]): boolean {
+  if (labels.length === 0) return true;
+  const have = new Set((pr.labels ?? []).map((name) => name.toLowerCase()));
+  return labels.every((label) => have.has(label.toLowerCase()));
 }
 
 export async function listCursorPrs(
@@ -166,19 +226,31 @@ export async function listCursorPrs(
   opts?: ListPrsOptions,
   head?: string,
 ): Promise<PrInfo[]> {
-  const limit = Math.max(1, Math.min(250, opts?.limit ?? 30));
+  const resolved = resolveListPrsOptions(opts);
+  const limit = Math.max(1, Math.min(250, resolved.limit ?? 200));
+  const fetchLimit = prListFetchLimit(limit, resolved.reviewer);
+  const useSearch = resolved.labels.length > 0 || Boolean(resolved.reviewer) || Boolean(resolved.query);
+  const state = resolved.draft === true ? 'draft' : resolved.state;
   const args = [
     'pr',
     'list',
     ...repoArgs(slug),
     '--state',
-    listState(opts),
+    state,
     '--limit',
-    String(limit),
+    String(fetchLimit),
     '--json',
-    LIST_FIELDS,
+    useSearch ? SEARCH_LIST_FIELDS : PLAIN_LIST_FIELDS,
   ];
   if (head?.trim()) args.push('--head', head.trim());
+  if (useSearch) {
+    for (const label of resolved.labels) args.push('--label', label);
+    if (resolved.query) args.push('--search', resolved.query);
+    else if (resolved.labels.length === 0) {
+      const token = state === 'all' ? 'is:open OR is:closed OR is:merged' : `is:${state}`;
+      args.push('--search', token);
+    }
+  }
   const { stdout, exitCode } = await originCli(args, repoPath, { reject: false, timeoutMs: 20_000 });
   if (exitCode !== 0 || !stdout.trim()) return [];
   let parsed: unknown;
@@ -191,7 +263,8 @@ export async function listCursorPrs(
   const normalized = parsed
     .filter((row) => row && typeof row === 'object')
     .map((row) => normalizeOriginPr(row as Record<string, unknown>));
-  return applyPrListResponse(JSON.stringify(normalized), opts);
+  const listed = applyPrListResponse(JSON.stringify(normalized), { ...opts, limit: undefined });
+  return listed.filter((pr) => listedHasLabels(pr, resolved.labels)).slice(0, limit);
 }
 
 export async function viewCursorPr(
@@ -328,10 +401,37 @@ export async function cursorPrChecks(
     { reject: false, timeoutMs: 20_000 },
   );
   const err = stderr.trim();
+  let ci: PrCheckRun[];
   if (!stdout.trim()) {
     if (/no pull request|not found|no change/i.test(err)) return null;
     if (exitCode !== 0 && err) throw new Error(err);
-    return [];
+    ci = [];
+  } else {
+    ci = originChecksToRuns(stdout);
   }
-  return originChecksToRuns(stdout);
+  const view = await viewCursorPr(
+    repoPath,
+    slug,
+    selector,
+    'url,baseRefName,reviewDecision,mergeability',
+  );
+  if (!view) return ci;
+  return cursorChecksWithGate(ci, cursorViewToPrMeta(view));
+}
+
+function cursorChecksWithGate(ci: PrCheckRun[], meta: PrMeta): PrCheckRun[] {
+  const gate: PrMergeGate = {
+    mergeable: meta.mergeable,
+    mergeStateStatus: meta.mergeStateStatus,
+    reviewDecision: meta.reviewDecision,
+    baseRefName: meta.baseRefName,
+    url: meta.url,
+    isInMergeQueue: meta.isInMergeQueue,
+  };
+  const review = (gate.reviewDecision ?? '').toUpperCase();
+  const hasReviewRow = review === 'CHANGES_REQUESTED' || review === 'REVIEW_REQUIRED';
+  const gateRows = buildMergeGateChecks(gate, {
+    suppressGenericBlocked: ci.some((check) => check.bucket === 'fail') || hasReviewRow,
+  });
+  return [...gateRows, ...ci];
 }
