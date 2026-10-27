@@ -51,6 +51,7 @@ export * from './git/run.js';
 export * from './git/gh-errors.js';
 export * from './git/git-auth-mode.js';
 export * from './git/worktree.js';
+export * from './git/pr-write.js';
 export * from './git/stack.js';
 export {
   examplePrefixedBranch,
@@ -64,6 +65,8 @@ export {
 } from './git/agent-git-actions.js';
 export type { AgentGitAction, SidebarGitAction } from './git/agent-git-actions.js';
 export * from './integrations/github.js';
+export * from './integrations/cursor-git.js';
+export * from './integrations/entire-git.js';
 export * from './integrations/linear.js';
 export * from './integrations/linear-oauth.js';
 export * from './integrations/github-issues.js';

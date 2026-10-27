@@ -1,0 +1,10 @@
+{
+  "client_id": "https://www.sideboard.cloud/oauth/entire-client.json",
+  "client_name": "Sideboard",
+  "client_uri": "https://www.sideboard.cloud",
+  "redirect_uris": ["https://relay.sideboard.cloud/remote/oauth/callback"],
+  "grant_types": ["authorization_code"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "scope": "openid email"
+}

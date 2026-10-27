@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { PublicAppSettings, RemoteHostStatus } from '@sideboard-ai/core';
+import type { PublicAppSettings, RelayAccountProvider, RemoteHostStatus } from '@sideboard-ai/core';
+import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
 import { PairingQr } from './PairingQr';
 
 /** Electron IPC prefixes the main-process message and drops `error.cause`. */
@@ -10,16 +11,7 @@ function errorText(err: unknown): string {
   return msg;
 }
 
-function GitHubMark() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-      <path
-        fill="currentColor"
-        d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"
-      />
-    </svg>
-  );
-}
+const hostButtonStyle = { display: 'inline-flex', alignItems: 'center', gap: 8 } as const;
 
 export function RemoteSettings({
   settings,
@@ -37,7 +29,7 @@ export function RemoteSettings({
   const [remote, setRemote] = useState<RemoteHostStatus | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
   const [relayDraft, setRelayDraft] = useState(settings.integrations.remoteRelayUrl ?? '');
-  const [signingIn, setSigningIn] = useState<'github' | 'out' | null>(null);
+  const [signingIn, setSigningIn] = useState<RelayAccountProvider | 'out' | null>(null);
   const [pairing, setPairing] = useState(false);
   const signedIn = Boolean(settings.integrations.hasRemoteAccount);
 
@@ -97,11 +89,11 @@ export function RemoteSettings({
     }
   }
 
-  async function signIn() {
-    setSigningIn('github');
+  async function signIn(provider: RelayAccountProvider) {
+    setSigningIn(provider);
     setError(null);
     try {
-      const next = await window.sideboard.startRemoteAccountLogin('github');
+      const next = await window.sideboard.startRemoteAccountLogin(provider);
       applySettings(next);
     } catch (err) {
       setError(errorText(err));
@@ -135,8 +127,8 @@ export function RemoteSettings({
     <div className="settings-body">
       <p className="settings-lead">
         The Sideboard phone app chats with the Global orchestrator on this Mac. Agents stay here.
-        Sign in with GitHub, the git host, so this Mac can register on the relay. Other git
-        hosts can be added later.
+        Sign in with GitHub, Cursor, or Entire so this Mac can register on the relay. Each
+        project keeps its own origin. Repos on this Mac do not have to share a git host.
       </p>
 
       <div className="settings-section settings-section-card">
@@ -170,18 +162,40 @@ export function RemoteSettings({
         <p className="settings-hint">
           {signedIn
             ? `Signed in${settings.integrations.remoteAccountEmail ? ` as ${settings.integrations.remoteAccountEmail}` : ''}.`
-            : 'Sign in with GitHub before pairing a phone.'}
+            : 'Sign in with GitHub, Cursor, or Entire before pairing a phone.'}
         </p>
         <div className="settings-key-row" style={{ marginTop: 12 }}>
           {signedIn ? null : (
             <button
               type="button"
               disabled={busy || signingIn !== null}
-              onClick={() => void signIn()}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              onClick={() => void signIn('github')}
+              style={hostButtonStyle}
             >
               <GitHubMark />
               {signingIn === 'github' ? 'Waiting for GitHub…' : 'Sign in with GitHub'}
+            </button>
+          )}
+          {signedIn ? null : (
+            <button
+              type="button"
+              disabled={busy || signingIn !== null}
+              onClick={() => void signIn('cursor')}
+              style={hostButtonStyle}
+            >
+              <CursorMark />
+              {signingIn === 'cursor' ? 'Waiting for Cursor…' : 'Sign in with Cursor'}
+            </button>
+          )}
+          {signedIn ? null : (
+            <button
+              type="button"
+              disabled={busy || signingIn !== null}
+              onClick={() => void signIn('entire')}
+              style={hostButtonStyle}
+            >
+              <EntireMark />
+              {signingIn === 'entire' ? 'Waiting for Entire…' : 'Sign in with Entire'}
             </button>
           )}
           {signedIn ? (

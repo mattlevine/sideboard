@@ -60,6 +60,11 @@ const api: IpcApi = {
   updateProjectProfileSettings: (repoPath, patch) =>
     ipcRenderer.invoke('updateProjectProfileSettings', repoPath, patch),
   getGitHubStatus: () => ipcRenderer.invoke('getGitHubStatus'),
+  getCursorGitStatus: () => ipcRenderer.invoke('getCursorGitStatus'),
+  loginCursorGit: () => ipcRenderer.invoke('loginCursorGit'),
+  setupCursorGit: () => ipcRenderer.invoke('setupCursorGit'),
+  getEntireGitStatus: () => ipcRenderer.invoke('getEntireGitStatus'),
+  loginEntireGit: () => ipcRenderer.invoke('loginEntireGit'),
   getSlackWorkspaces: () => ipcRenderer.invoke('getSlackWorkspaces'),
   connectSlackToken: (token) => ipcRenderer.invoke('connectSlackToken', token),
   startSlackOAuth: () => ipcRenderer.invoke('startSlackOAuth'),

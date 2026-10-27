@@ -117,6 +117,23 @@ export async function git(
   return result;
 }
 
+/** Origin CLI (`origin`). Non-interactive; Cursor repos use this instead of `gh`. */
+export async function originCli(
+  args: string[],
+  cwd: string,
+  opts?: { reject?: boolean; timeoutMs?: number },
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return run('origin', args, {
+    cwd,
+    reject: opts?.reject,
+    timeoutMs: opts?.timeoutMs,
+    env: {
+      GIT_TERMINAL_PROMPT: '0',
+      NO_COLOR: '1',
+    },
+  });
+}
+
 export async function gh(
   args: string[],
   cwd: string,

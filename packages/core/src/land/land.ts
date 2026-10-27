@@ -1,7 +1,7 @@
 import type { LandPreview, LandResult, Thread } from '../types/thread.js';
+import { createOrUpdatePr } from '../git/pr-write.js';
 import {
   commitAll,
-  createOrUpdatePr,
   currentBranch,
   isDirty,
   pushBranch,

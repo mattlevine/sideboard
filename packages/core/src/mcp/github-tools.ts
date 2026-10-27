@@ -10,7 +10,7 @@ import {
   listGitHubProjects,
   updateGitHubIssue,
 } from '../integrations/github-issues.js';
-import { listGitHubIssues } from '../integrations/issues.js';
+import { cursorIssuesUnavailableReason, listGitHubIssues } from '../integrations/issues.js';
 import { parseIssueSince } from '../integrations/issue-since.js';
 import {
   clampMcpIssueLimit,
@@ -29,6 +29,12 @@ function fail(err: unknown) {
     { error: err instanceof Error ? err.message : String(err) },
     true,
   );
+}
+
+/** Origin has no issues. GitHub issue tools stop before calling `gh`. */
+async function cursorIssueBlock(repoPath: string | undefined): Promise<string | null> {
+  const cwd = await resolveRepoRoot((repoPath ?? '').trim() || process.cwd());
+  return cursorIssuesUnavailableReason(cwd);
 }
 
 const repoPathSchema = z
@@ -52,7 +58,7 @@ export const GITHUB_ISSUE_MCP_TOOL_NAMES = [
 export function registerGithubIssueTools(server: McpServer): void {
   server.tool(
     'github_search_issues',
-    'Search or list open GitHub issues in this repo via Account gh. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all, or a login. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”).',
+    'Search or list open GitHub issues in this repo via Account gh. A Cursor origin returns unavailableReason — Origin has no issue tracker. An Entire origin does the same — tickets there are Trails (`entire trail`), not GitHub Issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all, or a login. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”).',
     {
       query: z
         .string()
@@ -76,6 +82,15 @@ export function registerGithubIssueTools(server: McpServer): void {
       try {
         const cwd = await resolveRepoRoot((repoPath ?? '').trim() || process.cwd());
         const page = clampMcpIssueLimit(limit);
+        const blocked = await cursorIssuesUnavailableReason(cwd);
+        if (blocked) {
+          return mcpJson(
+            formatListedIssuesForMcp(
+              { source: 'github', issues: [], unavailableReason: blocked },
+              page,
+            ),
+          );
+        }
         const since = updatedSince ? parseIssueSince(updatedSince) : undefined;
         const issues = await listGitHubIssues(cwd, {
           query,
@@ -114,6 +129,8 @@ export function registerGithubIssueTools(server: McpServer): void {
     { repoPath: repoPathSchema },
     async ({ repoPath }) => {
       try {
+        const blocked = await cursorIssueBlock(repoPath);
+        if (blocked) throw new Error(blocked);
         return text({ projects: await listGitHubProjects({ repoPath }) });
       } catch (err) {
         return fail(err);
@@ -127,6 +144,8 @@ export function registerGithubIssueTools(server: McpServer): void {
     { id: z.string(), include: mcpIssueIncludeSchema, repoPath: repoPathSchema },
     async ({ id, include, repoPath }) => {
       try {
+        const blocked = await cursorIssueBlock(repoPath);
+        if (blocked) throw new Error(blocked);
         return text(formatGitHubIssuePayload(await getGitHubIssue(id, { repoPath }), include));
       } catch (err) {
         return fail(err);
@@ -157,6 +176,8 @@ export function registerGithubIssueTools(server: McpServer): void {
     { id: z.string(), body: z.string(), repoPath: repoPathSchema },
     async ({ id, body, repoPath }) => {
       try {
+        const blocked = await cursorIssueBlock(repoPath);
+        if (blocked) throw new Error(blocked);
         return text(await commentGitHubIssue({ id, body }, { repoPath }));
       } catch (err) {
         return fail(err);
@@ -203,6 +224,8 @@ export function registerGithubIssueTools(server: McpServer): void {
     },
     async (args) => {
       try {
+        const blocked = await cursorIssueBlock(args.repoPath);
+        if (blocked) throw new Error(blocked);
         return text(await updateGitHubIssue(args, { repoPath: args.repoPath }));
       } catch (err) {
         return fail(err);
@@ -221,6 +244,8 @@ export function registerGithubIssueTools(server: McpServer): void {
     },
     async (args) => {
       try {
+        const blocked = await cursorIssueBlock(args.repoPath);
+        if (blocked) throw new Error(blocked);
         return text(await createGitHubIssue(args, { repoPath: args.repoPath }));
       } catch (err) {
         return fail(err);

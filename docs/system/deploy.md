@@ -38,6 +38,7 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 - https://www.sideboard.cloud/privacy/ — privacy policy
 - https://www.sideboard.cloud/support/ — support
 - https://www.sideboard.cloud/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)
+- https://www.sideboard.cloud/oauth/entire-client.json — Entire CIMD. `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` is that URL. No client secret.
 - https://www.sideboard.cloud/oauth/abletime/callback — AbleTime OAuth return (opens the desktop listener)
 - https://relay.sideboard.cloud/health — JSON; Fly checks this
 
@@ -45,7 +46,7 @@ A brief “not listening on 8080” warning during machine start is normal if No
 
 ## First-time / domains
 
-Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Phone accounts and pairings are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-slack-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. The OAuth redirect is `https://relay.sideboard.cloud/remote/oauth/callback`. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
+Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Phone accounts and pairings are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-slack-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. Cursor sign-in also needs `SIDEBOARD_RELAY_CURSOR_APP_ID` (the Origin app id). Entire sign-in needs `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` set to `https://www.sideboard.cloud/oauth/entire-client.json` (the client id is that metadata document; leave the secret unset). The redirect for all three is `https://relay.sideboard.cloud/remote/oauth/callback`. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
 
 ## Don’t
 

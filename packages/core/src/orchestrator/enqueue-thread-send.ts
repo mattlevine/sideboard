@@ -1,4 +1,5 @@
 import { expandCanonicalGitRequest } from '../git/agent-git-actions.js';
+import type { GitForge } from '../git/remote-forge.js';
 import {
   joinSteerPrompt,
   livePartsShowAgentReply,
@@ -97,12 +98,13 @@ export function promptForJoinedSteer(input: {
   expandedPrompt: string;
   worktreePath: string;
   attachments: ThreadAttachment[];
+  gitForge?: GitForge | null;
 }): string {
   if (input.latestPrompt === input.promptText) return input.agentPrompt;
   rewriteTrailingUserPrompt(input.threadId, input.promptText, input.latestPrompt);
   const { agentPrompt: expandedLatest } = expandComposerPrompt(
     input.worktreePath,
-    expandCanonicalGitRequest(input.latestPrompt),
+    expandCanonicalGitRequest(input.latestPrompt, { forge: input.gitForge }),
     { attachments: input.attachments },
   );
   return input.expandedPrompt && input.agentPrompt.endsWith(input.expandedPrompt)

@@ -6,9 +6,14 @@ import type { DatabaseSync } from 'node:sqlite';
 
 /**
  * GitHub’s issuer. The subject is the numeric user id, not the login.
- * Another git host gets its own issuer when that provider is added.
+ * Cursor uses {@link CURSOR_ACCOUNT_ISSUER}. Entire uses the regional
+ * auth host that issued the login (`https://us.auth.entire.io` and the
+ * other `https://<region>.auth.entire.io` hosts).
  */
 export const GITHUB_ACCOUNT_ISSUER = 'https://github.com';
+
+/** Cursor Origin user-confirmation issuer. The subject is the `user_…` id. */
+export const CURSOR_ACCOUNT_ISSUER = 'https://api.cursor.com/v1/origin';
 
 /** Macs one Sideboard account may register on the relay. */
 export const RELAY_DEVICE_CAP = 3;

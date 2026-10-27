@@ -22,6 +22,10 @@ In GitHub: Settings → Developer settings → OAuth Apps → New OAuth App.
 
 Use your relay’s public origin. Copy the client id and generate a client secret. Keep them on the relay. Do not put them in the desktop app or the phone.
 
+Cursor sign-in uses an Origin app id in `SIDEBOARD_RELAY_CURSOR_APP_ID`. Register the same callback on that app. There is no client secret.
+
+Entire sign-in uses a public OIDC client. `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` is the HTTPS URL of a Client ID Metadata Document you host (Entire fetches it and does not follow redirects). The document’s `client_id` is that URL, and `redirect_uris` contains this relay’s callback. Sideboard’s own relay uses `https://www.sideboard.cloud/oauth/entire-client.json`. Leave the client secret unset. Each project still uses its own `origin` remote, so GitHub, Cursor, and Entire repos can sit on the same Mac.
+
 ## Run
 
 From a checkout of the Sideboard repo:
@@ -30,6 +34,8 @@ From a checkout of the Sideboard repo:
 export SIDEBOARD_RELAY_PUBLIC_ORIGIN=https://relay.example.com
 export SIDEBOARD_RELAY_GITHUB_CLIENT_ID=your-client-id
 export SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=your-client-secret
+export SIDEBOARD_RELAY_CURSOR_APP_ID=app_your-origin-app-id
+export SIDEBOARD_RELAY_ENTIRE_CLIENT_ID=https://example.com/oauth/entire-client.json
 docker compose -f apps/relay/docker-compose.yml up --build -d
 ```
 
@@ -55,7 +61,7 @@ On each Mac, open **Settings → Remote → Relay** and paste:
 wss://relay.example.com/remote
 ```
 
-Save. Sideboard signs this Mac out of the previous relay. **Sign in with GitHub**, name the Mac, then **Show pairing code**.
+Save. Sideboard signs this Mac out of the previous relay. **Sign in with GitHub, Cursor, or Entire**, name the Mac, then **Show pairing code**.
 
 On the phone, open **Pair a Mac**, set **Relay** to that same address, and scan the QR code. The phone remembers it. Paste the line under the code if you can’t scan.
 

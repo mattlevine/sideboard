@@ -12,6 +12,9 @@ import { startRelayServer } from '@sideboard-ai/core';
  *   SIDEBOARD_RELAY_ACCOUNTS_PATH   SQLite file (Fly: /data/relay-accounts.sqlite on a volume)
  *   SIDEBOARD_RELAY_PUBLIC_ORIGIN   OAuth origin (https://relay.example.com)
  *   SIDEBOARD_RELAY_GITHUB_CLIENT_ID / SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET
+ *   SIDEBOARD_RELAY_CURSOR_APP_ID     optional Origin app id (app_…). No client secret.
+ *   SIDEBOARD_RELAY_ENTIRE_CLIENT_ID  optional Entire OIDC client. PKCE; secret optional.
+ *   SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET  set only for a confidential Entire client.
  *   PORT                           listen port (default 8787)
  *   HOST                           bind address (default 0.0.0.0)
  *   SIDEBOARD_SITE_ROOT            optional. Set only to serve the marketing site
@@ -54,8 +57,17 @@ async function main(): Promise<void> {
     return clientId && clientSecret ? { clientId, clientSecret } : undefined;
   };
   const github = client('SIDEBOARD_RELAY_GITHUB_CLIENT_ID', 'SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET');
+  const cursorAppId = process.env.SIDEBOARD_RELAY_CURSOR_APP_ID?.trim() ?? '';
+  const entireClientId = process.env.SIDEBOARD_RELAY_ENTIRE_CLIENT_ID?.trim() ?? '';
+  const entireClientSecret = process.env.SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET?.trim() ?? '';
   if (!github) {
-    console.log('warning: GitHub OAuth client is unset; desktops cannot sign in on this relay');
+    console.log('warning: GitHub OAuth client is unset; GitHub sign-in is off on this relay');
+  }
+  if (!cursorAppId) {
+    console.log('warning: Cursor Origin app id is unset; Cursor sign-in is off on this relay');
+  }
+  if (!entireClientId) {
+    console.log('warning: Entire OAuth client id is unset; Entire sign-in is off on this relay');
   }
   if (!process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim()) {
     console.log('warning: SIDEBOARD_RELAY_PUBLIC_ORIGIN is unset; sign-in redirects use the listen address');
@@ -83,6 +95,15 @@ async function main(): Promise<void> {
       : {}),
     relayOAuth: {
       github,
+      ...(cursorAppId ? { cursor: { clientId: cursorAppId } } : {}),
+      ...(entireClientId
+        ? {
+            entire: {
+              clientId: entireClientId,
+              ...(entireClientSecret ? { clientSecret: entireClientSecret } : {}),
+            },
+          }
+        : {}),
     },
     signal: ac.signal,
     onLog: (line) => console.log(line),

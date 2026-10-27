@@ -14,6 +14,10 @@
 #
 #   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_ID=… -a sideboard-slack-relay
 #   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=… -a sideboard-slack-relay
+#   fly secrets set SIDEBOARD_RELAY_CURSOR_APP_ID=app_… -a sideboard-slack-relay
+#   fly secrets set SIDEBOARD_RELAY_ENTIRE_CLIENT_ID=https://www.sideboard.cloud/oauth/entire-client.json -a sideboard-slack-relay
+#   # confidential Entire clients only. The hosted metadata document is public (no secret).
+#   fly secrets set SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET=… -a sideboard-slack-relay
 #
 # Phone accounts and pairings live in SQLite on a volume so restarts and image deploys keep them.
 # One machine only: the volume and the live phone sockets are local to that process.

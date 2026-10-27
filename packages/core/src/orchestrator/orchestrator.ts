@@ -24,6 +24,7 @@ import {
   mergePr as mergeGithubPr,
   removeWorktree,
   resolveGithubRepoSlug,
+  resolveOriginRemote,
   resolvePrSelector,
   switchWorktreeBranch,
 } from '../git/worktree.js';
@@ -1456,7 +1457,8 @@ export class Orchestrator {
     // Git-button phrases and PR-goal detection must see the raw user text.
     // Composer expansion appends attachments / @files / skills and would
     // both miss exact phrases and false-trigger on skill/file mentions of CI.
-    const gitPrompt = expandCanonicalGitRequest(promptText);
+    const turnOrigin = thread.worktreePath?.trim() ? await resolveOriginRemote(thread.worktreePath).catch(() => null) : null;
+    const gitPrompt = expandCanonicalGitRequest(promptText, { forge: turnOrigin?.forge });
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
       gitPrompt,
@@ -1602,11 +1604,9 @@ export class Orchestrator {
       isBrightsy || isOrchestration
         ? null
         : formatWorktreeDirective(fresh, {
-            githubSlug: await withTimeout(
-              resolveGithubRepoSlug(fresh.worktreePath),
-              8_000,
-              'resolveGithubRepoSlug',
-            ).catch(() => null),
+            githubSlug: turnOrigin?.forge === 'github' ? turnOrigin.slug : await withTimeout(resolveGithubRepoSlug(fresh.worktreePath), 8_000, 'resolveGithubRepoSlug').catch(() => null),
+            originForge: turnOrigin?.forge ?? null,
+            originSlug: turnOrigin?.slug ?? null,
             gitAuthMode,
             activeRuns: annotateDevAccessRuns(
               mergeWorktreeActiveRuns(
@@ -1732,6 +1732,7 @@ export class Orchestrator {
         expandedPrompt,
         worktreePath: fresh.worktreePath,
         attachments: autoContinue ? [] : (sentAttachments ?? []),
+        gitForge: turnOrigin?.forge,
       });
       const handle = await spawnAgentTurn(
         fresh,

@@ -78,7 +78,7 @@ export function CreateFromPicker({
   const [creatingTask, setCreatingTask] = useState(false);
   const [ticketScope, setTicketScope] = useState<TicketScope>('assigned');
   const [viewerLogin, setViewerLogin] = useState('');
-
+  const [issuesUnavailable, setIssuesUnavailable] = useState<string | null>(null);
   const applyIssueResult = (result: ListIssuesResult) => {
     setIssues(result.issues);
     setIssueSource(result.source);
@@ -86,8 +86,8 @@ export function CreateFromPicker({
     setLinearOk(result.linearConnected);
     setAbletimeOk(result.abletimeConnected);
     setViewerLogin(result.viewer?.login || result.viewer?.name || '');
+    setIssuesUnavailable(result.unavailableReason ?? null);
   };
-
   const loadIssues = async (assignee?: string) => {
     setLoading(true);
     setError(null);
@@ -100,20 +100,19 @@ export function CreateFromPicker({
       return result;
     } catch (err) {
       setIssues([]);
+      setIssuesUnavailable(null);
       setError(err instanceof Error ? err.message : String(err));
       return null;
     } finally {
       setLoading(false);
     }
   };
-
   const setLinearScope = (scope: TicketScope) => {
     setTicketScope(scope);
     const assignee =
       scope === 'unassigned' ? 'unassigned' : scope === 'all' || scope === 'cycle' ? 'all' : 'me';
     void loadIssues(assignee);
   };
-
   useEffect(() => {
     if (!open || !repoPath) return;
     let cancelled = false;
@@ -123,6 +122,7 @@ export function CreateFromPicker({
     setPrs([]);
     setBranches([]);
     setIssues([]);
+    setIssuesUnavailable(null);
     void (async () => {
       try {
         const threads = await window.sideboard.getThreads(false);
@@ -594,7 +594,7 @@ export function CreateFromPicker({
             <div className="composer-picker-section">
               {filteredIssues.length === 0 ? (
                 <div className="composer-picker-empty">
-                  No {issueSourceLabel(issueSource)} issues
+                  {issuesUnavailable ?? `No ${issueSourceLabel(issueSource)} issues`}
                 </div>
               ) : (
                 filteredIssues.slice(0, 50).map((issue) => {

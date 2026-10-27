@@ -24,14 +24,20 @@ In GitHub: Settings → Developer settings → OAuth Apps → New OAuth App.
 
 Use your relay’s public origin in both places. Copy the client id and generate a client secret. They stay in the relay’s environment. Do not put them in the desktop app or the phone.
 
+Cursor sign-in uses an Origin app id in `SIDEBOARD_RELAY_CURSOR_APP_ID`. Register the same callback on that app. There is no client secret.
+
+Entire sign-in uses a public OIDC client. `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` is the HTTPS URL of a Client ID Metadata Document you host. Entire fetches that URL during sign-in and does not follow redirects. The document’s `client_id` is that same URL, `redirect_uris` contains this relay’s `https://…/remote/oauth/callback`, `response_types` is `code`, and `token_endpoint_auth_method` is `none`. Sideboard’s relay uses `https://www.sideboard.cloud/oauth/entire-client.json`. Leave `SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET` unset. The relay sends PKCE to `https://auth.entire.io/authorize` and exchanges the code at the regional issuer Entire returns. Each project still uses its own `origin` remote.
+
 ## Run
 
-From a checkout of this repo, with those three variables set to your host and OAuth App:
+From a checkout of this repo, with the public origin and OAuth app set:
 
 ```bash
 export SIDEBOARD_RELAY_PUBLIC_ORIGIN=https://relay.example.com
 export SIDEBOARD_RELAY_GITHUB_CLIENT_ID=your-client-id
 export SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=your-client-secret
+export SIDEBOARD_RELAY_CURSOR_APP_ID=app_your-origin-app-id
+export SIDEBOARD_RELAY_ENTIRE_CLIENT_ID=https://example.com/oauth/entire-client.json
 docker compose -f apps/relay/docker-compose.yml up --build -d
 ```
 
@@ -59,7 +65,7 @@ On each Mac, open **Settings → Remote → Relay**. Paste:
 wss://relay.example.com/remote
 ```
 
-Save. Sideboard signs this Mac out of whichever relay it was using. **Sign in with GitHub** (your OAuth App, not a git token), name the Mac, then **Show pairing code**.
+Save. Sideboard signs this Mac out of whichever relay it was using. **Sign in with GitHub, Cursor, or Entire** (the OAuth client on this relay, not a git token), name the Mac, then **Show pairing code**.
 
 On the phone, open **Pair a Mac** and set **Relay** to that same `wss://` address, then scan the QR code. The phone remembers the address. Paste the line under the code if you can’t scan.
 

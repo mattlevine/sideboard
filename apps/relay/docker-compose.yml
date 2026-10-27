@@ -1,5 +1,5 @@
 # Phone relay only. This file does not serve the Sideboard website.
-# From the repo root, with the three variables set:
+# From the repo root, with the public origin and the OAuth clients you use:
 #   docker compose -f apps/relay/docker-compose.yml up --build -d
 services:
   relay:
@@ -14,6 +14,9 @@ services:
       SIDEBOARD_RELAY_PUBLIC_ORIGIN: ${SIDEBOARD_RELAY_PUBLIC_ORIGIN}
       SIDEBOARD_RELAY_GITHUB_CLIENT_ID: ${SIDEBOARD_RELAY_GITHUB_CLIENT_ID}
       SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET: ${SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET}
+      SIDEBOARD_RELAY_CURSOR_APP_ID: ${SIDEBOARD_RELAY_CURSOR_APP_ID:-}
+      SIDEBOARD_RELAY_ENTIRE_CLIENT_ID: ${SIDEBOARD_RELAY_ENTIRE_CLIENT_ID:-}
+      SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET: ${SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET:-}
       SIDEBOARD_RELAY_ACCOUNTS_PATH: /data/relay-accounts.sqlite
     volumes:
       - relay-accounts:/data

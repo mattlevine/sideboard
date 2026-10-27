@@ -403,4 +403,36 @@ describe('integrations / issues', () => {
     );
     expect(gh).toHaveBeenCalled();
   });
+
+  it('does not call gh for GitHub issues when origin is Cursor', async () => {
+    const { issues } = await load();
+    const gh = vi.spyOn(await import('../git/run.js'), 'gh').mockRejectedValue(new Error('gh should not run'));
+    vi.spyOn(await import('../git/worktree.js'), 'resolveOriginRemote').mockResolvedValue({
+      forge: 'cursor',
+      host: 'origin.cursor.com',
+      slug: 'acme/notes',
+    });
+
+    const result = await issues.listIssues('/tmp/repo');
+    expect(result.source).toBe('github');
+    expect(result.issues).toEqual([]);
+    expect(result.unavailableReason).toMatch(/no issue tracker/);
+    expect(gh).not.toHaveBeenCalled();
+  });
+
+  it('does not call gh for GitHub issues when origin is Entire', async () => {
+    const { issues } = await load();
+    const gh = vi.spyOn(await import('../git/run.js'), 'gh').mockRejectedValue(new Error('gh should not run'));
+    vi.spyOn(await import('../git/worktree.js'), 'resolveOriginRemote').mockResolvedValue({
+      forge: 'entire',
+      host: 'git.entire.io',
+      slug: 'acme/notes',
+    });
+
+    const result = await issues.listIssues('/tmp/repo');
+    expect(result.source).toBe('github');
+    expect(result.issues).toEqual([]);
+    expect(result.unavailableReason).toMatch(/Trails/);
+    expect(gh).not.toHaveBeenCalled();
+  });
 });

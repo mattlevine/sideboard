@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatGitAuthModeDirective } from '../git/git-auth-mode.js';
+import type { GitForge } from '../git/remote-forge.js';
+import { formatCursorGitDirective, formatEntireGitDirective } from './forge-git-directives.js';
 import { examplePrefixedBranch, sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
   isPlaceholderBranch,
@@ -13,6 +15,8 @@ import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
 import type { DevPreview } from '../hook/dev-preview.js';
 import type { ActiveRun, Thread } from '../types/thread.js';
+
+export { formatCursorGitDirective, formatEntireGitDirective };
 
 function normPath(p: string): string {
   return p.replace(/\/+$/, '');
@@ -107,6 +111,9 @@ export function formatWorktreeDirective(
     Partial<Pick<Thread, 'title' | 'prUrl'>>,
   opts?: {
     githubSlug?: string | null;
+    /** This worktree's origin forge. Cursor uses `origin`. Entire uses `entire trail`. */
+    originForge?: GitForge | null;
+    originSlug?: string | null;
     gitAuthMode?: GithubGitAuthMode;
     activeRuns?: readonly DevAccessRun[] | null;
   },
@@ -136,16 +143,40 @@ export function formatWorktreeDirective(
   lines.push(
     '- Always use this worktree\'s `origin` remote (`git remote get-url origin` from this cwd). Never push to or open PRs against `upstream` (template remotes).',
   );
-  lines.push(formatGitAuthModeDirective(opts?.gitAuthMode ?? 'auto'));
+  const cursorRepo = opts?.originForge === 'cursor';
+  const entireRepo = opts?.originForge === 'entire';
+  if (cursorRepo) {
+    lines.push(formatCursorGitDirective(opts?.originSlug));
+  } else if (entireRepo) {
+    lines.push(formatEntireGitDirective(opts?.originSlug));
+  } else {
+    lines.push(formatGitAuthModeDirective(opts?.gitAuthMode ?? 'auto'));
+  }
   lines.push(
     '- PR title/body and commit messages state what the change does and why (inspect the diff/commits and the user request) — never the worktree nickname or placeholder branch. Concise imperative title (Conventional Commits when it fits: feat:/fix:/chore:/docs:); body = intent, key changes, test notes.',
   );
   lines.push(
-    '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
+    cursorRepo
+      ? '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via Origin from this worktree (`origin pr merge` / `origin stack merge`).'
+      : entireRepo
+        ? '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge only when this turn is a Merge PR request or the user explicitly asked — via Entire from this worktree (`entire trail merge`).'
+        : '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
   if (thread.prUrl) {
     lines.push(
       `- A PR already exists (${thread.prUrl}). Update it (push + edit title/body if the purpose drifted) instead of opening a duplicate.`,
+    );
+  } else if (entireRepo) {
+    lines.push(
+      '- Prefer a Trail: `entire trail create --title "<title>" --body "<short>"`. Take the URL from `--json`. If this branch already has a trail, `entire trail update` instead of creating another. Trails have no draft state. Do not use `gh` or `origin`.',
+    );
+  } else if (cursorRepo) {
+    const slug = opts?.originSlug?.trim() || '<origin-owner/name>';
+    const resolve = opts?.originSlug?.trim()
+      ? ''
+      : ' Resolve `<origin-owner/name>` with `git remote get-url origin` in this worktree.';
+    lines.push(
+      `- Prefer a draft PR first: \`origin pr create --draft --push -R ${slug}\` (update via \`origin pr edit -R ${slug}\`). Take the URL from \`--json url\` — do not build it. Do not use \`gh\`.${resolve} Mark ready only when asked (\`origin pr ready\`). If the body is too long, retry with a short \`--body-file\`.`,
     );
   } else {
     const slug = opts?.githubSlug ?? '<origin-owner/name>';

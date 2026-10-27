@@ -5,19 +5,22 @@ import {
   type RelayAccountStore,
   type RelaySignInIdentity,
 } from './accounts.js';
+import { cursorGitHostEntry } from './account-cursor.js';
+import { entireGitHostEntry, newEntireCodeVerifier } from './account-entire.js';
 
 /**
- * Git hosts that can sign a Mac into the relay. GitHub is the only one today.
- * Add a host by extending this list and {@link GIT_HOST_AUTH}.
+ * Git hosts that can sign a Mac into the relay. A Mac's projects do not all
+ * use the same host; each identity links onto one Sideboard account when the
+ * verified email matches. Add a host by extending this list and {@link GIT_HOST_AUTH}.
  */
-export const RELAY_GIT_HOSTS = ['github'] as const;
+export const RELAY_GIT_HOSTS = ['github', 'cursor', 'entire'] as const;
 
 export type RelayGitHost = (typeof RELAY_GIT_HOSTS)[number];
 
 /** The relay signs a Mac in as its git host. */
 export type RelayAccountProvider = RelayGitHost;
 
-export type RelayOAuthClient = { clientId: string; clientSecret: string };
+export type RelayOAuthClient = { clientId: string; clientSecret?: string };
 
 export type RelayOAuthConfig = Partial<Record<RelayGitHost, RelayOAuthClient>>;
 
@@ -33,7 +36,17 @@ type PendingLogin = {
   provider: RelayAccountProvider;
   accountId: string | null;
   expiresAt: number;
+  /** PKCE verifier for hosts that redeem an authorization code that way. */
+  codeVerifier: string | null;
 };
+
+export type RelayAuthContext = {
+  codeVerifier: string | null;
+  /** RFC 9207 `iss` from the callback, when the host sent one. */
+  issuer: string | null;
+};
+
+const EMPTY_AUTH: RelayAuthContext = { codeVerifier: null, issuer: null };
 
 type PendingResult =
   | { ok: true; credential: string; email: string | null; accountId: string }
@@ -44,9 +57,19 @@ export class RelayLoginSessions {
   private readonly waiting = new Map<string, PendingLogin>();
   private readonly results = new Map<string, { value: PendingResult; expiresAt: number }>();
 
-  begin(state: string, provider: RelayAccountProvider, accountId: string | null): void {
+  begin(
+    state: string,
+    provider: RelayAccountProvider,
+    accountId: string | null,
+    codeVerifier: string | null = null,
+  ): void {
     this.sweep();
-    this.waiting.set(state, { provider, accountId, expiresAt: Date.now() + LOGIN_TTL_MS });
+    this.waiting.set(state, {
+      provider,
+      accountId,
+      codeVerifier,
+      expiresAt: Date.now() + LOGIN_TTL_MS,
+    });
   }
 
   takeLogin(state: string): PendingLogin | null {
@@ -85,28 +108,49 @@ export class RelayLoginSessions {
 
 type GitHostAuth = {
   label: string;
-  authorizeUrl: string;
-  scope: string;
+  requiresClientSecret: boolean;
+  /** Query parameter the callback uses for the credential. */
+  credentialParam: 'code' | 'confirmation_receipt';
+  authorizeUrl(
+    client: RelayOAuthClient,
+    redirectUri: string,
+    state: string,
+    ctx: RelayAuthContext,
+  ): string;
   fetchIdentity(
     client: RelayOAuthClient,
-    code: string,
+    credential: string,
     redirectUri: string,
+    state: string,
     fetchImpl: typeof fetch,
+    ctx: RelayAuthContext,
   ): Promise<RelaySignInIdentity>;
 };
 
 /**
- * One entry per git host. The desktop does not pick a mail provider — the
- * host that owns the repos is the relay account.
+ * One entry per git host. Signing in proves who this Mac belongs to.
+ * It does not choose the host of every registered project.
  */
 const GIT_HOST_AUTH: Record<RelayGitHost, GitHostAuth> = {
   github: {
     label: 'GitHub',
-    authorizeUrl: 'https://github.com/login/oauth/authorize',
-    scope: 'user:email',
+    requiresClientSecret: true,
+    credentialParam: 'code',
+    authorizeUrl: (client, redirectUri, state) => githubAuthorizeUrl(client, redirectUri, state),
     fetchIdentity: fetchGithubIdentity,
   },
+  cursor: cursorGitHostEntry(),
+  entire: entireGitHostEntry(),
 };
+
+function githubAuthorizeUrl(client: RelayOAuthClient, redirectUri: string, state: string): string {
+  const url = new URL('https://github.com/login/oauth/authorize');
+  url.searchParams.set('client_id', client.clientId);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('scope', 'user:email');
+  url.searchParams.set('state', state);
+  return url.toString();
+}
 
 function providerOf(value: string): RelayAccountProvider | null {
   return (RELAY_GIT_HOSTS as readonly string[]).includes(value) ? (value as RelayGitHost) : null;
@@ -117,14 +161,9 @@ export function relayAuthorizeUrl(
   client: RelayOAuthClient,
   redirectUri: string,
   state: string,
+  ctx: RelayAuthContext = EMPTY_AUTH,
 ): string {
-  const host = GIT_HOST_AUTH[provider];
-  const url = new URL(host.authorizeUrl);
-  url.searchParams.set('client_id', client.clientId);
-  url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('scope', host.scope);
-  url.searchParams.set('state', state);
-  return url.toString();
+  return GIT_HOST_AUTH[provider].authorizeUrl(client, redirectUri, state, ctx);
 }
 
 async function readJson(res: Response): Promise<unknown> {
@@ -150,8 +189,13 @@ async function fetchGithubIdentity(
   client: RelayOAuthClient,
   code: string,
   redirectUri: string,
+  state: string,
   fetchImpl: typeof fetch,
+  _ctx: RelayAuthContext,
 ): Promise<RelaySignInIdentity> {
+  void state;
+  void _ctx;
+  if (!client.clientSecret) throw new Error('GitHub sign-in is not configured on this relay.');
   const tokenRes = await fetchImpl('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -184,11 +228,13 @@ async function fetchGithubIdentity(
 export async function fetchRelayIdentity(
   provider: RelayAccountProvider,
   client: RelayOAuthClient,
-  code: string,
+  credential: string,
   redirectUri: string,
+  state: string,
   fetchImpl: typeof fetch,
+  ctx: RelayAuthContext = EMPTY_AUTH,
 ): Promise<RelaySignInIdentity> {
-  return GIT_HOST_AUTH[provider].fetchIdentity(client, code, redirectUri, fetchImpl);
+  return GIT_HOST_AUTH[provider].fetchIdentity(client, credential, redirectUri, state, fetchImpl, ctx);
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
@@ -286,9 +332,9 @@ function sendHtml(res: ServerResponse, status: number, title: string, body: stri
 }
 
 /**
- * Git-host sign-in for the phone relay. GitHub is the host today; another host
- * is a registry entry. Client secrets stay on the relay. The desktop receives
- * a Sideboard credential, not the provider token.
+ * Git-host sign-in for the phone relay. Each host is a registry entry.
+ * Client secrets stay on the relay. The desktop receives a Sideboard
+ * credential, not the provider token.
  */
 export async function handleRelayAccountHttp(opts: {
   req: IncomingMessage;
@@ -321,7 +367,8 @@ export async function handleRelayAccountHttp(opts: {
       return true;
     }
     const client = opts.oauth[provider];
-    if (!client?.clientId || !client.clientSecret) {
+    const host = provider ? GIT_HOST_AUTH[provider] : null;
+    if (!client?.clientId || (host?.requiresClientSecret && !client.clientSecret)) {
       sendJson(opts.res, 503, {
         ok: false,
         error: `${GIT_HOST_AUTH[provider].label} sign-in is not configured on this relay.`,
@@ -337,22 +384,27 @@ export async function handleRelayAccountHttp(opts: {
         return true;
       }
     }
-    opts.sessions.begin(state, provider, accountId);
-    sendJson(opts.res, 200, { ok: true, url: relayAuthorizeUrl(provider, client, redirectUri, state) });
+    const codeVerifier = provider === 'entire' ? newEntireCodeVerifier() : null;
+    const auth: RelayAuthContext = { codeVerifier, issuer: null };
+    opts.sessions.begin(state, provider, accountId, codeVerifier);
+    sendJson(opts.res, 200, {
+      ok: true,
+      url: relayAuthorizeUrl(provider, client, redirectUri, state, auth),
+    });
     return true;
   }
 
   if (method === 'GET' && path === REMOTE_OAUTH_CALLBACK_PATH) {
     const url = new URL(reqUrl, origin);
     const state = url.searchParams.get('state')?.trim() ?? '';
-    const code = url.searchParams.get('code')?.trim() ?? '';
     const providerError = url.searchParams.get('error')?.trim() ?? '';
     const pending = STATE_RE.test(state) ? opts.sessions.takeLogin(state) : null;
     if (!pending) {
       sendHtml(opts.res, 400, 'Sideboard', '<h1>Sign-in expired</h1><p>Return to Sideboard and try again.</p>');
       return true;
     }
-    if (providerError || !code) {
+    const credential = url.searchParams.get(GIT_HOST_AUTH[pending.provider].credentialParam)?.trim() ?? '';
+    if (providerError || !credential) {
       const message = providerError || 'Sign-in was cancelled.';
       opts.sessions.putResult(state, { ok: false, error: message });
       sendHtml(opts.res, 400, 'Sideboard', `<h1>Could not sign in</h1><p>${escapeHtml(message)}</p>`);
@@ -365,7 +417,15 @@ export async function handleRelayAccountHttp(opts: {
       return true;
     }
     try {
-      const identity = await fetchRelayIdentity(pending.provider, client, code, redirectUri, fetchImpl);
+      const identity = await fetchRelayIdentity(
+        pending.provider,
+        client,
+        credential,
+        redirectUri,
+        state,
+        fetchImpl,
+        { codeVerifier: pending.codeVerifier, issuer: url.searchParams.get('iss') },
+      );
       const signed = opts.store.signIn(identity, pending.accountId);
       opts.sessions.putResult(state, {
         ok: true,

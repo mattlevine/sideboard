@@ -27,6 +27,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
   const [preferredSource, setPreferredSource] = useState<IssueSource>('github');
   const [linearConnected, setLinearConnected] = useState(false);
   const [abletimeConnected, setAbletimeConnected] = useState(false);
+  const [issuesUnavailable, setIssuesUnavailable] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -38,6 +39,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setIssuesUnavailable(null);
     const q = query.trim();
     const timer = window.setTimeout(() => {
       void window.sideboard
@@ -49,6 +51,7 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
           setPreferredSource(result.preferredSource);
           setLinearConnected(result.linearConnected);
           setAbletimeConnected(result.abletimeConnected);
+          setIssuesUnavailable(result.unavailableReason ?? null);
           if (result.issues.length === 0) setError('empty');
         })
         .catch((err) => {
@@ -158,9 +161,11 @@ export function LinkIssuePicker({ open, repoPath, onClose, onPick }: IssuePicker
             )}
             {(error === 'empty' || !error) && (
               <div className="composer-picker-empty">
-                {issues.length === 0
-                  ? `No ${issueSourceLabel(source)} issues`
-                  : 'No matching issues'}
+                {issuesUnavailable
+                  ? issuesUnavailable
+                  : issues.length === 0
+                    ? `No ${issueSourceLabel(source)} issues`
+                    : 'No matching issues'}
               </div>
             )}
           </div>

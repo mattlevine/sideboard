@@ -72,6 +72,7 @@ export function formatMcpIssueList(input: {
   since?: string;
   comments?: IssueActivityComment[];
   commentsTruncated?: boolean;
+  unavailableReason?: string;
 }): {
   source?: string;
   viewer?: string;
@@ -80,11 +81,19 @@ export function formatMcpIssueList(input: {
   truncated: boolean;
   hint?: string;
   since?: string;
+  unavailableReason?: string;
   issues: ReturnType<typeof compactIssueRow>[];
   comments?: IssueActivityComment[];
 } {
   const truncated = input.truncated || Boolean(input.commentsTruncated);
   const comments = input.comments ?? [];
+  const pageHint = input.unavailableReason
+    ? input.unavailableReason
+    : truncated
+      ? input.since
+        ? 'More issues or comments match. Pass a higher limit (max 250) or a tighter query.'
+        : 'More issues match. Pass a higher limit (max 250) or a tighter query.'
+      : undefined;
   return {
     ...(input.source ? { source: input.source } : {}),
     ...(input.viewer ? { viewer: input.viewer } : {}),
@@ -92,13 +101,8 @@ export function formatMcpIssueList(input: {
     returned: input.issues.length,
     truncated,
     ...(input.since ? { since: input.since } : {}),
-    ...(truncated
-      ? {
-          hint: input.since
-            ? 'More issues or comments match. Pass a higher limit (max 250) or a tighter query.'
-            : 'More issues match. Pass a higher limit (max 250) or a tighter query.',
-        }
-      : {}),
+    ...(input.unavailableReason ? { unavailableReason: input.unavailableReason } : {}),
+    ...(pageHint ? { hint: pageHint } : {}),
     issues: input.issues.map((issue) => compactIssueRow(issue, { since: input.since })),
     ...(input.since || comments.length > 0 ? { comments } : {}),
   };
@@ -111,6 +115,7 @@ export function formatListedIssuesForMcp(
     issues: IssueInfo[];
     since?: string;
     comments?: IssueActivityComment[];
+    unavailableReason?: string;
   },
   page: number,
 ): ReturnType<typeof formatMcpIssueList> {
@@ -126,6 +131,7 @@ export function formatListedIssuesForMcp(
     since: result.since,
     comments: commentWindow.items,
     commentsTruncated: commentWindow.truncated,
+    unavailableReason: result.unavailableReason,
   });
 }
 

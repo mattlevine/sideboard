@@ -33,6 +33,7 @@ import {
   stopLiveSpeechDictate,
   transcribeWavFile,
 } from './speech-dictate';
+import { registerGitHostIpc } from './git-host-ipc';
 import { formatUpdaterCheckError } from './updater-error';
 import {
   bindPhoneOpenFile,
@@ -1123,6 +1124,7 @@ function registerIpc(): void {
     ) => toPublicAppSettings(updateProjectProfileSettings(repoPath, patch)),
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
+  registerGitHostIpc();
   ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());
   ipcMain.handle('connectSlackToken', async (_e, token: string) => {
     await connectSlackToken(token);

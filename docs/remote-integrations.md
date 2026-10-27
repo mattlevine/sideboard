@@ -1,13 +1,13 @@
 # Remote integrations
 
-Desktop Settings splits connections by job. The phone app is remote control. Linear and AbleTime are issue tracking. Vercel, Supabase, PostHog, and Sentry are optional project services. GitHub git auth is its own panel.
+Desktop Settings splits connections by job. The phone app is remote control. Linear, AbleTime, and GitHub Issues are issue tracking. Cursor Origin and Entire are git hosts, not GitHub issue sources. Entire’s tickets are Trails. Vercel, Supabase, PostHog, and Sentry are optional project services. Git hosts (GitHub, Cursor, and Entire) are their own panels under Settings → Git, the same way each agent has its own options.
 
 | Panel | What |
 |-------|------|
 | **Settings → Agents** | Default agent / model / effort, default orchestrator agent / model / effort, then harness setup |
-| **Settings → Git** | `gh` / SSH / PAT for this Mac and worktree agents |
+| **Settings → Git** | GitHub (`gh` / SSH / PAT), Cursor (`origin` login), and Entire (`entire login`) for this Mac and worktree agents |
 | **Settings → Issues** | Issue source, Linear, AbleTime |
-| **Settings → Remote** | Relay address, this Mac’s name, phone pairing code, relay status |
+| **Settings → Remote** | Relay address, sign-in (GitHub, Cursor, or Entire), this Mac’s name, phone pairing code |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
 Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is the `posthog_api` tool (the key is not copied onto the agent). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.

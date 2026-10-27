@@ -1,37 +1,157 @@
-import { useEffect, useState } from 'react';
-import type { GitHubStatus, GithubGitAuthMode, PublicAppSettings } from '@sideboard-ai/core';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  CursorGitStatus,
+  EntireGitStatus,
+  GitHubStatus,
+  GithubGitAuthMode,
+  PublicAppSettings,
+} from '@sideboard-ai/core';
 import { sanitizeGitBranchPrefix } from '@sideboard/branch-prefix';
+import { CursorGitCliPanel, EntireGitCliPanel } from './GitHostCliPanels';
+import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
+
+export type GitSettingsPanel = 'github' | 'cursor' | 'entire';
+
 
 export function GitSettings({
   settings,
+  panel = null,
+  onOpenPanel,
+  onHostStatus,
   applySettings,
   busy,
   setBusy,
   setError,
 }: {
   settings: PublicAppSettings;
+  /** Null is the host list, the same shape as Settings → Agents. */
+  panel?: GitSettingsPanel | null;
+  onOpenPanel?: (panel: GitSettingsPanel) => void;
+  onHostStatus?: (status: { github: boolean; cursor: boolean; entire: boolean }) => void;
   applySettings: (next: PublicAppSettings) => void;
   busy: boolean;
   setBusy: (busy: boolean) => void;
   setError: (error: string | null) => void;
 }) {
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
+  const [cursorStatus, setCursorStatus] = useState<CursorGitStatus | null>(null);
+  const [cursorNote, setCursorNote] = useState<string | null>(null);
+  const [cursorBusy, setCursorBusy] = useState(false);
+  const [entireStatus, setEntireStatus] = useState<EntireGitStatus | null>(null);
+  const [entireNote, setEntireNote] = useState<string | null>(null);
+  const [entireBusy, setEntireBusy] = useState(false);
   const [githubPatDraft, setGithubPatDraft] = useState('');
   const [showGithubPat, setShowGithubPat] = useState(false);
   const [branchPrefixDraft, setBranchPrefixDraft] = useState(
     settings.advanced?.branchPrefix ?? '',
   );
+  const onHostStatusRef = useRef(onHostStatus);
+  onHostStatusRef.current = onHostStatus;
+  const cursorLoginCancel = useRef(false);
+  const entireLoginCancel = useRef(false);
 
   useEffect(() => {
     setBranchPrefixDraft(settings.advanced?.branchPrefix ?? '');
   }, [settings.advanced?.branchPrefix]);
 
   useEffect(() => {
-    void window.sideboard
-      .getGitHubStatus()
-      .then(setGithubStatus)
-      .catch(() => setGithubStatus(null));
+    cursorLoginCancel.current = false;
+    entireLoginCancel.current = false;
+    return () => {
+      cursorLoginCancel.current = true;
+      entireLoginCancel.current = true;
+    };
   }, []);
+
+  async function refreshHosts() {
+    const [github, cursor, entire] = await Promise.all([
+      window.sideboard.getGitHubStatus().catch(() => null),
+      window.sideboard.getCursorGitStatus().catch(() => null),
+      window.sideboard.getEntireGitStatus().catch(() => null),
+    ]);
+    setGithubStatus(github);
+    setCursorStatus(cursor);
+    setEntireStatus(entire);
+  }
+
+  useEffect(() => {
+    void refreshHosts();
+  }, []);
+
+  useEffect(() => {
+    onHostStatusRef.current?.({
+      github: Boolean(githubStatus?.connected),
+      cursor: Boolean(cursorStatus?.connected),
+      entire: Boolean(entireStatus?.connected),
+    });
+  }, [githubStatus?.connected, cursorStatus?.connected, entireStatus?.connected]);
+
+  async function runCursorLogin() {
+    setCursorBusy(true);
+    setCursorNote(null);
+    setError(null);
+    try {
+      const result = await window.sideboard.loginCursorGit();
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setCursorNote(result.message);
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline && !cursorLoginCancel.current) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (cursorLoginCancel.current) return;
+        const next = await window.sideboard.getCursorGitStatus().catch(() => null);
+        if (next) setCursorStatus(next);
+        if (next?.connected) break;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCursorBusy(false);
+    }
+  }
+
+  async function runCursorSetupGit() {
+    setCursorBusy(true);
+    setCursorNote(null);
+    setError(null);
+    try {
+      const result = await window.sideboard.setupCursorGit();
+      setCursorNote(result.message);
+      if (!result.ok) setError(result.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCursorBusy(false);
+    }
+  }
+
+  async function runEntireLogin() {
+    setEntireBusy(true);
+    setEntireNote(null);
+    setError(null);
+    try {
+      const result = await window.sideboard.loginEntireGit();
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setEntireNote(result.message);
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline && !entireLoginCancel.current) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (entireLoginCancel.current) return;
+        const next = await window.sideboard.getEntireGitStatus().catch(() => null);
+        if (next) setEntireStatus(next);
+        if (next?.connected) break;
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEntireBusy(false);
+    }
+  }
 
   async function saveIntegrationsPatch(patch: {
     githubGitAuthMode?: GithubGitAuthMode | null;
@@ -73,10 +193,103 @@ export function GitSettings({
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        How Sideboard and worktree agents authenticate git on this Mac, and the
-        prefix used when renaming placeholder branches.
+        {panel === 'cursor'
+          ? 'How this Mac signs in to Cursor’s git host (origin.cursor.com). GitHub repos keep using GitHub.'
+          : panel === 'entire'
+            ? 'How this Mac signs in to Entire (entire.io). Trails replace pull requests on those repos.'
+            : panel === 'github'
+              ? 'How Sideboard and worktree agents authenticate GitHub on this Mac.'
+              : 'Each registered project uses its own git host. Sign-in for GitHub, Cursor, and Entire lives here, the same way each agent has its own options. Branch prefix applies to every host.'}
       </p>
 
+      {!panel ? (
+        <div className="settings-agent-list">
+          <button
+            type="button"
+            className="settings-agent-row"
+            onClick={() => onOpenPanel?.('github')}
+          >
+            <span className="settings-agent-mark">
+              <GitHubMark />
+            </span>
+            <div className="settings-agent-copy">
+              <div className="settings-agent-name">GitHub</div>
+              <div className="settings-agent-meta">
+                {githubStatus?.connected
+                  ? `Connected${githubStatus.login ? ` · ${githubStatus.login}` : ''}`
+                  : githubStatus?.reason || 'Not connected'}
+              </div>
+            </div>
+            <span className={`settings-dot${githubStatus?.connected ? ' ok' : ''}`} />
+          </button>
+          <button
+            type="button"
+            className="settings-agent-row"
+            onClick={() => onOpenPanel?.('cursor')}
+          >
+            <span className="settings-agent-mark">
+              <CursorMark />
+            </span>
+            <div className="settings-agent-copy">
+              <div className="settings-agent-name">Cursor</div>
+              <div className="settings-agent-meta">
+                {cursorStatus?.connected
+                  ? `Connected${cursorStatus.account ? ` · ${cursorStatus.account}` : ''}`
+                  : cursorStatus?.reason || 'Not signed in'}
+              </div>
+            </div>
+            <span className={`settings-dot${cursorStatus?.connected ? ' ok' : ''}`} />
+          </button>
+          <button
+            type="button"
+            className="settings-agent-row"
+            onClick={() => onOpenPanel?.('entire')}
+          >
+            <span className="settings-agent-mark">
+              <EntireMark />
+            </span>
+            <div className="settings-agent-copy">
+              <div className="settings-agent-name">Entire</div>
+              <div className="settings-agent-meta">
+                {entireStatus?.connected
+                  ? `Connected${entireStatus.account ? ` · ${entireStatus.account}` : ''}`
+                  : entireStatus?.reason || 'Not signed in'}
+              </div>
+            </div>
+            <span className={`settings-dot${entireStatus?.connected ? ' ok' : ''}`} />
+          </button>
+        </div>
+      ) : null}
+
+      {panel === 'cursor' ? (
+        <CursorGitCliPanel
+          status={cursorStatus}
+          note={cursorNote}
+          busy={cursorBusy}
+          onRefresh={() => {
+            void refreshHosts().catch((err) =>
+              setError(err instanceof Error ? err.message : String(err)),
+            );
+          }}
+          onLogin={() => void runCursorLogin()}
+          onSetupGit={() => void runCursorSetupGit()}
+        />
+      ) : null}
+
+      {panel === 'entire' ? (
+        <EntireGitCliPanel
+          status={entireStatus}
+          note={entireNote}
+          busy={entireBusy}
+          onRefresh={() => {
+            void refreshHosts().catch((err) =>
+              setError(err instanceof Error ? err.message : String(err)),
+            );
+          }}
+          onLogin={() => void runEntireLogin()}
+        />
+      ) : null}
+      {panel === 'github' ? (
       <div className="settings-section settings-section-card">
         <div className="settings-toggle-row">
           <div>
@@ -238,7 +451,9 @@ export function GitSettings({
           })}
         </div>
       </div>
+      ) : null}
 
+      {!panel ? (
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Branch prefix</div>
         <p className="settings-hint">
@@ -265,6 +480,7 @@ export function GitSettings({
           </code>
         </p>
       </div>
+      ) : null}
     </div>
   );
 }
