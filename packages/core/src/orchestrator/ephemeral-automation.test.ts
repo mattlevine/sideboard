@@ -10,6 +10,7 @@ import {
   EPHEMERAL_AUTOMATION_KEEP,
   ephemeralRunReadyToArchive,
   forgetOlderEphemeralRuns,
+  markEphemeralAutomation,
 } from './ephemeral-automation.js';
 import { Orchestrator } from './orchestrator.js';
 
@@ -26,6 +27,39 @@ function chat(over: Partial<Thread> = {}): Thread {
   });
   return { ...thread, ephemeralAutomationId: 'auto-1', ...over };
 }
+
+describe('markEphemeralAutomation', () => {
+  const prevData = process.env.SIDEBOARD_APP_DATA;
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-eph-mark-'));
+    process.env.SIDEBOARD_APP_DATA = dataDir;
+    process.env.SIDEBOARD_SECRET_VAULT = 'plain';
+  });
+
+  afterEach(() => {
+    if (prevData === undefined) delete process.env.SIDEBOARD_APP_DATA;
+    else process.env.SIDEBOARD_APP_DATA = prevData;
+    delete process.env.SIDEBOARD_SECRET_VAULT;
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('names a kept chat without marking it for archive', () => {
+    const thread = chat({
+      id: 'kept',
+      title: 'Arsenal',
+      userSetTitle: false,
+      ephemeralAutomationId: undefined,
+    });
+    writeThread(thread);
+    const next = markEphemeralAutomation(thread.id, { ephemeralTitle: 'Start my day' });
+    expect(next.title).toBe('Start my day');
+    expect(next.userSetTitle).toBe(true);
+    expect(next.ephemeralAutomationId).toBeUndefined();
+    expect(ephemeralRunReadyToArchive(next)).toBe(false);
+  });
+});
 
 describe('ephemeralRunReadyToArchive', () => {
   it('archives a finished one-off run', () => {

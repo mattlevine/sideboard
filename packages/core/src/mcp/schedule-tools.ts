@@ -67,8 +67,12 @@ function parseWhen(args: CadenceArgs): ScheduleWhen {
   };
 }
 
-/** Update can change only the clock time or the days of an existing weekly job. */
-function whenFromUpdate(id: string, args: CadenceArgs): ScheduleWhen | undefined {
+/**
+ * Partial `time` / `days` edits apply only to an existing weekly job.
+ * Both together switch any cadence to weekly. One of them on an interval,
+ * cron, or one-shot job would drop that cadence.
+ */
+export function whenFromUpdate(id: string, args: CadenceArgs): ScheduleWhen | undefined {
   const at = args.at?.trim();
   const every = args.every?.trim();
   const cron = args.cron?.trim();
@@ -78,16 +82,24 @@ function whenFromUpdate(id: string, args: CadenceArgs): ScheduleWhen | undefined
   if (!at && !every && !cron && !time && !days && !tzSet) return undefined;
   if ((time || days) && !at && !every && !cron) {
     const current = getSchedule(id);
-    const base = current?.when.kind === 'weekly' ? current.when : null;
-    const clock = time || base?.time;
+    const weekly = current?.when.kind === 'weekly' ? current.when : null;
+    if (!weekly && !(time && days)) {
+      const kind = current?.when.kind ?? 'missing';
+      throw new Error(
+        `time and days change a days-at-a-time automation. This job is ${kind}. Pass time and days together to switch it, or at / every / cron to replace the cadence.`,
+      );
+    }
+    const clock = time || weekly?.time;
     if (!clock) {
       throw new Error('time (HH:mm) is required, for example time=07:30 days=weekdays');
     }
+    const prevTz =
+      current?.when.kind === 'weekly' || current?.when.kind === 'cron' ? current.when.tz : undefined;
     return {
       kind: 'weekly',
       time: clock,
-      days: days ? parseWeeklyDays(days) : (base?.days ?? parseWeeklyDays('daily')),
-      tz: tzSet ? args.tz?.trim() || undefined : base?.tz,
+      days: days ? parseWeeklyDays(days) : (weekly?.days ?? parseWeeklyDays('daily')),
+      tz: tzSet ? args.tz?.trim() || undefined : prevTz,
     };
   }
   if (!at && !every && !cron && !time && !days && tzSet) {

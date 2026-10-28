@@ -158,11 +158,13 @@ describe('schedule runner', () => {
     const { store, runner } = await load();
     const thread = orchThread({ id: 'morning' });
     let ephemeral: string | undefined = 'unset';
+    let title: string | undefined;
     runner.setScheduleFireHooks({
       findThread: () => null,
       send: async () => thread,
       startOrchestration: async (opts) => {
         ephemeral = opts.ephemeralAutomationId;
+        title = opts.ephemeralTitle;
         return thread;
       },
     });
@@ -175,6 +177,7 @@ describe('schedule runner', () => {
     });
     const after = await runner.fireSchedule(schedule.id);
     expect(ephemeral).toBeUndefined();
+    expect(title).toBe('Start my day');
     expect(after.lastThreadId).toBe('morning');
     expect(after.enabled).toBe(true);
     expect(store.getSchedule(schedule.id)?.threadId).toBeNull();

@@ -161,9 +161,8 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
       ...(schedule.planMode != null ? { planMode: schedule.planMode } : {}),
       ...(schedule.autonomy ? { autonomy: schedule.autonomy } : {}),
       attachments: schedule.attachments,
-      ...(archiveFresh
-        ? { ephemeralAutomationId: schedule.id, ephemeralTitle: schedule.name }
-        : {}),
+      ...(archiveFresh ? { ephemeralAutomationId: schedule.id } : {}),
+      ephemeralTitle: schedule.name,
     });
     if (pinReplacement) {
       updateSchedule(schedule.id, { threadId: created.id });

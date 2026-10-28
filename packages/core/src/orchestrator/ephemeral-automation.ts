@@ -26,18 +26,22 @@ export function ephemeralRunReadyToArchive(
   return true;
 }
 
-/** Stamp a fresh automation chat and use the automation name as its title. */
+/**
+ * Name a fresh automation chat. `ephemeralAutomationId` marks a run that
+ * archives when it finishes. A kept chat (archive off) still takes the title
+ * and is not marked, so it stays in the sidebar under the job name.
+ */
 export function markEphemeralAutomation(
   threadId: string,
   opts: { ephemeralAutomationId?: string; ephemeralTitle?: string },
 ): Thread {
   const id = opts.ephemeralAutomationId?.trim();
+  const title = opts.ephemeralTitle?.trim();
   const current = readThread(threadId);
   if (!current) throw new Error(`Thread not found: ${threadId}`);
-  if (!id) return current;
-  const title = opts.ephemeralTitle?.trim();
+  if (!id && !title) return current;
   return updateThread(threadId, {
-    ephemeralAutomationId: id,
+    ...(id ? { ephemeralAutomationId: id } : {}),
     ...(title ? { title, userSetTitle: true } : {}),
   });
 }
