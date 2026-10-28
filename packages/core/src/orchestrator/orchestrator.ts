@@ -12,6 +12,7 @@ import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnF
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
+import { isSameAgentProcess, pidStartedAt } from './agent-pid.js';
 import { traceTurn, withTimeout } from '../agents/turn-trace.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -654,7 +655,7 @@ export class Orchestrator {
       const deadPid =
         typeof pid === 'number' && pid > 0 && !isPidAlive(pid) ? true : false;
       if (deadPid) {
-        updateThread(thread.id, { agentPid: null });
+        updateThread(thread.id, { agentPid: null, agentPidStartedAt: null });
       }
 
       // Heal: prompt was popped then the draining process died before running.
@@ -1312,21 +1313,29 @@ export class Orchestrator {
         // until the user clicked again (second click was a no-op while draining).
         const livePid = thread.agentPid;
         if (typeof livePid === 'number' && livePid > 0 && isPidAlive(livePid)) {
-          const exited = await waitForPidExit(livePid, STALE_AGENT_PID_WAIT_MS);
-          if (!exited && isPidAlive(livePid)) {
+          if (!isSameAgentProcess(livePid, thread.agentPidStartedAt, true)) {
             try {
-              process.kill(livePid, 'SIGKILL');
-            } catch {
-              // ignore
-            }
-            await waitForPidExit(livePid, 400);
-            try {
-              updateThread(threadId, { agentPid: null });
+              updateThread(threadId, { agentPid: null, agentPidStartedAt: null });
             } catch {
               // Thread may have been archived.
             }
+          } else {
+            const exited = await waitForPidExit(livePid, STALE_AGENT_PID_WAIT_MS);
+            if (!exited && isPidAlive(livePid)) {
+              try {
+                process.kill(livePid, 'SIGKILL');
+              } catch {
+                // ignore
+              }
+              await waitForPidExit(livePid, 400);
+              try {
+                updateThread(threadId, { agentPid: null, agentPidStartedAt: null });
+              } catch {
+                // Thread may have been archived.
+              }
+            }
+            continue;
           }
-          continue;
         }
 
         const shifted = shiftQueuedItem(thread.queue, thread.queueAttachments);
@@ -1581,7 +1590,9 @@ export class Orchestrator {
     // Re-resolve session before turn
     const adapter = getAdapter(thread.agent);
     const resolved = await adapter.resolveSessionId(thread.worktreePath, thread.sessionId);
-    if (resolved && resolved !== thread.sessionId) {
+    // A null resolve means the cached id is gone (OpenCode session list).
+    // Leaving the stale id on the thread drops the playbook on the next turn.
+    if (resolved !== thread.sessionId) {
       updateThread(threadId, { sessionId: resolved });
     }
 
@@ -1781,7 +1792,10 @@ export class Orchestrator {
       this.activeTurns.set(threadId, handle);
       this.startingTurns.delete(threadId);
       if (typeof handle.pid === 'number' && handle.pid > 0) {
-        updateThread(threadId, { agentPid: handle.pid });
+        updateThread(threadId, {
+          agentPid: handle.pid,
+          agentPidStartedAt: pidStartedAt(handle.pid),
+        });
       }
       // If stop() raced mid-spawn, kill immediately and do not re-assert running.
       if (this.stoppedTurns.has(threadId)) {
@@ -1949,7 +1963,10 @@ export class Orchestrator {
         );
         this.activeTurns.set(threadId, retryHandle);
         if (typeof retryHandle.pid === 'number' && retryHandle.pid > 0) {
-          updateThread(threadId, { agentPid: retryHandle.pid });
+          updateThread(threadId, {
+            agentPid: retryHandle.pid,
+            agentPidStartedAt: pidStartedAt(retryHandle.pid),
+          });
         }
         this.processes.set(`${threadId}:agent`, {
           kind: 'agent',
@@ -2130,7 +2147,7 @@ export class Orchestrator {
       this.runningCount = Math.max(0, this.runningCount - 1);
       clearTurnLive(threadId);
       try {
-        updateThread(threadId, { agentPid: null });
+        updateThread(threadId, { agentPid: null, agentPidStartedAt: null });
       } catch {
         // Thread may have been purged mid-turn.
       }
@@ -2177,10 +2194,18 @@ export class Orchestrator {
     if (proc) proc.kill();
     const pid = thread.agentPid;
     if (typeof pid === 'number' && pid > 0 && isPidAlive(pid)) {
-      try {
-        process.kill(pid, 'SIGTERM');
-      } catch {
-        // Already signaled via handle, or the process exited.
+      if (!isSameAgentProcess(pid, thread.agentPidStartedAt, true)) {
+        try {
+          updateThread(thread.id, { agentPid: null, agentPidStartedAt: null });
+        } catch {
+          // Thread may have been archived.
+        }
+      } else {
+        try {
+          process.kill(pid, 'SIGTERM');
+        } catch {
+          // Already signaled via handle, or the process exited.
+        }
       }
     }
     const stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;

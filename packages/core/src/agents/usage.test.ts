@@ -4,6 +4,7 @@ import {
   contextTokens,
   fromInclusiveInputUsage,
   requestOccupancy,
+  subtractUsage,
   sumUsageList,
   withTurnScopedCost,
 } from './usage.js';
@@ -246,6 +247,15 @@ describe('withTurnScopedCost', () => {
     ).toBeCloseTo(0.015);
   });
 
+  it('treats a dropped session total as a new session, not a delta of the old one', () => {
+    expect(
+      withTurnScopedCost(
+        { ...tokens, costUsd: 0.02, sessionCostUsd: 0.02 },
+        [{ role: 'agent', usage: { ...tokens, costUsd: 1.5, sessionCostUsd: 1.5 } }],
+      ).costUsd,
+    ).toBeCloseTo(0.02);
+  });
+
   it('recovers when older messages stored session totals as costUsd', () => {
     const previous = [
       { role: 'agent' as const, usage: { ...tokens, costUsd: 0.081 } },
@@ -257,5 +267,17 @@ describe('withTurnScopedCost', () => {
         previous,
       ).costUsd,
     ).toBeCloseTo(0.012);
+  });
+});
+
+describe('subtractUsage', () => {
+  it('removes an earlier snapshot so a repeated message id is not double-counted', () => {
+    const first = applyTurnUsage(null, { inputTokens: 10, outputTokens: 2 }, 'request');
+    const replaced = applyTurnUsage(
+      subtractUsage(first, { inputTokens: 10, outputTokens: 2 }),
+      { inputTokens: 12, outputTokens: 4 },
+      'request',
+    );
+    expect(replaced).toMatchObject({ inputTokens: 12, outputTokens: 4 });
   });
 });

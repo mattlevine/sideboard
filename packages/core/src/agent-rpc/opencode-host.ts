@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import type { Thread } from '../types/thread.js';
 import {
   buildInjectedMcpServers,
@@ -41,10 +42,12 @@ export async function buildOpencodeHostEnv(
       : {};
   const env: Record<string, string> = {};
   if (rpc) {
-    const { configDir, pluginFile } = writeOpencodeRpcPlugin();
-    env.OPENCODE_CONFIG_DIR = configDir;
+    // OPENCODE_CONFIG_DIR replaces ~/.config/opencode (user providers, plugins,
+    // MCP). List the plugin as a file URL in the inline config instead; OpenCode
+    // appends that array to the user's plugins.
+    const pluginFile = writeOpencodeRpcPlugin();
     Object.assign(env, agentRpcChildEnv(rpc, thread.worktreePath));
-    config.plugin = [pluginFile];
+    config.plugin = [pathToFileURL(pluginFile).href];
   }
   if (Object.keys(config).length > 0) {
     env.OPENCODE_CONFIG_CONTENT = JSON.stringify(config);

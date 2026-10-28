@@ -265,14 +265,16 @@ export function codexSandboxWritableRootsArgs(roots: string[]): string[] {
 
 export function codexUnattendedGitConfigArgs(
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access' | string,
-  opts?: { writableRoots?: string[] },
+  opts?: { writableRoots?: string[]; preserveEnv?: Record<string, string | undefined> },
 ): string[] {
-  const args = [
-    '-c',
-    'shell_environment_policy.inherit="all"',
-    '-c',
-    'shell_environment_policy.ignore_default_excludes=true',
-  ];
+  // Default Codex excludes strip *KEY* / *TOKEN* / *SECRET*. Leave them on.
+  // `GIT_CONFIG_KEY_n` matches *KEY* and is required for the credential-store
+  // helper, so re-set those names after the filter. Do not re-set token vars.
+  const args = ['-c', 'shell_environment_policy.inherit="all"'];
+  for (const [key, value] of Object.entries(opts?.preserveEnv ?? {})) {
+    if (!/^GIT_CONFIG_KEY_\d+$/.test(key) || !value) continue;
+    args.push('-c', `shell_environment_policy.set.${key}=${JSON.stringify(value)}`);
+  }
   if (sandbox === 'workspace-write') {
     args.push('-c', 'sandbox_workspace_write.network_access=true');
     args.push(...codexSandboxWritableRootsArgs(opts?.writableRoots ?? []));

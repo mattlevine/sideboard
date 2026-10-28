@@ -74,6 +74,7 @@ describe('shouldReturnRunErrorToAgent', () => {
     expect(shouldReturnRunErrorToAgent('invalid API key')).toBe(false);
     expect(shouldReturnRunErrorToAgent('credit balance is too low')).toBe(false);
     expect(shouldReturnRunErrorToAgent('')).toBe(false);
+    expect(shouldReturnRunErrorToAgent('internal server error')).toBe(false);
   });
 });
 

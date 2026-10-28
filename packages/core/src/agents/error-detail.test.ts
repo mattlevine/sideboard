@@ -46,6 +46,9 @@ describe('extractJsonErrorMessage', () => {
   it('prefers message / nested error.message', () => {
     expect(extractJsonErrorMessage({ message: 'boom' })).toBe('boom');
     expect(extractJsonErrorMessage({ error: { message: 'nested' } })).toBe('nested');
+    expect(
+      extractJsonErrorMessage({ error: { data: { message: 'from data' } } }),
+    ).toBe('from data');
     expect(extractJsonErrorMessage({ errors: [{ message: 'a' }, 'b'] })).toBe('a; b');
   });
 });

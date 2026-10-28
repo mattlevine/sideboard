@@ -61,6 +61,12 @@ export function extractJsonErrorMessage(obj: Record<string, unknown>): string | 
     typeof obj.message === 'string' ? obj.message : null,
     typeof obj.error === 'string' ? obj.error : null,
     nested && typeof nested.message === 'string' ? nested.message : null,
+    nested &&
+    nested.data &&
+    typeof nested.data === 'object' &&
+    typeof (nested.data as { message?: unknown }).message === 'string'
+      ? ((nested.data as { message: string }).message)
+      : null,
     typeof obj.result === 'string' ? obj.result : null,
     typeof obj.detail === 'string' ? obj.detail : null,
   ];

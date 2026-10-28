@@ -102,13 +102,16 @@ const NON_RECOVERABLE_RUN_ERROR =
  * around (tool throw, oversized result, dropped stream). Auth and quota
  * failures are not — another prompt will fail the same way.
  */
+const RECOVERABLE_RUN_ERROR =
+  /premature close|tool execution failed|stream (?:idle|cut ?off|closed)|custom tool|result too (?:large|long)|max(?:imum)? (?:tool )?result/;
+
 export function shouldReturnRunErrorToAgent(detail: string): boolean {
   const text = detail.trim();
   if (!text) return false;
   if (looksLikeHugeToolResultDump(text) || looksLikeCursorStreamCutOff(text)) return true;
   const head = text.slice(0, 2_000).toLowerCase();
   if (NON_RECOVERABLE_RUN_ERROR.test(head)) return false;
-  return true;
+  return RECOVERABLE_RUN_ERROR.test(head);
 }
 
 /** Follow-up prompt so the same Cursor agent sees the failure and can continue. */

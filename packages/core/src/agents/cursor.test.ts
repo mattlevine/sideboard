@@ -207,9 +207,11 @@ describe('cursorAdapter.buildTurn', () => {
       { ...baseThread, sessionId: 'agent-abc' } as typeof baseThread,
       { cachedPrefix: 'should not appear', prompt: 'next step' },
     );
-    const req = JSON.parse(cmd.stdin!) as { prompt: string; agentId?: string };
+    const req = JSON.parse(cmd.stdin!) as { prompt: string; freshPrompt?: string; agentId?: string };
     expect(req.prompt).toBe('next step');
     expect(req.prompt).not.toContain('should not appear');
+    expect(req.freshPrompt).toContain('should not appear');
+    expect(req.freshPrompt).toContain('next step');
     expect(req.agentId).toBe('agent-abc');
   });
 });
@@ -518,7 +520,7 @@ describe('turnCostUsdFromCursorUsage', () => {
     expect(
       turnCostUsdFromCursorUsage(null, {
         cost: { chargedCents: 42 },
-        runs: [],
+        runs: [{ runId: 'old', cost: { chargedCents: 42 } }],
       }),
     ).toBeUndefined();
   });

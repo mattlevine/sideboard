@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../git/run.js';
@@ -7,11 +7,17 @@ import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { extractJsonErrorMessage } from './error-detail.js';
 import { fromInclusiveInputUsage } from './usage.js';
-import { codexUnattendedGitConfigArgs, resolveCodexGitWritableRoots } from '../git/git-auth-mode.js';
+import {
+  codexUnattendedGitConfigArgs,
+  resolveAgentGitAuthEnv,
+  resolveCodexGitWritableRoots,
+} from '../git/git-auth-mode.js';
+import { listAssignedLinearIssues } from './linear-list.js';
 import {
   buildInjectedMcpServers,
   shouldInjectBrightsyMcp,
   toCodexMcpConfigArgs,
+  writeCodexMcpSecretProfile,
 } from './injected-mcp.js';
 import {
   listUserCodexMcpNames,
@@ -109,17 +115,8 @@ function usageFromCodex(usage: CodexUsage | undefined): TokenUsage | null {
   });
 }
 
-function codexConfigHasNetworkAccess(): boolean {
-  const candidates = [
-    join(homedir(), '.codex', 'config.toml'),
-    join(homedir(), '.config', 'codex', 'config.toml'),
-  ];
-  for (const path of candidates) {
-    if (!existsSync(path)) continue;
-    const text = readFileSync(path, 'utf8');
-    if (/network_access\s*=\s*true/.test(text)) return true;
-  }
-  return false;
+function codexHomeDir(): string {
+  return process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');
 }
 
 /** Flatten Codex/MCP result content arrays to a single string payload. */
@@ -155,7 +152,7 @@ function codexLooksAuthenticated(): boolean {
   // Never spawn `codex login status` / `codex mcp list` from detect — nested under
   // an active `codex exec` those CLIs can block forever on ~/.codex SQLite locks,
   // which hangs Sideboard MCP create_workspace (orchestrator → create agent=codex).
-  const authPath = join(homedir(), '.codex', 'auth.json');
+  const authPath = join(codexHomeDir(), 'auth.json');
   if (!existsSync(authPath)) return false;
   try {
     return statSync(authPath).size > 2;
@@ -198,11 +195,6 @@ export const codexAdapter: AgentAdapter = {
     const linearMcp = false;
 
     const warnings: string[] = [];
-    if (!codexConfigHasNetworkAccess()) {
-      warnings.push(
-        'Codex workspace-write blocks network by default — set [sandbox_workspace_write] network_access = true in ~/.codex/config.toml if agents need npm install etc.',
-      );
-    }
 
     return {
       agent: 'codex',
@@ -212,7 +204,7 @@ export const codexAdapter: AgentAdapter = {
       warnings,
       reason: authenticated
         ? undefined
-        : 'Codex auth not found — run `codex login` (expected ~/.codex/auth.json)',
+        : `Codex auth not found — run \`codex login\` (expected ${join(codexHomeDir(), 'auth.json')})`,
     };
   },
 
@@ -249,6 +241,15 @@ export const codexAdapter: AgentAdapter = {
       isOrchestrator ||
       Boolean(thread.isolateCodexPlugins) ||
       Boolean(normalizeTurnInput(input).isolateCodexPlugins);
+    const gitEnv = await resolveAgentGitAuthEnv(process.env, {
+      cwd: thread.worktreePath,
+    });
+    const writableRoots =
+      mode.codexSandbox === 'workspace-write'
+        ? await resolveCodexGitWritableRoots(thread.worktreePath)
+        : [];
+    const secretProfile = writeCodexMcpSecretProfile(injected);
+    const effort = thread.effort?.trim() ?? '';
     const mcpOverrides = [
       // Worktree first try keeps plugins (Claude connectors). Coordinators
       // isolate. After a fatal plugin MCP, the orchestrator retries with
@@ -269,6 +270,7 @@ export const codexAdapter: AgentAdapter = {
     const execOpts = [
       // Global orchestration cwd is not a git repo; without this Codex ≥0.147
       // refuses to start ("Not inside a trusted directory").
+      ...(secretProfile ? (['-p', secretProfile.profile] as const) : []),
       '--skip-git-repo-check',
       '--cd',
       thread.worktreePath,
@@ -278,17 +280,16 @@ export const codexAdapter: AgentAdapter = {
       // `codex exec` rejects `--ask-for-approval` (global-only on newer CLIs).
       '-c',
       'approval_policy="never"',
-      // Seatbelt cannot use the login Keychain; inherit GH_CONFIG_DIR / GIT_CONFIG_*.
-      // Default policy also strips *TOKEN*. Linked worktrees need the main
-      // repo `.git` (+ `.git/worktrees/<name>`) as writable_roots so git commit
-      // can create index.lock.
+      // Seatbelt cannot use the login Keychain. inherit=all keeps GH_CONFIG_DIR
+      // and GIT_CONFIG_*. Default excludes still strip *TOKEN*/*SECRET*/*KEY*;
+      // GIT_CONFIG_KEY_n is re-set because it matches *KEY*. Linked worktrees
+      // need the main repo `.git` as writable_roots so git commit can lock.
       ...codexUnattendedGitConfigArgs(mode.codexSandbox, {
-        writableRoots:
-          mode.codexSandbox === 'workspace-write'
-            ? await resolveCodexGitWritableRoots(thread.worktreePath)
-            : [],
+        writableRoots,
+        preserveEnv: gitEnv,
       }),
       ...(model ? (['--model', model] as const) : []),
+      ...(effort ? (['-c', `model_reasoning_effort=${JSON.stringify(effort)}`] as const) : []),
       ...mcpOverrides,
     ];
     const args = sessionId
@@ -300,6 +301,7 @@ export const codexAdapter: AgentAdapter = {
       args,
       cwd: thread.worktreePath,
       stdin: useStdin ? `${prompt}\n` : undefined,
+      ...(secretProfile ? { cleanupDirs: [secretProfile.file] } : {}),
     };
   },
 
@@ -330,7 +332,8 @@ export const codexAdapter: AgentAdapter = {
           type?: string;
           item_type?: string;
           text?: string;
-          message?: string;
+          message?: unknown;
+          changes?: Array<{ path?: string; kind?: string }>;
           status?: string;
           server?: string;
           tool?: string;
@@ -345,8 +348,42 @@ export const codexAdapter: AgentAdapter = {
         };
         const itemType = item.type ?? item.item_type;
 
+        if (itemType === 'reasoning' && typeof item.text === 'string' && item.text) {
+          return { type: 'thinking', data: item.text };
+        }
+        if (itemType === 'file_change' && item.id) {
+          const changes = Array.isArray(item.changes) ? item.changes : [];
+          const paths = changes
+            .map((change) => (typeof change?.path === 'string' ? change.path : ''))
+            .filter(Boolean);
+          const added = changes.some((change) => change?.kind === 'add');
+          const events: AgentEvent[] = [
+            {
+              type: 'tool_use',
+              id: item.id,
+              name: added ? 'Write' : 'Edit',
+              input: paths.length ? { paths } : undefined,
+            },
+          ];
+          const finished =
+            type === 'item.completed' ||
+            item.status === 'completed' ||
+            item.status === 'failed';
+          if (finished) {
+            events.push({
+              type: 'tool_result',
+              id: item.id,
+              content: paths.join('\n') || undefined,
+              isError: item.status === 'failed',
+            });
+          }
+          return events.length === 1 ? events[0]! : events;
+        }
         if (itemType === 'error') {
-          const detail = item.message?.trim() || extractJsonErrorMessage(obj) || 'Codex item error';
+          const detail =
+            (typeof item.message === 'string' ? item.message.trim() : '') ||
+            extractJsonErrorMessage(obj) ||
+            'Codex item error';
           // Stream-lag warnings are non-fatal; still surface but prefer real failures later.
           return { type: 'stderr', data: detail };
         }
@@ -385,7 +422,8 @@ export const codexAdapter: AgentAdapter = {
           const finished =
             type === 'item.completed' ||
             item.status === 'completed' ||
-            item.status === 'failed';
+            item.status === 'failed' ||
+            item.status === 'declined';
           const output =
             typeof item.aggregated_output === 'string' && item.aggregated_output
               ? item.aggregated_output
@@ -395,7 +433,7 @@ export const codexAdapter: AgentAdapter = {
               type: 'tool_result',
               id: item.id,
               content: output,
-              isError: item.status === 'failed',
+              isError: item.status === 'failed' || item.status === 'declined',
             });
           } else if (output) {
             events.push({
@@ -465,7 +503,13 @@ export const codexAdapter: AgentAdapter = {
       }
 
       if (type === 'turn.completed' || type === 'turn_completed') {
-        const usage = usageFromCodex((obj as { usage?: CodexUsage }).usage);
+        const payload = obj as {
+          usage?: CodexUsage;
+          last_token_usage?: CodexUsage;
+        };
+        // `last_token_usage` is this turn. `usage` is the older per-turn field.
+        // `total_token_usage` is the session sum — do not bill it as this turn.
+        const usage = usageFromCodex(payload.last_token_usage ?? payload.usage);
         return usage ? { type: 'usage', data: usage, scope: 'turn' } : null;
       }
 
@@ -491,9 +535,11 @@ export const codexAdapter: AgentAdapter = {
     const codex = resolveAgentExecutable('codex');
     const sessionId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
     if (sessionId) {
+      // `codex exec resume` is the headless runner. Attach opens a PTY, so use
+      // the interactive `codex resume` (same as Claude's `claude --resume`).
       return {
         file: codex,
-        args: ['exec', '--cd', thread.worktreePath, 'resume', sessionId],
+        args: ['resume', sessionId],
         cwd: thread.worktreePath,
       };
     }
@@ -505,29 +551,6 @@ export const codexAdapter: AgentAdapter = {
   },
 
   async listLinearIssues(_repoPath: string): Promise<IssueInfo[]> {
-    const prompt =
-      'List my assigned Linear issues as JSON array only: id, identifier, title, url, labels.';
-    const { stdout, exitCode } = await run(
-      resolveAgentExecutable('codex'),
-      [
-        'exec',
-        '--json',
-        '--sandbox',
-        'read-only',
-        '-c',
-        'approval_policy="never"',
-        prompt,
-      ],
-      { reject: false },
-    );
-    if (exitCode !== 0) return [];
-    const match = stdout.match(/\[[\s\S]*\]/);
-    if (!match) return [];
-    try {
-      const parsed = JSON.parse(match[0]) as IssueInfo[];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
+    return listAssignedLinearIssues();
   },
 };

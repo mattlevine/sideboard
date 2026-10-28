@@ -33,6 +33,25 @@ export function requestOccupancy(u: TokenUsage): number {
   return u.inputTokens + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0);
 }
 
+/** Remove a previously added snapshot so a later one for the same message can replace it. */
+export function subtractUsage(total: TokenUsage | null, part: TokenUsage): TokenUsage | null {
+  if (!total) return null;
+  const cacheRead = Math.max(0, (total.cacheReadTokens ?? 0) - (part.cacheReadTokens ?? 0));
+  const cacheWrite = Math.max(0, (total.cacheWriteTokens ?? 0) - (part.cacheWriteTokens ?? 0));
+  return {
+    inputTokens: Math.max(0, total.inputTokens - part.inputTokens),
+    outputTokens: Math.max(0, total.outputTokens - part.outputTokens),
+    cacheReadTokens: cacheRead || undefined,
+    cacheWriteTokens: cacheWrite || undefined,
+    costUsd:
+      total.costUsd != null && part.costUsd != null
+        ? Math.max(0, total.costUsd - part.costUsd)
+        : total.costUsd,
+    sessionCostUsd: total.sessionCostUsd,
+    lastRequestTokens: total.lastRequestTokens,
+  };
+}
+
 /** Accumulate incremental usage (one CLI turn may report usage in several steps). */
 export function mergeUsage(a: TokenUsage | null, b: TokenUsage): TokenUsage {
   return {
@@ -159,7 +178,12 @@ type UsageCostMessage = { role?: string; usage?: TokenUsage | null };
  */
 export function previousCostBaseline(
   messages: ReadonlyArray<UsageCostMessage>,
-): { sessionCostUsd: number; lastCostUsd: number | undefined } {
+): {
+  sessionCostUsd: number;
+  lastCostUsd: number | undefined;
+  /** True when a prior message stored `sessionCostUsd` (not only summed turn costs). */
+  hasSessionSnapshot: boolean;
+} {
   let summed = 0;
   let lastCost: number | undefined;
   let lastSession: number | undefined;
@@ -176,6 +200,7 @@ export function previousCostBaseline(
   return {
     sessionCostUsd: lastSession ?? summed,
     lastCostUsd: lastCost,
+    hasSessionSnapshot: lastSession != null,
   };
 }
 
@@ -188,6 +213,8 @@ export function turnCostUsdFromProviderSnapshot(opts: {
   sessionCostUsd?: number;
   previousSessionCostUsd: number;
   previousLastCostUsd?: number;
+  /** See {@link previousCostBaseline}. */
+  previousHasSessionSnapshot?: boolean;
 }): number | undefined {
   const reported = finiteUsd(opts.reportedTurnCostUsd);
   const session = finiteUsd(opts.sessionCostUsd);
@@ -201,6 +228,13 @@ export function turnCostUsdFromProviderSnapshot(opts: {
       if (session + USD_EPS >= previous) {
         return roundUsd(Math.max(0, session - previous));
       }
+      if (opts.previousHasSessionSnapshot) {
+        // CLI session restarted (crash retry, compaction). The prior snapshot
+        // belongs to the old session; this one is the new session's total.
+        return roundUsd(session);
+      }
+      // Older messages stored session totals in costUsd and never set
+      // sessionCostUsd, so the baseline is a sum and can exceed this snapshot.
       if (last != null && session + USD_EPS >= last) {
         return roundUsd(Math.max(0, session - last));
       }
@@ -225,6 +259,7 @@ export function withTurnScopedCost(
     sessionCostUsd: usage.sessionCostUsd,
     previousSessionCostUsd: baseline.sessionCostUsd,
     previousLastCostUsd: baseline.lastCostUsd,
+    previousHasSessionSnapshot: baseline.hasSessionSnapshot,
   });
   if (costUsd == null) {
     if (usage.costUsd == null) return usage;

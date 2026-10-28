@@ -8,6 +8,7 @@ import { AGENT_RPC_CLAUDE_SDK_SERVER } from '../agent-rpc/protocol.js';
 import { dropNestedElectronEnvFromProcess } from '../hook/nested-electron-env.js';
 import { createClaudePilotSdkServer } from './claude-sdk-tools.js';
 import { claudePermissionResult } from './claude-permission.js';
+import { buildClaudeSdkQueryOptions } from './claude-query-options.js';
 import type { ClaudeTurnRequest } from './claude-turn-request.js';
 
 dropNestedElectronEnvFromProcess();
@@ -66,23 +67,19 @@ async function main(): Promise<void> {
     mcpServers[name] = spec;
   }
 
+  const abortController = new AbortController();
+  let stopped = false;
+  const onStop = (): void => {
+    stopped = true;
+    abortController.abort();
+    // If the SDK query does not settle, don't leave the claude child running.
+    setTimeout(() => process.exit(130), 3_000).unref();
+  };
+  process.once('SIGTERM', onStop);
+  process.once('SIGINT', onStop);
+
   try {
-    const options: Record<string, unknown> = {
-      cwd: req.cwd,
-      pathToClaudeCodeExecutable: req.claudePath,
-      permissionMode: req.permissionMode,
-      ...(req.permissionMode === 'bypassPermissions'
-        ? { allowDangerouslySkipPermissions: true }
-        : {}),
-      allowedTools: req.allowedTools,
-      mcpServers,
-      includePartialMessages: true,
-    };
-    if (req.sessionId) options.resume = req.sessionId;
-    if (req.model) options.model = req.model;
-    if (req.systemPrompt) options.appendSystemPrompt = req.systemPrompt;
-    if (req.effort) options.effort = req.effort;
-    if (req.chrome) options.chrome = true;
+    const options = buildClaudeSdkQueryOptions(req, mcpServers, abortController);
     // acceptEdits still asks for paths outside the worktree (a home-directory
     // skill, for example). Without this callback those asks are denied.
     options.canUseTool = (
@@ -114,14 +111,14 @@ async function main(): Promise<void> {
         options: toolOpts,
         rpc: req.agentRpc,
       });
-    // Match CLI `--strict-mcp-config`: only servers we pass (injected + copied
-    // user stdio). Default settingSources would merge ~/.claude.json and nest.
-    options.settingSources = [];
 
     for await (const message of sdk.query({ prompt: req.prompt, options })) {
       emit(message);
     }
+    if (stopped) process.exitCode = 130;
   } finally {
+    process.off('SIGTERM', onStop);
+    process.off('SIGINT', onStop);
     exec.close();
   }
 }

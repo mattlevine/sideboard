@@ -22,6 +22,8 @@ type Pending = {
  */
 export class AgentRpcClient {
   private ws: WebSocket | null = null;
+  /** In-flight connect. Concurrent call()s must share it or each opens a socket. */
+  private connecting: Promise<WebSocket> | null = null;
   private readonly pending = new Map<string, Pending>();
   private nextId = 1;
   private readonly url: string;
@@ -72,10 +74,10 @@ export class AgentRpcClient {
     return url.toString();
   }
 
-  private async ensureSocket(): Promise<WebSocket> {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) return this.ws;
+  private ensureSocket(): Promise<WebSocket> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return Promise.resolve(this.ws);
+    if (this.connecting) return this.connecting;
     const ws = new WebSocket(this.socketUrl());
-    this.ws = ws;
     ws.on('message', (data) => this.onFrame(data.toString()));
     // Persistent listener: an un-listened `ws` 'error' is an uncaught
     // exception in the runner process. Fail in-flight calls instead.
@@ -92,8 +94,9 @@ export class AgentRpcClient {
         ),
       );
     });
-    await new Promise<void>((resolve, reject) => {
+    this.connecting = new Promise<WebSocket>((resolve, reject) => {
       const fail = (err: Error) => {
+        this.connecting = null;
         const message = err.message.includes('401') ? 'Unauthorized' : err.message;
         reject(message === err.message ? err : new Error(message));
       };
@@ -109,14 +112,19 @@ export class AgentRpcClient {
       ws.once('error', fail);
       ws.once('open', () => {
         ws.off('error', fail);
-        resolve();
+        this.ws = ws;
+        this.connecting = null;
+        resolve(ws);
       });
     });
-    return ws;
+    return this.connecting;
   }
 
   private drop(ws: WebSocket, err: Error): void {
-    if (this.ws === ws) this.ws = null;
+    // A socket that lost the race (or failed before open) must not reject
+    // calls that belong to the live socket.
+    if (this.ws !== ws) return;
+    this.ws = null;
     if (this.pending.size === 0) return;
     this.failAll(err);
   }

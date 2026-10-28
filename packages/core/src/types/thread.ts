@@ -239,6 +239,12 @@ export interface Thread {
    */
   agentPid?: number | null;
   /**
+   * `ps -o lstart` of {@link Thread.agentPid} when it was recorded.
+   * Stop / drain refuse to signal a pid whose start time no longer matches,
+   * so a recycled pid is not killed.
+   */
+  agentPidStartedAt?: string | null;
+  /**
    * When set, host auto-retries this chat after a provider session/usage
    * quota reset (ISO timestamp).
    */
@@ -626,6 +632,11 @@ export type AgentEvent =
       data: TokenUsage;
       /** `request` = one API call; `turn` = billed total for the whole agent turn. */
       scope?: 'request' | 'turn';
+      /**
+       * Assistant message id when a provider repeats usage on each snapshot.
+       * Spawn replaces the earlier snapshot instead of adding it again.
+       */
+      messageId?: string;
     }
   | { type: 'exit'; data: number | null };
 

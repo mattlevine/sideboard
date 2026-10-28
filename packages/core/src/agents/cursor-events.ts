@@ -86,7 +86,10 @@ export function turnCostUsdFromCursorUsage(
   after: CursorAgentUsageSnapshot | null | undefined,
 ): number | undefined {
   if (!after) return undefined;
-  const beforeIds = new Set((before?.runs ?? []).map((r) => r.runId));
+  // Without a before snapshot every stored run looks new, so the sum is the
+  // whole session. Agent-level cents are session-cumulative too.
+  if (before == null) return undefined;
+  const beforeIds = new Set((before.runs ?? []).map((r) => r.runId));
   const newRuns = (after.runs ?? []).filter((r) => !beforeIds.has(r.runId));
   let sum = 0;
   let any = false;
@@ -99,9 +102,6 @@ export function turnCostUsdFromCursorUsage(
   }
   if (any) return sum / 100;
 
-  // Without a before snapshot, agent.cost is session-cumulative — do not assign
-  // the whole agent total to this turn.
-  if (before == null) return undefined;
   const afterCents = preferredCursorCostCents(after.cost);
   if (afterCents == null) return undefined;
   const beforeCents = preferredCursorCostCents(before.cost) ?? 0;

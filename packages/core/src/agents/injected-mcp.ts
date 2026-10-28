@@ -1,6 +1,7 @@
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from '../git/run.js';
@@ -449,8 +450,51 @@ export function toCursorMcpServers(servers: InjectedMcpServer[]): CursorMcpServe
   return out;
 }
 
+/** Env keys that must not appear on the Codex argv (process list / shell history). */
+export function isCodexSecretEnvKey(key: string): boolean {
+  return /token|secret|password|credential|oauth|api_key|_key$/i.test(key);
+}
+
+function tomlBasicString(value: string): string {
+  return `"${value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')}"`;
+}
+
+/**
+ * Secret MCP env goes in `$CODEX_HOME/<profile>.config.toml` (mode 0600) and is
+ * selected with `codex exec -p`. Non-secret env stays on `-c` so it still merges.
+ * Caller must delete `file` after the turn — never the Codex home directory.
+ */
+export function writeCodexMcpSecretProfile(
+  servers: InjectedMcpServer[],
+): { profile: string; file: string } | null {
+  const blocks: string[] = [];
+  for (const s of servers) {
+    const env = mcpSpawnEnv(s.env);
+    if (!env) continue;
+    const secrets = Object.entries(env).filter(([key]) => isCodexSecretEnvKey(key));
+    if (secrets.length === 0) continue;
+    const lines = [`[mcp_servers.${s.name}.env]`];
+    for (const [key, value] of secrets) {
+      lines.push(`${key} = ${tomlBasicString(value)}`);
+    }
+    blocks.push(lines.join('\n'));
+  }
+  if (blocks.length === 0) return null;
+  const home = process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');
+  mkdirSync(home, { recursive: true, mode: 0o700 });
+  const profile = `sideboard-${randomBytes(8).toString('hex')}`;
+  const file = join(home, `${profile}.config.toml`);
+  writeFileSync(file, `${blocks.join('\n\n')}\n`, { mode: 0o600 });
+  return { profile, file };
+}
+
 /**
  * Codex CLI `-c key=value` overrides for mcp_servers (merged over ~/.codex/config.toml).
+ * Secret env is omitted here; {@link writeCodexMcpSecretProfile} carries it.
  * @see https://developers.openai.com/codex/mcp
  */
 export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
@@ -464,6 +508,7 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
     const env = mcpSpawnEnv(s.env);
     if (env) {
       for (const [key, value] of Object.entries(env)) {
+        if (isCodexSecretEnvKey(key)) continue;
         args.push('-c', `${prefix}.env.${key}=${JSON.stringify(value)}`);
       }
     }
@@ -549,7 +594,7 @@ export function writeMcpServersConfig(
 
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-mcp-'));
   const cfgPath = join(dir, 'mcp.json');
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }, null, 2));
+  writeFileSync(cfgPath, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
   return cfgPath;
 }
 
@@ -582,9 +627,8 @@ export function writeSideboardMcpConfig(): string {
       };
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-orch-mcp-'));
   const cfgPath = join(dir, 'mcp.json');
-  writeFileSync(
-    cfgPath,
-    JSON.stringify({ mcpServers: { sideboard } }, null, 2),
-  );
+  writeFileSync(cfgPath, JSON.stringify({ mcpServers: { sideboard } }, null, 2), {
+    mode: 0o600,
+  });
   return cfgPath;
 }

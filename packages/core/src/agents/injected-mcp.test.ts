@@ -13,6 +13,7 @@ import {
   threadRequestsBrightsyMcp,
   resolveSideboardMcpServer,
   toCodexMcpConfigArgs,
+  writeCodexMcpSecretProfile,
   toCursorMcpServers,
   toOpencodeMcpConfigContent,
   writeMcpServersConfig,
@@ -618,5 +619,32 @@ describe('Claude / Codex / OpenCode MCP serializers', () => {
     expect(oc.mcp.sideboard.command).toEqual(['/opt/homebrew/bin/node', '/tmp/run-stdio.js']);
     expect(oc.mcp.sideboard.environment?.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(oc.mcp.sideboard.environment?.SIDEBOARD_APP_DATA).toBe('/tmp/data');
+  });
+
+  it('keeps MCP secrets out of Codex argv and in a 0600 profile', () => {
+    const home = mkdtempSync(join(tmpdir(), 'codex-profile-'));
+    vi.stubEnv('CODEX_HOME', home);
+    try {
+      const server = {
+        name: 'brightsy_acme',
+        command: 'node',
+        args: ['mcp.js'],
+        env: {
+          BRIGHTSY_API_TOKEN: 'secret-token',
+          BRIGHTSY_API_URL: 'https://brightsy.ai',
+        },
+      };
+      const args = toCodexMcpConfigArgs([server]);
+      expect(args.join('\n')).not.toContain('secret-token');
+      expect(args.some((a) => a.includes('BRIGHTSY_API_URL'))).toBe(true);
+      const profile = writeCodexMcpSecretProfile([server]);
+      expect(profile?.profile.startsWith('sideboard-')).toBe(true);
+      const body = readFileSync(profile!.file, 'utf8');
+      expect(body).toContain('BRIGHTSY_API_TOKEN = "secret-token"');
+      expect(body).not.toContain('BRIGHTSY_API_URL');
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

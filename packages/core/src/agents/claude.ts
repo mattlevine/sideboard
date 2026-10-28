@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { run } from '../git/run.js';
 import {
   claudeChromeEnabled,
@@ -140,8 +141,14 @@ export function claudeResultErrorDetail(obj: Record<string, unknown>): string | 
     (typeof obj.subtype === 'string' && /^error/i.test(obj.subtype));
 
   const fromResult = typeof obj.result === 'string' ? obj.result.trim() : '';
-  // Session/weekly limits often arrive as normal result text (no is_error), then exit 1.
-  if (fromResult && (isError || looksLikeAgentFailureMessage(fromResult))) {
+  // Session/weekly limits often arrive as a short result (no is_error), then exit 1.
+  // A normal answer that mentions "rate limit" or "401" must stay on stdout.
+  const shortFailure =
+    fromResult.length > 0 &&
+    fromResult.length <= 300 &&
+    !fromResult.includes('\n') &&
+    looksLikeAgentFailureMessage(fromResult);
+  if (fromResult && (isError || shortFailure)) {
     return fromResult;
   }
   if (!isError) return null;
@@ -444,7 +451,7 @@ function eventsFromClaudeSystem(obj: Record<string, unknown>): AgentEvent | Agen
       data: `Context compressed${trigger}`,
       replace: true,
     };
-    if (meta.postTokens != null && meta.postTokens > 0) {
+    if (meta.postTokens != null && meta.postTokens > 0 && !parentId) {
       return [
         thinking,
         {
@@ -669,6 +676,7 @@ export const claudeAdapter: AgentAdapter = {
       args,
       cwd: thread.worktreePath,
       stdin: useStdin ? `${promptText}\n` : undefined,
+      ...(mcpConfigPath ? { cleanupDirs: [dirname(mcpConfigPath)] } : {}),
       // Nested Task/Agent thinking+text in stream-json (Claude Code 2.1.211+).
       // Raise the -p background-agent wait so long TaskOutput polls are not
       // abandoned at Claude Code’s 10-minute default.
@@ -714,9 +722,22 @@ export const claudeAdapter: AgentAdapter = {
                 Array.isArray(message?.content) ? message.content : undefined,
                 parentId,
               );
-        if (obj.type === 'assistant') {
+        // Nested subagent messages carry their own (smaller) context. Counting
+        // them overwrites the parent turn's occupancy indicator.
+        if (obj.type === 'assistant' && !parentId) {
           const usage = usageFromClaude(message?.usage);
-          if (usage) events.push({ type: 'usage', data: usage, scope: 'request' });
+          const messageId =
+            message && typeof (message as { id?: unknown }).id === 'string'
+              ? (message as { id: string }).id
+              : undefined;
+          if (usage) {
+            events.push({
+              type: 'usage',
+              data: usage,
+              scope: 'request',
+              ...(messageId ? { messageId } : {}),
+            });
+          }
         }
         // For assistant snapshots after streaming, prefer tool/thinking blocks;
         // text may duplicate stream deltas (spawn dedupes stdout).
@@ -833,25 +854,8 @@ export const claudeAdapter: AgentAdapter = {
   },
 
   async listLinearIssues(_repoPath: string): Promise<IssueInfo[]> {
-    const claude = resolveClaudeExecutable();
-    const prompt =
-      'List my assigned Linear issues as JSON array only, no markdown. Each item: id, identifier, title, url, labels (string[]).';
-    const { stdout, exitCode } = await run(
-      claude,
-      [
-        '-p',
-        prompt,
-        '--output-format',
-        'json',
-        '--permission-mode',
-        'bypassPermissions',
-        '--allowedTools',
-        'mcp__linear__*',
-      ],
-      { reject: false },
-    );
-    if (exitCode !== 0) return [];
-    return parseIssuesJson(stdout);
+    const { listAssignedLinearIssues } = await import('./linear-list.js');
+    return listAssignedLinearIssues();
   },
 };
 

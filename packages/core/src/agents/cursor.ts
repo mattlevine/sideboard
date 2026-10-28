@@ -181,6 +181,7 @@ export const cursorAdapter: AgentAdapter = {
 
   async buildTurn(thread, input): Promise<TurnCommand> {
     const agentId = await this.resolveSessionId(thread.worktreePath, thread.sessionId);
+    const fullPrompt = flattenTurnInput(input);
     const prompt = flattenTurnInput(dropCachedPrefixOnResume(input, agentId));
     const apiKey = resolveCursorApiKey() || undefined;
     // Sideboard always. Brightsy only when logged in and the user asked (or this
@@ -199,6 +200,7 @@ export const cursorAdapter: AgentAdapter = {
     const mcpServers = toCursorMcpServers(injected);
     const req: CursorTurnRequest = {
       prompt,
+      ...(fullPrompt !== prompt ? { freshPrompt: fullPrompt } : {}),
       cwd: thread.worktreePath,
       threadId: thread.id,
       agentId,
@@ -231,7 +233,8 @@ export const cursorAdapter: AgentAdapter = {
       env: {
         ...launch.env,
         ...cursorRipgrepEnv({ startFile: runner }),
-        ...(apiKey ? { CURSOR_API_KEY: apiKey } : {}),
+        // API key stays on the stdin request. Do not copy it into the child env,
+        // where `ps` and crash dumps can see it. The runner reads `req.apiKey`.
       },
     };
   },

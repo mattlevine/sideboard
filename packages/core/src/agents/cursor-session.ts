@@ -39,9 +39,9 @@ export function isUnresumableCursorSession(err: unknown): boolean {
   return (
     /corrupt local agent checkpoint/.test(lower) ||
     /missing root blob/.test(lower) ||
-    /\bagent\b.{0,120}\bnot found\b/.test(lower) ||
+    /\bagent\s+agent-[\w-]+\s+not found\b/.test(lower) ||
     // Shared JSONL last-write-wins: `Run run-… not found for agent agent-…`
-    /\brun\b.{0,80}\bnot found for agent\b/.test(lower) ||
+    /\brun\s+run-[\w-]+\s+not found for agent\b/.test(lower) ||
     /cannot resume/.test(lower)
   );
 }
@@ -112,15 +112,32 @@ export async function retryOnceOnRetryableCursorError<T>(
  * Local SDK `send()` does not throw `agent_busy`. A previous runner that died
  * leaves a persisted RUNNING run; `force` expires it (SDK: crashed CLI recovery).
  */
-export function cursorSendOptions<M>(mcpServers?: M): {
+export function cursorSendOptions<M>(
+  mcpServers?: M,
+  mode?: 'agent' | 'plan',
+): {
   local: { force: true };
   mcpServers?: M;
+  mode?: 'agent' | 'plan';
 } {
-  const opts: { local: { force: true }; mcpServers?: M } = { local: { force: true } };
+  const opts: { local: { force: true }; mcpServers?: M; mode?: 'agent' | 'plan' } = {
+    local: { force: true },
+  };
+  if (mode) opts.mode = mode;
   if (mcpServers && typeof mcpServers === 'object' && Object.keys(mcpServers).length > 0) {
     opts.mcpServers = mcpServers;
   }
   return opts;
+}
+
+/**
+ * Built-in `read` is replaced by the sliced custom tool. Plan mode also
+ * blocks shell and file mutation on create. The local SDK has no per-command
+ * approval hook, so default vs full autonomy cannot be split further.
+ */
+export function cursorDisallowedTools(planMode?: boolean): string[] {
+  if (planMode) return ['read', 'shell', 'edit', 'write', 'delete', 'task'];
+  return ['read'];
 }
 
 /**
