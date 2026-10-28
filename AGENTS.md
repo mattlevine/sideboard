@@ -19,4 +19,4 @@ Recurring multi-item work (migration, port, batch fix, fan-out): follow [`.claud
 
 **Reading run script logs:** Dev terminal and other run script output are persisted to `~/.sideboard/threads/wt-{hash}-run-{script}.run.log.json`. Agents can call the MCP tool `get_run_log` (ref omitted on worktree turns) to read the tail of any script's output. CLI: `.context/cli/read-dev-log.sh [worktree] [script-name]` for manual access.
 
-Keep this file and `CLAUDE.md` identical.
+`CLAUDE.md` is only `@AGENTS.md`. Edit this file. Cursor loads both filenames; the import keeps it from loading these instructions a second time.

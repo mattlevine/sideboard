@@ -1678,7 +1678,7 @@ export class Orchestrator {
     }
 
     // Fresh orchestration sessions get audience + workspace inventory.
-    // Fleet playbook is AGENTS.md / CLAUDE.md in the global cwd (same body).
+    // Fleet playbook is AGENTS.md in the global cwd. CLAUDE.md imports it.
     // Every turn also gets coordinatorTurnReminder in agentPrompt.
     let coordinatorDirective: string | null = null;
     if (isOrchestration) {

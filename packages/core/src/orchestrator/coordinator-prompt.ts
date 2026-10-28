@@ -208,7 +208,7 @@ export function coordinatorTurnReminder(opts: {
   const goal = opts.goal?.trim();
   return [
     'Sideboard Orchestration (mandatory):',
-    '- You oversee worktree agents from a synthetic empty cwd (not a git repo). Follow AGENTS.md / CLAUDE.md.',
+    '- You oversee worktree agents from a synthetic empty cwd (not a git repo). Follow AGENTS.md (CLAUDE.md imports it).',
     `- YOUR orchestration chat id is ${opts.parentId} — pass parentChatId="${opts.parentId}" on create_workspace, or omit it.`,
     goal ? `- Goal / title: ${goal}` : null,
     accountDefaultsPlaybookLine(),
@@ -220,9 +220,9 @@ export function coordinatorTurnReminder(opts: {
 }
 
 /**
- * Write durable CLAUDE.md / AGENTS.md into the global synthetic cwd so Claude
- * (and other agents that load AGENTS.md) keep orchestrator identity on resume.
- * Both files get the same body — they are filename aliases, not two documents.
+ * Write the fleet playbook to AGENTS.md in the global synthetic cwd. CLAUDE.md
+ * is `@AGENTS.md` so Claude imports that file and Cursor does not load a
+ * second copy (it always reads both filenames).
  * When `orchestratorThreadId` is set, embed that uuid so Codex/Claude resume
  * cannot invent a stale parentChatId.
  */
@@ -297,8 +297,8 @@ export function ensureGlobalCoordinatorCwd(opts?: {
   // Never throw — a sandboxed Codex MCP child that cannot write here must still
   // serve create_workspace / list_chats instead of dying during initialize.
   try {
-    writeFileSync(join(dir, 'CLAUDE.md'), `${body}\n`, 'utf8');
     writeFileSync(join(dir, 'AGENTS.md'), `${body}\n`, 'utf8');
+    writeFileSync(join(dir, 'CLAUDE.md'), '@AGENTS.md\n', 'utf8');
   } catch {
     // ignore
   }
@@ -332,13 +332,14 @@ export function coordinatorSystemPrompt(opts: {
             'Stay concise and actionable; prefer Sideboard MCP for fleet status; use Bash for greenfield repo setup and inspecting target worktree paths.',
           ];
 
-  // Fleet playbook lives in AGENTS.md / CLAUDE.md (same body) so CLIs auto-load
-  // one copy. This prefix is first-turn extras only — inventory, audience, goal.
+  // Fleet playbook lives in AGENTS.md. CLAUDE.md imports it so Cursor, which
+  // reads both filenames, does not get a second copy. This prefix is first-turn
+  // extras only — inventory, audience, goal.
   return [
     ...intro,
     'You operate across ALL registered workspaces below.',
     'You have no project git home — this process cwd is synthetic and empty on purpose.',
-    'Follow AGENTS.md / CLAUDE.md in this cwd for the fleet playbook (they are the same document).',
+    'Follow AGENTS.md in this cwd for the fleet playbook. CLAUDE.md is `@AGENTS.md` so Cursor does not load a second copy.',
     `YOUR orchestration chat id is ${opts.parentId} — pass parentChatId="${opts.parentId}" on create_workspace, or omit parentChatId (Sideboard binds it). Never invent a uuid.`,
     `Goal: ${opts.goal}`,
     'Registered workspaces:',
