@@ -170,7 +170,7 @@ export function askToolPermission(ask: ToolPermissionAsk): Promise<ToolPermissio
   const prompt: AgentPermissionPrompt = {
     id: randomUUID(),
     title: described.title,
-    detail: [described.detail, sessionNote].filter(Boolean).join('\n') || undefined,
+    detail: [described.detail, sessionNote].filter(Boolean).join('\n'),
     path: described.path || undefined,
     // Claude hides "always allow" when the saved rule would be broader than
     // this call. For MCP that broader rule is what we want: the whole server.
