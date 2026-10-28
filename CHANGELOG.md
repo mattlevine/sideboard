@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.324] - 2026-10-28
+
+### Fixed
+
+- Cursor loads project instructions once. Claude still reads them because `CLAUDE.md` imports `AGENTS.md`.
+
 ## [0.1.323] - 2026-10-28
 
 ### Added
