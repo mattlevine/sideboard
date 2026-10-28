@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.324] - 2026-10-28
+
+### Fixed
+
+- `@sideboard-ai/core@0.1.323` never became installable after npm staged it. This cut publishes the packages again, and publish waits until the registry lists a package before publishing the next one.
+
 ## [0.1.323] - 2026-10-28
 
 ### Added

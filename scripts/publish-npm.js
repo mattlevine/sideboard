@@ -52,6 +52,7 @@ function npmPublish(cwd, npmFlags, name, version) {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       if (out) process.stdout.write(out);
+      waitUntilPublished(name, version);
       return;
     } catch (err) {
       const stdout = err && err.stdout ? String(err.stdout) : '';
@@ -63,6 +64,7 @@ function npmPublish(cwd, npmFlags, name, version) {
       const tlog = /TLOG_CREATE_ENTRY_ERROR|error creating tlog entry/.test(output);
       if ((conflict && attempt > 1) || publishedOnNpm(name, version)) {
         console.log(`⏭  ${name}@${version} is on npm`);
+        waitUntilPublished(name, version);
         return;
       }
       if (!tlog || attempt === maxAttempts) throw err;
@@ -71,6 +73,25 @@ function npmPublish(cwd, npmFlags, name, version) {
       sleepMs(waitMs);
     }
   }
+}
+
+/**
+ * `npm publish` can print `+ name@version` and exit 0 while the version is
+ * only staged. The registry then 404s, and a retry of that same version is
+ * rejected. Do not publish the next package until this one is installable.
+ */
+function waitUntilPublished(name, version) {
+  const pauses = [0, 5000, 10000, 15000, 20000, 20000, 20000];
+  for (const pause of pauses) {
+    if (pause) sleepMs(pause);
+    if (publishedOnNpm(name, version)) {
+      console.log(`✓ ${name}@${version} is on npm`);
+      return;
+    }
+  }
+  throw new Error(
+    `${name}@${version} is not on npm after publish. A staged version cannot be republished; cut the next patch.`,
+  );
 }
 
 function publishedOnNpm(name, version) {
