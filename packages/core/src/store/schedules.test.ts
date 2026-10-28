@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -49,6 +49,35 @@ describe('schedules store', () => {
     expect(cronNext.toISOString()).toBe('2026-08-22T09:00:00.000Z');
   });
 
+  it('computes a clock time on selected days', async () => {
+    const { computeNextRunAt, formatScheduleWhen, parseWeeklyDays } = await load();
+    const fridayEvening = new Date('2026-08-21T17:00:00.000Z');
+    expect(parseWeeklyDays('weekdays')).toEqual([1, 2, 3, 4, 5]);
+    expect(parseWeeklyDays('Mon, Wed, Fri')).toEqual([1, 3, 5]);
+    expect(parseWeeklyDays('mon-fri')).toEqual([1, 2, 3, 4, 5]);
+    expect(parseWeeklyDays('daily')).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(() => parseWeeklyDays('funday')).toThrow(/Unknown day/);
+
+    const weekdays = computeNextRunAt(
+      { kind: 'weekly', days: [1, 2, 3, 4, 5], time: '09:00', tz: 'UTC' },
+      fridayEvening,
+    );
+    expect(weekdays.toISOString()).toBe('2026-08-24T09:00:00.000Z');
+
+    const laterThatMorning = computeNextRunAt(
+      { kind: 'weekly', days: [1, 2, 3, 4, 5], time: '09:00', tz: 'UTC' },
+      new Date('2026-08-24T07:00:00.000Z'),
+    );
+    expect(laterThatMorning.toISOString()).toBe('2026-08-24T09:00:00.000Z');
+
+    expect(
+      formatScheduleWhen({ kind: 'weekly', days: [1, 2, 3, 4, 5], time: '07:30', tz: 'UTC' }),
+    ).toBe('weekdays at 07:30 (UTC)');
+    expect(
+      formatScheduleWhen({ kind: 'weekly', days: [0, 1, 2, 3, 4, 5, 6], time: '08:00' }),
+    ).toBe('daily at 08:00');
+  });
+
   it('resolves self thread ids from orchestration or worktree env', async () => {
     const { resolveScheduleThreadId } = await load();
     expect(resolveScheduleThreadId(undefined)).toBeNull();
@@ -85,6 +114,7 @@ describe('schedules store', () => {
     expect(created.name).toBe('Check CI');
     expect(created.enabled).toBe(true);
     expect(created.threadId).toBeNull();
+    expect(created.archiveChat).toBe(true);
     expect(listSchedules()).toHaveLength(1);
     expect(getSchedule(created.id.slice(0, 8))?.id).toBe(created.id);
 
@@ -162,5 +192,52 @@ describe('schedules store', () => {
 
     updateSchedule(disabled.id, { enabled: true });
     expect(settings.caffeinateWhileSchedulesEnabled()).toBe(true);
+  });
+
+  it('keeps a morning chat open and advances to the next weekday', async () => {
+    const { createSchedule, getSchedule, recordScheduleRun, schedulesPath, updateSchedule } =
+      await load();
+    writeFileSync(
+      schedulesPath(),
+      `${JSON.stringify([
+        {
+          id: 'legacy-job',
+          name: 'Legacy',
+          prompt: 'Old job',
+          enabled: true,
+          when: { kind: 'every', every: '1h' },
+          nextRunAt: '2099-01-01T00:00:00.000Z',
+          createdBy: 'ui',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ])}\n`,
+    );
+    expect(getSchedule('legacy-job')?.archiveChat).toBe(true);
+
+    const row = createSchedule({
+      name: 'Start my day',
+      prompt: 'Brief me',
+      when: { kind: 'weekly', days: [1, 2, 3, 4, 5], time: '07:30:00', tz: 'UTC' },
+      archiveChat: false,
+      createdBy: 'ui',
+    });
+    expect(row.archiveChat).toBe(false);
+    expect(row.when).toEqual({
+      kind: 'weekly',
+      days: [1, 2, 3, 4, 5],
+      time: '07:30',
+      tz: 'UTC',
+    });
+    const after = recordScheduleRun(row.id, {
+      lastThreadId: 'morning',
+      firedAt: new Date('2026-08-21T17:00:00.000Z'),
+    });
+    expect(after.enabled).toBe(true);
+    expect(after.archiveChat).toBe(false);
+    expect(after.nextRunAt).toBe('2026-08-24T07:30:00.000Z');
+
+    const closed = updateSchedule(row.id, { archiveChat: true });
+    expect(closed.archiveChat).toBe(true);
   });
 });

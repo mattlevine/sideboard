@@ -1,4 +1,5 @@
 import type { Thread } from '../types/thread.js';
+import { archivedUpdatedMs } from '../store/history-retention.js';
 import {
   deleteThreadRecord,
   listThreads,
@@ -6,6 +7,9 @@ import {
   updateThread,
   withThreadLock,
 } from '../store/thread-store.js';
+
+/** Archived runs History keeps for one automation. */
+export const EPHEMERAL_AUTOMATION_KEEP = 5;
 
 /** Fresh automation chat with no continuing target. */
 export function ephemeralRunReadyToArchive(
@@ -22,23 +26,27 @@ export function ephemeralRunReadyToArchive(
   return true;
 }
 
-/** Stamp a fresh automation chat and use the automation name as its title. */
+/**
+ * Name a fresh automation chat. `ephemeralAutomationId` marks a run that
+ * archives when it finishes. A kept chat (archive off) still takes the title
+ * and is not marked, so it stays in the sidebar under the job name.
+ */
 export function markEphemeralAutomation(
   threadId: string,
   opts: { ephemeralAutomationId?: string; ephemeralTitle?: string },
 ): Thread {
   const id = opts.ephemeralAutomationId?.trim();
+  const title = opts.ephemeralTitle?.trim();
   const current = readThread(threadId);
   if (!current) throw new Error(`Thread not found: ${threadId}`);
-  if (!id) return current;
-  const title = opts.ephemeralTitle?.trim();
+  if (!id && !title) return current;
   return updateThread(threadId, {
-    ephemeralAutomationId: id,
+    ...(id ? { ephemeralAutomationId: id } : {}),
     ...(title ? { title, userSetTitle: true } : {}),
   });
 }
 
-/** Archive a finished one-off run and drop older archived runs of that automation. */
+/** Archive a finished one-off run and drop archived runs beyond the last five. */
 export async function archiveEphemeralAutomationIfReady(
   threadId: string,
   archive: (id: string) => Promise<unknown>,
@@ -77,15 +85,27 @@ export function clearEphemeralAutomation(threadId: string): void {
   updateThread(threadId, { ephemeralAutomationId: undefined });
 }
 
-/** Drop earlier archived runs of the same automation. Keeps `keepId`. */
+/**
+ * Drop archived runs of the same automation beyond the newest
+ * {@link EPHEMERAL_AUTOMATION_KEEP}. `keepId` stays even when it is older
+ * (a failover continuation owns that run).
+ */
 export function forgetOlderEphemeralRuns(automationId: string, keepId: string): string[] {
   const id = automationId.trim();
   if (!id || !keepId) return [];
+  const archived = listThreads({ includeArchived: true }).filter(
+    (thread) => thread.status === 'archived' && thread.ephemeralAutomationId === id,
+  );
+  const ranked = [...archived].sort((a, b) => {
+    if (a.id === keepId) return -1;
+    if (b.id === keepId) return 1;
+    return archivedUpdatedMs(b) - archivedUpdatedMs(a);
+  });
+  const keep = new Set(ranked.slice(0, EPHEMERAL_AUTOMATION_KEEP).map((thread) => thread.id));
+  keep.add(keepId);
   const removed: string[] = [];
-  for (const thread of listThreads({ includeArchived: true })) {
-    if (thread.id === keepId) continue;
-    if (thread.status !== 'archived') continue;
-    if (thread.ephemeralAutomationId !== id) continue;
+  for (const thread of archived) {
+    if (keep.has(thread.id)) continue;
     try {
       deleteThreadRecord(thread.id);
       removed.push(thread.id);

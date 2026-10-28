@@ -431,10 +431,11 @@ sideboard schedule ls
 sideboard schedule add --prompt "Triage open PRs" --every 1h --thread <id>
 sideboard schedule add --prompt "Morning standup" --cron "0 9 * * *" --tz America/Los_Angeles
 sideboard schedule add --prompt "One-shot reminder" --at 2026-08-21T18:00:00-07:00
+sideboard schedule add --prompt "Start my day" --time 07:30 --days weekdays --no-archive
 sideboard schedule run <id>
 ```
 
-Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs open a new chat each run and archive it when that run finishes; History keeps the latest run). Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. If the target chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
+Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs open a new chat each run and archive it when that run finishes; History keeps the last 5 runs). `--time 07:30 --days weekdays` (or `daily`, `weekends`, `mon,wed,fri`) fires at that clock time. `--no-archive` leaves that chat in the sidebar so you can keep talking. Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. If the target chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
 
 ## Also: Brightsy
 

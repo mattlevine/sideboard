@@ -11,6 +11,22 @@ function formatWhen(when: ScheduleWhen): string {
     return Number.isNaN(d.getTime()) ? `once ${when.at}` : `once ${d.toLocaleString()}`;
   }
   if (when.kind === 'every') return `every ${when.every}`;
+  if (when.kind === 'weekly') {
+    const key = [...when.days].sort((a, b) => a - b).join(',');
+    const days =
+      key === '0,1,2,3,4,5,6'
+        ? 'daily'
+        : key === '1,2,3,4,5'
+          ? 'weekdays'
+          : key === '0,6'
+            ? 'weekends'
+            : [...when.days]
+                .sort((a, b) => a - b)
+                .map((day) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][day] ?? String(day))
+                .join(', ');
+    const tz = when.tz ? ` (${when.tz})` : '';
+    return `${days} at ${when.time}${tz}`;
+  }
   return when.tz ? `cron ${when.expr} (${when.tz})` : `cron ${when.expr}`;
 }
 
@@ -125,6 +141,7 @@ export function SchedulesSettings() {
         planMode: form.planMode,
         autonomy: form.autonomy,
         attachments: form.attachments,
+        archiveChat: form.archiveChat,
         enabled: form.enabled,
       };
       if (editingId) await window.sideboard.updateSchedule(editingId, payload);
@@ -179,9 +196,25 @@ export function SchedulesSettings() {
     }
   }
 
+  const empty = rows.length === 0;
+
   return (
-    <div className="settings-body">
+    <div className={`settings-body${empty ? ' is-empty' : ''}`}>
       {error && !showForm && <div className="settings-error" style={{ margin: '0 0 12px' }}>{error}</div>}
+      {empty ? (
+        <div className="chat-empty">
+          <div className="chat-empty-mark" aria-hidden>
+            <span className="chat-empty-cube" />
+          </div>
+          <h3>No automations yet</h3>
+          <p>Schedule a prompt for a chat, or start a new one on a timer.</p>
+          <div className="chat-empty-action">
+            <button type="button" className="primary" disabled={busy} onClick={() => void openCreate()}>
+              New automation
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="settings-section settings-section-card automations-list-card">
         <div className="automations-toolbar">
           <button type="button" className="primary" disabled={busy} onClick={() => void openCreate()}>
@@ -189,10 +222,7 @@ export function SchedulesSettings() {
           </button>
         </div>
         <div className="settings-history-list" role="list">
-          {rows.length === 0 ? (
-            <div className="settings-empty">No automations yet.</div>
-          ) : (
-            rows.map((row) => (
+          {rows.map((row) => (
               <div
                 key={row.id}
                 className={`settings-history-row${editingId === row.id ? ' is-editing' : ''}`}
@@ -209,7 +239,9 @@ export function SchedulesSettings() {
                     {row.enabled ? row.name : `${row.name} (off)`}
                   </span>
                   <span className="settings-history-meta">
-                    {formatWhen(row.when)} · {threadLabel(row.threadId)} · next {formatNext(row.nextRunAt)}
+                    {formatWhen(row.when)} · {threadLabel(row.threadId)}
+                    {!row.threadId && row.archiveChat === false ? ' · stays open' : ''} · next{' '}
+                    {formatNext(row.nextRunAt)}
                     {row.lastError ? ` · ${row.lastError}` : ''}
                   </span>
                 </button>
@@ -223,10 +255,10 @@ export function SchedulesSettings() {
                   Delete
                 </button>
               </div>
-            ))
-          )}
+            ))}
         </div>
       </div>
+      )}
       {showForm && (
         <div
           className="modal-backdrop"

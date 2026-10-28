@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.323] - 2026-10-28
+
+### Added
+
+- An automation can run on chosen days at a clock time (daily, weekdays, or specific days).
+- A new automation chat can stay in the sidebar after the run, so a morning start-my-day chat is still there to continue.
+
+### Changed
+
+- History keeps the last 5 archived runs of an automation.
+- An empty Automations page centers the same empty state as the Board.
+
+### Fixed
+
+- A chat left open by an automation uses the automation name.
+- Changing only the clock time or weekdays of an interval, cron, or one-shot automation no longer rewrites it as a daily job.
 
 ## [0.1.322] - 2026-10-27
 

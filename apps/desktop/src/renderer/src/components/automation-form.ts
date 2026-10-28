@@ -33,8 +33,14 @@ export interface FormState {
   atLocal: string;
   every: string;
   cron: string;
+  /** 0 = Sunday … 6 = Saturday. */
+  days: number[];
+  /** HH:mm */
+  time: string;
   tz: string;
   threadId: string;
+  /** Archive a new chat when the run finishes. */
+  archiveChat: boolean;
   agent: OrchestratorAgent;
   model: string | null;
   effort: ThinkingEffort;
@@ -85,8 +91,11 @@ export function emptyForm(defaults: ThreadDefaults = FALLBACK_DEFAULTS): FormSta
     atLocal: defaultOnceLocal(),
     every: '1h',
     cron: '0 9 * * *',
+    days: [1, 2, 3, 4, 5],
+    time: '08:00',
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     threadId: '',
+    archiveChat: true,
     enabled: true,
     ...composerFrom(defaults),
   };
@@ -100,11 +109,14 @@ export function formFromTask(row: ScheduledTask, defaults: ThreadDefaults): Form
     atLocal: row.when.kind === 'once' ? toDatetimeLocal(row.when.at) : defaultOnceLocal(),
     every: row.when.kind === 'every' ? row.when.every : '1h',
     cron: row.when.kind === 'cron' ? row.when.expr : '0 9 * * *',
+    days: row.when.kind === 'weekly' ? row.when.days : [1, 2, 3, 4, 5],
+    time: row.when.kind === 'weekly' ? row.when.time : '08:00',
     tz:
-      row.when.kind === 'cron' && row.when.tz
+      (row.when.kind === 'cron' || row.when.kind === 'weekly') && row.when.tz
         ? row.when.tz
         : Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     threadId: row.threadId ?? '',
+    archiveChat: row.archiveChat !== false,
     enabled: row.enabled,
     ...composerFrom(defaults, row),
   };
@@ -117,5 +129,19 @@ export function whenFromForm(form: FormState): ScheduleWhen {
     return { kind: 'once', at: at.toISOString() };
   }
   if (form.kind === 'every') return { kind: 'every', every: form.every };
+  if (form.kind === 'weekly') {
+    const match = form.time.trim().match(/^([01]\d|2[0-3]):([0-5]\d)/);
+    if (!match) throw new Error('Use a time like 07:30');
+    const days = [...new Set(form.days.filter((day) => day >= 0 && day <= 6))].sort(
+      (a, b) => a - b,
+    );
+    if (!days.length) throw new Error('Pick at least one day');
+    return {
+      kind: 'weekly',
+      days,
+      time: `${match[1]}:${match[2]}`,
+      tz: form.tz.trim() || undefined,
+    };
+  }
   return { kind: 'cron', expr: form.cron.trim(), tz: form.tz.trim() || undefined };
 }

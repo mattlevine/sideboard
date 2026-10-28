@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { Cron } from 'croner';
+import {
+  computeNextRunAt,
+  normalizeWhen,
+  type ScheduleWhen,
+} from './schedule-when.js';
 import {
   coerceOrchestratorAgent,
   isOrchestratorCapableAgent,
@@ -19,12 +23,23 @@ import {
   updateAdvancedSettings,
 } from './app-settings.js';
 
-export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
+export type {
+  ScheduleWhen,
+  WeekdayIndex,
+} from './schedule-when.js';
+export {
+  WEEKDAY_LABELS,
+  computeNextRunAt,
+  formatScheduleWhen,
+  formatWeeklyDays,
+  normalizeWeekdays,
+  normalizeWeeklyTime,
+  parseDurationMs,
+  parseWeeklyDays,
+  weeklyCronExpr,
+} from './schedule-when.js';
 
-export type ScheduleWhen =
-  | { kind: 'once'; at: string }
-  | { kind: 'every'; every: string }
-  | { kind: 'cron'; expr: string; tz?: string };
+export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 
 export interface ScheduledTask {
   id: string;
@@ -46,6 +61,12 @@ export interface ScheduledTask {
   autonomy: Autonomy | null;
   /** Files, issues, and workspace links staged on the prompt. */
   attachments: ThreadAttachment[];
+  /**
+   * When a fresh chat is opened for this job, archive it after the run.
+   * False leaves the chat in the sidebar so the person can keep talking
+   * (a morning start-my-day run). Omitted on older jobs means true.
+   */
+  archiveChat: boolean;
   nextRunAt: string;
   lastRunAt: string | null;
   lastThreadId: string | null;
@@ -67,6 +88,8 @@ export interface CreateScheduledTaskInput {
   planMode?: boolean | null;
   autonomy?: Autonomy | null;
   attachments?: ThreadAttachment[];
+  /** Default true. False leaves a new chat open after the run. */
+  archiveChat?: boolean;
   enabled?: boolean;
   createdBy: ScheduleCreatedBy;
 }
@@ -86,28 +109,12 @@ export type UpdateScheduledTaskPatch = Partial<
     | 'planMode'
     | 'autonomy'
     | 'attachments'
+    | 'archiveChat'
   >
 >;
 
-const DURATION_RE = /^(\d+)(s|m|h|d)$/i;
-const UNIT_MS: Record<string, number> = {
-  s: 1_000,
-  m: 60_000,
-  h: 3_600_000,
-  d: 86_400_000,
-};
-
 export function schedulesPath(): string {
   return join(appDataDir(), 'schedules.json');
-}
-
-export function parseDurationMs(every: string): number | null {
-  const m = every.trim().match(DURATION_RE);
-  if (!m) return null;
-  const n = Number.parseInt(m[1], 10);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  const unit = m[2].toLowerCase();
-  return n * UNIT_MS[unit];
 }
 
 export function defaultScheduleName(prompt: string): string {
@@ -136,68 +143,8 @@ export function resolveScheduleThreadId(
   return value;
 }
 
-export function computeNextRunAt(when: ScheduleWhen, from: Date = new Date()): Date {
-  if (when.kind === 'once') {
-    const at = new Date(when.at);
-    if (Number.isNaN(at.getTime())) {
-      throw new Error(`Invalid once-at datetime: ${when.at}`);
-    }
-    return at;
-  }
-  if (when.kind === 'every') {
-    const ms = parseDurationMs(when.every);
-    if (!ms) {
-      throw new Error(`Invalid interval: ${when.every} (use 15m, 1h, 6h, 1d)`);
-    }
-    return new Date(from.getTime() + ms);
-  }
-  try {
-    const job = new Cron(when.expr, {
-      timezone: when.tz?.trim() || undefined,
-      paused: true,
-    });
-    const next = job.nextRun(from);
-    if (!next) {
-      throw new Error(`Cron expression has no next run: ${when.expr}`);
-    }
-    return next;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Invalid cron: ${message}`);
-  }
-}
-
-export function formatScheduleWhen(when: ScheduleWhen): string {
-  if (when.kind === 'once') return `once at ${when.at}`;
-  if (when.kind === 'every') return `every ${when.every}`;
-  const tz = when.tz?.trim();
-  return tz ? `cron ${when.expr} (${tz})` : `cron ${when.expr}`;
-}
-
 function nowIso(d: Date = new Date()): string {
   return d.toISOString();
-}
-
-function normalizeWhen(raw: unknown): ScheduleWhen {
-  if (!raw || typeof raw !== 'object') {
-    throw new Error('Schedule is missing `when`');
-  }
-  const rec = raw as Record<string, unknown>;
-  const kind = rec.kind;
-  if (kind === 'once' && typeof rec.at === 'string') {
-    return { kind: 'once', at: rec.at };
-  }
-  if (kind === 'every' && typeof rec.every === 'string') {
-    return { kind: 'every', every: rec.every };
-  }
-  if (kind === 'cron' && typeof rec.expr === 'string') {
-    return {
-      kind: 'cron',
-      expr: rec.expr,
-      tz: typeof rec.tz === 'string' && rec.tz.trim() ? rec.tz.trim() : undefined,
-    };
-  }
-  throw new Error('Schedule `when` must be once, every, or cron');
 }
 
 const ATTACHMENT_KINDS = new Set<ThreadAttachment['kind']>([
@@ -263,6 +210,7 @@ function normalizeTask(raw: ScheduledTask): ScheduledTask {
     planMode: normalizeOptionalBool(raw.planMode),
     autonomy: normalizeAutonomy(raw.autonomy),
     attachments: normalizeAttachments(raw.attachments),
+    archiveChat: raw.archiveChat !== false,
     nextRunAt: raw.nextRunAt,
     lastRunAt: raw.lastRunAt ?? null,
     lastThreadId: raw.lastThreadId ?? null,
@@ -323,6 +271,7 @@ function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
     planMode: normalizeOptionalBool(input.planMode),
     autonomy: normalizeAutonomy(input.autonomy),
     attachments: normalizeAttachments(input.attachments),
+    archiveChat: input.archiveChat !== false,
     nextRunAt,
     lastRunAt: null,
     lastThreadId: null,
@@ -425,6 +374,8 @@ export function updateSchedule(
       patch.attachments !== undefined
         ? normalizeAttachments(patch.attachments)
         : prev.attachments,
+    archiveChat:
+      patch.archiveChat !== undefined ? patch.archiveChat !== false : prev.archiveChat,
     nextRunAt: whenChanged ? computeNextRunAt(when).toISOString() : prev.nextRunAt,
     lastError: whenChanged ? null : prev.lastError,
     updatedAt: nowIso(),

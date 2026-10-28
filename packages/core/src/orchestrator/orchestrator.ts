@@ -3834,7 +3834,7 @@ export async function startOrchestration(opts: {
   attachments?: Thread['attachments'];
   /**
    * One-off automation run. The chat is archived when the turn finishes, and
-   * History keeps only the latest run for this id.
+   * History keeps the last five runs for this id.
    */
   ephemeralAutomationId?: string;
   /** Sidebar / History label. Defaults to the soccer nickname. */

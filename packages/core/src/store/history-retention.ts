@@ -108,7 +108,7 @@ export function planHistoryRetention<
     }
   }
 
-  // One-off automation runs are capped per automation (latest only). They must
+  // Automation runs are capped per automation (last five). They must
   // not occupy the shared History slots or push real archives out.
   const remaining = oldestFirst.filter(
     (t) => !expiredIds.has(t.id) && !t.ephemeralAutomationId?.trim(),

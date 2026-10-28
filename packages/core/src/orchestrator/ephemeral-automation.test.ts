@@ -7,8 +7,10 @@ import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 import type { Thread } from '../types/thread.js';
 import {
   archiveEphemeralAutomationIfReady,
+  EPHEMERAL_AUTOMATION_KEEP,
   ephemeralRunReadyToArchive,
   forgetOlderEphemeralRuns,
+  markEphemeralAutomation,
 } from './ephemeral-automation.js';
 import { Orchestrator } from './orchestrator.js';
 
@@ -25,6 +27,39 @@ function chat(over: Partial<Thread> = {}): Thread {
   });
   return { ...thread, ephemeralAutomationId: 'auto-1', ...over };
 }
+
+describe('markEphemeralAutomation', () => {
+  const prevData = process.env.SIDEBOARD_APP_DATA;
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'sb-eph-mark-'));
+    process.env.SIDEBOARD_APP_DATA = dataDir;
+    process.env.SIDEBOARD_SECRET_VAULT = 'plain';
+  });
+
+  afterEach(() => {
+    if (prevData === undefined) delete process.env.SIDEBOARD_APP_DATA;
+    else process.env.SIDEBOARD_APP_DATA = prevData;
+    delete process.env.SIDEBOARD_SECRET_VAULT;
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('names a kept chat without marking it for archive', () => {
+    const thread = chat({
+      id: 'kept',
+      title: 'Arsenal',
+      userSetTitle: false,
+      ephemeralAutomationId: undefined,
+    });
+    writeThread(thread);
+    const next = markEphemeralAutomation(thread.id, { ephemeralTitle: 'Start my day' });
+    expect(next.title).toBe('Start my day');
+    expect(next.userSetTitle).toBe(true);
+    expect(next.ephemeralAutomationId).toBeUndefined();
+    expect(ephemeralRunReadyToArchive(next)).toBe(false);
+  });
+});
 
 describe('ephemeralRunReadyToArchive', () => {
   it('archives a finished one-off run', () => {
@@ -65,18 +100,46 @@ describe('forgetOlderEphemeralRuns', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  it('keeps the latest archived run and a different automation', () => {
-    const keep = chat({ id: 'keep', status: 'archived' });
-    const old = chat({ id: 'old', status: 'archived' });
-    const other = chat({ id: 'other', status: 'archived', ephemeralAutomationId: 'auto-2' });
+  it('keeps the last five archived runs and a different automation', () => {
+    expect(EPHEMERAL_AUTOMATION_KEEP).toBe(5);
+    const runs = Array.from({ length: EPHEMERAL_AUTOMATION_KEEP + 1 }, (_, i) =>
+      chat({
+        id: `run-${i + 1}`,
+        status: 'archived',
+        archivedAt: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`,
+      }),
+    );
+    const other = chat({
+      id: 'other',
+      status: 'archived',
+      ephemeralAutomationId: 'auto-2',
+      archivedAt: '2020-01-01T00:00:00.000Z',
+    });
     const live = chat({ id: 'live', status: 'idle' });
-    for (const thread of [keep, old, other, live]) writeThread(thread);
+    for (const thread of [...runs, other, live]) writeThread(thread);
 
-    expect(forgetOlderEphemeralRuns('auto-1', 'keep').sort()).toEqual(['old']);
-    expect(readThread('keep')?.status).toBe('archived');
-    expect(readThread('old')).toBeNull();
+    expect(forgetOlderEphemeralRuns('auto-1', 'run-6').sort()).toEqual(['run-1']);
+    expect(readThread('run-1')).toBeNull();
+    expect(readThread('run-2')?.status).toBe('archived');
+    expect(readThread('run-6')?.status).toBe('archived');
     expect(readThread('other')?.id).toBe('other');
     expect(readThread('live')?.id).toBe('live');
+  });
+
+  it('keeps an older continuation ahead of a newer source', () => {
+    const runs = Array.from({ length: EPHEMERAL_AUTOMATION_KEEP + 1 }, (_, i) =>
+      chat({
+        id: `run-${i + 1}`,
+        status: 'archived',
+        archivedAt: `2026-02-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`,
+      }),
+    );
+    for (const thread of runs) writeThread(thread);
+
+    expect(forgetOlderEphemeralRuns('auto-1', 'run-1').sort()).toEqual(['run-2']);
+    expect(readThread('run-1')?.id).toBe('run-1');
+    expect(readThread('run-2')).toBeNull();
+    expect(readThread('run-6')?.id).toBe('run-6');
   });
 });
 
@@ -113,7 +176,7 @@ describe('failover continuation owns the one-off', () => {
     await archiveEphemeralAutomationIfReady('next', archive);
     expect(readThread('next')?.status).toBe('archived');
     expect(readThread('next')?.ephemeralAutomationId).toBe('auto-1');
-    expect(readThread('orig')).toBeNull();
+    expect(readThread('orig')?.status).toBe('archived');
   });
 
   it('does not drop a continuation that archived before the original', async () => {
@@ -121,8 +184,9 @@ describe('failover continuation owns the one-off', () => {
     writeThread(chat({ id: 'orig' }));
 
     await archiveEphemeralAutomationIfReady('orig', archive);
+    expect(readThread('next')?.status).toBe('archived');
     expect(readThread('next')?.ephemeralAutomationId).toBe('auto-1');
-    expect(readThread('orig')).toBeNull();
+    expect(readThread('orig')?.status).toBe('archived');
   });
 });
 

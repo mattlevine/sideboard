@@ -30,6 +30,7 @@ import {
   formatScheduleWhen,
   getSchedule,
   listSchedules,
+  parseWeeklyDays,
   resolveScheduleThreadId,
   updateSchedule,
   type AgentKind,
@@ -748,27 +749,44 @@ async function main(): Promise<void> {
     .option('--name <name>', 'short label')
     .option('--at <iso>', 'one-shot ISO datetime')
     .option('--every <duration>', 'interval (15m, 1h, 6h, 1d)')
+    .option('--time <hh:mm>', 'clock time (24-hour). Daily if --days is omitted')
+    .option('--days <list>', 'daily, weekdays, weekends, or mon,wed,fri')
     .option('--cron <expr>', '5-field cron')
-    .option('--tz <iana>', 'timezone for cron')
+    .option('--tz <iana>', 'timezone for --cron or --time')
+    .option(
+      '--no-archive',
+      'Leave the new chat in the sidebar so you can keep talking after the run',
+    )
     .option(
       '--thread <id>',
       'existing chat (orchestration or worktree, or self). Omit to create a new Global chat each run',
     )
     .option('--agent <agent>', 'claude|cursor|codex|opencode (new chats only)')
     .action((opts) => {
-      const cadence = [opts.at, opts.every, opts.cron].filter(Boolean);
+      const time = opts.time ? String(opts.time) : '';
+      const cadence = [opts.at, opts.every, opts.cron, time].filter(Boolean);
       if (cadence.length !== 1) {
-        throw new Error('Pass exactly one of --at, --every, or --cron');
+        throw new Error('Pass exactly one of --at, --every, --time, or --cron');
+      }
+      if (opts.days && !time) {
+        throw new Error('--days needs --time (HH:mm), for example --time 07:30 --days weekdays');
       }
       const when = opts.at
         ? { kind: 'once' as const, at: String(opts.at) }
         : opts.every
           ? { kind: 'every' as const, every: String(opts.every) }
-          : {
-              kind: 'cron' as const,
-              expr: String(opts.cron),
-              tz: opts.tz ? String(opts.tz) : undefined,
-            };
+          : time
+            ? {
+                kind: 'weekly' as const,
+                time,
+                days: parseWeeklyDays(opts.days ? String(opts.days) : 'daily'),
+                tz: opts.tz ? String(opts.tz) : undefined,
+              }
+            : {
+                kind: 'cron' as const,
+                expr: String(opts.cron),
+                tz: opts.tz ? String(opts.tz) : undefined,
+              };
       const threadId = resolveScheduleThreadId(
         opts.thread ? String(opts.thread) : undefined,
       );
@@ -787,12 +805,15 @@ async function main(): Promise<void> {
         when,
         threadId,
         agent,
+        archiveChat: opts.archive === false ? false : true,
         createdBy: 'cli',
       });
       if (!row.threadId && row.when.kind !== 'once') {
         console.log(
           chalk.yellow(
-            'Recurring automation has no --thread: each run opens a new orchestration chat.',
+            row.archiveChat
+              ? 'Recurring automation has no --thread: each run opens a new orchestration chat and archives it when that run finishes.'
+              : 'Recurring automation has no --thread: each run opens a new orchestration chat and leaves it open.',
           ),
         );
       }
