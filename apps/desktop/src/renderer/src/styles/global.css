@@ -2162,13 +2162,120 @@ body.resizing-panels webview {
 }
 
 .automations-panel .settings-body {
+  display: flex;
+  flex-direction: column;
   max-width: 880px;
+  overflow: hidden;
+}
+
+.automations-panel .settings-error {
+  flex-shrink: 0;
+}
+
+.automations-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.automations-panel .automations-heading h2 {
+  flex: 0 1 auto;
+}
+
+.automations-help {
+  position: relative;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+}
+
+.automations-help:hover,
+.automations-help:focus-visible {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.automations-help-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: min(340px, 72vw);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated, #1a1a1a);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  z-index: 5;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.automations-panel > .panel-header {
+  position: relative;
+  z-index: 2;
+}
+
+.automations-help:hover .automations-help-tip,
+.automations-help:focus-visible .automations-help-tip {
+  display: block;
+}
+
+.automations-panel .automations-list-card {
+  flex: 1 1 0;
+  min-height: 4.5rem;
+  margin-bottom: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .automations-toolbar {
   display: flex;
   justify-content: flex-end;
+  flex-shrink: 0;
   margin-bottom: 10px;
+}
+
+.automations-panel .settings-history-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  margin-top: 0;
+}
+
+.automations-panel .settings-history-row.is-editing {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.modal.automations-modal {
+  width: min(760px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.automations-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .automations-composer textarea {

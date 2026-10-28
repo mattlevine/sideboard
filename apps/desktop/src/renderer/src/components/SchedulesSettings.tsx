@@ -65,6 +65,23 @@ export function SchedulesSettings() {
     return off;
   }, [reload]);
 
+  function closeForm() {
+    setShowForm(false);
+    setError(null);
+  }
+
+  useEffect(() => {
+    if (!showForm) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || busy || event.defaultPrevented) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('.composer-picker-backdrop, .composer-ac')) return;
+      closeForm();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showForm, busy]);
+
   const threadLabel = useMemo(() => {
     const map = new Map(targetThreads.map((t) => [t.id, threadDisplayLabel(t)]));
     return (id: string | null) => {
@@ -164,14 +181,8 @@ export function SchedulesSettings() {
 
   return (
     <div className="settings-body">
-      <p className="settings-lead">
-        Jobs that send a prompt to a chat (Global orchestration or a worktree), or start a new
-        Global chat. Sideboard must be running. Creating or enabling a future job turns on{' '}
-        <strong>Settings → Advanced → Caffeinate while automations are enabled</strong> so the Mac
-        can stay awake until due. A sleeping Mac skips until wake.
-      </p>
-      {error && <div className="settings-error" style={{ margin: '0 0 12px' }}>{error}</div>}
-      <div className="settings-section settings-section-card">
+      {error && !showForm && <div className="settings-error" style={{ margin: '0 0 12px' }}>{error}</div>}
+      <div className="settings-section settings-section-card automations-list-card">
         <div className="automations-toolbar">
           <button type="button" className="primary" disabled={busy} onClick={() => void openCreate()}>
             New
@@ -182,7 +193,12 @@ export function SchedulesSettings() {
             <div className="settings-empty">No automations yet.</div>
           ) : (
             rows.map((row) => (
-              <div key={row.id} className="settings-history-row" role="listitem">
+              <div
+                key={row.id}
+                className={`settings-history-row${editingId === row.id ? ' is-editing' : ''}`}
+                role="listitem"
+                aria-current={editingId === row.id ? 'true' : undefined}
+              >
                 <button
                   type="button"
                   className="settings-history-open"
@@ -212,19 +228,32 @@ export function SchedulesSettings() {
         </div>
       </div>
       {showForm && (
-        <AutomationEditor
-          form={form}
-          setForm={setForm}
-          busy={busy}
-          editingId={editingId}
-          threads={targetThreads}
-          onSave={save}
-          onCancel={() => {
-            setShowForm(false);
-            setError(null);
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            if (!busy) closeForm();
           }}
-          onError={setError}
-        />
+        >
+          <div
+            className="modal automations-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="automation-editor-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {error && <div className="settings-error">{error}</div>}
+            <AutomationEditor
+              form={form}
+              setForm={setForm}
+              busy={busy}
+              editingId={editingId}
+              threads={targetThreads}
+              onSave={save}
+              onCancel={closeForm}
+              onError={setError}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

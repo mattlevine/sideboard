@@ -67,8 +67,8 @@ export function AutomationEditor({
   }
 
   return (
-    <div className="settings-section settings-section-card">
-      <div className="settings-section-title">{editingId ? 'Edit automation' : 'New automation'}</div>
+    <div className="automations-editor">
+      <h3 id="automation-editor-title">{editingId ? 'Edit automation' : 'New automation'}</h3>
       <label className="settings-field">
         Name
         <input

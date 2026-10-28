@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.322] - 2026-10-27
+
+### Changed
+
+- Automations open in a dialog. The list fills the pane, the setup note sits on the ? next to the heading, and the box around the list is gone.
+
 ## [0.1.321] - 2026-10-27
 
 ### Added
