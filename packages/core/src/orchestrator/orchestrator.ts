@@ -12,7 +12,8 @@ import { pushTurnStderr, summarizeTurnStderr, formatTurnExitError, fallbackTurnF
 import { resolveGitDirsForLockRecovery } from '../git/run.js';
 import { clearStaleIndexLocks } from '../git/stale-lock.js';
 import { spawnAgentTurn, type SpawnTurnHandle } from '../agents/spawn.js';
-import { isSameAgentProcess, pidStartedAt } from './agent-pid.js';
+import { isPidAlive, isSameAgentProcess, pidStartedAt, waitForPidExit } from './agent-pid.js';
+export { isPidAlive, waitForPidExit };
 import { traceTurn, withTimeout } from '../agents/turn-trace.js';
 import { getAdapter } from '../agents/index.js';
 import {
@@ -302,30 +303,6 @@ export const LIVE_TURN_SPAWN_GRACE_MS = 15_000;
 
 /** MCP/CLI wait for desktop to adopt a run-script request (under the ~60s MCP kill). */
 export const RUN_SCRIPT_DESKTOP_ADOPT_MS = 20_000;
-
-/** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
-export function isPidAlive(pid: number): boolean {
-  if (!Number.isFinite(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Wait until pid exits, or `timeoutMs` elapses. */
-export async function waitForPidExit(
-  pid: number,
-  timeoutMs: number,
-): Promise<boolean> {
-  const start = Date.now();
-  while (isPidAlive(pid)) {
-    if (Date.now() - start >= timeoutMs) return false;
-    await new Promise((r) => setTimeout(r, 80));
-  }
-  return true;
-}
 
 export { resolveSendFollowUp } from './enqueue-thread-send.js';
 
@@ -1590,8 +1567,6 @@ export class Orchestrator {
     // Re-resolve session before turn
     const adapter = getAdapter(thread.agent);
     const resolved = await adapter.resolveSessionId(thread.worktreePath, thread.sessionId);
-    // A null resolve means the cached id is gone (OpenCode session list).
-    // Leaving the stale id on the thread drops the playbook on the next turn.
     if (resolved !== thread.sessionId) {
       updateThread(threadId, { sessionId: resolved });
     }

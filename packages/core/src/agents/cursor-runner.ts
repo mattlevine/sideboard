@@ -31,6 +31,7 @@ import {
   CURSOR_BUSY_RETRY_DELAY_MS,
   cursorDisallowedTools,
   cursorSendOptions,
+  exitWhenFlushed,
   cursorSessionRecoveryMessage,
   isAgentBusyError,
   isUnresumableCursorSession,
@@ -487,32 +488,6 @@ async function main(): Promise<number> {
   } finally {
     await closeCursorCatalogTurn();
   }
-}
-
-/** macOS pipes drop the last stdout writes if we exit before they flush. */
-function exitWhenFlushed(code: number): void {
-  let pending = 2;
-  let exited = false;
-  const finish = (): void => {
-    pending -= 1;
-    if (pending > 0 || exited) return;
-    exited = true;
-    process.exit(code);
-  };
-  const flush = (stream: NodeJS.WriteStream): void => {
-    if (stream.writableEnded) {
-      finish();
-      return;
-    }
-    stream.write('', finish);
-  };
-  flush(process.stdout);
-  flush(process.stderr);
-  setTimeout(() => {
-    if (exited) return;
-    exited = true;
-    process.exit(code);
-  }, 1_000).unref();
 }
 
 main().then(

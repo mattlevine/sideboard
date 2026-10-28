@@ -13,11 +13,11 @@ import {
   threadRequestsBrightsyMcp,
   resolveSideboardMcpServer,
   toCodexMcpConfigArgs,
-  writeCodexMcpSecretProfile,
   toCursorMcpServers,
   toOpencodeMcpConfigContent,
   writeMcpServersConfig,
 } from './injected-mcp.js';
+import { writeCodexMcpSecretProfile } from './codex-mcp-profile.js';
 import { brightsyMcpServerName } from '../brightsy/connected-teams.js';
 import { wrapElectronAsNodeLaunch } from '../hook/nested-electron-env.js';
 import { AGENT_RPC_NATIVE_ENV } from '../agent-rpc/protocol.js';

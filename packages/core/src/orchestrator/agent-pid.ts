@@ -31,3 +31,24 @@ export function isSameAgentProcess(
   if (!now) return true;
   return now === startedAt;
 }
+
+/** True when `kill(pid, 0)` succeeds (process exists and is signalable). */
+export function isPidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Wait until pid exits, or `timeoutMs` elapses. */
+export async function waitForPidExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (isPidAlive(pid)) {
+    if (Date.now() - start >= timeoutMs) return false;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return true;
+}

@@ -5,6 +5,7 @@ import { run } from '../git/run.js';
 import { resolveAgentExecutable } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
+import { eventsFromCodexItem } from './codex-items.js';
 import { extractJsonErrorMessage } from './error-detail.js';
 import { fromInclusiveInputUsage } from './usage.js';
 import {
@@ -13,11 +14,11 @@ import {
   resolveCodexGitWritableRoots,
 } from '../git/git-auth-mode.js';
 import { listAssignedLinearIssues } from './linear-list.js';
+import { writeCodexMcpSecretProfile } from './codex-mcp-profile.js';
 import {
   buildInjectedMcpServers,
   shouldInjectBrightsyMcp,
   toCodexMcpConfigArgs,
-  writeCodexMcpSecretProfile,
 } from './injected-mcp.js';
 import {
   listUserCodexMcpNames,
@@ -347,38 +348,8 @@ export const codexAdapter: AgentAdapter = {
           agents_states?: Record<string, { status?: string; message?: string | null }>;
         };
         const itemType = item.type ?? item.item_type;
-
-        if (itemType === 'reasoning' && typeof item.text === 'string' && item.text) {
-          return { type: 'thinking', data: item.text };
-        }
-        if (itemType === 'file_change' && item.id) {
-          const changes = Array.isArray(item.changes) ? item.changes : [];
-          const paths = changes
-            .map((change) => (typeof change?.path === 'string' ? change.path : ''))
-            .filter(Boolean);
-          const added = changes.some((change) => change?.kind === 'add');
-          const events: AgentEvent[] = [
-            {
-              type: 'tool_use',
-              id: item.id,
-              name: added ? 'Write' : 'Edit',
-              input: paths.length ? { paths } : undefined,
-            },
-          ];
-          const finished =
-            type === 'item.completed' ||
-            item.status === 'completed' ||
-            item.status === 'failed';
-          if (finished) {
-            events.push({
-              type: 'tool_result',
-              id: item.id,
-              content: paths.join('\n') || undefined,
-              isError: item.status === 'failed',
-            });
-          }
-          return events.length === 1 ? events[0]! : events;
-        }
+        const mapped = eventsFromCodexItem(type, item);
+        if (mapped) return mapped;
         if (itemType === 'error') {
           const detail =
             (typeof item.message === 'string' ? item.message.trim() : '') ||
