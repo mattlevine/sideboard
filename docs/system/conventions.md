@@ -29,7 +29,7 @@ In a Sideboard worktree, setup and agent env already point `pnpm install` at `.c
 ## Docs
 
 - User-facing behavior (CLI, MCP, Slack URLs, install, process skills): update `README.md`, the matching file under `docs/`, and `site/` (marketing + `/docs/`) when the public story changes.
-- Agent-facing repo instructions: update `docs/system/` and keep root `AGENTS.md` / `CLAUDE.md` as pointers (same text in both). Recurring method lives in `.claude/skills/<name>/SKILL.md`.
+- Agent-facing repo instructions: update `docs/system/` and the body in root `AGENTS.md`. `CLAUDE.md` stays `@AGENTS.md` so Cursor does not load the same text twice. Recurring method lives in `.claude/skills/<name>/SKILL.md`.
 - Architecture decisions belong in `docs/system/` in the same change (layout, host split, deploy, safety rails) — not only in chat or a code comment.
 
 ## Git / PRs
