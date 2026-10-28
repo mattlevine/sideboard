@@ -858,34 +858,3 @@ export const claudeAdapter: AgentAdapter = {
     return listAssignedLinearIssues();
   },
 };
-
-function parseIssuesJson(raw: string): IssueInfo[] {
-  const text = raw.trim();
-  // Try whole string, then extract first [...] block
-  const candidates = [text];
-  const match = text.match(/\[[\s\S]*\]/);
-  if (match) candidates.push(match[0]);
-  for (const c of candidates) {
-    try {
-      const parsed = JSON.parse(c);
-      if (Array.isArray(parsed)) {
-        return parsed.map((item) => ({
-          id: String(item.id ?? item.identifier ?? ''),
-          identifier: String(item.identifier ?? item.id ?? ''),
-          title: String(item.title ?? ''),
-          url: String(item.url ?? ''),
-          labels: Array.isArray(item.labels)
-            ? item.labels.map(String)
-            : [],
-        }));
-      }
-      // Claude --output-format json wraps result
-      if (parsed && typeof parsed === 'object' && typeof parsed.result === 'string') {
-        return parseIssuesJson(parsed.result);
-      }
-    } catch {
-      // continue
-    }
-  }
-  return [];
-}

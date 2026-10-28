@@ -454,7 +454,7 @@ export const codexAdapter: AgentAdapter = {
         }
         if (item.status === 'failed') {
           const detail =
-            item.message?.trim() ||
+            (typeof item.message === 'string' ? item.message.trim() : '') ||
             extractJsonErrorMessage(item as Record<string, unknown>) ||
             `Codex ${itemType ?? 'item'} failed`;
           return { type: 'stderr', data: detail };
