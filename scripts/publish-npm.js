@@ -29,6 +29,50 @@ function run(cmd, opts = {}) {
   });
 }
 
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * npm's own retry replays one signature, so Rekor answers 409
+ * TLOG_CREATE_ENTRY_ERROR and the registry put never happens. A new
+ * `npm publish` process signs again and is accepted. A later
+ * EPUBLISHCONFLICT means the earlier attempt landed.
+ */
+function npmPublish(cwd, npmFlags, name, version) {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    console.log(`$ npm publish ${npmFlags} (${name}@${version}, attempt ${attempt}/${maxAttempts})`);
+    try {
+      const out = execSync(`npm publish ${npmFlags}`, {
+        cwd,
+        encoding: 'utf8',
+        env: process.env,
+        shell: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (out) process.stdout.write(out);
+      return;
+    } catch (err) {
+      const stdout = err && err.stdout ? String(err.stdout) : '';
+      const stderr = err && err.stderr ? String(err.stderr) : '';
+      if (stdout) process.stdout.write(stdout);
+      if (stderr) process.stderr.write(stderr);
+      const output = `${stdout}\n${stderr}`;
+      const conflict = /EPUBLISHCONFLICT/.test(output);
+      const tlog = /TLOG_CREATE_ENTRY_ERROR|error creating tlog entry/.test(output);
+      if ((conflict && attempt > 1) || publishedOnNpm(name, version)) {
+        console.log(`⏭  ${name}@${version} is on npm`);
+        return;
+      }
+      if (!tlog || attempt === maxAttempts) throw err;
+      const waitMs = 15000 * attempt;
+      console.log(`tlog 409 is transient — retrying in ${waitMs / 1000}s with a new signature`);
+      sleepMs(waitMs);
+    }
+  }
+}
+
 function publishedOnNpm(name, version) {
   try {
     const out = execSync(`npm view ${name}@${version} version`, {
@@ -126,9 +170,9 @@ try {
   // pnpm publish does not always complete the npm OIDC exchange; use npm on GHA.
   if (githubOidcAvailable() && !process.env.NPM_TOKEN && !process.env.NODE_AUTH_TOKEN) {
     const npmFlags = ['--access public', dryRun ? '--dry-run' : ''].filter(Boolean).join(' ');
-    if (!coreDone) run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/core') });
+    if (!coreDone) npmPublish(path.join(repoRoot, 'packages/core'), npmFlags, coreName, corePkg.version);
     else console.log(`⏭  ${coreName}@${corePkg.version} already on npm`);
-    if (!cliDone) run(`npm publish ${npmFlags}`, { cwd: path.join(repoRoot, 'packages/cli') });
+    if (!cliDone) npmPublish(path.join(repoRoot, 'packages/cli'), npmFlags, cliName, cliPkg.version);
     else console.log(`⏭  ${cliName}@${cliPkg.version} already on npm`);
   } else {
     if (!coreDone) run(`pnpm --filter @sideboard-ai/core publish ${publishArgs}`);
