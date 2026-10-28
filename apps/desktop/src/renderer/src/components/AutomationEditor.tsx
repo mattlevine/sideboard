@@ -9,6 +9,7 @@ import { useSpeechDictation } from '../lib/use-speech-dictation';
 import { orchestratorAgent, type FormState } from './automation-form';
 
 const EVERY_OPTIONS = ['15m', '1h', '6h', '1d'] as const;
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 function linkRepoPath(thread: Thread | undefined): string | undefined {
   const path = thread?.repoPath?.trim();
@@ -107,6 +108,7 @@ export function AutomationEditor({
         >
           <option value="once">Once at a datetime</option>
           <option value="every">Every interval</option>
+          <option value="weekly">Days at a time</option>
           <option value="cron">Cron</option>
         </select>
       </label>
@@ -137,29 +139,88 @@ export function AutomationEditor({
           </select>
         </label>
       )}
-      {form.kind === 'cron' && (
+      {form.kind === 'weekly' && (
         <>
           <label className="settings-field">
-            Cron (5-field)
+            Time
             <input
               className="settings-history-search"
-              value={form.cron}
-              onChange={(e) => setForm((f) => ({ ...f, cron: e.target.value }))}
-              placeholder="0 9 * * *"
-              spellCheck={false}
+              type="time"
+              value={form.time}
+              onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
             />
           </label>
-          <label className="settings-field">
-            Timezone
-            <input
-              className="settings-history-search"
-              value={form.tz}
-              onChange={(e) => setForm((f) => ({ ...f, tz: e.target.value }))}
-              placeholder="America/Los_Angeles"
-              spellCheck={false}
-            />
-          </label>
+          <div className="settings-field">
+            Days
+            <div className="automation-day-row" role="group" aria-label="Days">
+              {WEEKDAY_LABELS.map((label, day) => (
+                <button
+                  key={label}
+                  type="button"
+                  className={form.days.includes(day) ? 'is-on' : ''}
+                  aria-pressed={form.days.includes(day)}
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      days: f.days.includes(day)
+                        ? f.days.filter((value) => value !== day)
+                        : [...f.days, day],
+                    }))
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="automation-day-presets">
+              <button
+                type="button"
+                className="settings-inline-btn"
+                onClick={() => setForm((f) => ({ ...f, days: [0, 1, 2, 3, 4, 5, 6] }))}
+              >
+                Daily
+              </button>
+              <button
+                type="button"
+                className="settings-inline-btn"
+                onClick={() => setForm((f) => ({ ...f, days: [1, 2, 3, 4, 5] }))}
+              >
+                Weekdays
+              </button>
+              <button
+                type="button"
+                className="settings-inline-btn"
+                onClick={() => setForm((f) => ({ ...f, days: [0, 6] }))}
+              >
+                Weekends
+              </button>
+            </div>
+          </div>
         </>
+      )}
+      {form.kind === 'cron' && (
+        <label className="settings-field">
+          Cron (5-field)
+          <input
+            className="settings-history-search"
+            value={form.cron}
+            onChange={(e) => setForm((f) => ({ ...f, cron: e.target.value }))}
+            placeholder="0 9 * * *"
+            spellCheck={false}
+          />
+        </label>
+      )}
+      {(form.kind === 'cron' || form.kind === 'weekly') && (
+        <label className="settings-field">
+          Timezone
+          <input
+            className="settings-history-search"
+            value={form.tz}
+            onChange={(e) => setForm((f) => ({ ...f, tz: e.target.value }))}
+            placeholder="America/Los_Angeles"
+            spellCheck={false}
+          />
+        </label>
       )}
       <label className="settings-field">
         Target
@@ -187,10 +248,20 @@ export function AutomationEditor({
         Enabled
       </label>
       {!form.threadId && (
+        <label className="settings-check-row">
+          <input
+            type="checkbox"
+            checked={form.archiveChat}
+            onChange={(e) => setForm((f) => ({ ...f, archiveChat: e.target.checked }))}
+          />
+          Archive the chat when the run finishes
+        </label>
+      )}
+      {!form.threadId && (
         <p className="settings-hint">
-          {form.kind === 'once'
-            ? 'A one-shot with no target chat opens a new Global orchestration agent and archives it when that run finishes. History keeps that run.'
-            : 'Recurring jobs with no target chat open a new Global orchestration agent each run and archive it when that run finishes. History keeps the latest run for this automation.'}
+          {form.archiveChat
+            ? 'History keeps the last 5 runs of this automation. Leave this off when you want the chat to stay in the sidebar, such as a morning start-my-day run you will continue at your desk.'
+            : 'The chat stays in the sidebar after the run so you can keep talking. The next run opens a new chat.'}
         </p>
       )}
       <div className="settings-actions">

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- An automation can run on chosen days at a clock time (daily, weekdays, or specific days).
+- A new automation chat can stay in the sidebar after the run, so a morning start-my-day chat is still there to continue.
+
+### Changed
+
+- History keeps the last 5 archived runs of an automation.
+- An empty Automations page centers the same empty state as the Board.
+
 ## [0.1.322] - 2026-10-27
 
 ### Changed

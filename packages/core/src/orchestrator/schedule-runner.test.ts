@@ -154,6 +154,33 @@ describe('schedule runner', () => {
     expect(after.enabled).toBe(true);
   });
 
+  it('leaves a fresh morning chat open when archiveChat is false', async () => {
+    const { store, runner } = await load();
+    const thread = orchThread({ id: 'morning' });
+    let ephemeral: string | undefined = 'unset';
+    runner.setScheduleFireHooks({
+      findThread: () => null,
+      send: async () => thread,
+      startOrchestration: async (opts) => {
+        ephemeral = opts.ephemeralAutomationId;
+        return thread;
+      },
+    });
+    const schedule = store.createSchedule({
+      name: 'Start my day',
+      prompt: 'Brief me before I get in',
+      when: { kind: 'weekly', days: [1, 2, 3, 4, 5], time: '07:30', tz: 'UTC' },
+      archiveChat: false,
+      createdBy: 'ui',
+    });
+    const after = await runner.fireSchedule(schedule.id);
+    expect(ephemeral).toBeUndefined();
+    expect(after.lastThreadId).toBe('morning');
+    expect(after.enabled).toBe(true);
+    expect(store.getSchedule(schedule.id)?.threadId).toBeNull();
+    expect(store.getSchedule(schedule.id)?.archiveChat).toBe(false);
+  });
+
   it('opens a new Global chat when the target is missing', async () => {
     const { store, runner } = await load();
     const sent: string[] = [];

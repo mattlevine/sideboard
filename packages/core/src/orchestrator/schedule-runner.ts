@@ -148,8 +148,10 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
       });
     }
     // A named recurring chat that disappeared should keep using the replacement.
-    // Every other fresh chat is one run: archive it when that run finishes.
+    // Other fresh chats archive when the run finishes unless archiveChat is off,
+    // so a morning run can stay in the sidebar.
     const pinReplacement = Boolean(schedule.threadId) && schedule.when.kind !== 'once';
+    const archiveFresh = schedule.archiveChat !== false && !pinReplacement;
     const created = await deps.startOrchestration({
       goal: prompt,
       agent: pickAgent(schedule),
@@ -159,9 +161,9 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
       ...(schedule.planMode != null ? { planMode: schedule.planMode } : {}),
       ...(schedule.autonomy ? { autonomy: schedule.autonomy } : {}),
       attachments: schedule.attachments,
-      ...(pinReplacement
-        ? {}
-        : { ephemeralAutomationId: schedule.id, ephemeralTitle: schedule.name }),
+      ...(archiveFresh
+        ? { ephemeralAutomationId: schedule.id, ephemeralTitle: schedule.name }
+        : {}),
     });
     if (pinReplacement) {
       updateSchedule(schedule.id, { threadId: created.id });
