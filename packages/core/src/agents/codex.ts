@@ -106,10 +106,7 @@ type CodexUsage = {
   reasoning_output_tokens?: number;
 };
 
-function usageFromCodex(
-  usage: CodexUsage | undefined,
-  opts?: { context?: boolean },
-): TokenUsage | null {
+function usageFromCodex(usage: CodexUsage | undefined, asContext = false): TokenUsage | null {
   if (!usage) return null;
   // `reasoning_output_tokens` is a subset of `output_tokens` — do not add it.
   const mapped = fromInclusiveInputUsage({
@@ -117,9 +114,7 @@ function usageFromCodex(
     outputTokens: Number(usage.output_tokens ?? 0),
     cachedInputTokens: Number(usage.cached_input_tokens ?? 0),
   });
-  if (!mapped) return null;
-  // Only the last model call is the context window. A session/turn sum is not.
-  if (!opts?.context) return mapped;
+  if (!mapped || !asContext) return mapped;
   const occ = requestOccupancy(mapped);
   return occ > 0 ? { ...mapped, lastRequestTokens: occ } : mapped;
 }
@@ -486,12 +481,9 @@ export const codexAdapter: AgentAdapter = {
           usage?: CodexUsage;
           last_token_usage?: CodexUsage;
         };
-        // `last_token_usage` is the latest model call (the window; it drops
-        // after Codex compacts). Exec JSON `usage` is `token_usage.total`,
-        // the session sum — bill it, but do not paint it on the context meter.
-        // `total_token_usage` on the same event is that sum again; ignore it.
+        // last_token_usage is the latest call (the window). `usage` is the session sum.
         const usage = payload.last_token_usage
-          ? usageFromCodex(payload.last_token_usage, { context: true })
+          ? usageFromCodex(payload.last_token_usage, true)
           : usageFromCodex(payload.usage);
         return usage ? { type: 'usage', data: usage, scope: 'turn' } : null;
       }

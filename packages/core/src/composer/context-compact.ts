@@ -441,22 +441,14 @@ export interface CompactResult {
   olderCount?: number;
 }
 
-/**
- * Last agent turn's context-window occupancy, or a transcript estimate.
- * Cursor stores the turn sum in `lastRequestTokens`. Codex exec JSON `usage`
- * is the session sum and has no per-request figure. Neither is the window
- * after summarization — don't reset the session from that bill.
- */
-export function lastRequestOccupancy(
-  thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] },
-): number {
+/** Window occupancy. Cursor/Codex bills are sums, so those fall back to the transcript. */
+export function lastRequestOccupancy(thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] }): number {
   if (thread.agent === 'cursor') return estimateOccupancyTokens(thread.messages);
   for (let i = thread.messages.length - 1; i >= 0; i--) {
     const n = thread.messages[i]?.usage?.lastRequestTokens;
     if (n != null && n > 0) return n;
   }
-  if (thread.agent === 'codex') return estimateOccupancyTokens(thread.messages);
-  return 0;
+  return thread.agent === 'codex' ? estimateOccupancyTokens(thread.messages) : 0;
 }
 
 /**
@@ -498,12 +490,8 @@ export async function maybeCompactContext(
 
   let messages = applyCompaction(thread.messages, summary, thresholds);
   const compactedMessages = appendCompactedMessages(thread.compactedMessages, older);
-  const resetSession = shouldResetSessionForOccupancy({
-    messages: thread.messages,
-    agent: thread.agent,
-  });
-  // Session reset reseeds from this transcript — persist going-forward occupancy
-  // so the meter and lastRequestOccupancy match the compressed context.
+  const resetSession = shouldResetSessionForOccupancy(thread);
+  // Reseed stores going-forward occupancy so the meter matches the compressed transcript.
   if (resetSession) {
     messages = applyForwardOccupancy(messages);
   }
