@@ -357,8 +357,11 @@ export function cursorSdkMessageToEvents(msg: CursorSdkStreamMessage): AgentEven
   }
 
   if (msg.type === 'usage') {
+    // SDK usage is per-turn totals (every model call summed), emitted once at
+    // turn end. Cursor summarizes between calls, so this is billed usage, not
+    // the context window. Request scope would paint the sum on the meter.
     const usage = usageFromCursor(msg.usage);
-    if (usage) return [{ type: 'usage', data: usage, scope: 'request' }];
+    if (usage) return [{ type: 'usage', data: usage, scope: 'turn' }];
   }
 
   if (msg.type === 'status' && msg.status === 'ERROR') {

@@ -4,11 +4,11 @@ import {
   lastAssistantMessageText,
 } from '../agents/message-parts.js';
 import { clipToolResultForStore } from '../agents/error-detail.js';
-import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
 import {
   applyForwardOccupancy,
   estimateMessageChars,
+  estimateOccupancyTokens,
   estimateThreadChars,
 } from './context-estimate.js';
 import { summarizeConversation } from './summarize.js';
@@ -441,21 +441,22 @@ export interface CompactResult {
   olderCount?: number;
 }
 
-/** Last agent turn's context-window occupancy, or 0. */
-export function lastRequestOccupancy(thread: Pick<Thread, 'messages'>): number {
+/** Window occupancy. A Codex session sum must not reuse an older peak. */
+export function lastRequestOccupancy(thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] }): number {
+  if (thread.agent === 'cursor') return estimateOccupancyTokens(thread.messages);
   for (let i = thread.messages.length - 1; i >= 0; i--) {
     const usage = thread.messages[i]?.usage;
-    if (usage) return contextTokens(usage);
+    if (!usage) continue;
+    const n = usage.lastRequestTokens;
+    if (n != null && n > 0) return n;
+    if (thread.agent === 'codex') return estimateOccupancyTokens(thread.messages);
   }
-  return 0;
+  return thread.agent === 'codex' ? estimateOccupancyTokens(thread.messages) : 0;
 }
 
-/**
- * True when the CLI session should be dropped so the next turn reseeds from
- * the (possibly compacted) Sideboard transcript instead of overflowing.
- */
+/** Reseed when occupancy is near the window. */
 export function shouldResetSessionForOccupancy(
-  thread: Pick<Thread, 'messages'>,
+  thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] },
   occupancyTokens: number = SESSION_RESET_OCCUPANCY_TOKENS,
 ): boolean {
   return lastRequestOccupancy(thread) >= occupancyTokens;
@@ -489,9 +490,8 @@ export async function maybeCompactContext(
 
   let messages = applyCompaction(thread.messages, summary, thresholds);
   const compactedMessages = appendCompactedMessages(thread.compactedMessages, older);
-  const resetSession = shouldResetSessionForOccupancy({ messages: thread.messages });
-  // Session reset reseeds from this transcript — persist going-forward occupancy
-  // so the meter and lastRequestOccupancy match the compressed context.
+  const resetSession = shouldResetSessionForOccupancy(thread);
+  // Reseed stores going-forward occupancy so the meter matches the compressed transcript.
   if (resetSession) {
     messages = applyForwardOccupancy(messages);
   }

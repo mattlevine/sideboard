@@ -59,13 +59,17 @@ export function forwardOccupancyTokens(
   messages: ThreadMessage[],
   usage?: TokenUsage | null,
   windowTokens = 1_000_000,
+  opts?: { trustProviderOccupancy?: boolean },
 ): number {
   const estimated = estimateOccupancyTokens(messages);
+  // Cursor's stored lastRequestTokens is the turn sum, not the window.
+  if (opts?.trustProviderOccupancy === false) return estimated;
   if (threadHasCompactedContext(messages) && estimated > 0) return estimated;
-  if (usage) {
-    const last = contextTokens(usage);
-    if (last > 0 && last <= windowTokens) return last;
-  }
+  // Only an explicit per-request figure. Billed input+cache is every model
+  // call added together (Cursor turn total, Codex session total) and stays
+  // high after those agents summarize.
+  const explicit = usage?.lastRequestTokens;
+  if (explicit != null && explicit > 0 && explicit <= windowTokens) return explicit;
   return estimated;
 }
 

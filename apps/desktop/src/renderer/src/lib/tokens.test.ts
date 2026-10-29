@@ -70,6 +70,9 @@ describe('contextMeterTooltip', () => {
       'remaining after compression',
     );
     expect(contextMeterTooltip(usage, 1_000_000)).toContain('next request (going-forward context)');
+    expect(contextMeterTooltip(usage, 1_000_000, { estimated: true })).toContain(
+      'estimated from the stored transcript',
+    );
   });
 
   it('keeps the billed thread sum in the tooltip, not the occupancy label', () => {

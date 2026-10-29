@@ -84,12 +84,11 @@ export function formatTokenCount(n: number): string {
 
 export function usageTooltip(
   u: TokenUsage,
-  opts?: { showCost?: boolean },
+  opts?: { showCost?: boolean; context?: boolean },
 ): string {
   const billed = totalTokens(u);
-  const context = contextTokens(u);
   const bits = [
-    `Context ~${context.toLocaleString()}`,
+    ...(opts?.context === false ? [] : [`Context ~${contextTokens(u).toLocaleString()}`]),
     `Billed ${billed.toLocaleString()}`,
     `Input: ${u.inputTokens.toLocaleString()}`,
     `Output: ${u.outputTokens.toLocaleString()}`,
@@ -172,7 +171,7 @@ export function tabUsageRingRatio(
 export function contextMeterTooltip(
   usage: TokenUsage | null,
   windowTokens: number,
-  opts?: { compacted?: boolean; billedTotal?: number; occupancy?: number },
+  opts?: { compacted?: boolean; billedTotal?: number; occupancy?: number; estimated?: boolean },
 ): string {
   const occ =
     opts?.occupancy != null && opts.occupancy > 0
@@ -184,9 +183,11 @@ export function contextMeterTooltip(
   const pct = Math.round(occupancyFillRatio(occ ?? 0, windowTokens) * 100);
   const basis = opts?.compacted
     ? 'remaining after compression'
-    : occ == null
-      ? 'billed turn total (occupancy unknown)'
-      : 'next request (going-forward context)';
+    : opts?.estimated
+      ? 'estimated from the stored transcript'
+      : occ == null
+        ? 'billed turn total (occupancy unknown)'
+        : 'next request (going-forward context)';
   const bits = [
     occ == null
       ? usage

@@ -209,7 +209,7 @@ describe('codexAdapter.parseEvent', () => {
     );
     expect(event).toEqual({
       type: 'usage',
-      data: { inputTokens: 100, outputTokens: 10 },
+      data: { inputTokens: 100, outputTokens: 10, lastRequestTokens: 100 },
       scope: 'turn',
     });
   });

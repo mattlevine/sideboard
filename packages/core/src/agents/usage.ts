@@ -124,10 +124,17 @@ export function applyTurnUsage(
           : {}),
       };
     }
+    // Keep a real per-request occupancy. A lone turn total is the sum of every
+    // model call — do not invent lastRequestTokens from it (Cursor). An
+    // explicit lastRequestTokens (Codex last call) still counts.
+    const explicit =
+      incoming.lastRequestTokens != null && incoming.lastRequestTokens > 0
+        ? incoming.lastRequestTokens
+        : undefined;
     return {
       ...incoming,
       costUsd: incoming.costUsd ?? current?.costUsd,
-      lastRequestTokens: current?.lastRequestTokens ?? requestOccupancy(incoming),
+      lastRequestTokens: current?.lastRequestTokens ?? explicit,
       ...(incoming.sessionCostUsd == null && current?.sessionCostUsd != null
         ? { sessionCostUsd: current.sessionCostUsd }
         : {}),
