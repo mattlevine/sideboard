@@ -441,20 +441,20 @@ export interface CompactResult {
   olderCount?: number;
 }
 
-/** Window occupancy. Cursor/Codex bills are sums, so those fall back to the transcript. */
+/** Window occupancy. A Codex session sum must not reuse an older peak. */
 export function lastRequestOccupancy(thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] }): number {
   if (thread.agent === 'cursor') return estimateOccupancyTokens(thread.messages);
   for (let i = thread.messages.length - 1; i >= 0; i--) {
-    const n = thread.messages[i]?.usage?.lastRequestTokens;
+    const usage = thread.messages[i]?.usage;
+    if (!usage) continue;
+    const n = usage.lastRequestTokens;
     if (n != null && n > 0) return n;
+    if (thread.agent === 'codex') return estimateOccupancyTokens(thread.messages);
   }
   return thread.agent === 'codex' ? estimateOccupancyTokens(thread.messages) : 0;
 }
 
-/**
- * True when the CLI session should be dropped so the next turn reseeds from
- * the (possibly compacted) Sideboard transcript instead of overflowing.
- */
+/** Reseed when occupancy is near the window. */
 export function shouldResetSessionForOccupancy(
   thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] },
   occupancyTokens: number = SESSION_RESET_OCCUPANCY_TOKENS,

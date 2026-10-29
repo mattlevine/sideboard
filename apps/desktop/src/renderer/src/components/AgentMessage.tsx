@@ -35,6 +35,8 @@ interface Props {
   usage?: TokenUsage;
   /** Going-forward occupancy override (tabs/live meter — not billed turn Σ). */
   occupancyTokens?: number;
+  /** Occupancy is a transcript estimate, not a measured next request. */
+  occupancyEstimated?: boolean;
   /** Used with usage for the context-fill ring (defaults to Claude-sized window). */
   agent?: AgentKind;
   model?: string | null;
@@ -305,6 +307,7 @@ export function AgentMessage({
   durationMs,
   usage,
   occupancyTokens,
+  occupancyEstimated,
   agent,
   model,
   startedAt,
@@ -350,7 +353,10 @@ export function AgentMessage({
     summedContext && shownOccupancy == null && usage
       ? usageTooltip(usage, { showCost, context: false })
       : shownOccupancy != null
-        ? contextMeterTooltip(usage ?? null, windowTokens, { occupancy: shownOccupancy })
+        ? contextMeterTooltip(usage ?? null, windowTokens, {
+            occupancy: shownOccupancy,
+            estimated: occupancyEstimated,
+          })
         : usage
           ? contextMeterTooltip(usage, windowTokens)
           : undefined;

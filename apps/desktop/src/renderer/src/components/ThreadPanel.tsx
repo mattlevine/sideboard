@@ -346,6 +346,7 @@ const ChatTranscript = memo(function ChatTranscript({
   liveUsage,
   turnStartedAt,
   forwardOccupancy,
+  occupancyEstimated,
   threadId,
   worktreePath,
   agent,
@@ -374,6 +375,7 @@ const ChatTranscript = memo(function ChatTranscript({
   liveUsage: TokenUsage | null;
   turnStartedAt: number | undefined;
   forwardOccupancy: number | undefined;
+  occupancyEstimated?: boolean;
   threadId: string;
   worktreePath: string;
   agent: Thread['agent'];
@@ -512,6 +514,11 @@ const ChatTranscript = memo(function ChatTranscript({
                       ? forwardOccupancy
                       : undefined
                   }
+                  occupancyEstimated={
+                    !showStreaming && i === lastAgentMessageIndex
+                      ? occupancyEstimated
+                      : undefined
+                  }
                   agent={agent}
                   model={model}
                   threadId={threadId}
@@ -621,6 +628,7 @@ const ChatTranscript = memo(function ChatTranscript({
               startedAt={turnStartedAt}
               usage={liveUsage ?? undefined}
               occupancyTokens={forwardOccupancy}
+              occupancyEstimated={occupancyEstimated}
               agent={agent}
               model={model}
               threadId={threadId}
@@ -1890,6 +1898,11 @@ export function ThreadPanel({
   );
   const contextRatio = occupancyFillRatio(forwardOccupancy, contextWindow);
   const contextCompacted = threadHasCompactedContext(forwardMessages);
+  const measuredWindow =
+    trustProviderOccupancy &&
+    (latestContextUsage?.lastRequestTokens ?? 0) > 0 &&
+    (latestContextUsage?.lastRequestTokens ?? 0) <= contextWindow;
+  const occupancyEstimated = !contextCompacted && !measuredWindow;
   const showClaudePlan = shouldShowClaudePlanUsage(thread);
   const [accountEpoch, setAccountEpoch] = useState(0);
   const claudePlanUsage = useClaudePlanUsage(
@@ -2296,7 +2309,7 @@ export function ThreadPanel({
               contextTooltip={contextMeterTooltip(latestContextUsage, contextWindow, {
                 occupancy: forwardOccupancy,
                 compacted: contextCompacted,
-                estimated: !trustProviderOccupancy && !contextCompacted,
+                estimated: occupancyEstimated,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })}
             />
@@ -2616,6 +2629,7 @@ export function ThreadPanel({
             liveUsage={liveUsage}
             turnStartedAt={turnStartedAt}
             forwardOccupancy={forwardOccupancy}
+            occupancyEstimated={occupancyEstimated}
             threadId={thread.id}
             worktreePath={thread.worktreePath}
             agent={thread.agent}

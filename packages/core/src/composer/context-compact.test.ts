@@ -631,6 +631,24 @@ describe('context compact', () => {
     expect(forwardOccupancyTokens(messages, messages[3]!.usage, 1_000_000)).toBe(80_000);
   });
 
+  it('a newer Codex session sum does not reuse an older last-request peak', () => {
+    const messages = fatThread(4, 40);
+    messages[1] = {
+      ...messages[1]!,
+      role: 'agent',
+      usage: { inputTokens: 10, outputTokens: 2, lastRequestTokens: 900_000 },
+    };
+    messages[3] = {
+      ...messages[3]!,
+      role: 'agent',
+      usage: { inputTokens: 1_200_000, outputTokens: 4_000 },
+    };
+    const estimated = estimateOccupancyTokens(messages);
+    expect(estimated).toBeLessThan(750_000);
+    expect(lastRequestOccupancy({ messages, agent: 'codex' })).toBe(estimated);
+    expect(shouldResetSessionForOccupancy({ messages, agent: 'codex' }, 750_000)).toBe(false);
+  });
+
   it('forwardContextUsage caps the meter to remaining transcript after compression', () => {
     const recent = fatThread(4, 200);
     const messages = [
