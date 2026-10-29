@@ -11,6 +11,7 @@ import {
 } from '../store/managed-accounts.js';
 import { updateThread } from '../store/thread-store.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
+import { isPidAlive, isSameAgentProcess, pidStartedAt } from '../orchestrator/agent-pid.js';
 import { traceTurn, withTimeout } from './turn-trace.js';
 import type { AgentEvent, AgentKind, MessagePart, Thread, TokenUsage } from '../types/thread.js';
 import { adjustBrightsyTurnExit, parseBrightsyCliLine } from './brightsy.js';
@@ -309,7 +310,17 @@ export async function spawnAgentTurn(
     pid: child.pid,
     kill: () => {
       const pid = child.pid;
+      const startedAt = typeof pid === 'number' && pid > 0 ? pidStartedAt(pid) : null;
       const signal = (sig: NodeJS.Signals) => {
+        // SIGKILL runs 5s later. Skip it if this pid has exited or been reused.
+        if (
+          sig === 'SIGKILL' &&
+          typeof pid === 'number' &&
+          pid > 0 &&
+          !isSameAgentProcess(pid, startedAt, isPidAlive(pid))
+        ) {
+          return;
+        }
         if (pid && process.platform !== 'win32') {
           try {
             process.kill(-pid, sig);
@@ -327,6 +338,7 @@ export async function spawnAgentTurn(
       signal('SIGTERM');
       const timer = setTimeout(() => signal('SIGKILL'), 5_000);
       timer.unref?.();
+      child.once('exit', () => clearTimeout(timer));
     },
     done,
   };

@@ -6,15 +6,25 @@ const LIST_TIMEOUT_MS = 15_000;
  * Assigned Linear issues via the connected API. Adapters used to spawn a
  * permissive agent (`bypassPermissions` / `* : allow`) just to list issues.
  */
-export async function listAssignedLinearIssues(): Promise<IssueInfo[]> {
+export async function listAssignedLinearIssues(opts?: {
+  timeoutMs?: number;
+}): Promise<IssueInfo[]> {
   try {
     const { listLinearIssuesDirect } = await import('../integrations/linear.js');
-    return await Promise.race([
-      listLinearIssuesDirect({ limit: 50 }),
-      new Promise<IssueInfo[]>((resolve) => {
-        setTimeout(() => resolve([]), LIST_TIMEOUT_MS);
-      }),
-    ]);
+    // Attach catch before the race. A rejection after the timeout already
+    // returned [] would otherwise be an unhandled rejection.
+    const listed = listLinearIssuesDirect({ limit: 50 }).catch(() => [] as IssueInfo[]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        listed,
+        new Promise<IssueInfo[]>((resolve) => {
+          timer = setTimeout(() => resolve([]), opts?.timeoutMs ?? LIST_TIMEOUT_MS);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   } catch {
     return [];
   }

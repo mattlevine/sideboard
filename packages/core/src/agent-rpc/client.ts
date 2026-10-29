@@ -94,12 +94,18 @@ export class AgentRpcClient {
         ),
       );
     });
-    this.connecting = new Promise<WebSocket>((resolve, reject) => {
+    let settled = false;
+    const pending = new Promise<WebSocket>((resolve, reject) => {
       const fail = (err: Error) => {
-        this.connecting = null;
+        if (settled) return;
+        settled = true;
+        if (this.connecting === pending) this.connecting = null;
         const message = err.message.includes('401') ? 'Unauthorized' : err.message;
         reject(message === err.message ? err : new Error(message));
       };
+      // `close` without `error` (handshake dropped) must reject this attempt.
+      // Otherwise `connecting` stays pending and every later call waits forever.
+      const failClose = () => fail(new Error('Agent RPC socket closed'));
       ws.once('unexpected-response', (_req, res) => {
         fail(
           new Error(
@@ -110,14 +116,18 @@ export class AgentRpcClient {
         );
       });
       ws.once('error', fail);
+      ws.once('close', failClose);
       ws.once('open', () => {
         ws.off('error', fail);
+        ws.off('close', failClose);
+        settled = true;
         this.ws = ws;
         this.connecting = null;
         resolve(ws);
       });
     });
-    return this.connecting;
+    this.connecting = pending;
+    return pending;
   }
 
   private drop(ws: WebSocket, err: Error): void {
