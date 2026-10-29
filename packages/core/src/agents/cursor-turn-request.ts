@@ -3,6 +3,12 @@ import type { AgentRpcConnect } from '../agent-rpc/metadata.js';
 /** JSON payload written to the Cursor runner on stdin. */
 export type CursorTurnRequest = {
   prompt: string;
+  /**
+   * Full prompt including the worktree playbook. Used only when a cached
+   * session cannot be resumed and the runner has to `createAgent()` — `prompt`
+   * has already dropped `cachedPrefix` for a resume.
+   */
+  freshPrompt?: string;
   cwd: string;
   /** Isolates the JSONL catalog so concurrent Cursor runners do not clobber runs. */
   threadId?: string | null;

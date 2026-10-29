@@ -58,6 +58,24 @@ describe('recoverFinishedCursorRun', () => {
     expect(hit?.result).toBe('fresh answer');
   });
 
+  it('does not replay a previous run that finished inside the clock-skew window', () => {
+    const runsPath = join(dataDir, 'cursor-sdk-store', 'runs.ndjson');
+    writeFileSync(
+      runsPath,
+      JSON.stringify({
+        runId: 'run-prev',
+        agentId: 'agent-1',
+        status: 'finished',
+        result: 'previous answer',
+        createdAt: 1_000,
+        endedAt: 4_500,
+      }),
+    );
+    expect(
+      recoverFinishedCursorRun({ agentId: 'agent-1', startedAfterMs: 4_000 }),
+    ).toBeNull();
+  });
+
   it('ignores unfinished runs', () => {
     const runsPath = join(dataDir, 'cursor-sdk-store', 'runs.ndjson');
     writeFileSync(

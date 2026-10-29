@@ -49,7 +49,13 @@ function readText(path: string): string {
 }
 
 export function userCodexConfigPaths(home = homedir()): string[] {
-  return [join(home, '.codex', 'config.toml'), join(home, '.config', 'codex', 'config.toml')];
+  const paths = [
+    join(home, '.codex', 'config.toml'),
+    join(home, '.config', 'codex', 'config.toml'),
+  ];
+  const codexHome = process.env.CODEX_HOME?.trim();
+  if (codexHome) paths.unshift(join(codexHome, 'config.toml'));
+  return paths;
 }
 
 export function userOpencodeConfigPaths(home = homedir()): string[] {

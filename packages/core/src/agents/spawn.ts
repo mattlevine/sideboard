@@ -1,3 +1,4 @@
+import { rmSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { execa } from 'execa';
 import { resolveGithubRepoSlug } from '../git/worktree.js';
@@ -10,6 +11,7 @@ import {
 } from '../store/managed-accounts.js';
 import { updateThread } from '../store/thread-store.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
+import { isPidAlive, isSameAgentProcess, pidStartedAt } from '../orchestrator/agent-pid.js';
 import { traceTurn, withTimeout } from './turn-trace.js';
 import type { AgentEvent, AgentKind, MessagePart, Thread, TokenUsage } from '../types/thread.js';
 import { adjustBrightsyTurnExit, parseBrightsyCliLine } from './brightsy.js';
@@ -29,7 +31,7 @@ import { SIDEBOARD_THREAD_ID_ENV } from '../mcp/profile.js';
 import { applyWorktreePkgCacheEnv } from '../hook/worktree-pkg-cache.js';
 import { applyAgentRunnerHeapEnv } from './node-launch.js';
 import { ensureAgentPath } from './path.js';
-import { applyTurnUsage, withTurnScopedCost } from './usage.js';
+import { applyTurnUsage, subtractUsage, withTurnScopedCost } from './usage.js';
 import type { AgentTurnInput } from './turn-input.js';
 import { createAgentStreamCoalescer } from './cursor-stream-coalesce.js';
 
@@ -183,8 +185,13 @@ export async function spawnAgentTurn(
     cwd: cmd.cwd,
     env,
     reject: false,
+    // readline consumes both streams. The default buffer (100 MB) keeps a
+    // second copy and SIGTERMs the agent when a long stream-json turn exceeds it.
+    buffer: false,
     stdout: 'pipe',
     stderr: 'pipe',
+    // Own process group so Stop can signal MCP servers and shells the CLI spawned.
+    detached: process.platform !== 'win32',
     // Claude stream-json turns write a user message to stdin; otherwise ignore
     // so Claude doesn't wait ~3s for an empty pipe.
     stdin: cmd.stdin != null ? 'pipe' : 'ignore',
@@ -200,6 +207,7 @@ export async function spawnAgentTurn(
   let assistantText = '';
   let parts: MessagePart[] = [];
   let usage: TokenUsage | null = null;
+  const usageByMessageId = new Map<string, TokenUsage>();
   // Claude content_block_delta / Cursor SDK / similar token streams would
   // otherwise IPC + React-render on every word.
   const outbound = createAgentStreamCoalescer(onEvent);
@@ -208,52 +216,67 @@ export async function spawnAgentTurn(
     if (!stream) return;
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
     rl.on('line', (line) => {
-      if (kind === 'stderr') {
-        outbound.push({ type: 'stderr', data: line });
-        return;
-      }
-      let events = normalizeParseResult(adapter.parseEvent(line));
-      // Brightsy CLI `--json` lines must become tool/thinking events, never answer text.
-      if (thread.agent === 'brightsy' && kind === 'stdout' && isBrightsyNdjsonLine(line)) {
-        const dumped = events.some(
-          (e) => e.type === 'stdout' && isBrightsyNdjsonLine(e.data),
-        );
-        if (events.length === 0 || dumped) {
-          events = normalizeParseResult(parseBrightsyCliLine(line));
+      try {
+        if (kind === 'stderr') {
+          outbound.push({ type: 'stderr', data: line });
+          return;
         }
-      }
-      for (const event of events) {
-        let parsed = event;
-        if (parsed.type === 'session_id') {
-          sessionId = parsed.data;
-          outbound.push(parsed);
-          continue;
+        let events = normalizeParseResult(adapter.parseEvent(line));
+        // Brightsy CLI `--json` lines must become tool/thinking events, never answer text.
+        if (thread.agent === 'brightsy' && kind === 'stdout' && isBrightsyNdjsonLine(line)) {
+          const dumped = events.some(
+            (e) => e.type === 'stdout' && isBrightsyNdjsonLine(e.data),
+          );
+          if (events.length === 0 || dumped) {
+            events = normalizeParseResult(parseBrightsyCliLine(line));
+          }
         }
-        if (parsed.type === 'usage') {
-          const data =
-            parsed.scope === 'turn'
-              ? withTurnScopedCost(parsed.data, thread.messages)
-              : parsed.data;
-          usage = applyTurnUsage(usage, data, parsed.scope ?? 'request');
-          outbound.push({ ...parsed, data });
-          continue;
-        }
-        if (parsed.type === 'stdout') {
-          if (thread.agent === 'brightsy' && isBrightsyNdjsonLine(parsed.data)) {
+        for (const event of events) {
+          let parsed = event;
+          if (parsed.type === 'session_id') {
+            sessionId = parsed.data;
+            outbound.push(parsed);
             continue;
           }
-          // Claude streams tokens, then replays the same paragraphs as an
-          // assistant snapshot and again as the result string. Keep a longer
-          // snapshot's new tail; drop a chunk that is already on screen.
-          const folded = foldDuplicateStdout(textSoFar(parts, parsed.parentId), parsed.data);
-          if (folded == null) continue;
-          if (folded !== parsed.data) parsed = { ...parsed, data: folded };
+          if (parsed.type === 'usage') {
+            const data =
+              parsed.scope === 'turn'
+                ? withTurnScopedCost(parsed.data, thread.messages)
+                : parsed.data;
+            let base = usage;
+            const messageId = parsed.messageId;
+            if (messageId && parsed.scope !== 'turn') {
+              const prev = usageByMessageId.get(messageId);
+              if (prev) base = subtractUsage(base, prev);
+              usageByMessageId.set(messageId, data);
+            }
+            usage = applyTurnUsage(base, data, parsed.scope ?? 'request');
+            outbound.push({ ...parsed, data });
+            continue;
+          }
+          if (parsed.type === 'stdout') {
+            if (thread.agent === 'brightsy' && isBrightsyNdjsonLine(parsed.data)) {
+              continue;
+            }
+            // Claude streams tokens, then replays the same paragraphs as an
+            // assistant snapshot and again as the result string. Keep a longer
+            // snapshot's new tail; drop a chunk that is already on screen.
+            const folded = foldDuplicateStdout(textSoFar(parts, parsed.parentId), parsed.data);
+            if (folded == null) continue;
+            if (folded !== parsed.data) parsed = { ...parsed, data: folded };
+          }
+          parts = applyAgentEvent(parts, parsed);
+          if (parsed.type === 'stdout') {
+            assistantText = partsToAssistantText(parts);
+          }
+          outbound.push(parsed);
         }
-        parts = applyAgentEvent(parts, parsed);
-        if (parsed.type === 'stdout') {
-          assistantText = partsToAssistantText(parts);
-        }
-        outbound.push(parsed);
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        outbound.push({
+          type: 'stderr',
+          data: `sideboard: failed to parse agent output: ${detail}`,
+        });
       }
     });
   };
@@ -273,16 +296,49 @@ export async function spawnAgentTurn(
         : (result.exitCode ?? null);
     onEvent({ type: 'exit', data: exitCode });
     return { exitCode, sessionId, assistantText: text, parts: finalized, usage };
+  }).finally(() => {
+    for (const dir of cmd.cleanupDirs ?? []) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // temp MCP config is best-effort
+      }
+    }
   });
 
   return {
     pid: child.pid,
     kill: () => {
-      try {
-        child.kill('SIGTERM');
-      } catch {
-        // ignore
-      }
+      const pid = child.pid;
+      const startedAt = typeof pid === 'number' && pid > 0 ? pidStartedAt(pid) : null;
+      const signal = (sig: NodeJS.Signals) => {
+        // SIGKILL runs 5s later. Skip it if this pid has exited or been reused.
+        if (
+          sig === 'SIGKILL' &&
+          typeof pid === 'number' &&
+          pid > 0 &&
+          !isSameAgentProcess(pid, startedAt, isPidAlive(pid))
+        ) {
+          return;
+        }
+        if (pid && process.platform !== 'win32') {
+          try {
+            process.kill(-pid, sig);
+            return;
+          } catch {
+            // not a process-group leader
+          }
+        }
+        try {
+          child.kill(sig);
+        } catch {
+          // ignore
+        }
+      };
+      signal('SIGTERM');
+      const timer = setTimeout(() => signal('SIGKILL'), 5_000);
+      timer.unref?.();
+      child.once('exit', () => clearTimeout(timer));
     },
     done,
   };

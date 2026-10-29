@@ -99,6 +99,7 @@ export function normalizeThread(raw: Thread): Thread {
     approvedMcpServers: normalizeApprovedMcpServers(raw.approvedMcpServers),
     lastError: raw.lastError ?? null,
     agentPid: raw.agentPid ?? null,
+    agentPidStartedAt: raw.agentPidStartedAt ?? null,
     attachments: Array.isArray(raw.attachments) ? raw.attachments : [],
     pendingTurnAttachments: Array.isArray(raw.pendingTurnAttachments)
       ? raw.pendingTurnAttachments
@@ -274,6 +275,7 @@ export function createEmptyThread(
     agent: partial.agent,
     lastError: null,
     agentPid: null,
+    agentPidStartedAt: null,
     ...(partial.accountId !== undefined ? { accountId: partial.accountId } : {}),
   };
 }

@@ -171,10 +171,24 @@ describe('codexUnattendedGitConfigArgs', () => {
       '-c',
       'shell_environment_policy.inherit="all"',
       '-c',
-      'shell_environment_policy.ignore_default_excludes=true',
-      '-c',
       'sandbox_workspace_write.network_access=true',
     ]);
+  });
+
+  it('re-sets GIT_CONFIG_KEY_n after the default *KEY* exclude and leaves token filters on', () => {
+    const args = codexUnattendedGitConfigArgs('read-only', {
+      preserveEnv: {
+        GIT_CONFIG_KEY_0: 'credential.helper',
+        GIT_CONFIG_VALUE_0: 'store --file=/tmp/git-credentials',
+        GH_TOKEN: 'gho_secret',
+      },
+    });
+    expect(args).toContain(
+      'shell_environment_policy.set.GIT_CONFIG_KEY_0="credential.helper"',
+    );
+    expect(args.join('\n')).not.toContain('gho_secret');
+    expect(args.join('\n')).not.toContain('GIT_CONFIG_VALUE_0');
+    expect(args).not.toContain('shell_environment_policy.ignore_default_excludes=true');
   });
 
   it('does not force network on read-only or full-access', () => {
@@ -194,8 +208,6 @@ describe('codexUnattendedGitConfigArgs', () => {
     ).toEqual([
       '-c',
       'shell_environment_policy.inherit="all"',
-      '-c',
-      'shell_environment_policy.ignore_default_excludes=true',
       '-c',
       'sandbox_workspace_write.network_access=true',
       '-c',

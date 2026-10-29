@@ -37,10 +37,20 @@ export async function acquireCursorCatalogLock(storeDir: string): Promise<() => 
   try {
     return await lockfile.lock(lockPath, {
       retries: { retries: 40, minTimeout: 50, maxTimeout: 500 },
-      stale: 5_000,
-      update: 2_000,
+      // Repair rewrites run_events.ndjson synchronously while holding the lock.
+      // A 5s stale window treats that stall as a dead owner and throws from a
+      // timer, which kills the runner mid-turn.
+      stale: 30_000,
+      update: 10_000,
+      onCompromised: (err) => {
+        console.error(`[sideboard] cursor catalog lock compromised: ${err.message}`);
+      },
     });
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(
+      `[sideboard] cursor catalog lock not acquired (${message}); continuing without the lock`,
+    );
     return async () => {};
   }
 }

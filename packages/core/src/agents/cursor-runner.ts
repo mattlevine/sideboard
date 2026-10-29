@@ -29,7 +29,9 @@ import { cursorSdkStoreDir } from './cursor-store.js';
 import {
   CURSOR_STREAM_IDLE_MS,
   CURSOR_BUSY_RETRY_DELAY_MS,
+  cursorDisallowedTools,
   cursorSendOptions,
+  exitWhenFlushed,
   cursorSessionRecoveryMessage,
   isAgentBusyError,
   isUnresumableCursorSession,
@@ -197,7 +199,7 @@ async function main(): Promise<number> {
     mode,
     local,
     name: 'Sideboard' as const,
-    disallowedTools: ['read'],
+    disallowedTools: cursorDisallowedTools(req.planMode),
     ...(mcpServers ? { mcpServers } : {}),
   };
 
@@ -215,14 +217,22 @@ async function main(): Promise<number> {
     return retryTransport(() => Agent.resume(agentId, opts));
   }
 
-  async function openAgent() {
+  function promptForNewSession(): string {
+    return req.freshPrompt?.trim() || req.prompt;
+  }
+
+  async function openAgent(): Promise<{
+    agent: Awaited<ReturnType<typeof createAgent>>;
+    fresh: boolean;
+  }> {
     try {
-      return req.agentId ? await resumeAgent(req.agentId) : await createAgent();
+      if (!req.agentId) return { agent: await createAgent(), fresh: true };
+      return { agent: await resumeAgent(req.agentId), fresh: false };
     } catch (err) {
       if (!isUnresumableCursorSession(err)) throw err;
       if (repairCursorCatalogForResume(storeRoot, note) && req.agentId) {
         try {
-          return await resumeAgent(req.agentId);
+          return { agent: await resumeAgent(req.agentId), fresh: false };
         } catch (err2) {
           if (!isUnresumableCursorSession(err2)) throw err2;
         }
@@ -231,7 +241,7 @@ async function main(): Promise<number> {
         type: 'stderr',
         data: cursorSessionRecoveryMessage(err, req.agentId),
       });
-      return createAgent();
+      return { agent: await createAgent(), fresh: true };
     }
   }
 
@@ -259,7 +269,7 @@ async function main(): Promise<number> {
     extra?: { onDelta?: (args: { update: unknown }) => void },
   ) {
     const sendOpts = {
-      ...cursorSendOptions(mcpServers),
+      ...cursorSendOptions(mcpServers, mode),
       ...extra,
     };
     try {
@@ -297,7 +307,7 @@ async function main(): Promise<number> {
         setTimeout(resolve, 2_000);
       }),
     ]).finally(() => {
-      void closeCursorCatalogTurn().finally(() => process.exit(1));
+      void closeCursorCatalogTurn().finally(() => exitWhenFlushed(1));
     });
   };
   process.once('SIGTERM', onSignal);
@@ -399,7 +409,12 @@ async function main(): Promise<number> {
         return 2;
       }
       // User stop / abort — not a failure for lastError.
-      if (result.status === 'cancelled') return 0;
+      if (result.status === 'cancelled') {
+        // Idle-cancel already logged stderr. A user stop is also `cancelled`
+        // but did not set streamIdle — that one is a clean exit.
+        if (streamIdle) return 1;
+        return 0;
+      }
 
       // Billed USD is not on the stream — pull getUsage when the account supports it.
       try {
@@ -422,16 +437,18 @@ async function main(): Promise<number> {
   }
 
   try {
-    let agent = await openAgent();
+    const opened = await openAgent();
+    let agent = opened.agent;
+    const prompt = opened.fresh ? promptForNewSession() : req.prompt;
     try {
       try {
-        return await runTurn(agent);
+        return await runTurn(agent, prompt);
       } catch (err) {
         // Steer killed the previous process, but Cursor still has that run.
         // Cancel it and send this prompt again instead of failing the turn.
         if (isAgentBusyError(err)) {
           await retryAfterBusy(agent);
-          return await runTurn(agent);
+          return await runTurn(agent, prompt);
         }
         // send() can throw the same unresumable errors after a "successful" resume.
         // Dispose first so that flush cannot overwrite the repaired catalog.
@@ -452,7 +469,7 @@ async function main(): Promise<number> {
           data: cursorSessionRecoveryMessage(err, agentId),
         });
         agent = await createAgent();
-        return await runTurn(agent);
+        return await runTurn(agent, promptForNewSession());
       }
     } finally {
       await agent[Symbol.asyncDispose]().catch(() => undefined);
@@ -474,9 +491,9 @@ async function main(): Promise<number> {
 }
 
 main().then(
-  (code) => process.exit(code),
+  (code) => exitWhenFlushed(code),
   (err) => {
     emit({ type: 'stderr', data: err instanceof Error ? err.message : String(err) });
-    process.exit(1);
+    exitWhenFlushed(1);
   },
 );

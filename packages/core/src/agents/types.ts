@@ -10,6 +10,8 @@ export interface TurnCommand {
   env?: Record<string, string>;
   /** When set, written to the child process stdin (e.g. Claude stream-json). */
   stdin?: string;
+  /** Temp directories removed when the child exits (MCP configs that hold tokens). */
+  cleanupDirs?: string[];
 }
 
 export interface AttachCommand {
@@ -51,19 +53,8 @@ export function permissionMode(
   opencodePermission: string;
   codexSandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
 } {
-  // Orchestrators spawn Sideboard MCP which creates worktrees + thread files
-  // outside `--cd`. Codex workspace-write can seatbelt those MCP children and
-  // hang create_workspace; Claude does not — so Claude orch works and Codex does not.
-  if (thread.sourceType === 'orchestration') {
-    return {
-      claude: 'acceptEdits',
-      opencodePermission: JSON.stringify({
-        edit: 'allow',
-        bash: { '*': 'allow', 'rm -rf *': 'deny' },
-      }),
-      codexSandbox: 'danger-full-access',
-    };
-  }
+  // Plan mode wins over orchestration. A coordinator in Plan mode must not
+  // get danger-full-access / acceptEdits just because it creates worktrees.
   if (thread.planMode) {
     return {
       claude: 'plan',
@@ -75,6 +66,21 @@ export function permissionMode(
       codexSandbox: 'read-only',
     };
   }
+  // Orchestrators spawn Sideboard MCP which creates worktrees + thread files
+  // outside `--cd`. Codex workspace-write can seatbelt those MCP children and
+  // hang create_workspace; Claude does not — so Claude orch works and Codex does not.
+  if (thread.sourceType === 'orchestration') {
+    return {
+      claude: 'acceptEdits',
+      // Unattended coordinators cannot answer permission prompts. Explicit
+      // allows override the user's OpenCode denies for this process only.
+      opencodePermission: JSON.stringify({
+        edit: 'allow',
+        bash: { '*': 'allow' },
+      }),
+      codexSandbox: 'danger-full-access',
+    };
+  }
   if (thread.autonomy === 'full') {
     return {
       claude: 'bypassPermissions',
@@ -82,12 +88,11 @@ export function permissionMode(
       codexSandbox: 'workspace-write',
     };
   }
+  // Default: do not send allow rules. OpenCode's own config and defaults
+  // stand, including user denies. An allow here would override them.
   return {
     claude: 'acceptEdits',
-    opencodePermission: JSON.stringify({
-      edit: 'allow',
-      bash: { '*': 'allow', 'rm -rf *': 'deny' },
-    }),
+    opencodePermission: JSON.stringify({}),
     codexSandbox: 'workspace-write',
   };
 }

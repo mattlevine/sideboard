@@ -26,6 +26,7 @@ import {
   unwrapStrippedElectronLaunch,
 } from '../hook/nested-electron-env.js';
 import { mergeAgentGitAuthEnv, resolveAgentGitAuthEnv } from '../git/git-auth-mode.js';
+import { isCodexSecretEnvKey } from './codex-mcp-profile.js';
 
 export type InjectedMcpServer = {
   name: string;
@@ -449,10 +450,7 @@ export function toCursorMcpServers(servers: InjectedMcpServer[]): CursorMcpServe
   return out;
 }
 
-/**
- * Codex CLI `-c key=value` overrides for mcp_servers (merged over ~/.codex/config.toml).
- * @see https://developers.openai.com/codex/mcp
- */
+/** Codex `-c` overrides. Secret env is written by `writeCodexMcpSecretProfile`. */
 export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
   const args: string[] = [];
   for (const s of servers) {
@@ -464,6 +462,7 @@ export function toCodexMcpConfigArgs(servers: InjectedMcpServer[]): string[] {
     const env = mcpSpawnEnv(s.env);
     if (env) {
       for (const [key, value] of Object.entries(env)) {
+        if (isCodexSecretEnvKey(key)) continue;
         args.push('-c', `${prefix}.env.${key}=${JSON.stringify(value)}`);
       }
     }
@@ -549,7 +548,7 @@ export function writeMcpServersConfig(
 
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-mcp-'));
   const cfgPath = join(dir, 'mcp.json');
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }, null, 2));
+  writeFileSync(cfgPath, JSON.stringify({ mcpServers }, null, 2), { mode: 0o600 });
   return cfgPath;
 }
 
@@ -582,9 +581,8 @@ export function writeSideboardMcpConfig(): string {
       };
   const dir = mkdtempSync(join(tmpdir(), 'sideboard-orch-mcp-'));
   const cfgPath = join(dir, 'mcp.json');
-  writeFileSync(
-    cfgPath,
-    JSON.stringify({ mcpServers: { sideboard } }, null, 2),
-  );
+  writeFileSync(cfgPath, JSON.stringify({ mcpServers: { sideboard } }, null, 2), {
+    mode: 0o600,
+  });
   return cfgPath;
 }

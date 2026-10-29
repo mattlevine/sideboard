@@ -60,7 +60,7 @@ export function extractJsonErrorMessage(obj: Record<string, unknown>): string | 
   const candidates = [
     typeof obj.message === 'string' ? obj.message : null,
     typeof obj.error === 'string' ? obj.error : null,
-    nested && typeof nested.message === 'string' ? nested.message : null,
+    nested && typeof nested.message === 'string' ? nested.message : typeof (nested?.data as { message?: unknown } | undefined)?.message === 'string' ? (nested!.data as { message: string }).message : null,
     typeof obj.result === 'string' ? obj.result : null,
     typeof obj.detail === 'string' ? obj.detail : null,
   ];

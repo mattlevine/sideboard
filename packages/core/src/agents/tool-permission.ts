@@ -101,13 +101,15 @@ function sessionGrants(item: QueueItem): unknown[] | undefined {
   return [{ type: 'addDirectories', directories: [dir], destination: 'session' }];
 }
 
-function directoryGrant(item: QueueItem): string {
-  const stored = item.prompt;
-  const path = stored.path ?? '';
+function directoryGrantPath(path: string): string {
   if (!path) return '';
   if (path.endsWith('/') || path.endsWith('\\')) return path;
   const dir = dirname(path);
   return dir && dir !== '.' ? dir : path;
+}
+
+function directoryGrant(item: QueueItem): string {
+  return directoryGrantPath(item.prompt.path ?? '');
 }
 
 function toAnswer(item: QueueItem, decision: ToolPermissionDecision): ToolPermissionAnswer {
@@ -160,10 +162,15 @@ export function askToolPermission(ask: ToolPermissionAsk): Promise<ToolPermissio
   if (!threadId || !toolName) return Promise.resolve(denied('Missing chat or tool.'));
   const described = describeToolPermission({ ...ask, threadId, toolName });
   const mcpServerId = mcpServerIdForPermission(toolName, ask.mcpServer) ?? undefined;
+  const grantDir = described.path ? directoryGrantPath(described.path) : '';
+  const sessionNote =
+    grantDir && described.path && grantDir !== described.path
+      ? `Allow for this session applies to ${grantDir}, not only this file.`
+      : '';
   const prompt: AgentPermissionPrompt = {
     id: randomUUID(),
     title: described.title,
-    detail: described.detail,
+    detail: [described.detail, sessionNote].filter(Boolean).join('\n'),
     path: described.path || undefined,
     // Claude hides "always allow" when the saved rule would be broader than
     // this call. For MCP that broader rule is what we want: the whole server.

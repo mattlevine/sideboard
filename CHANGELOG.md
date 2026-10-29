@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.325] - 2026-10-28
+
+### Fixed
+
+- Codex connector tokens stay off the process list, and plan mode plus the user's own command denies stay in effect.
+- Stopping a chat checks that the saved process is still the agent before signaling it.
+- A missing OpenCode session starts clean, and repeated usage reports are not counted twice.
+
 ## [0.1.324] - 2026-10-28
 
 ### Fixed

@@ -13,7 +13,18 @@ describe('permissionMode', () => {
     const mode = permissionMode({ autonomy: 'default', planMode: false });
     expect(mode.claude).toBe('acceptEdits');
     expect(mode.codexSandbox).toBe('workspace-write');
-    expect(JSON.parse(mode.opencodePermission)).toMatchObject({ edit: 'allow' });
+    expect(JSON.parse(mode.opencodePermission)).toEqual({});
+  });
+
+  it('keeps plan mode when the thread is also an orchestrator', () => {
+    const mode = permissionMode({
+      autonomy: 'default',
+      planMode: true,
+      sourceType: 'orchestration',
+    });
+    expect(mode.claude).toBe('plan');
+    expect(mode.codexSandbox).toBe('read-only');
+    expect(JSON.parse(mode.opencodePermission)).toMatchObject({ edit: 'deny' });
   });
 
   it('uses danger-full-access for Codex orchestration (MCP writes outside --cd)', () => {

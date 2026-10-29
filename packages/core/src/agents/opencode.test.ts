@@ -68,6 +68,7 @@ describe('opencodeAdapter.buildTurn', () => {
     expect(cmd.stdin).not.toContain('cache_control');
     expect(cmd.args.includes('--input-format')).toBe(false);
     expect(cmd.args[cmd.args.indexOf('--format') + 1]).toBe('json');
+    expect(cmd.args).toContain('--thinking');
   });
 
   it('continues via --session id (never --continue)', async () => {
@@ -109,13 +110,15 @@ describe('opencodeAdapter.buildTurn', () => {
     });
     const cmd = await opencodeAdapter.buildTurn(baseThread, { prompt: 'list threads' });
     expect(cmd.env?.[AGENT_RPC_URL_ENV]).toBe(url);
-    expect(cmd.env?.OPENCODE_CONFIG_DIR).toContain('agent-rpc/opencode');
+    expect(cmd.env?.OPENCODE_CONFIG_DIR).toBeUndefined();
     const parsed = JSON.parse(cmd.env!.OPENCODE_CONFIG_CONTENT!) as {
       mcp?: Record<string, { environment?: Record<string, string> }>;
       plugin?: string[];
     };
     expect(parsed.mcp?.sideboard?.environment?.[AGENT_RPC_NATIVE_ENV]).toBe('1');
-    expect(parsed.plugin?.some((p) => p.endsWith('sideboard-rpc.js'))).toBe(true);
+    expect(parsed.plugin?.some((p) => p.startsWith('file://') && p.endsWith('sideboard-rpc.js'))).toBe(
+      true,
+    );
   });
 
   it('keeps OpenCode on MCP when agent-runtime.json names a dead desktop pid', async () => {

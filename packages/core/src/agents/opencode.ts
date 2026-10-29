@@ -209,6 +209,11 @@ export const opencodeAdapter: AgentAdapter = {
     if (model) {
       args.push('--model', model);
     }
+    args.push('--thinking');
+    const variant = thread.effort?.trim() ?? '';
+    if (variant && /^(minimal|low|medium|high|max|xhigh)$/i.test(variant)) {
+      args.push('--variant', variant);
+    }
     const hostEnv = await buildOpencodeHostEnv(thread);
     return {
       file: resolveAgentExecutable('opencode'),
@@ -267,6 +272,12 @@ export const opencodeAdapter: AgentAdapter = {
           (obj as { part?: { text?: string }; text?: string }).part?.text ??
           (obj as { text?: string }).text;
         if (text) return { type: 'stdout', data: text };
+      }
+      if (obj.type === 'reasoning' || obj.type === 'thinking') {
+        const text =
+          (obj as { part?: { text?: string }; text?: string }).part?.text ??
+          (obj as { text?: string }).text;
+        if (typeof text === 'string' && text) return { type: 'thinking', data: text };
       }
       if (obj.type === 'tool_use') {
         const part = (obj as {
@@ -460,16 +471,19 @@ export const opencodeAdapter: AgentAdapter = {
     const listed = await run(
       resolveAgentExecutable('opencode'),
       ['session', 'list', '--format', 'json'],
-      { cwd: worktreePath, reject: false },
+      { cwd: worktreePath, reject: false, timeoutMs: 8_000 },
     );
-    if (listed.exitCode === 0 && listed.stdout.trim()) {
+    if (listed.exitCode === 0) {
+      const raw = listed.stdout.trim();
+      if (!raw) return null;
       try {
-        const sessions = JSON.parse(listed.stdout) as Array<{
+        const sessions = JSON.parse(raw) as Array<{
           id?: string;
           directory?: string;
           path?: string;
           updated?: string;
         }>;
+        if (Array.isArray(sessions) && sessions.length === 0) return null;
         if (Array.isArray(sessions) && sessions.length > 0) {
           const norm = (p: string) => p.replace(/\/+$/, '');
           const wt = norm(worktreePath);
@@ -513,35 +527,7 @@ export const opencodeAdapter: AgentAdapter = {
   },
 
   async listLinearIssues(_repoPath: string): Promise<IssueInfo[]> {
-    const prompt =
-      'List my assigned Linear issues as JSON array only: id, identifier, title, url, labels.';
-    const { stdout, exitCode } = await run(
-      resolveAgentExecutable('opencode'),
-      ['run', prompt, '--format', 'json'],
-      {
-        reject: false,
-        env: { OPENCODE_PERMISSION: JSON.stringify({ '*': 'allow' }) },
-      },
-    );
-    if (exitCode !== 0) return [];
-    const texts: string[] = [];
-    for (const line of stdout.split('\n')) {
-      try {
-        const obj = JSON.parse(line) as { type?: string; part?: { text?: string }; text?: string };
-        if (obj.type === 'text') {
-          texts.push(obj.part?.text ?? obj.text ?? '');
-        }
-      } catch {
-        // ignore
-      }
-    }
-    const joined = texts.join('');
-    const match = joined.match(/\[[\s\S]*\]/);
-    if (!match) return [];
-    try {
-      return JSON.parse(match[0]) as IssueInfo[];
-    } catch {
-      return [];
-    }
+    const { listAssignedLinearIssues } = await import('./linear-list.js');
+    return listAssignedLinearIssues();
   },
 };

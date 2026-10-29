@@ -56,7 +56,10 @@ function scanFinishedCursorRuns(
       if (typeof row.result !== 'string' || !row.result.trim()) continue;
       const endedAt = typeof row.endedAt === 'number' ? row.endedAt : 0;
       const createdAt = typeof row.createdAt === 'number' ? row.createdAt : 0;
-      if (createdAt < startedAfterMs && endedAt < startedAfterMs) continue;
+      // A run that started before this turn is a previous answer, even when it
+      // finished inside the clock-skew window. Matching on endedAt replayed
+      // the prior turn when this turn's runner died with no output.
+      if (createdAt < startedAfterMs) continue;
       if (!best || endedAt >= best.endedAt) {
         best = { runId: row.runId || '', result: row.result.trim(), endedAt };
       }

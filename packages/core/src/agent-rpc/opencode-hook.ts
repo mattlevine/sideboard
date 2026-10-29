@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { appDataDir } from '../store/paths.js';
 import {
@@ -13,13 +13,14 @@ import {
 } from './protocol.js';
 
 /**
- * OpenCode plugin loaded from OPENCODE_CONFIG_DIR/plugins.
- * Uses the runtime's `@opencode-ai/plugin` `tool()` helper and the global
- * WebSocket (Bun / Node 22) so it does not import Sideboard packages.
+ * OpenCode plugin referenced from `OPENCODE_CONFIG_CONTENT` (`config.plugin`).
+ * Do not name a binding `URL` — that shadows the global constructor and
+ * `new URL(...)` throws. Uses the runtime's `@opencode-ai/plugin` `tool()`
+ * helper and the global WebSocket (Bun / Node 22).
  */
 export const OPENCODE_PLUGIN_SOURCE = `import { tool } from "@opencode-ai/plugin"
 
-const URL = process.env[${JSON.stringify(AGENT_RPC_URL_ENV)}] || ""
+const RPC_URL = process.env[${JSON.stringify(AGENT_RPC_URL_ENV)}] || ""
 const TOKEN = process.env[${JSON.stringify(AGENT_RPC_TOKEN_ENV)}] || ""
 const CWD = process.env[${JSON.stringify(AGENT_RPC_CWD_ENV)}] || ""
 
@@ -32,24 +33,29 @@ function jsonError(err) {
 }
 
 function socketUrl() {
-  const u = new URL(URL)
+  const u = new URL(RPC_URL)
   u.searchParams.set(${JSON.stringify(AGENT_RPC_TOKEN_QUERY)}, TOKEN)
   return u.toString()
 }
 
 function call(method, params) {
-  if (!URL || !TOKEN) {
+  if (!RPC_URL || !TOKEN) {
     return Promise.resolve(jsonError(new Error("Agent RPC runtime is not running")))
   }
+  const timeoutMs = method === "job.wait" ? 130000 : 30000
   return new Promise((resolve) => {
     let settled = false
+    let ws
+    let timer
     const done = (value) => {
       if (settled) return
       settled = true
+      clearTimeout(timer)
       try { ws.close() } catch {}
       resolve(value)
     }
-    const ws = new WebSocket(socketUrl())
+    timer = setTimeout(() => done(jsonError(new Error("Agent RPC timed out"))), timeoutMs)
+    ws = new WebSocket(socketUrl())
     const id = Date.now()
     ws.addEventListener("open", () => {
       ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params, authToken: TOKEN }))
@@ -121,13 +127,22 @@ export const SideboardRpc = async (ctx) => {
 }
 `;
 
-export function writeOpencodeRpcPlugin(): { configDir: string; pluginFile: string } {
-  const configDir = join(appDataDir(), 'agent-rpc', 'opencode');
-  const pluginDir = join(configDir, 'plugins');
+/** Absolute path of the plugin file. Not placed under a config `plugins/` dir. */
+export function writeOpencodeRpcPlugin(): string {
+  const pluginDir = join(appDataDir(), 'agent-rpc', 'opencode');
   mkdirSync(pluginDir, { recursive: true });
   const pluginFile = join(pluginDir, 'sideboard-rpc.js');
-  writeFileSync(pluginFile, OPENCODE_PLUGIN_SOURCE);
-  return { configDir, pluginFile };
+  if (existsSync(pluginFile)) {
+    try {
+      if (readFileSync(pluginFile, 'utf8') === OPENCODE_PLUGIN_SOURCE) return pluginFile;
+    } catch {
+      // rewrite below
+    }
+  }
+  const tmp = `${pluginFile}.${process.pid}.tmp`;
+  writeFileSync(tmp, OPENCODE_PLUGIN_SOURCE);
+  renameSync(tmp, pluginFile);
+  return pluginFile;
 }
 
 /** JSON Schema kept so tests can assert the plugin still names the pilot set. */

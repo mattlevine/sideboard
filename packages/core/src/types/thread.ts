@@ -233,11 +233,9 @@ export interface Thread {
    */
   queueAttachments?: ThreadAttachment[][];
   lastError?: string | null;
-  /**
-   * OS pid of the in-flight agent child while status is `running`.
-   * Used so other processes (MCP) do not reclaim a live turn as dead.
-   */
+  /** Live agent pid, and its `ps` lstart so Stop skips a recycled pid. */
   agentPid?: number | null;
+  agentPidStartedAt?: string | null;
   /**
    * When set, host auto-retries this chat after a provider session/usage
    * quota reset (ISO timestamp).
@@ -626,6 +624,8 @@ export type AgentEvent =
       data: TokenUsage;
       /** `request` = one API call; `turn` = billed total for the whole agent turn. */
       scope?: 'request' | 'turn';
+      /** Repeated assistant snapshot; spawn replaces the earlier usage. */
+      messageId?: string;
     }
   | { type: 'exit'; data: number | null };
 

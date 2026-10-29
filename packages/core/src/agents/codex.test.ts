@@ -27,10 +27,18 @@ const baseThread = {
 
 describe('codexAdapter.buildTurn', () => {
   beforeEach(() => {
-    vi.stubEnv('SIDEBOARD_APP_DATA', mkdtempSync(join(tmpdir(), 'sideboard-codex-')));
+    const dataDir = mkdtempSync(join(tmpdir(), 'sideboard-codex-'));
+    vi.stubEnv('SIDEBOARD_APP_DATA', dataDir);
+    vi.stubEnv('CODEX_HOME', dataDir);
   });
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  it('opens interactive resume instead of headless exec', async () => {
+    const cmd = await codexAdapter.buildAttach({ ...baseThread, sessionId: 'thread-abc' });
+    expect(cmd.args).toEqual(['resume', 'thread-abc']);
+    expect(cmd.cwd).toBe('/tmp/wt');
   });
 
   it('uses read-only sandbox in plan mode', async () => {
@@ -92,8 +100,10 @@ describe('codexAdapter.buildTurn', () => {
   it('forwards git auth env through Codex sandbox (Keychain is unreachable there)', async () => {
     const cmd = await codexAdapter.buildTurn(baseThread, { prompt: 'push' });
     const cfg = cmd.args.filter((_, i) => cmd.args[i - 1] === '-c');
+    expect(cfg).toContain('model_reasoning_effort="high"');
     expect(cfg).toContain('shell_environment_policy.inherit="all"');
-    expect(cfg).toContain('shell_environment_policy.ignore_default_excludes=true');
+    expect(cfg).not.toContain('shell_environment_policy.ignore_default_excludes=true');
+    expect(cfg.some((c) => c.includes('TOKEN') || c.includes('SECRET'))).toBe(false);
     expect(cfg).toContain('sandbox_workspace_write.network_access=true');
     const writable = cfg.find((c) => c.startsWith('sandbox_workspace_write.writable_roots='));
     expect(writable).toBeTruthy();
@@ -187,6 +197,57 @@ describe('codexAdapter.parseEvent', () => {
       data: { inputTokens: 4763, outputTokens: 122, cacheReadTokens: 20000 },
       scope: 'turn',
     });
+  });
+
+  it('prefers last_token_usage over the session total', () => {
+    const event = codexAdapter.parseEvent(
+      JSON.stringify({
+        type: 'turn.completed',
+        last_token_usage: { input_tokens: 100, output_tokens: 10 },
+        total_token_usage: { input_tokens: 9000, output_tokens: 800 },
+      }),
+    );
+    expect(event).toEqual({
+      type: 'usage',
+      data: { inputTokens: 100, outputTokens: 10 },
+      scope: 'turn',
+    });
+  });
+
+  it('maps file changes and declined commands', () => {
+    const edit = codexAdapter.parseEvent(
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'fc1',
+          type: 'file_change',
+          status: 'completed',
+          changes: [{ path: 'a.ts', kind: 'update' }],
+        },
+      }),
+    );
+    expect(edit).toEqual([
+      { type: 'tool_use', id: 'fc1', name: 'Edit', input: { paths: ['a.ts'] } },
+      { type: 'tool_result', id: 'fc1', content: 'a.ts', isError: false },
+    ]);
+    const declined = codexAdapter.parseEvent(
+      JSON.stringify({
+        type: 'item.completed',
+        item: { id: 'cmd1', type: 'command_execution', status: 'declined', command: 'rm -rf /' },
+      }),
+    );
+    expect(declined).toEqual([
+      { type: 'tool_use', id: 'cmd1', name: 'Bash', input: { command: 'rm -rf /' } },
+      { type: 'tool_result', id: 'cmd1', content: undefined, isError: true },
+    ]);
+    expect(
+      codexAdapter.parseEvent(
+        JSON.stringify({
+          type: 'item.completed',
+          item: { id: 'r1', type: 'reasoning', text: 'checking auth' },
+        }),
+      ),
+    ).toEqual({ type: 'thinking', data: 'checking auth' });
   });
 
   it('does not treat Codex cached_input_tokens as extra input', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   CURSOR_STREAM_IDLE_MS,
+  cursorDisallowedTools,
   cursorErrorMessage,
   cursorSendOptions,
   cursorSessionRecoveryMessage,
@@ -86,6 +87,9 @@ describe('isUnresumableCursorSession', () => {
       false,
     );
     expect(isUnresumableCursorSession(new Error('Credit balance is too low'))).toBe(false);
+    expect(isUnresumableCursorSession(new Error('the agent config was not found'))).toBe(
+      false,
+    );
   });
 });
 
@@ -178,6 +182,16 @@ describe('retryOnceOnRetryableCursorError', () => {
 describe('cursorSendOptions / withCursorLocalHangGuards', () => {
   it('expires a leftover local run on every send', () => {
     expect(cursorSendOptions()).toEqual({ local: { force: true } });
+    expect(cursorSendOptions(undefined, 'plan')).toEqual({ local: { force: true }, mode: 'plan' });
+    expect(cursorDisallowedTools(true)).toEqual([
+      'read',
+      'shell',
+      'edit',
+      'write',
+      'delete',
+      'task',
+    ]);
+    expect(cursorDisallowedTools(false)).toEqual(['read']);
     expect(cursorSendOptions({ sideboard: { command: 'sideboard' } })).toEqual({
       local: { force: true },
       mcpServers: { sideboard: { command: 'sideboard' } },
