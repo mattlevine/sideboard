@@ -1879,9 +1879,14 @@ export function ThreadPanel({
     ];
   }, [thread.messages, liveOutput, liveParts, liveUsage]);
   const contextWindow = resolveContextWindow(thread.agent, thread.model);
+  // Cursor's usage blob is the turn's billed sum, not the window after summarization.
+  const trustProviderOccupancy = thread.agent !== 'cursor';
   const forwardOccupancy = useMemo(
-    () => forwardOccupancyTokens(forwardMessages, latestContextUsage, contextWindow),
-    [forwardMessages, latestContextUsage, contextWindow],
+    () =>
+      forwardOccupancyTokens(forwardMessages, latestContextUsage, contextWindow, {
+        trustProviderOccupancy,
+      }),
+    [forwardMessages, latestContextUsage, contextWindow, trustProviderOccupancy],
   );
   const contextRatio = occupancyFillRatio(forwardOccupancy, contextWindow);
   const contextCompacted = threadHasCompactedContext(forwardMessages);
@@ -2291,6 +2296,7 @@ export function ThreadPanel({
               contextTooltip={contextMeterTooltip(latestContextUsage, contextWindow, {
                 occupancy: forwardOccupancy,
                 compacted: contextCompacted,
+                estimated: !trustProviderOccupancy && !contextCompacted,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
               })}
             />

@@ -7,7 +7,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow, usageTooltip } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import { type FilePathLink } from '../lib/file-path-link';
@@ -334,6 +334,26 @@ export function AgentMessage({
   const diffAnchorRef = useRef<HTMLElement | null>(null);
   const userToggledPhases = useRef(new Set<number>());
   const windowTokens = resolveContextWindow(agent ?? 'claude', model);
+  // Cursor's lastRequestTokens and Codex's billed input are summed across
+  // model calls, not the window after summarization. The latest turn passes
+  // an explicit transcript estimate; older turns show the bill only.
+  const summedContext = agent === 'cursor' || agent === 'codex';
+  const shownOccupancy =
+    occupancyTokens != null
+      ? occupancyTokens
+      : summedContext
+        ? null
+        : usage
+          ? meterOccupancyTokens(usage, windowTokens)
+          : null;
+  const usageTitle =
+    summedContext && shownOccupancy == null && usage
+      ? usageTooltip(usage, { showCost, context: false })
+      : shownOccupancy != null
+        ? contextMeterTooltip(usage ?? null, windowTokens, { occupancy: shownOccupancy })
+        : usage
+          ? contextMeterTooltip(usage, windowTokens)
+          : undefined;
 
   function openFileReference(link: FilePathLink) {
     void openWorktreePathLink({
@@ -625,39 +645,24 @@ export function AgentMessage({
               </span>
             )}
             {(usage || occupancyTokens != null) && (
-              <span
-                className="msg-usage"
-                title={
-                  usage
-                    ? contextMeterTooltip(usage, windowTokens, {
-                        occupancy: occupancyTokens,
-                      })
-                    : occupancyTokens != null
-                      ? contextMeterTooltip(null, windowTokens, { occupancy: occupancyTokens })
-                      : undefined
-                }
-              >
+              <span className="msg-usage" title={usageTitle}>
                 <ContextMeter
                   ratio={
-                    occupancyTokens != null
-                      ? occupancyFillRatio(occupancyTokens, windowTokens)
-                      : usage
+                    shownOccupancy != null
+                      ? occupancyFillRatio(shownOccupancy, windowTokens)
+                      : usage && !summedContext
                         ? contextFillRatio(usage, windowTokens)
                         : 0
                   }
-                  title={
-                    usage
-                      ? contextMeterTooltip(usage, windowTokens, {
-                          occupancy: occupancyTokens,
-                        })
-                      : undefined
-                  }
+                  title={usageTitle}
                   size={12}
                 />
                 {formatTokenCount(
-                  occupancyTokens ??
+                  shownOccupancy ??
                     (usage
-                      ? (meterOccupancyTokens(usage, windowTokens) ?? totalTokens(usage))
+                      ? summedContext
+                        ? totalTokens(usage)
+                        : (meterOccupancyTokens(usage, windowTokens) ?? totalTokens(usage))
                       : 0),
                 )}{' '}
                 tok

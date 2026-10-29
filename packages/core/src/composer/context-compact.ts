@@ -4,11 +4,11 @@ import {
   lastAssistantMessageText,
 } from '../agents/message-parts.js';
 import { clipToolResultForStore } from '../agents/error-detail.js';
-import { contextTokens } from '../agents/usage.js';
 import type { MessagePart, Thread, ThreadMessage } from '../types/thread.js';
 import {
   applyForwardOccupancy,
   estimateMessageChars,
+  estimateOccupancyTokens,
   estimateThreadChars,
 } from './context-estimate.js';
 import { summarizeConversation } from './summarize.js';
@@ -441,12 +441,21 @@ export interface CompactResult {
   olderCount?: number;
 }
 
-/** Last agent turn's context-window occupancy, or 0. */
-export function lastRequestOccupancy(thread: Pick<Thread, 'messages'>): number {
+/**
+ * Last agent turn's context-window occupancy, or a transcript estimate.
+ * Cursor stores the turn sum in `lastRequestTokens`. Codex exec JSON `usage`
+ * is the session sum and has no per-request figure. Neither is the window
+ * after summarization — don't reset the session from that bill.
+ */
+export function lastRequestOccupancy(
+  thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] },
+): number {
+  if (thread.agent === 'cursor') return estimateOccupancyTokens(thread.messages);
   for (let i = thread.messages.length - 1; i >= 0; i--) {
-    const usage = thread.messages[i]?.usage;
-    if (usage) return contextTokens(usage);
+    const n = thread.messages[i]?.usage?.lastRequestTokens;
+    if (n != null && n > 0) return n;
   }
+  if (thread.agent === 'codex') return estimateOccupancyTokens(thread.messages);
   return 0;
 }
 
@@ -455,7 +464,7 @@ export function lastRequestOccupancy(thread: Pick<Thread, 'messages'>): number {
  * the (possibly compacted) Sideboard transcript instead of overflowing.
  */
 export function shouldResetSessionForOccupancy(
-  thread: Pick<Thread, 'messages'>,
+  thread: Pick<Thread, 'messages'> & { agent?: Thread['agent'] },
   occupancyTokens: number = SESSION_RESET_OCCUPANCY_TOKENS,
 ): boolean {
   return lastRequestOccupancy(thread) >= occupancyTokens;
@@ -489,7 +498,10 @@ export async function maybeCompactContext(
 
   let messages = applyCompaction(thread.messages, summary, thresholds);
   const compactedMessages = appendCompactedMessages(thread.compactedMessages, older);
-  const resetSession = shouldResetSessionForOccupancy({ messages: thread.messages });
+  const resetSession = shouldResetSessionForOccupancy({
+    messages: thread.messages,
+    agent: thread.agent,
+  });
   // Session reset reseeds from this transcript — persist going-forward occupancy
   // so the meter and lastRequestOccupancy match the compressed context.
   if (resetSession) {

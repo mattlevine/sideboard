@@ -583,6 +583,54 @@ describe('context compact', () => {
     expect(shouldResetSessionForOccupancy({ messages }, 20_000)).toBe(false);
   });
 
+  it('cursor occupancy uses the transcript, not the billed turn sum', () => {
+    const messages = fatThread(4, 40);
+    messages[3] = {
+      ...messages[3]!,
+      role: 'agent',
+      usage: {
+        inputTokens: 505_503,
+        outputTokens: 5_004,
+        cacheReadTokens: 469_120,
+        lastRequestTokens: 974_623,
+      },
+    };
+    const estimated = estimateOccupancyTokens(messages);
+    expect(estimated).toBeLessThan(100_000);
+    expect(lastRequestOccupancy({ messages, agent: 'cursor' })).toBe(estimated);
+    expect(
+      forwardOccupancyTokens(messages, messages[3]!.usage, 1_000_000, {
+        trustProviderOccupancy: false,
+      }),
+    ).toBe(estimated);
+    expect(shouldResetSessionForOccupancy({ messages, agent: 'cursor' }, 750_000)).toBe(false);
+  });
+
+  it('codex session totals are not the context window', () => {
+    const messages = fatThread(4, 40);
+    messages[3] = {
+      ...messages[3]!,
+      role: 'agent',
+      usage: { inputTokens: 900_000, outputTokens: 4_000, cacheReadTokens: 50_000 },
+    };
+    const estimated = estimateOccupancyTokens(messages);
+    expect(lastRequestOccupancy({ messages, agent: 'codex' })).toBe(estimated);
+    expect(forwardOccupancyTokens(messages, messages[3]!.usage, 1_000_000)).toBe(estimated);
+    expect(shouldResetSessionForOccupancy({ messages, agent: 'codex' }, 750_000)).toBe(false);
+
+    messages[3] = {
+      ...messages[3]!,
+      usage: {
+        inputTokens: 20_000,
+        outputTokens: 100,
+        cacheReadTokens: 60_000,
+        lastRequestTokens: 80_000,
+      },
+    };
+    expect(lastRequestOccupancy({ messages, agent: 'codex' })).toBe(80_000);
+    expect(forwardOccupancyTokens(messages, messages[3]!.usage, 1_000_000)).toBe(80_000);
+  });
+
   it('forwardContextUsage caps the meter to remaining transcript after compression', () => {
     const recent = fatThread(4, 200);
     const messages = [

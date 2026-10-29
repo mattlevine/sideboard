@@ -7,7 +7,7 @@ import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { AgentEvent, AgentStatus, IssueInfo, TokenUsage } from '../types/thread.js';
 import { eventsFromCodexItem } from './codex-items.js';
 import { extractJsonErrorMessage } from './error-detail.js';
-import { fromInclusiveInputUsage } from './usage.js';
+import { fromInclusiveInputUsage, requestOccupancy } from './usage.js';
 import {
   codexUnattendedGitConfigArgs,
   resolveAgentGitAuthEnv,
@@ -106,14 +106,22 @@ type CodexUsage = {
   reasoning_output_tokens?: number;
 };
 
-function usageFromCodex(usage: CodexUsage | undefined): TokenUsage | null {
+function usageFromCodex(
+  usage: CodexUsage | undefined,
+  opts?: { context?: boolean },
+): TokenUsage | null {
   if (!usage) return null;
   // `reasoning_output_tokens` is a subset of `output_tokens` — do not add it.
-  return fromInclusiveInputUsage({
+  const mapped = fromInclusiveInputUsage({
     inputTokens: Number(usage.input_tokens ?? 0),
     outputTokens: Number(usage.output_tokens ?? 0),
     cachedInputTokens: Number(usage.cached_input_tokens ?? 0),
   });
+  if (!mapped) return null;
+  // Only the last model call is the context window. A session/turn sum is not.
+  if (!opts?.context) return mapped;
+  const occ = requestOccupancy(mapped);
+  return occ > 0 ? { ...mapped, lastRequestTokens: occ } : mapped;
 }
 
 function codexHomeDir(): string {
@@ -478,9 +486,13 @@ export const codexAdapter: AgentAdapter = {
           usage?: CodexUsage;
           last_token_usage?: CodexUsage;
         };
-        // `last_token_usage` is this turn. `usage` is the older per-turn field.
-        // `total_token_usage` is the session sum — do not bill it as this turn.
-        const usage = usageFromCodex(payload.last_token_usage ?? payload.usage);
+        // `last_token_usage` is the latest model call (the window; it drops
+        // after Codex compacts). Exec JSON `usage` is `token_usage.total`,
+        // the session sum — bill it, but do not paint it on the context meter.
+        // `total_token_usage` on the same event is that sum again; ignore it.
+        const usage = payload.last_token_usage
+          ? usageFromCodex(payload.last_token_usage, { context: true })
+          : usageFromCodex(payload.usage);
         return usage ? { type: 'usage', data: usage, scope: 'turn' } : null;
       }
 

@@ -89,14 +89,28 @@ describe('applyTurnUsage', () => {
     expect(contextTokens(withTotal)).toBe(70_500);
   });
 
-  it('falls back to occupancy of a lone turn total', () => {
+  it('does not treat a lone turn total as context occupancy', () => {
     const only = applyTurnUsage(
       null,
       { inputTokens: 120, outputTokens: 45, cacheReadTokens: 900, cacheWriteTokens: 300 },
       'turn',
     );
-    expect(only.lastRequestTokens).toBe(1_320);
+    expect(only.lastRequestTokens).toBeUndefined();
     expect(requestOccupancy(only)).toBe(1_320);
+  });
+
+  it('keeps an explicit lastRequestTokens on a turn total', () => {
+    const only = applyTurnUsage(
+      null,
+      {
+        inputTokens: 120,
+        outputTokens: 45,
+        cacheReadTokens: 900,
+        lastRequestTokens: 1_020,
+      },
+      'turn',
+    );
+    expect(only.lastRequestTokens).toBe(1_020);
   });
 
   it('sums costUsd across request-scoped steps', () => {
