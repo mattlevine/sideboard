@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dropRemovedFollowUp,
   extraPendingFollowUps,
   joinSteerPrompt,
   pendingTranscriptTexts,
   splitTurnQueue,
+  unlandedFollowUps,
   unlandedUserTexts,
 } from './visible-follow-up-queue';
 
@@ -135,6 +137,68 @@ describe('pendingTranscriptTexts', () => {
         pendingInTranscript: true,
       }),
     ).toEqual([]);
+  });
+});
+
+describe('unlandedFollowUps', () => {
+  it('drops a chip once the transcript has the send, even if it never stayed in the queue', () => {
+    expect(
+      unlandedFollowUps(
+        [{ id: 'a', text: 'do this', seen: 0 }],
+        [],
+        [
+          { role: 'user', text: 'do this' },
+          { role: 'agent', text: 'working' },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps a resend until that copy lands in the queue or the transcript', () => {
+    expect(
+      unlandedFollowUps([{ id: 'a', text: 'do this', seen: 1 }], [], [{ role: 'user', text: 'do this' }]),
+    ).toEqual([{ id: 'a', text: 'do this', seen: 1 }]);
+  });
+
+  it('remembers a chip the saved queue is showing so the next copy is not consumed early', () => {
+    const queued = unlandedFollowUps(
+      [
+        { id: 'a', text: 'same', seen: 0 },
+        { id: 'b', text: 'same', seen: 0 },
+      ],
+      ['same'],
+      [],
+    );
+    expect(queued).toEqual([
+      { id: 'a', text: 'same', seen: 0, queued: true },
+      { id: 'b', text: 'same', seen: 0 },
+    ]);
+    const waitingForTranscript = unlandedFollowUps(queued, [], []);
+    expect(waitingForTranscript).toEqual(queued);
+    expect(unlandedFollowUps(waitingForTranscript, [], [{ role: 'user', text: 'same' }])).toEqual([
+      { id: 'b', text: 'same', seen: 0 },
+    ]);
+  });
+
+  it('drops the chip the user removed, not the later same-text send', () => {
+    const pending = [
+      { id: 'a', text: 'same', seen: 0, queued: true },
+      { id: 'b', text: 'same', seen: 0 },
+    ];
+    expect(dropRemovedFollowUp(pending, 'same')).toEqual([{ id: 'b', text: 'same', seen: 0 }]);
+  });
+
+  it('drops only the copies that have landed', () => {
+    expect(
+      unlandedFollowUps(
+        [
+          { id: 'a', text: 'same', seen: 0 },
+          { id: 'b', text: 'same', seen: 0 },
+        ],
+        [],
+        [{ role: 'user', text: 'same' }],
+      ),
+    ).toEqual([{ id: 'b', text: 'same', seen: 0 }]);
   });
 });
 

@@ -194,7 +194,7 @@ export function formatWorktreeDirective(
   lines.push(formatDevAccessHint(opts?.activeRuns));
   lines.push('');
   lines.push(
-    'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` continues this chat; omit chatId for a new Global chat. Fires only while Sideboard.app is running. A future job turns on Settings → Advanced → Caffeinate while automations are enabled.',
+    'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. A future job turns on Settings → Advanced → Caffeinate while automations are enabled.',
   );
   lines.push(
     '`set_workspace_tags` labels this checkout (omit ref; replace, add, or remove). Not another checkout.',
@@ -229,7 +229,7 @@ export function connectedOrchestratorTurnReminder(
 
 /** Short isolation line on every worktree turn (survives CLI resume). */
 export function formatWorktreeReminder(): string {
-  return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Automations: create_schedule (at / every / cron, or time + days such as weekdays at 07:30; archiveChat=false leaves the new chat open; chatId=self for this chat). set_workspace_tags updates labels on this workspace (omit ref).';
+  return 'Sideboard workspace: stay in this cwd for all file and git work. Push and open PRs against origin, never upstream. Do not edit the main repo checkout. If a goal is given (Greptile 5/5, CI green), watch-fix-push until it lands — do not watch after every push. Automations: create_schedule (at / every / cron, or time + days such as weekdays at 07:30; archiveChat=false leaves the new chat open; chatId=self ends with the chat). set_workspace_tags updates labels on this workspace (omit ref).';
 }
 
 /**

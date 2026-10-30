@@ -5,10 +5,10 @@ import {
 import { isThisProcessDesktopHost } from '../store/desktop-host.js';
 import { resolveOrchestratorDefaults } from '../store/app-settings.js';
 import {
+  deleteSchedule,
   getSchedule,
   listSchedules,
   recordScheduleRun,
-  updateSchedule,
   type ScheduledTask,
 } from '../store/schedules.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
@@ -137,7 +137,15 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
     const deps = fireHooks ?? (await defaultDeps());
     const prompt = formatScheduledPrompt(schedule.name, schedule.prompt);
     const target = schedule.threadId ? deps.findThread(schedule.threadId) : null;
-    if (target && target.status !== 'archived') {
+    if (schedule.threadId && (!target || target.status === 'archived')) {
+      deleteSchedule(schedule.id);
+      return {
+        ...schedule,
+        enabled: false,
+        lastError: 'Removed because its chat is archived or gone.',
+      };
+    }
+    if (target) {
       const sent = await deps.send(target.id, prompt, {
         attachments: schedule.attachments,
         options: scheduleSendOptions(schedule),
@@ -147,11 +155,9 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
         lastError: null,
       });
     }
-    // A named recurring chat that disappeared should keep using the replacement.
-    // Other fresh chats archive when the run finishes unless archiveChat is off,
-    // so a morning run can stay in the sidebar.
-    const pinReplacement = Boolean(schedule.threadId) && schedule.when.kind !== 'once';
-    const archiveFresh = schedule.archiveChat !== false && !pinReplacement;
+    // A Global job (no chat) opens a fresh chat. Archive it when the run
+    // finishes unless archiveChat is off, so a morning run can stay open.
+    const archiveFresh = schedule.archiveChat !== false;
     const created = await deps.startOrchestration({
       goal: prompt,
       agent: pickAgent(schedule),
@@ -164,9 +170,6 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
       ...(archiveFresh ? { ephemeralAutomationId: schedule.id } : {}),
       ephemeralTitle: schedule.name,
     });
-    if (pinReplacement) {
-      updateSchedule(schedule.id, { threadId: created.id });
-    }
     return recordScheduleRun(schedule.id, {
       lastThreadId: created.id,
       lastError: null,

@@ -184,20 +184,15 @@ describe('schedule runner', () => {
     expect(store.getSchedule(schedule.id)?.archiveChat).toBe(false);
   });
 
-  it('opens a new Global chat when the target is missing', async () => {
+  it('removes the automation when the target chat is missing', async () => {
     const { store, runner } = await load();
-    const sent: string[] = [];
-    const created = orchThread({ id: 'fallback-orch' });
-    let ephemeral: string | undefined = 'unset';
+    let started = 0;
     runner.setScheduleFireHooks({
       findThread: () => null,
-      send: async (id, prompt) => {
-        sent.push(`${id}:${prompt}`);
-        return created;
-      },
-      startOrchestration: async (opts) => {
-        ephemeral = opts.ephemeralAutomationId;
-        return created;
+      send: async () => orchThread(),
+      startOrchestration: async () => {
+        started += 1;
+        return orchThread();
       },
     });
     const schedule = store.createSchedule({
@@ -207,26 +202,23 @@ describe('schedule runner', () => {
       createdBy: 'cli',
     });
     const after = await runner.fireSchedule(schedule.id);
-    expect(sent).toHaveLength(0);
-    expect(after.lastThreadId).toBe('fallback-orch');
-    expect(after.lastError).toBeNull();
-    expect(after.enabled).toBe(true);
-    expect(store.getSchedule(schedule.id)?.threadId).toBe('fallback-orch');
-    expect(ephemeral).toBeUndefined();
+    expect(started).toBe(0);
+    expect(after.lastError).toMatch(/archived or gone/);
+    expect(after.enabled).toBe(false);
+    expect(store.getSchedule(schedule.id)).toBeNull();
   });
 
-  it('opens a new Global chat when the target is archived', async () => {
+  it('removes the automation when the target chat is archived', async () => {
     const { store, runner } = await load();
     const archived = orchThread({ id: 'old-orch', status: 'archived' });
-    const created = orchThread({ id: 'new-orch' });
-    let sent = 0;
+    let started = 0;
     runner.setScheduleFireHooks({
       findThread: () => archived,
-      send: async () => {
-        sent += 1;
-        return archived;
+      send: async () => archived,
+      startOrchestration: async () => {
+        started += 1;
+        return orchThread({ id: 'new-orch' });
       },
-      startOrchestration: async () => created,
     });
     const schedule = store.createSchedule({
       prompt: 'Retry',
@@ -235,10 +227,9 @@ describe('schedule runner', () => {
       createdBy: 'ui',
     });
     const after = await runner.fireSchedule(schedule.id);
-    expect(sent).toBe(0);
-    expect(after.lastThreadId).toBe('new-orch');
-    expect(after.lastError).toBeNull();
-    expect(after.enabled).toBe(false);
+    expect(started).toBe(0);
+    expect(after.lastError).toMatch(/archived or gone/);
+    expect(store.getSchedule(schedule.id)).toBeNull();
   });
 
   it('sends to an existing worktree chat', async () => {

@@ -1,5 +1,6 @@
 import type { AgentRpcConnect } from '../agent-rpc/metadata.js';
 import { AgentRpcClient } from '../agent-rpc/client.js';
+import { isAskUserToolName } from '../plan/ask-user.js';
 import {
   isClaudeAiConnectorMcp,
   mcpServerIdForPermission,
@@ -104,6 +105,11 @@ export async function claudePermissionResult(input: {
   call?: (method: string, params: unknown) => Promise<unknown>;
   rpc?: AgentRpcConnect;
 }): Promise<ClaudePermissionResult> {
+  // The composer shows the questions. Asking permission to use the tool
+  // blocks that picker in plan mode, default permissions, and full autonomy.
+  if (isAskUserToolName(input.toolName)) {
+    return { behavior: 'allow', decisionClassification: 'user_permanent' };
+  }
   if (input.permissionMode === 'plan') {
     return deny('Plan mode is on, so this action stays blocked.');
   }

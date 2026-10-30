@@ -17,7 +17,13 @@ export function splitTurnQueue(
   };
 }
 
-export type PendingFollowUp = { id: string; text: string };
+export type PendingFollowUp = {
+  id: string;
+  text: string;
+  seen?: number;
+  /** This chip was matched to a saved queue row and is waiting to be sent or removed. */
+  queued?: boolean;
+};
 
 /**
  * Optimistic follow-ups that have not landed in `thread.queue` yet.
@@ -92,6 +98,53 @@ export function pendingTranscriptTexts(input: {
     texts.push(input.pendingUser);
   }
   return texts;
+}
+
+/**
+ * Optimistic queue chips that are still only local.
+ * A chip stays in this list while the saved queue is showing it (`queued`)
+ * and after that row leaves the queue, until a new user message lands.
+ * Dropping it in the gap before the transcript updates would charge that
+ * send to the next same-text chip. `seen` is how many matching user
+ * messages existed when the user sent.
+ */
+export function unlandedFollowUps(
+  pending: PendingFollowUp[],
+  queue: string[],
+  messages: Array<{ role: string; text?: string; origin?: string }>,
+): PendingFollowUp[] {
+  const queued = new Map<string, number>();
+  for (const text of queue) queued.set(text, (queued.get(text) ?? 0) + 1);
+  const landed = new Map<string, number>();
+  for (const message of messages) {
+    if (message.role !== 'user' || message.origin === 'continue') continue;
+    const text = message.text ?? '';
+    landed.set(text, (landed.get(text) ?? 0) + 1);
+  }
+  const out: PendingFollowUp[] = [];
+  for (const item of pending) {
+    const now = landed.get(item.text) ?? 0;
+    if (now > (item.seen ?? 0)) {
+      landed.set(item.text, now - 1);
+      continue;
+    }
+    const inQueue = queued.get(item.text) ?? 0;
+    if (inQueue > 0) {
+      queued.set(item.text, inQueue - 1);
+      out.push(item.queued ? item : { ...item, queued: true });
+      continue;
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+/** Drop the chip the user just removed from the saved queue. */
+export function dropRemovedFollowUp(pending: PendingFollowUp[], text: string): PendingFollowUp[] {
+  const queuedIdx = pending.findIndex((item) => item.text === text && item.queued);
+  const idx = queuedIdx >= 0 ? queuedIdx : pending.findIndex((item) => item.text === text);
+  if (idx < 0) return pending;
+  return pending.filter((_, i) => i !== idx);
 }
 
 export function extraPendingFollowUps(

@@ -129,6 +129,7 @@ export function mcpAuthWarnings(servers: McpServerStatus[]): string[] {
  *
  * Background Agent/Task polls need TaskOutput / TaskStop. EnterWorktree is how
  * `isolation: "worktree"` agents start. Skill is process guides.
+ * AskUserQuestion is the composer picker, so it stays approved in every mode.
  */
 export const BASE_ALLOWED_TOOLS = [
   'Edit',
@@ -146,6 +147,7 @@ export const BASE_ALLOWED_TOOLS = [
   'EnterWorktree',
   'ExitWorktree',
   'Skill',
+  'AskUserQuestion',
 ];
 
 /**
