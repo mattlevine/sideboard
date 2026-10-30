@@ -4,6 +4,7 @@ import {
   joinSteerPrompt,
   pendingTranscriptTexts,
   splitTurnQueue,
+  unlandedFollowUps,
   unlandedUserTexts,
 } from './visible-follow-up-queue';
 
@@ -135,6 +136,44 @@ describe('pendingTranscriptTexts', () => {
         pendingInTranscript: true,
       }),
     ).toEqual([]);
+  });
+});
+
+describe('unlandedFollowUps', () => {
+  it('drops a chip once the transcript has the send, even if it never stayed in the queue', () => {
+    expect(
+      unlandedFollowUps(
+        [{ id: 'a', text: 'do this', seen: 0 }],
+        [],
+        [
+          { role: 'user', text: 'do this' },
+          { role: 'agent', text: 'working' },
+        ],
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps a resend until that copy lands in the queue or the transcript', () => {
+    expect(
+      unlandedFollowUps([{ id: 'a', text: 'do this', seen: 1 }], [], [{ role: 'user', text: 'do this' }]),
+    ).toEqual([{ id: 'a', text: 'do this', seen: 1 }]);
+  });
+
+  it('drops a chip the saved queue already shows', () => {
+    expect(unlandedFollowUps([{ id: 'a', text: 'later', seen: 0 }], ['later'], [])).toEqual([]);
+  });
+
+  it('drops only the copies that have landed', () => {
+    expect(
+      unlandedFollowUps(
+        [
+          { id: 'a', text: 'same', seen: 0 },
+          { id: 'b', text: 'same', seen: 0 },
+        ],
+        [],
+        [{ role: 'user', text: 'same' }],
+      ),
+    ).toEqual([{ id: 'b', text: 'same', seen: 0 }]);
   });
 });
 

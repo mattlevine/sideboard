@@ -1,5 +1,6 @@
 import type { AgentRpcConnect } from '../agent-rpc/metadata.js';
 import { AgentRpcClient } from '../agent-rpc/client.js';
+import { isAskUserToolName } from '../plan/ask-user.js';
 import {
   isClaudeAiConnectorMcp,
   mcpServerIdForPermission,
@@ -110,6 +111,12 @@ export async function claudePermissionResult(input: {
   if (input.permissionMode === 'bypassPermissions') {
     const serverId = mcpServerIdForPermission(input.toolName, input.mcpServer);
     if (serverId) return allowMcpServer(serverId);
+    // AskUserQuestion is a built-in, so the MCP auto-allow above misses it.
+    // Full autonomy must not stop on "Allow AskUser?" — the composer shows
+    // the questions once the tool runs.
+    if (isAskUserToolName(input.toolName)) {
+      return { behavior: 'allow', decisionClassification: 'user_permanent' };
+    }
   }
   // Desktop "Always allow" on a claude.ai connector is tool policy `allow`.
   // Claude Code only turns `permission_policy: always_allow` into an allow

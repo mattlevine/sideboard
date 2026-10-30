@@ -164,6 +164,7 @@ import {
   extraPendingFollowUps,
   pendingTranscriptTexts,
   splitTurnQueue,
+  unlandedFollowUps,
   unlandedUserTexts,
   type OptimisticUserSend,
   type PendingFollowUp,
@@ -1209,12 +1210,12 @@ export function ThreadPanel({
   useEffect(() => {
     setPendingFollowUps((prev) => {
       if (prev.length === 0) return prev;
-      const landed = extraPendingFollowUps(thread.queue, prev);
+      const landed = unlandedFollowUps(prev, thread.queue, thread.messages);
       return landed.length === prev.length && landed.every((p, i) => p.id === prev[i]?.id)
         ? prev
         : landed;
     });
-  }, [thread.queue]);
+  }, [thread.messages, thread.queue]);
 
   useEffect(() => {
     void window.sideboard
@@ -1454,12 +1455,17 @@ export function ThreadPanel({
       ? pendingNotLanded
       : null;
 
+  const pendingFollowUpsLive = unlandedFollowUps(
+    pendingFollowUps,
+    thread.queue,
+    thread.messages,
+  );
   const optimisticFollowUps = extraPendingFollowUps(
     [
       ...followUpQueue,
       ...(pendingQueue ? [pendingQueue] : []),
     ],
-    pendingFollowUps,
+    pendingFollowUpsLive,
   );
   const showQueueDock =
     followUpQueue.some((text) => !shownInTranscript.has(text)) ||
@@ -1487,7 +1493,7 @@ export function ThreadPanel({
     turnBusy ||
     thread.queue.length > 0 ||
     followUpQueue.length > 0 ||
-    pendingFollowUps.length > 0 ||
+    pendingFollowUpsLive.length > 0 ||
     optimisticUsers.length > 0;
   /** Agent text, thinking, or a tool — not merely "turn started". */
   const agentReplying = Boolean(liveOutput.trim()) || liveParts.length > 0;
@@ -1511,9 +1517,9 @@ export function ThreadPanel({
       return;
     }
     if (explicitAskSkip.current || saved) return;
-    if (pendingUser || pendingFollowUps.length > 0 || thread.queue.length > 0) return;
+    if (pendingUser || pendingFollowUpsLive.length > 0 || thread.queue.length > 0) return;
     setDismissedPlanQuestionsId((cur) => (cur == null ? cur : null));
-  }, [pendingFollowUps.length, pendingUser, thread.dismissedQuestionSignature, thread.queue.length]);
+  }, [pendingFollowUpsLive.length, pendingUser, thread.dismissedQuestionSignature, thread.queue.length]);
 
   function clearPendingSend() {
     setPendingUser(null);

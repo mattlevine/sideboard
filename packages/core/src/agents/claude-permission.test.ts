@@ -123,6 +123,23 @@ describe('claudePermissionResult', () => {
     expect(result.behavior).toBe('deny');
   });
 
+  it('does not ask to approve AskUserQuestion in full autonomy', async () => {
+    const result = await claudePermissionResult({
+      permissionMode: 'bypassPermissions',
+      threadId: 't1',
+      toolName: 'AskUserQuestion',
+      toolInput: { questions: [{ question: 'Which API?', options: [{ label: 'A' }] }] },
+      options: { requiresUserInteraction: true, displayName: 'AskUser' },
+      call: async () => {
+        throw new Error('should not ask');
+      },
+    });
+    expect(result).toEqual({
+      behavior: 'allow',
+      decisionClassification: 'user_permanent',
+    });
+  });
+
   it('still asks for a non-MCP tool in full autonomy', async () => {
     const result = await claudePermissionResult({
       permissionMode: 'bypassPermissions',

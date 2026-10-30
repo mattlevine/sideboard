@@ -123,7 +123,13 @@ function beginPendingSend(input: ComposerSendInput, text: string, attachments: T
     input.pendingInTranscript && input.pendingUser != null && input.pendingUser !== text && !input.agentReplying;
   const queueing = (input.followUpBusy && !input.steeringFollowUp) || preserveInFlight;
   if (queueing) {
-    input.setPendingFollowUps((prev) => [...prev, { id: crypto.randomUUID(), text }]);
+    const seen = input.messages.reduce(
+      (count, message) =>
+        count +
+        (message.role === 'user' && message.origin !== 'continue' && message.text === text ? 1 : 0),
+      0,
+    );
+    input.setPendingFollowUps((prev) => [...prev, { id: crypto.randomUUID(), text, seen }]);
     return;
   }
   input.setPendingUser(text);

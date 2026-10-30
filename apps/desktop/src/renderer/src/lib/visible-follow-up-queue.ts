@@ -17,7 +17,7 @@ export function splitTurnQueue(
   };
 }
 
-export type PendingFollowUp = { id: string; text: string };
+export type PendingFollowUp = { id: string; text: string; seen?: number };
 
 /**
  * Optimistic follow-ups that have not landed in `thread.queue` yet.
@@ -92,6 +92,43 @@ export function pendingTranscriptTexts(input: {
     texts.push(input.pendingUser);
   }
   return texts;
+}
+
+/**
+ * Optimistic queue chips that are still only local.
+ * Drop a chip once the saved queue has that text, or once a new user message
+ * with the same text is in the transcript — the turn already took it, so it
+ * must not keep sitting in the dock while the agent answers.
+ * `seen` is how many matching user messages existed when the user sent.
+ */
+export function unlandedFollowUps(
+  pending: PendingFollowUp[],
+  queue: string[],
+  messages: Array<{ role: string; text?: string; origin?: string }>,
+): PendingFollowUp[] {
+  const queued = new Map<string, number>();
+  for (const text of queue) queued.set(text, (queued.get(text) ?? 0) + 1);
+  const landed = new Map<string, number>();
+  for (const message of messages) {
+    if (message.role !== 'user' || message.origin === 'continue') continue;
+    const text = message.text ?? '';
+    landed.set(text, (landed.get(text) ?? 0) + 1);
+  }
+  const out: PendingFollowUp[] = [];
+  for (const item of pending) {
+    const inQueue = queued.get(item.text) ?? 0;
+    if (inQueue > 0) {
+      queued.set(item.text, inQueue - 1);
+      continue;
+    }
+    const now = landed.get(item.text) ?? 0;
+    if (now > (item.seen ?? 0)) {
+      landed.set(item.text, now - 1);
+      continue;
+    }
+    out.push(item);
+  }
+  return out;
 }
 
 export function extraPendingFollowUps(
