@@ -181,6 +181,7 @@ describe('claudeAdapter.buildTurn', () => {
     expect(allowed).toContain('TaskStop');
     expect(allowed).toContain('EnterWorktree');
     expect(allowed).toContain('Skill');
+    expect(allowed).toContain('AskUserQuestion');
     expect(cmd.env?.CLAUDE_CODE_FORWARD_SUBAGENT_TEXT).toBe('1');
     expect(cmd.env?.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS).toBe('7200000');
   });
