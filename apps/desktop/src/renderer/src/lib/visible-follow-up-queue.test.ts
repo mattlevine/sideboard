@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dropRemovedFollowUp,
   extraPendingFollowUps,
   joinSteerPrompt,
   pendingTranscriptTexts,
@@ -172,14 +173,19 @@ describe('unlandedFollowUps', () => {
       { id: 'a', text: 'same', seen: 0, queued: true },
       { id: 'b', text: 'same', seen: 0 },
     ]);
-    expect(unlandedFollowUps(queued, [], [{ role: 'user', text: 'same' }])).toEqual([
+    const waitingForTranscript = unlandedFollowUps(queued, [], []);
+    expect(waitingForTranscript).toEqual(queued);
+    expect(unlandedFollowUps(waitingForTranscript, [], [{ role: 'user', text: 'same' }])).toEqual([
       { id: 'b', text: 'same', seen: 0 },
     ]);
   });
 
-  it('drops a chip the user removed from the queue', () => {
-    const queued = unlandedFollowUps([{ id: 'a', text: 'later', seen: 0 }], ['later'], []);
-    expect(unlandedFollowUps(queued, [], [])).toEqual([]);
+  it('drops the chip the user removed, not the later same-text send', () => {
+    const pending = [
+      { id: 'a', text: 'same', seen: 0, queued: true },
+      { id: 'b', text: 'same', seen: 0 },
+    ];
+    expect(dropRemovedFollowUp(pending, 'same')).toEqual([{ id: 'b', text: 'same', seen: 0 }]);
   });
 
   it('drops only the copies that have landed', () => {

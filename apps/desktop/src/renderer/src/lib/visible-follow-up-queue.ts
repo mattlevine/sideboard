@@ -102,11 +102,11 @@ export function pendingTranscriptTexts(input: {
 
 /**
  * Optimistic queue chips that are still only local.
- * A chip stays in this list while the saved queue is showing it (`queued`),
- * so a later transcript row for that copy cannot be charged to the next
- * same-text send. Drop it once a new user message lands, or once a queued
- * chip leaves the queue without that message (the user removed it).
- * `seen` is how many matching user messages existed when the user sent.
+ * A chip stays in this list while the saved queue is showing it (`queued`)
+ * and after that row leaves the queue, until a new user message lands.
+ * Dropping it in the gap before the transcript updates would charge that
+ * send to the next same-text chip. `seen` is how many matching user
+ * messages existed when the user sent.
  */
 export function unlandedFollowUps(
   pending: PendingFollowUp[],
@@ -134,10 +134,17 @@ export function unlandedFollowUps(
       out.push(item.queued ? item : { ...item, queued: true });
       continue;
     }
-    if (item.queued) continue;
     out.push(item);
   }
   return out;
+}
+
+/** Drop the chip the user just removed from the saved queue. */
+export function dropRemovedFollowUp(pending: PendingFollowUp[], text: string): PendingFollowUp[] {
+  const queuedIdx = pending.findIndex((item) => item.text === text && item.queued);
+  const idx = queuedIdx >= 0 ? queuedIdx : pending.findIndex((item) => item.text === text);
+  if (idx < 0) return pending;
+  return pending.filter((_, i) => i !== idx);
 }
 
 export function extraPendingFollowUps(

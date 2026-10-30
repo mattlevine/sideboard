@@ -161,6 +161,7 @@ import {
   writeRightColumnWidth,
 } from '../lib/panel-widths';
 import {
+  dropRemovedFollowUp,
   extraPendingFollowUps,
   pendingTranscriptTexts,
   splitTurnQueue,
@@ -1639,8 +1640,12 @@ export function ThreadPanel({
         setEditingQueueIndex(editingQueueIndex - 1);
       }
     }
+    const removedText = thread.queue[index];
     try {
       await window.sideboard.removeQueuedMessage(thread.id, index);
+      if (removedText) {
+        setPendingFollowUps((prev) => dropRemovedFollowUp(prev, removedText));
+      }
       onRefresh();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err));
