@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.327] - 2026-10-30
+
+### Fixed
+
+- A message you send no longer stays in the queue while the agent is already answering it. Sending the same text again stays queued until that copy lands.
+- Ask-user questions are available in every permission mode, including full autonomy, without an Allow/Deny card.
+- An automation that continues one chat is removed when that chat is archived. A Global automation with no chat stays.
+
 ## [0.1.326] - 2026-10-28
 
 ### Fixed
