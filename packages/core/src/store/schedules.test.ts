@@ -240,4 +240,52 @@ describe('schedules store', () => {
     const closed = updateSchedule(row.id, { archiveChat: true });
     expect(closed.archiveChat).toBe(true);
   });
+
+  it('removes chat-bound automations when that chat is archived or deleted', async () => {
+    const { createSchedule, listSchedules } = await load();
+    const threads = await import('./thread-store.js');
+    const chat = threads.createEmptyThread({
+      title: 'watch',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/watch',
+      worktreePath: '/tmp/watch',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    const other = threads.createEmptyThread({
+      title: 'other',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/other',
+      worktreePath: '/tmp/other',
+      repoPath: '/tmp/repo',
+      agent: 'claude',
+    });
+    threads.writeThread(chat);
+    threads.writeThread(other);
+    createSchedule({
+      prompt: 'Keep checking CI',
+      when: { kind: 'every', every: '1h' },
+      threadId: chat.id,
+      createdBy: 'mcp',
+    });
+    createSchedule({
+      prompt: 'Morning brief',
+      when: { kind: 'every', every: '1d' },
+      createdBy: 'ui',
+    });
+    createSchedule({
+      prompt: 'Other chat',
+      when: { kind: 'every', every: '1h' },
+      threadId: other.id,
+      createdBy: 'mcp',
+    });
+
+    threads.setStatus(chat.id, 'archived');
+    expect(listSchedules().map((row) => row.prompt).sort()).toEqual(['Morning brief', 'Other chat']);
+
+    threads.deleteThreadRecord(other.id);
+    expect(listSchedules().map((row) => row.prompt)).toEqual(['Morning brief']);
+  });
 });

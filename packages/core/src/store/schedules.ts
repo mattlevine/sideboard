@@ -47,7 +47,7 @@ export interface ScheduledTask {
   prompt: string;
   enabled: boolean;
   when: ScheduleWhen;
-  /** Existing chat (orchestration or worktree). Null = create a new Global chat on fire. */
+  /** Existing chat. Null = a new Global chat on each fire. Removed when that chat is archived. */
   threadId: string | null;
   agent: OrchestratorAgentKind | null;
   model: string | null;
@@ -384,6 +384,16 @@ export function updateSchedule(
   writeAll(rows);
   ensureCaffeinateForFutureSchedule(next);
   return next;
+}
+
+/** Drop automations that continue this chat. Global jobs (no chat) stay. */
+export function deleteSchedulesForThread(threadId: string): void {
+  const id = threadId.trim();
+  if (!id) return;
+  const rows = readAll();
+  const next = rows.filter((row) => row.threadId !== id);
+  if (next.length === rows.length) return;
+  writeAll(next);
 }
 
 export function deleteSchedule(id: string): void {

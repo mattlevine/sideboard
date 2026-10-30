@@ -117,7 +117,7 @@ function createdHint(schedule: ScheduledTask): string {
     ? ' Caffeinate while automations are enabled is now on so the Mac can stay awake until this job is due.'
     : '';
   const fresh = schedule.threadId
-    ? ''
+    ? ' This job is removed when that chat is archived.'
     : schedule.archiveChat === false
       ? ' This job leaves the new chat open so you can keep talking.'
       : ' A new Global chat is archived when the run finishes (History keeps the last 5 runs). Pass archiveChat=false to leave it open.';
@@ -144,7 +144,7 @@ export function registerScheduleTools(server: McpServer): void {
 
   server.tool(
     'create_schedule',
-    'Create a local automation that, when due, sends a prompt to an existing chat (chatId) or starts a new Global orchestration chat (omit chatId). Pass chatId=self to continue this chat. If that chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat). Exactly one of at (ISO datetime), every (15m/1h/6h/1d), time (HH:mm, with days such as weekdays or mon,wed), or cron (5-field). Recurring jobs without chatId open a new Global chat each run and archive it when that run finishes unless archiveChat is false (leave the chat open to keep talking, for example a morning start-my-day run). History keeps the last 5 archived runs for that automation. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while automations are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
+    'Create a local automation that, when due, sends a prompt to an existing chat (chatId) or starts a new Global orchestration chat (omit chatId). Pass chatId=self to continue this chat. A job bound to a chat is removed when that chat is archived or gone; it does not start a new Global chat. Omit chatId only for a Global automation that should outlive this chat. Exactly one of at (ISO datetime), every (15m/1h/6h/1d), time (HH:mm, with days such as weekdays or mon,wed), or cron (5-field). Recurring jobs without chatId open a new Global chat each run and archive it when that run finishes unless archiveChat is false (leave the chat open to keep talking, for example a morning start-my-day run). History keeps the last 5 archived runs for that automation. Creating or enabling a future job turns on Settings → Advanced → Caffeinate while automations are enabled so the Mac stays awake until due. Sideboard.app must be running for the job to fire.',
     {
       prompt: z.string().describe('User message / goal queued when the automation fires'),
       name: z.string().optional(),
@@ -173,7 +173,7 @@ export function registerScheduleTools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          'Existing chat id (orchestration or workspace), or "self" for this chat. Omit to create a new Global chat on fire.',
+          'Existing chat id, or "self" for this chat. That job is removed when the chat is archived. Omit only for a Global automation that should outlive this chat.',
         ),
       threadId: z
         .string()
@@ -241,7 +241,7 @@ export function registerScheduleTools(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          'Existing chat (orchestration or workspace), "self", or empty string to create a new Global chat each run',
+          'Existing chat, "self", or empty string for a Global chat each run. A bound job is removed when that chat is archived.',
         ),
       threadId: z
         .string()

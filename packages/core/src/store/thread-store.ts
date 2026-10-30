@@ -22,6 +22,7 @@ import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-
 import { sanitizeMcpServerName } from '../agents/claude-mcp.js';
 import { cursorSdkStoreDir } from '../agents/cursor-store.js';
 import { threadFilePath, threadLockPath, threadsDir } from './paths.js';
+import { deleteSchedulesForThread } from './schedules.js';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -437,19 +438,17 @@ export function deleteThreadRecord(id: string): void {
   forgetThread(id);
   const path = threadFilePath(id);
   if (existsSync(path)) unlinkSync(path);
-  const lock = threadLockPath(id);
-  if (existsSync(lock)) {
-    try {
-      unlinkSync(lock);
-    } catch {
-      // ignore
-    }
+  try {
+    if (existsSync(threadLockPath(id))) unlinkSync(threadLockPath(id));
+  } catch {
+    // ignore
   }
   try {
     rmSync(cursorSdkStoreDir(id), { recursive: true, force: true });
   } catch {
     // Catalog may not exist.
   }
+  deleteSchedulesForThread(id);
 }
 
 export function updateThread(
@@ -469,6 +468,7 @@ export function updateThread(
   }
   if (!next.ephemeralAutomationId?.trim()) delete next.ephemeralAutomationId;
   writeThread(next);
+  if (patch.status === 'archived' && current.status !== 'archived') deleteSchedulesForThread(current.id);
   return next;
 }
 
