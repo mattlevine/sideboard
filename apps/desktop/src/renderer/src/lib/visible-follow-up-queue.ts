@@ -17,7 +17,13 @@ export function splitTurnQueue(
   };
 }
 
-export type PendingFollowUp = { id: string; text: string; seen?: number };
+export type PendingFollowUp = {
+  id: string;
+  text: string;
+  seen?: number;
+  /** This chip was matched to a saved queue row and is waiting to be sent or removed. */
+  queued?: boolean;
+};
 
 /**
  * Optimistic follow-ups that have not landed in `thread.queue` yet.
@@ -96,9 +102,10 @@ export function pendingTranscriptTexts(input: {
 
 /**
  * Optimistic queue chips that are still only local.
- * Drop a chip once the saved queue has that text, or once a new user message
- * with the same text is in the transcript — the turn already took it, so it
- * must not keep sitting in the dock while the agent answers.
+ * A chip stays in this list while the saved queue is showing it (`queued`),
+ * so a later transcript row for that copy cannot be charged to the next
+ * same-text send. Drop it once a new user message lands, or once a queued
+ * chip leaves the queue without that message (the user removed it).
  * `seen` is how many matching user messages existed when the user sent.
  */
 export function unlandedFollowUps(
@@ -116,16 +123,18 @@ export function unlandedFollowUps(
   }
   const out: PendingFollowUp[] = [];
   for (const item of pending) {
-    const inQueue = queued.get(item.text) ?? 0;
-    if (inQueue > 0) {
-      queued.set(item.text, inQueue - 1);
-      continue;
-    }
     const now = landed.get(item.text) ?? 0;
     if (now > (item.seen ?? 0)) {
       landed.set(item.text, now - 1);
       continue;
     }
+    const inQueue = queued.get(item.text) ?? 0;
+    if (inQueue > 0) {
+      queued.set(item.text, inQueue - 1);
+      out.push(item.queued ? item : { ...item, queued: true });
+      continue;
+    }
+    if (item.queued) continue;
     out.push(item);
   }
   return out;

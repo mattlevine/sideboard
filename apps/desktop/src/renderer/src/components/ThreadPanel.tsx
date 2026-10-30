@@ -1211,7 +1211,10 @@ export function ThreadPanel({
     setPendingFollowUps((prev) => {
       if (prev.length === 0) return prev;
       const landed = unlandedFollowUps(prev, thread.queue, thread.messages);
-      return landed.length === prev.length && landed.every((p, i) => p.id === prev[i]?.id)
+      return landed.length === prev.length &&
+        landed.every(
+          (p, i) => p.id === prev[i]?.id && p.queued === prev[i]?.queued && p.seen === prev[i]?.seen,
+        )
         ? prev
         : landed;
     });

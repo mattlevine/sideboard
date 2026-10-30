@@ -159,8 +159,27 @@ describe('unlandedFollowUps', () => {
     ).toEqual([{ id: 'a', text: 'do this', seen: 1 }]);
   });
 
-  it('drops a chip the saved queue already shows', () => {
-    expect(unlandedFollowUps([{ id: 'a', text: 'later', seen: 0 }], ['later'], [])).toEqual([]);
+  it('remembers a chip the saved queue is showing so the next copy is not consumed early', () => {
+    const queued = unlandedFollowUps(
+      [
+        { id: 'a', text: 'same', seen: 0 },
+        { id: 'b', text: 'same', seen: 0 },
+      ],
+      ['same'],
+      [],
+    );
+    expect(queued).toEqual([
+      { id: 'a', text: 'same', seen: 0, queued: true },
+      { id: 'b', text: 'same', seen: 0 },
+    ]);
+    expect(unlandedFollowUps(queued, [], [{ role: 'user', text: 'same' }])).toEqual([
+      { id: 'b', text: 'same', seen: 0 },
+    ]);
+  });
+
+  it('drops a chip the user removed from the queue', () => {
+    const queued = unlandedFollowUps([{ id: 'a', text: 'later', seen: 0 }], ['later'], []);
+    expect(unlandedFollowUps(queued, [], [])).toEqual([]);
   });
 
   it('drops only the copies that have landed', () => {
