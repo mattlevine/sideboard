@@ -6,9 +6,9 @@ Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted
 
 | Host | Serves |
 |------|--------|
-| https://www.sideboard.cloud | `site/` (`index.html`, `docs/`) |
-| https://sideboard.cloud | 301 → www |
-| https://relay.sideboard.cloud | Phone remote, legacy Slack, and `/health` |
+| https://www.sideboard.build and https://sideboard.build | `site/` while both domains are live |
+| https://www.sideboard.cloud and https://sideboard.cloud | Same site. A host in `SIDEBOARD_SITE_HOSTS` is served even if it is also a redirect host. |
+| https://relay.sideboard.cloud | Phone remote, legacy Slack, and `/health`. `relay.sideboard.build` is the same app once its DNS and certificate exist. |
 | https://download.sideboard.cloud | Intended custom domain for desktop artifacts. CNAME is set; TLS is not issued yet. |
 | https://sideboard-downloads.t3.tigrisfiles.io | Working public Tigris host (use this until custom-domain HTTPS works). |
 
@@ -32,7 +32,7 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 
 ## Check
 
-- https://www.sideboard.cloud/ — marketing
+- https://sideboard.build/ and https://www.sideboard.cloud/ — marketing (both hosts until the cutover)
 - https://www.sideboard.cloud/docs/ — docs page
 - https://www.sideboard.cloud/slack/ — Slack app landing
 - https://www.sideboard.cloud/privacy/ — privacy policy
