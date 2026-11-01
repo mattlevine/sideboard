@@ -283,18 +283,35 @@ describe('latestPendingPlanQuestions', () => {
     ).toBe('q1');
   });
 
-  it('hides the ask once a later tool runs', () => {
+  it('keeps the ask on screen after a later tool runs', () => {
     const later = { type: 'tool' as const, id: 'r1', name: 'Read', status: 'done' as const };
     expect(
       latestPendingPlanQuestions({
         messages: [{ role: 'user' }],
         liveParts: [askPart, later],
         status: 'running',
+      })?.id,
+    ).toBe('q1');
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'agent', parts: [askPart, later] }],
+      })?.id,
+    ).toBe('q1');
+  });
+
+  it('ignores a nested ask_user under another tool', () => {
+    const nested = { ...askPart, parentId: 'task' };
+    const later = { type: 'tool' as const, id: 'r1', name: 'Read', status: 'done' as const };
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'agent', parts: [nested, later] }],
       }),
     ).toBeNull();
     expect(
       latestPendingPlanQuestions({
-        messages: [{ role: 'agent', parts: [askPart, later] }],
+        messages: [{ role: 'user' }],
+        liveParts: [nested],
+        status: 'running',
       }),
     ).toBeNull();
   });

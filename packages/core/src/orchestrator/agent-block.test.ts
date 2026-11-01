@@ -176,13 +176,21 @@ describe('agentBlockAfterTurn', () => {
     expect(next?.questionSignature).toBe(askSignature);
   });
 
-  it('drops an ask_user stamp once a later tool runs', () => {
+  it('keeps an unanswered ask after a later tool and drops a question-less stamp', () => {
     const stamped = makeAgentBlock('ask_user', 'Asked the user: Which API?', 't');
     const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
     expect(
       agentBlockAfterTurn({
         existing: stamped,
         parts: [askUser, later],
+        planMode: false,
+        failed: false,
+      })?.source,
+    ).toBe('ask_user');
+    expect(
+      agentBlockAfterTurn({
+        existing: stamped,
+        parts: [later],
         planMode: false,
         failed: false,
       }),
@@ -195,6 +203,40 @@ describe('agentBlockAfterTurn', () => {
         failed: false,
       }),
     ).toBe(stamped);
+  });
+
+  it('does not replace a reported or permission block with an earlier ask', () => {
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
+    const reported = makeAgentBlock('reported', 'Need a token', 't');
+    const permission = makeAgentBlock('permission', 'Allow the edit?', 't');
+    expect(
+      agentBlockAfterTurn({
+        existing: reported,
+        parts: [askUser, later],
+        planMode: false,
+        failed: false,
+      }),
+    ).toBe(reported);
+    expect(
+      agentBlockAfterTurn({
+        existing: permission,
+        parts: [askUser],
+        planMode: false,
+        failed: false,
+      }),
+    ).toBe(permission);
+  });
+
+  it('does not keep a nested ask_user after a later top-level tool', () => {
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
+    expect(
+      agentBlockAfterTurn({
+        existing: makeAgentBlock('ask_user', 'Asked the user: Which API?', 't'),
+        parts: [{ ...askUser, parentId: 'task' }, later],
+        planMode: false,
+        failed: false,
+      }),
+    ).toBeNull();
   });
 });
 
@@ -226,14 +268,16 @@ describe('askBlockAfterLiveParts', () => {
     });
   });
 
-  it('drops the ask once a later live tool runs', () => {
+  it('keeps the ask on screen once a later live tool runs', () => {
     const later: MessagePart = {
       type: 'tool',
       id: 'r1',
       name: 'Read',
       status: 'running',
     };
-    expect(askBlockAfterLiveParts({ ...stamped, onScreen: true }, [askUser, later])).toBeNull();
+    const next = askBlockAfterLiveParts({ ...stamped, onScreen: true }, [askUser, later]);
+    expect(next?.onScreen).toBe(true);
+    expect(next?.questionSignature).toBe(askSignature);
   });
 
   it('leaves a permission block alone when live last tool is not ask_user', () => {
@@ -245,6 +289,19 @@ describe('askBlockAfterLiveParts', () => {
       status: 'running',
     };
     expect(askBlockAfterLiveParts(permission, [later])).toBe(permission);
+    expect(askBlockAfterLiveParts(permission, [askUser, later])).toBe(permission);
+  });
+
+  it('leaves a reported block alone when an earlier ask is still in the stream', () => {
+    const reported = makeAgentBlock('reported', 'Need a token', 't');
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'running' };
+    expect(askBlockAfterLiveParts(reported, [askUser, later])).toBe(reported);
+  });
+
+  it('does not stamp a skipped ask again', () => {
+    expect(askBlockAfterLiveParts(null, [askUser], askSignature)).toBeNull();
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'running' };
+    expect(askBlockAfterLiveParts(null, [askUser, later], askSignature)).toBeNull();
   });
 });
 
@@ -382,7 +439,7 @@ describe('dismissAskUserQuestion', () => {
     expect(readThread(thread.id)?.dismissedQuestionSignature).toBe(askSignature);
   });
 
-  it('marks a live ask on-screen and clears it after a later tool', () => {
+  it('marks a live ask on-screen and keeps it after a later tool', () => {
     const thread = persist();
     writeAgentBlock(thread.id, {
       ...makeAgentBlock('ask_user', 'Asked the user: Which API?'),
@@ -394,7 +451,34 @@ describe('dismissAskUserQuestion', () => {
       askUser,
       { type: 'tool', id: 'r1', name: 'Read', status: 'running' },
     ]);
+    expect(readThread(thread.id)?.agentBlock?.onScreen).toBe(true);
+    expect(readThread(thread.id)?.agentBlock?.source).toBe('ask_user');
+  });
+
+  it('does not restore a skipped ask on the next live tool', () => {
+    const thread = persist();
+    writeAgentBlock(thread.id, {
+      ...makeAgentBlock('ask_user', 'Asked the user: Which API?'),
+      questionSignature: askSignature,
+      onScreen: true,
+    });
+    dismissAskUserQuestion(thread.id, askSignature);
+    syncAskUserBlockFromLive(thread.id, [
+      askUser,
+      { type: 'tool', id: 'r1', name: 'Read', status: 'running' },
+    ]);
     expect(readThread(thread.id)?.agentBlock).toBeNull();
+  });
+
+  it('keeps a reported block when a later live tool follows an ask', () => {
+    const thread = persist();
+    writeAgentBlock(thread.id, makeAgentBlock('reported', 'Need a token'));
+    syncAskUserBlockFromLive(thread.id, [
+      askUser,
+      { type: 'tool', id: 'r1', name: 'Read', status: 'running' },
+    ]);
+    expect(readThread(thread.id)?.agentBlock?.source).toBe('reported');
+    expect(readThread(thread.id)?.agentBlock?.reason).toBe('Need a token');
   });
 });
 

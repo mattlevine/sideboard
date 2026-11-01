@@ -328,4 +328,63 @@ describe('Orchestrator.getTurnResult', () => {
     expect(result.taskState).toBe('input-required');
     expect(result.stillRunning).toBe(false);
   });
+
+  it('stays input-required when ask_user was followed by another tool', () => {
+    const thread = seed({ status: 'idle', agentText: 'Need a choice.' });
+    thread.messages[thread.messages.length - 1]!.parts = [
+      {
+        type: 'tool',
+        id: 'q1',
+        name: 'ask_user',
+        status: 'done',
+        input: {
+          questions: [
+            {
+              question: 'Which API?',
+              options: [{ label: 'REST' }, { label: 'GraphQL' }],
+            },
+          ],
+        },
+      },
+      { type: 'tool', id: 'r1', name: 'Read', status: 'done' },
+    ];
+    writeThread(thread);
+    expect(new Orchestrator().getTurnResult(thread.id).taskState).toBe('input-required');
+  });
+
+  it('is completed when that question was skipped or the user already replied', () => {
+    const thread = seed({ status: 'idle', agentText: 'Need a choice.' });
+    thread.messages[thread.messages.length - 1]!.parts = [
+      {
+        type: 'tool',
+        id: 'q1',
+        name: 'ask_user',
+        status: 'done',
+        input: {
+          questions: [
+            {
+              question: 'Which API?',
+              options: [{ label: 'REST' }, { label: 'GraphQL' }],
+            },
+          ],
+        },
+      },
+      { type: 'tool', id: 'r1', name: 'Read', status: 'done' },
+    ];
+    thread.dismissedQuestionSignature = 'Which API?\u001eREST\u001fGraphQL';
+    writeThread(thread);
+    expect(new Orchestrator().getTurnResult(thread.id).taskState).toBe('completed');
+
+    const answered = seed({ status: 'idle', agentText: 'Need a choice.' });
+    answered.messages[answered.messages.length - 1]!.parts = [
+      { type: 'tool', id: 'q1', name: 'ask_user', status: 'done' },
+    ];
+    answered.messages.push({
+      role: 'user',
+      text: 'REST',
+      ts: new Date().toISOString(),
+    });
+    writeThread(answered);
+    expect(new Orchestrator().getTurnResult(answered.id).taskState).toBe('completed');
+  });
 });

@@ -4,7 +4,7 @@ import {
   lastAgentReply,
   pendingInjectedNotices,
 } from '../threads/injected-notices.js';
-import { deriveTaskState, type TurnResult } from './task-state.js';
+import { deriveTaskState, userRepliedAfterAgent, type TurnResult } from './task-state.js';
 import { lastActivityAtForWait } from '../mcp/wait-for-turn.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -2982,6 +2982,8 @@ export class Orchestrator {
       ? 'Queued — waiting for a concurrency slot' : null;
     const taskState = deriveTaskState({
       status: thread.status, stillRunning, lastAgentParts: lastAgent?.parts,
+      dismissedQuestionSignature: thread.dismissedQuestionSignature,
+      userAnswered: userRepliedAfterAgent(thread.messages, lastAgent),
     });
     const block = thread.agentBlock?.reason?.trim() ? thread.agentBlock : null;
     return {

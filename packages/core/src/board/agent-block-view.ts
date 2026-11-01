@@ -38,7 +38,7 @@ export function isDismissedAskUserBlock(
  * Blocked highlight. Errors and archived chats keep their own status.
  * An ask_user stamp lands when the tool is called — before the picker is on
  * screen — so hide it while the turn is in flight unless `onScreen` (the
- * live last tool is ask_user). Drop it once the chat is no longer asking.
+ * ask is in the live stream). Drop it once the user answers or skips.
  */
 export function visibleAgentBlock(thread: AgentBlockThread): AgentBlock | null {
   if (

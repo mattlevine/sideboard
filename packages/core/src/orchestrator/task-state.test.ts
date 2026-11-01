@@ -79,6 +79,62 @@ describe('deriveTaskState', () => {
       }),
     ).toBe('working');
   });
+
+  it('stays input-required when a later tool ran after ask_user', () => {
+    const later: MessagePart = { type: 'tool', id: '2', name: 'Read', status: 'done' };
+    expect(
+      deriveTaskState({
+        status: 'idle',
+        stillRunning: false,
+        lastAgentParts: [askUser, later],
+      }),
+    ).toBe('input-required');
+    expect(
+      deriveTaskState({
+        status: 'idle',
+        stillRunning: false,
+        lastAgentParts: [
+          { type: 'tool', id: '1', name: 'ask_user', status: 'done', parentId: 'task' },
+          later,
+        ],
+      }),
+    ).toBe('completed');
+  });
+
+  it('is completed after the question is skipped or the user replies', () => {
+    const asked: MessagePart = {
+      type: 'tool',
+      id: 'q1',
+      name: 'ask_user',
+      status: 'done',
+      input: {
+        questions: [
+          {
+            question: 'Which API?',
+            options: [{ label: 'REST' }, { label: 'GraphQL' }],
+          },
+        ],
+      },
+    };
+    const later: MessagePart = { type: 'tool', id: '2', name: 'Read', status: 'done' };
+    expect(
+      deriveTaskState({
+        status: 'idle',
+        stillRunning: false,
+        lastAgentParts: [asked, later],
+        dismissedQuestionSignature:
+          'Which API?\u001eREST\u001fGraphQL',
+      }),
+    ).toBe('completed');
+    expect(
+      deriveTaskState({
+        status: 'idle',
+        stillRunning: false,
+        lastAgentParts: [asked, later],
+        userAnswered: true,
+      }),
+    ).toBe('completed');
+  });
 });
 
 describe('taskState helpers', () => {

@@ -14,7 +14,7 @@ The topology stays a **star**: one Global orchestrator talks down to worktree ch
 |-----------|-------------------|
 | `submitted` | queued, waiting for a concurrency slot — not started |
 | `working` | the agent is running this turn |
-| `input-required` | the turn ended on `ask_user`; wait for the human in that chat |
+| `input-required` | the turn asked with `ask_user` and the person has not answered or skipped, even if a later tool ran |
 | `completed` | the turn ended with an answer |
 | `failed` | runner/agent error, or worktree missing (`broken`) |
 | `canceled` | force-stopped before finishing |
@@ -27,12 +27,12 @@ Herdr marks `blocked` only when an agent is waiting on a person (approval, quest
 
 | source | when |
 |--------|------|
-| `ask_user` | the turn's last tool is a question (includes AskUserQuestion) |
+| `ask_user` | an unanswered question is in the turn (includes AskUserQuestion; not only when it was the last tool) |
 | `plan` | Plan mode and the turn called `present_plan` or ExitPlanMode |
 | `reported` | the agent called `notify_orchestrator` with a reason |
 | `permission` | the agent is waiting on a tool permission |
 
-`Thread.agentBlock.reason` is the short why. The sidebar, board, and phone desktop list highlight an `ask_user` only while that question is on screen in the agent (not the mid-turn stamp, and not after the picker is gone). Other blocks last until the next user message starts a turn. The phone list shows **Needs you** with that reason, and the workspace mark turns amber when nothing in that workspace is still running. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
+`Thread.agentBlock.reason` is the short why. The sidebar, board, and phone desktop list highlight an `ask_user` only while that question is on screen in the agent (not the mid-turn stamp, and not after the user skips or answers). A later tool in the same turn does not take the picker down — `ask_user` returns immediately, so the model often keeps going before the person can answer. Other blocks last until the next user message starts a turn. The phone list shows **Needs you** with that reason, and the workspace mark turns amber when nothing in that workspace is still running. `wait_for_turn` / `get_turn_result` / `list_chats` / `get_chat` / `list_board` include `blockedReason`. Process `status` stays `idle` or `running` — blocked is attention, not liveness.
 
 A2A also has `rejected` and `auth-required`. No Sideboard source yet — do not invent them.
 
