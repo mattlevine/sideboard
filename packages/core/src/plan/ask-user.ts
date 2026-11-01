@@ -190,6 +190,8 @@ export interface AskBlockSnapshot {
   at?: string;
   questionSignature?: string;
   questions?: PlanQuestion[];
+  /** Set once the picker is in the live stream. A mid-turn stamp omits it. */
+  onScreen?: boolean;
 }
 
 function pendingFromAskBlock(
