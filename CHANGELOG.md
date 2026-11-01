@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.328] - 2026-10-31
+
+### Fixed
+
+- An ask-user question stays on screen when the agent keeps working in the same turn, until you answer or skip. Slack and Brightsy wait on the Mac instead of posting that turn as finished.
+- Skipping the question, or a later permission prompt or coordinator note, is not covered up by that question.
+
 ## [0.1.327] - 2026-10-30
 
 ### Fixed
