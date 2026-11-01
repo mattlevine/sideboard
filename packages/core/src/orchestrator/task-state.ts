@@ -79,6 +79,21 @@ export function turnWaitingOnAskUser(
   return pending.signature !== dismissed;
 }
 
+/** A real user message after the agent reply that asked. Host continues do not count. */
+export function userRepliedAfterAgent<T extends { role: string; origin?: string }>(
+  messages: T[] | undefined,
+  lastAgent: T | undefined,
+): boolean {
+  if (!messages || !lastAgent) return false;
+  const index = messages.lastIndexOf(lastAgent);
+  if (index < 0) return false;
+  for (let i = index + 1; i < messages.length; i++) {
+    const message = messages[i]!;
+    if (message.role === 'user' && message.origin !== 'continue') return true;
+  }
+  return false;
+}
+
 export function deriveTaskState(input: {
   status: ThreadStatus | string;
   stillRunning: boolean;
