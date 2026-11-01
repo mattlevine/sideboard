@@ -164,7 +164,7 @@ function questionsFromToolPart(part: ToolPartLike): PlanQuestion[] {
   }
 }
 
-/** Newest ask-user tool part with parseable questions (live or persisted). */
+/** Newest top-level ask-user tool with parseable questions. Nested calls do not count. */
 export function extractPendingPlanQuestions(
   parts: ToolPartLike[] | undefined | null,
 ): PendingPlanQuestions | null {
