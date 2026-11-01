@@ -76,6 +76,11 @@ export function decisionBlockFromParts(
   );
 }
 
+/** Reported and permission prompts outrank an earlier ask_user re-stamp. */
+function attentionOutranksAsk(existing: AgentBlock | null | undefined): boolean {
+  return existing?.source === 'reported' || existing?.source === 'permission';
+}
+
 /**
  * A transcript ask_user with empty input still replaces the stamp. Keep the
  * questions captured when the tool was called so the chat picker can render.
@@ -96,9 +101,11 @@ function withStampedQuestions(
 /**
  * Turn-end block. Errors clear it. A successful or stopped turn keeps a
  * decision in the transcript, or a block stamped earlier in this turn
- * when that tool never showed up in the transcript. A later top-level tool
- * means an ask_user / plan stamp is stale. A skipped question stays down.
- * Reported blocks stay until the next user message.
+ * when that tool never showed up in the transcript. An unanswered ask_user
+ * stays even when a later tool ran. A skipped question stays down. A plan
+ * stamp is stale once a later top-level tool runs. Reported and permission
+ * blocks are not replaced by an earlier ask. Reported blocks stay until
+ * the next user message.
  */
 export function agentBlockAfterTurn(input: {
   existing: AgentBlock | null | undefined;
@@ -110,11 +117,42 @@ export function agentBlockAfterTurn(input: {
   if (input.failed) return null;
   const decision = decisionBlockFromParts(input.parts, input.planMode);
   if (decision) {
+    if (decision.source === 'ask_user' && attentionOutranksAsk(input.existing)) {
+      return input.existing ?? null;
+    }
     const next = withStampedQuestions(decision, input.existing);
     if (isDismissedAskUserBlock(next, input.dismissedQuestionSignature)) {
       return input.existing?.source === 'reported' ? input.existing : null;
     }
     return next;
+  }
+  const pending = extractPendingPlanQuestions(input.parts);
+  if (pending && attentionOutranksAsk(input.existing)) {
+    return input.existing ?? null;
+  }
+  if (pending) {
+    const kept = withStampedQuestions(
+      {
+        ...makeAgentBlock(
+          'ask_user',
+          formatAskUserNotifyMessage(pending.questions),
+          input.existing?.source === 'ask_user' ? input.existing.at : undefined,
+        ),
+        onScreen: true,
+        questionSignature: pending.signature,
+        questions: pending.questions,
+      },
+      input.existing,
+    );
+    if (!isDismissedAskUserBlock(kept, input.dismissedQuestionSignature)) return kept;
+  } else if (
+    input.existing?.source === 'ask_user' &&
+    input.existing.onScreen &&
+    input.existing.questions?.length &&
+    !isDismissedAskUserBlock(input.existing, input.dismissedQuestionSignature)
+  ) {
+    // Live buffer no longer contains the tool (trimmed, or a follow-up turn).
+    return input.existing;
   }
   if (
     input.existing &&
@@ -169,16 +207,23 @@ function askBlocksEqual(
 
 /**
  * Live-stream counterpart to settle. Mark an ask_user block on-screen once
- * that tool is the last top-level action; drop it when a later tool runs.
+ * that tool is in the stream, and keep it when a later tool runs so the
+ * composer picker does not flash and vanish. A reported or permission block
+ * stays. A skipped signature is not stamped again.
  */
 export function askBlockAfterLiveParts(
   existing: AgentBlock | null | undefined,
   parts: MessagePart[] | undefined,
+  dismissedQuestionSignature?: string | null,
 ): AgentBlock | null {
+  if (attentionOutranksAsk(existing)) return existing ?? null;
+  if (isDismissedAskUserBlock(existing, dismissedQuestionSignature)) return null;
+  const dismissed = dismissedQuestionSignature?.trim() ?? '';
+  let pending = extractPendingPlanQuestions(parts);
+  if (dismissed && pending?.signature === dismissed) pending = null;
   const last = lastTopLevelTool(parts);
   if (last?.type === 'tool' && isAskUserToolName(last.name)) {
     if (existing?.source === 'ask_user' && existing.onScreen) return existing;
-    const pending = extractPendingPlanQuestions(parts);
     const questions = pending?.questions ?? existing?.questions;
     if (!questions?.length) {
       return existing?.source === 'ask_user'
@@ -194,6 +239,21 @@ export function askBlockAfterLiveParts(
       questions,
     };
   }
+  if (pending) {
+    if (existing?.source === 'ask_user' && existing.onScreen && existing.questions?.length) {
+      return existing;
+    }
+    const at = existing?.source === 'ask_user' ? existing.at : undefined;
+    return {
+      ...makeAgentBlock('ask_user', formatAskUserNotifyMessage(pending.questions), at),
+      onScreen: true,
+      questionSignature: pending.signature,
+      questions: pending.questions,
+    };
+  }
+  if (existing?.source === 'ask_user' && existing.onScreen && existing.questions?.length) {
+    return existing;
+  }
   if (last && existing?.source === 'ask_user') return null;
   return existing ?? null;
 }
@@ -204,7 +264,11 @@ export function syncAskUserBlockFromLive(
 ): void {
   const thread = readThread(threadId);
   if (!thread || thread.status === 'archived') return;
-  const next = askBlockAfterLiveParts(thread.agentBlock, parts);
+  const next = askBlockAfterLiveParts(
+    thread.agentBlock,
+    parts,
+    thread.dismissedQuestionSignature,
+  );
   if (askBlocksEqual(thread.agentBlock, next)) return;
   updateThread(threadId, { agentBlock: next });
 }

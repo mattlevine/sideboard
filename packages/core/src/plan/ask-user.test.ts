@@ -283,20 +283,20 @@ describe('latestPendingPlanQuestions', () => {
     ).toBe('q1');
   });
 
-  it('hides the ask once a later tool runs', () => {
+  it('keeps the ask on screen after a later tool runs', () => {
     const later = { type: 'tool' as const, id: 'r1', name: 'Read', status: 'done' as const };
     expect(
       latestPendingPlanQuestions({
         messages: [{ role: 'user' }],
         liveParts: [askPart, later],
         status: 'running',
-      }),
-    ).toBeNull();
+      })?.id,
+    ).toBe('q1');
     expect(
       latestPendingPlanQuestions({
         messages: [{ role: 'agent', parts: [askPart, later] }],
-      }),
-    ).toBeNull();
+      })?.id,
+    ).toBe('q1');
   });
 });
 

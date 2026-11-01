@@ -152,10 +152,6 @@ export function lastTopLevelToolIsAskUser(
   return false;
 }
 
-function hasTopLevelTool(parts: ToolPartLike[] | undefined | null): boolean {
-  return Boolean(parts?.some((part) => part.type === 'tool' && !part.parentId));
-}
-
 function questionsFromToolPart(part: ToolPartLike): PlanQuestion[] {
   const fromInput = parsePlanQuestionsInput(part.input);
   if (fromInput.length) return fromInput;
@@ -251,30 +247,44 @@ export function latestPendingPlanQuestions(input: {
    */
   agentBlock?: AskBlockSnapshot | null;
   dismissedQuestionSignature?: string | null;
-  /** Hide a mid-turn stamp until the ask is the last tool (or the turn ends). */
+  /**
+   * Hide a mid-turn stamp until the ask is in the stream (or the turn
+   * ends). Once the picker is on screen, a later tool must not hide it.
+   */
   status?: string;
 }): PendingPlanQuestions | null {
   if (input.userReplied) return null;
 
+  const dismissed = input.dismissedQuestionSignature?.trim();
+  const accept = (pending: PendingPlanQuestions | null): PendingPlanQuestions | null => {
+    if (!pending) return null;
+    if (dismissed && pending.signature === dismissed) return null;
+    return pending;
+  };
   const fromBlock = () =>
     pendingFromAskBlock(input.agentBlock, input.dismissedQuestionSignature);
 
-  if (lastTopLevelToolIsAskUser(input.liveParts)) {
-    return extractPendingPlanQuestions(input.liveParts) ?? fromBlock();
-  }
+  // The tool returns immediately, so the model often calls something else
+  // before the user can answer. Keep the newest unanswered ask on screen.
+  const liveAsk = accept(extractPendingPlanQuestions(input.liveParts));
+  if (liveAsk) return liveAsk;
 
   const last = input.messages[input.messages.length - 1];
-  if (last?.role === 'agent' && lastTopLevelToolIsAskUser(last.parts)) {
-    return extractPendingPlanQuestions(last.parts) ?? fromBlock();
-  }
-
-  // A later top-level tool means the picker is no longer on screen.
-  if (hasTopLevelTool(input.liveParts) || (last?.role === 'agent' && hasTopLevelTool(last.parts))) {
-    return null;
+  if (last?.role === 'agent') {
+    const fromTranscript = accept(extractPendingPlanQuestions(last.parts));
+    if (fromTranscript) return fromTranscript;
   }
 
   // Stamp lands when ask_user is called, before the tool is in the stream.
-  if (input.status === 'running' || input.status === 'queued') return null;
+  // Don't show that early copy while the turn is still running, unless the
+  // picker was already up (a later tool or a trimmed live buffer must not
+  // yank it).
+  if (
+    (input.status === 'running' || input.status === 'queued') &&
+    !input.agentBlock?.onScreen
+  ) {
+    return null;
+  }
 
   const stamped = fromBlock();
   if (stamped && askBlockStillWaiting(input.agentBlock, input.messages)) {

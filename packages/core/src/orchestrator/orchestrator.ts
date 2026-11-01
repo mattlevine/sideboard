@@ -2980,8 +2980,18 @@ export class Orchestrator {
     const liveSummary = live?.summary && !isInternalAgentStatusText(live.summary) ? live.summary : null;
     const queuedHint = stillRunning && thread.status === 'queued' && !liveSummary
       ? 'Queued — waiting for a concurrency slot' : null;
+    const lastAgentIndex = lastAgent ? thread.messages.lastIndexOf(lastAgent) : -1;
+    const userAnswered =
+      lastAgentIndex >= 0 &&
+      thread.messages.slice(lastAgentIndex + 1).some(
+        (message) => message.role === 'user' && message.origin !== 'continue',
+      );
     const taskState = deriveTaskState({
-      status: thread.status, stillRunning, lastAgentParts: lastAgent?.parts,
+      status: thread.status,
+      stillRunning,
+      lastAgentParts: lastAgent?.parts,
+      dismissedQuestionSignature: thread.dismissedQuestionSignature,
+      userAnswered,
     });
     const block = thread.agentBlock?.reason?.trim() ? thread.agentBlock : null;
     return {
