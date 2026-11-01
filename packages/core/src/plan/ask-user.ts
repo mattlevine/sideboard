@@ -171,7 +171,7 @@ export function extractPendingPlanQuestions(
   if (!parts?.length) return null;
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i]!;
-    if (p.type !== 'tool' || !isAskUserToolName(p.name)) continue;
+    if (p.type !== 'tool' || p.parentId || !isAskUserToolName(p.name)) continue;
     const questions = questionsFromToolPart(p);
     if (!questions.length) continue;
     return {

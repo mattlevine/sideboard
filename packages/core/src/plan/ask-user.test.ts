@@ -298,6 +298,23 @@ describe('latestPendingPlanQuestions', () => {
       })?.id,
     ).toBe('q1');
   });
+
+  it('ignores a nested ask_user under another tool', () => {
+    const nested = { ...askPart, parentId: 'task' };
+    const later = { type: 'tool' as const, id: 'r1', name: 'Read', status: 'done' as const };
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'agent', parts: [nested, later] }],
+      }),
+    ).toBeNull();
+    expect(
+      latestPendingPlanQuestions({
+        messages: [{ role: 'user' }],
+        liveParts: [nested],
+        status: 'running',
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('formatPlanQuestionAnswers', () => {

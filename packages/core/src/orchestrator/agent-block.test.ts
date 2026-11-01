@@ -226,6 +226,18 @@ describe('agentBlockAfterTurn', () => {
       }),
     ).toBe(permission);
   });
+
+  it('does not keep a nested ask_user after a later top-level tool', () => {
+    const later: MessagePart = { type: 'tool', id: 'r1', name: 'Read', status: 'done' };
+    expect(
+      agentBlockAfterTurn({
+        existing: makeAgentBlock('ask_user', 'Asked the user: Which API?', 't'),
+        parts: [{ ...askUser, parentId: 'task' }, later],
+        planMode: false,
+        failed: false,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('askBlockAfterLiveParts', () => {
