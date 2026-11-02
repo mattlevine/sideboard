@@ -50,7 +50,7 @@ Code is updated (`docs/slack-app-manifest.yaml`, `packages/core/src/slack/oauth.
 
 Slack dashboard → **Manage Distribution** → complete their SSL/OAuth checklist → **Activate Public Distribution**.
 
-- OAuth redirect stays `https://relay.sideboard.build/slack/callback` (HTTPS).
+- OAuth redirect URLs are `https://relay.sideboard.build/slack/callback` and `https://relay.sideboard.cloud/slack/callback`. New builds send the `.build` host. Slack matches the redirect exactly, so both stay on the app.
 - Drop `http://127.0.0.1:19847/slack/callback` from the **production** redirect list (local override via `SIDEBOARD_SLACK_OAUTH_REDIRECT` is enough).
 - Confirm **Add to Slack** URL works from a workspace that is **not** Brightsy.
 

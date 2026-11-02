@@ -32,6 +32,7 @@ features:
 
 oauth_config:
   redirect_urls:
+    - https://relay.sideboard.build/slack/callback
     - https://relay.sideboard.cloud/slack/callback
   scopes:
     bot:
