@@ -42,7 +42,7 @@ describe('entireAuthorizeUrl', () => {
 });
 
 describe('entireIdentityFromCode', () => {
-  const redirect = 'https://relay.sideboard.cloud/remote/oauth/callback';
+  const redirect = 'https://relay.sideboard.build/remote/oauth/callback';
   const ctx = { codeVerifier: 'verifier', issuer: 'https://us.auth.entire.io' };
 
   it('keeps a public client id in the body and off the Authorization header', async () => {
@@ -92,7 +92,7 @@ describe('hosted Entire client metadata', () => {
       response_types: string[];
     };
     expect(doc.client_id).toBe('https://www.sideboard.cloud/oauth/entire-client.json');
-    expect(doc.redirect_uris).toEqual(['https://relay.sideboard.cloud/remote/oauth/callback']);
+    expect(doc.redirect_uris).toEqual(['https://relay.sideboard.build/remote/oauth/callback']);
     expect(doc.token_endpoint_auth_method).toBe('none');
     expect(doc.response_types).toEqual(['code']);
   });

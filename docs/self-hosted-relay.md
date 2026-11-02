@@ -2,7 +2,7 @@
 
 The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.
 
-Sideboard hosts a relay at `wss://relay.sideboard.cloud/remote`. This page is how to run your own and point the desktop and the phone at it.
+Sideboard hosts a relay at `wss://relay.sideboard.build/remote`. This page is how to run your own and point the desktop and the phone at it.
 
 The process you deploy is the relay only. It accepts the phone and desktop WebSocket, GitHub sign-in, and the account database. It does not serve the Sideboard website. The website stays on [www.sideboard.cloud](https://www.sideboard.cloud/), which is a separate setting on Sideboard’s own Fly app ([deploy.md](system/deploy.md)).
 
@@ -73,7 +73,7 @@ On the phone, open **Pair a Mac** and set **Relay** to that same `wss://` addres
 
 Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after switching. A credential from one relay does not work on another.
 
-When the Settings field is empty, `SIDEBOARD_REMOTE_RELAY_URL` still selects the relay (the default is `wss://relay.sideboard.cloud/remote`). A URL saved in Settings wins.
+When the Settings field is empty, `SIDEBOARD_REMOTE_RELAY_URL` still selects the relay (the default is `wss://relay.sideboard.build/remote`). A URL saved in Settings wins.
 
 ## What this relay stores
 

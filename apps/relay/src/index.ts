@@ -25,7 +25,7 @@ import { startRelayServer } from '@sideboard-ai/core';
  *
  * Phone and Mac connect at wss://<host>/remote. A self-hosted process is that
  * relay only: no marketing site unless SIDEBOARD_SITE_ROOT is set.
- * Slack desktops use wss://relay.sideboard.cloud/slack/desktop when
+ * Slack desktops use wss://relay.sideboard.build/slack/desktop when
  * SIDEBOARD_SLACK_APP_TOKEN is set. GET /slack/callback exchanges Slack OAuth.
  * GET / on www.sideboard.cloud serves the marketing site. GET
  * /oauth/abletime/callback bounces AbleTime OAuth to the desktop listener.

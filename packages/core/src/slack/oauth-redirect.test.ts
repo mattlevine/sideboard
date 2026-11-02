@@ -13,7 +13,7 @@ import { slackOAuthResultUrl, slackRelayHttpOrigin } from './oauth-exchange.js';
 
 describe('Slack OAuth HTTPS callback', () => {
   it('registers an https redirect on the hosted relay under /slack', () => {
-    expect(SLACK_OAUTH_REDIRECT).toBe('https://relay.sideboard.cloud/slack/callback');
+    expect(SLACK_OAUTH_REDIRECT).toBe('https://relay.sideboard.build/slack/callback');
     expect(SLACK_OAUTH_REDIRECT.startsWith('https://')).toBe(true);
     expect(SLACK_OAUTH_CALLBACK_PATH).toBe('/slack/callback');
     expect(SLACK_OAUTH_LOCAL_CALLBACK).toBe('http://127.0.0.1:19847/slack/callback');

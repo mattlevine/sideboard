@@ -10,7 +10,7 @@ export const SLACK_OAUTH_LOCAL_PORT = 19847;
 /** Local callback — namespaced so one port can also host `/linear/callback`, etc. */
 export const SLACK_OAUTH_LOCAL_CALLBACK = `http://127.0.0.1:${SLACK_OAUTH_LOCAL_PORT}${SLACK_OAUTH_CALLBACK_PATH}`;
 
-export const SLACK_OAUTH_REDIRECT = `https://relay.sideboard.cloud${SLACK_OAUTH_CALLBACK_PATH}`;
+export const SLACK_OAUTH_REDIRECT = `https://relay.sideboard.build${SLACK_OAUTH_CALLBACK_PATH}`;
 
 /** @deprecated Use SLACK_OAUTH_CALLBACK_PATH */
 export const SLACK_OAUTH_BOUNCE_PATH = SLACK_OAUTH_CALLBACK_PATH;

@@ -63,7 +63,7 @@ export interface RelayServerOptions {
   accountsPath?: string;
   /** Git-host OAuth clients. Secrets stay on the relay. */
   relayOAuth?: RelayOAuthConfig;
-  /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.cloud`. */
+  /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.build`. */
   relayPublicOrigin?: string;
 }
 

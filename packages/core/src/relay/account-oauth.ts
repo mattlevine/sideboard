@@ -257,7 +257,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 /**
- * GitHub OAuth return. Self-contained so relay.sideboard.cloud matches the
+ * GitHub OAuth return. Self-contained so relay.sideboard.build matches the
  * marketing site (dark ground, blue mark) without serving site CSS.
  */
 export function relayOAuthReturnPage(title: string, body: string): string {

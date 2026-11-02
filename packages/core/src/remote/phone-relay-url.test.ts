@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { relaySocketUrl } from '../../../../apps/mobile/relay-address.ts';
 import { createRelayLink, RELAY_ADDRESS_INVALID } from '../../../../apps/mobile/relay-link.ts';
 
-const HOSTED = 'wss://relay.sideboard.cloud/remote';
+const HOSTED = 'wss://relay.sideboard.build/remote';
 
 describe('relaySocketUrl', () => {
   it('uses the hosted address only when the field is blank', () => {

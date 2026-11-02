@@ -16,7 +16,7 @@ export function isRemoteAccountLoginCancelled(err: unknown): boolean {
   return err instanceof RemoteAccountLoginCancelled;
 }
 
-/** `wss://relay.sideboard.cloud/remote` → `https://relay.sideboard.cloud`. */
+/** `wss://relay.sideboard.build/remote` → `https://relay.sideboard.build`. */
 export function remoteAccountHttpOrigin(wsUrl: string = remoteRelayUrl()): string {
   const url = new URL(wsUrl);
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';

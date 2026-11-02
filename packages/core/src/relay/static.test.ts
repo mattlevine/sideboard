@@ -123,7 +123,7 @@ describe('relay static marketing site', () => {
     expect(www.status).toBe(200);
     expect(www.body).toContain('Site');
 
-    const relay = await request(handle.port, '/', 'relay.sideboard.cloud');
+    const relay = await request(handle.port, '/', 'relay.sideboard.build');
     expect(JSON.parse(relay.body)).toMatchObject({ ok: true, service: 'sideboard-relay' });
 
     const apex = await request(handle.port, '/docs', 'sideboard.cloud');

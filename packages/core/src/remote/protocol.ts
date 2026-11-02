@@ -6,7 +6,7 @@ export const REMOTE_RELAY_PATH = '/remote';
 export const REMOTE_PING_INTERVAL_MS = 20_000;
 export const REMOTE_PONG_TIMEOUT_MS = 15_000;
 
-export const BAKED_REMOTE_RELAY_URL = `wss://relay.sideboard.cloud${REMOTE_RELAY_PATH}`;
+export const BAKED_REMOTE_RELAY_URL = `wss://relay.sideboard.build${REMOTE_RELAY_PATH}`;
 
 /**
  * `wss://host/remote`, or `ws://` for a local relay.

@@ -63,7 +63,7 @@ Also true, and useful on the way:
 
 Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Phone](#phone) · [Automations](#automations)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.cloud` is the phone remote). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
+Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.build` is the phone remote). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 
@@ -378,7 +378,7 @@ The Sideboard phone app is the remote surface for the **same local orchestrator*
                                           Global orchestrator → worktrees
 ```
 
-**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** a routing token so the relay can find this Mac. Message text is encrypted between the phone and this Mac; the relay forwards ciphertext. The default relay is `relay.sideboard.cloud`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
+**What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** a routing token so the relay can find this Mac. Message text is encrypted between the phone and this Mac; the relay forwards ciphertext. The default relay is `relay.sideboard.build`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
 
 The phone reaches this Mac while Sideboard.app is open, or while `sideboard serve` owns the host after you quit the window. It cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
 
@@ -399,7 +399,7 @@ A phone can pair with more than one Mac. Name each one in **Settings → Remote*
 
 Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user`, the phone shows the options.
 
-**Settings → Remote → Relay** is the address both this Mac and the phone use (`wss://host/remote`). Leave it blank for Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.cloud/remote`). Steps to deploy the relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
+**Settings → Remote → Relay** is the address both this Mac and the phone use (`wss://host/remote`). Leave it blank for Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Steps to deploy the relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
 
 The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts Metro and opens the iOS Simulator when that app is installed. If Simulator.app is missing, Metro stays up and Expo Go opens on a simulator that is already booted. Pair from **Settings → Remote**.
 
