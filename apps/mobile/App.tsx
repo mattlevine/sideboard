@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -857,6 +858,17 @@ export default function App() {
     } else if (next.length === 0) setScreen((screenRef.current = 'pair'));
   }
 
+  function confirmForget(desktop: Desktop) {
+    Alert.alert(
+      `Forget “${desktop.deviceLabel}”?`,
+      'This phone removes the saved pairing. Pair again from Settings → Remote on that Mac.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Forget', style: 'destructive', onPress: () => forget(desktop.deviceId) },
+      ],
+    );
+  }
+
   function showAgents() {
     if (historyTimerRef.current) clearTimeout(historyTimerRef.current);
     openDocs.closeAll();
@@ -1328,7 +1340,12 @@ export default function App() {
                   <Text style={styles.status}>{desktopStatus(desktop)}</Text>
                 </View>
               </Pressable>
-              <Pressable style={styles.ghost} onPress={() => forget(desktop.deviceId)}>
+              <Pressable
+                style={styles.ghost}
+                accessibilityRole="button"
+                accessibilityLabel={`Forget ${desktop.deviceLabel}`}
+                onPress={() => confirmForget(desktop)}
+              >
                 <Text style={styles.ghostText}>Forget</Text>
               </Pressable>
             </View>
