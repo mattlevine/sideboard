@@ -37,9 +37,9 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 - https://www.sideboard.cloud/slack/ — Slack app landing
 - https://www.sideboard.cloud/privacy/ — privacy policy
 - https://www.sideboard.cloud/support/ — support
-- https://www.sideboard.cloud/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)
+- https://www.sideboard.build/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)
 - https://www.sideboard.cloud/oauth/entire-client.json — Entire CIMD. `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` is that URL. No client secret.
-- https://www.sideboard.cloud/oauth/abletime/callback — AbleTime OAuth return (opens the desktop listener)
+- https://www.sideboard.build/oauth/abletime/callback — AbleTime OAuth return (opens the desktop listener)
 - https://relay.sideboard.build/health — JSON; Fly checks this
 
 A brief “not listening on 8080” warning during machine start is normal if Node is still booting; wait for the health check.

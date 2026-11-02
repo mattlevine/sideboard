@@ -16,7 +16,7 @@ export const ABLETIME_OAUTH_PORT = 19849;
 /** Local listener the marketing-site bounce sends the browser to. */
 export const ABLETIME_OAUTH_LOCAL_CALLBACK = `http://127.0.0.1:${ABLETIME_OAUTH_PORT}/callback`;
 /** Registered redirect — must match `site/oauth/abletime-client.json` redirect_uris. */
-export const ABLETIME_OAUTH_REDIRECT = `https://www.sideboard.cloud${ABLETIME_OAUTH_CALLBACK_PATH}`;
+export const ABLETIME_OAUTH_REDIRECT = `https://www.sideboard.build${ABLETIME_OAUTH_CALLBACK_PATH}`;
 
 export function ableTimeOAuthRedirectUri(): string {
   return process.env.SIDEBOARD_ABLETIME_OAUTH_REDIRECT?.trim() || ABLETIME_OAUTH_REDIRECT;
@@ -73,7 +73,7 @@ h1{font-size:1.25rem}p{line-height:1.5;color:#444}a{color:#0f7ed4}</style>
 
 /** Client ID Metadata Document (AbleTime advertises CIMD, not DCR). */
 export const BAKED_ABLETIME_OAUTH_CLIENT_ID =
-  'https://www.sideboard.cloud/oauth/abletime-client.json';
+  'https://www.sideboard.build/oauth/abletime-client.json';
 
 export const ABLETIME_OAUTH_RESOURCE = `${DEFAULT_ABLETIME_HOST}/api/public/v2/mcp`;
 
