@@ -43,6 +43,7 @@ import { createSealedRelayLink, lookupSealMaterial } from './phone-seal';
 import { RELAY_UNREACHABLE, type RelayLink } from './relay-link';
 import { parsePairingBlob, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
 import { PairMacScreen } from './pair-mac';
+import { PhoneDesktopsScreen } from './phone-desktops';
 import { AgentKindIcon } from './agent-icons';
 import { SearchGlyph } from './sidebar-icons';
 import {
@@ -65,7 +66,7 @@ import {
 import { palette, styles } from './styles';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
-import { composerPlaceholder, desktopStatus, historyCount, onMac } from './labels';
+import { composerPlaceholder, historyCount, onMac } from './labels';
 import { deliverPhoneMcpUi, PhoneMcpApps, type PhoneMcpUiControl } from './phone-mcp-app';
 import { applyPhoneTurn, applyStream, openedTranscript, phoneAskIsLive, phoneTurnPatch, pushBubble, settleBubbles } from './transcript';
 import { paintedFindStrings } from './find-surface';
@@ -1304,43 +1305,16 @@ export default function App() {
 
   if (screen === 'desktops') {
     return (
-      <SafeAreaView style={styles.screen}>
-        <StatusBar style="light" />
-        <View style={styles.header}>
-          <Brand />
-          <Text style={styles.title}>Choose a desktop</Text>
-          <Text style={styles.hint}>
-            Pair each Mac from Settings → Remote. The name you save there is the name in this list.
-          </Text>
-        </View>
-        <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad}>
-          {ordered.map((desktop) => (
-            <View key={desktop.sessionToken} style={styles.row}>
-              <Pressable style={styles.rowMain} onPress={() => choose(desktop)}>
-                <Text style={styles.rowTitle}>{desktop.deviceLabel}</Text>
-                <View style={styles.statusRow}>
-                  <View
-                    style={[
-                      styles.dot,
-                      desktop.online ? styles.dotOn : desktop.expired ? styles.dotWarn : styles.dotOff,
-                    ]}
-                  />
-                  <Text style={styles.status}>{desktopStatus(desktop)}</Text>
-                </View>
-              </Pressable>
-              <Pressable style={styles.ghost} onPress={() => forget(desktop.deviceId)}>
-                <Text style={styles.ghostText}>Forget</Text>
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
-        {error && !checkingHostsRef.current ? <Text style={styles.error}>{error}</Text> : null}
-        <View style={styles.footer}>
-          <Pressable style={styles.primary} onPress={() => { setError(null); setScreen('pair'); }}>
-            <Text style={styles.primaryText}>Pair another Mac</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <PhoneDesktopsScreen
+        desktops={ordered}
+        error={error && !checkingHostsRef.current ? error : null}
+        onChoose={choose}
+        onForget={forget}
+        onPair={() => {
+          setError(null);
+          setScreen('pair');
+        }}
+      />
     );
   }
 
