@@ -30,7 +30,7 @@ describe('abletime OAuth URL', () => {
     expect(url).toContain(
       encodeURIComponent('https://track.abletime.com/api/public/v2/mcp'),
     );
-    expect(ABLETIME_OAUTH_REDIRECT).toBe('https://www.sideboard.cloud/oauth/abletime/callback');
+    expect(ABLETIME_OAUTH_REDIRECT).toBe('https://www.sideboard.build/oauth/abletime/callback');
     expect(ABLETIME_OAUTH_REDIRECT.startsWith('https://')).toBe(true);
     expect(url).toContain(encodeURIComponent(ABLETIME_OAUTH_REDIRECT));
   });
@@ -63,7 +63,7 @@ describe('abletime OAuth URL', () => {
     expect(hasBakedAbleTimeOAuth()).toBe(true);
     expect(ableTimeOAuthClientId()).toBe(BAKED_ABLETIME_OAUTH_CLIENT_ID);
     expect(BAKED_ABLETIME_OAUTH_CLIENT_ID).toBe(
-      'https://www.sideboard.cloud/oauth/abletime-client.json',
+      'https://www.sideboard.build/oauth/abletime-client.json',
     );
   });
 

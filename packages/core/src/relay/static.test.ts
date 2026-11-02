@@ -123,12 +123,34 @@ describe('relay static marketing site', () => {
     expect(www.status).toBe(200);
     expect(www.body).toContain('Site');
 
-    const relay = await request(handle.port, '/', 'relay.sideboard.cloud');
+    const relay = await request(handle.port, '/', 'relay.sideboard.build');
     expect(JSON.parse(relay.body)).toMatchObject({ ok: true, service: 'sideboard-relay' });
 
     const apex = await request(handle.port, '/docs', 'sideboard.cloud');
     expect(apex.status).toBe(301);
     expect(apex.location).toBe('https://www.sideboard.cloud/docs');
+  });
+
+  it('serves a host that is listed as both a site host and a redirect', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'sideboard-site-'));
+    await writeFile(path.join(root, 'index.html'), '<!DOCTYPE html><h1>Site</h1>');
+    const handle = await startRelayServer({
+      appToken: 'xapp-test',
+      skipSocketMode: true,
+      staticRoot: root,
+      staticHosts: ['www.sideboard.build', 'sideboard.build', 'www.sideboard.cloud'],
+      redirectHosts: ['sideboard.build', 'sideboard.cloud'],
+      canonicalSiteHost: 'www.sideboard.build',
+    });
+    handles.push(handle);
+
+    const build = await request(handle.port, '/', 'sideboard.build');
+    expect(build.status).toBe(200);
+    expect(build.body).toContain('Site');
+
+    const cloud = await request(handle.port, '/docs', 'sideboard.cloud');
+    expect(cloud.status).toBe(301);
+    expect(cloud.location).toBe('https://www.sideboard.build/docs');
   });
 
   it('keeps JSON on / when staticRoot is unset', async () => {

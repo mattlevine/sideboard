@@ -16,11 +16,11 @@ Same phone steps as the [README](../README.md#phone). Linear / AbleTime: [README
 
 ## Phone
 
-The phone app is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac. Message text is encrypted between the phone and this Mac; the relay at `/remote` forwards ciphertext. The default host is `relay.sideboard.cloud`. The relay does not host worktrees. The Mac must stay awake. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from the orchestration chat. Quit the window and leave `sideboard serve` running to keep the relay (it exits if the app is already the host). `sideboard serve --lan` prints `ws://<lan-ip>:<port>/remote` for the phone’s Relay field. A blocked chat shows **Needs you** and the reason.
+The phone app is remote control for the **local** orchestrator. Agents, worktrees, and repos stay on this Mac. Message text is encrypted between the phone and this Mac; the relay at `/remote` forwards ciphertext. The default host is `relay.sideboard.build`. The relay does not host worktrees. The Mac must stay awake. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from the orchestration chat. Quit the window and leave `sideboard serve` running to keep the relay (it exits if the app is already the host). `sideboard serve --lan` prints `ws://<lan-ip>:<port>/remote` for the phone’s Relay field. A blocked chat shows **Needs you** and the reason.
 
 **Settings → Remote** shows the relay address, Relay connected, this Mac’s name, and **Show pairing code**. Start `apps/mobile` from the Run menu (**Mobile**) or with `pnpm --filter @sideboard-ai/mobile start`, set the phone’s **Relay** field to the same address, then scan that QR code. Paste the line under the code if you can’t scan. The phone keeps every Mac it has paired and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options render as buttons on the phone.
 
-A URL saved in **Settings → Remote → Relay** is the relay this Mac uses. Leave it blank for Sideboard’s relay. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.cloud/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
+A URL saved in **Settings → Remote → Relay** is the relay this Mac uses. Leave it blank for Sideboard’s relay. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
 
 ## Related
 

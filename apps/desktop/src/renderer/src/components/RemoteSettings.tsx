@@ -144,7 +144,7 @@ export function RemoteSettings({
             type="text"
             value={relayDraft}
             onChange={(e) => setRelayDraft(e.target.value)}
-            placeholder="wss://relay.sideboard.cloud/remote"
+            placeholder="wss://relay.sideboard.build/remote"
             spellCheck={false}
           />
           <button

@@ -50,7 +50,7 @@ Code is updated (`docs/slack-app-manifest.yaml`, `packages/core/src/slack/oauth.
 
 Slack dashboard → **Manage Distribution** → complete their SSL/OAuth checklist → **Activate Public Distribution**.
 
-- OAuth redirect stays `https://relay.sideboard.cloud/slack/callback` (HTTPS).
+- OAuth redirect URLs are `https://relay.sideboard.build/slack/callback` and `https://relay.sideboard.cloud/slack/callback`. New builds send the `.build` host. Slack matches the redirect exactly, so both stay on the app.
 - Drop `http://127.0.0.1:19847/slack/callback` from the **production** redirect list (local override via `SIDEBOARD_SLACK_OAUTH_REDIRECT` is enough).
 - Confirm **Add to Slack** URL works from a workspace that is **not** Brightsy.
 
@@ -192,7 +192,7 @@ User `chat:write` and `search:read` are **not requested**. Posting is as `@Sideb
 
 - Models: plugs on the user’s Mac (Claude Code, Codex, OpenCode, Cursor). Sideboard does not host a model.
 - Slack message text: relayed to that Mac; **not** used to train LLMs.
-- Retention: message text transits `relay.sideboard.cloud`; tokens live in the Mac vault (`slack-workspaces.json`). See `/privacy/`.
+- Retention: message text transits `relay.sideboard.build`; tokens live in the Mac vault (`slack-workspaces.json`). See `/privacy/`.
 - Tenancy / residency: user’s Mac + Fly relay (sjc). Confirm in privacy page.
 
 ### Test account details (for Slack reviewers)

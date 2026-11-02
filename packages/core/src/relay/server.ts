@@ -49,7 +49,10 @@ export interface RelayServerOptions {
   staticRoot?: string;
   /** Hostnames that get the marketing site (e.g. `www.sideboard.cloud`). Empty = any host. */
   staticHosts?: string[];
-  /** Apex (or aliases) that 301 to `canonicalSiteHost`. */
+  /**
+   * Apex (or aliases) that 301 to `canonicalSiteHost`.
+   * A host listed in `staticHosts` is served instead, so both names can stay up.
+   */
   redirectHosts?: string[];
   /** Canonical public site host (default `www.sideboard.cloud`). */
   canonicalSiteHost?: string;
@@ -60,7 +63,7 @@ export interface RelayServerOptions {
   accountsPath?: string;
   /** Git-host OAuth clients. Secrets stay on the relay. */
   relayOAuth?: RelayOAuthConfig;
-  /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.cloud`. */
+  /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.build`. */
   relayPublicOrigin?: string;
 }
 
@@ -287,7 +290,9 @@ export async function startRelayServer(
       }
       const hostname = requestHostname(req);
       const canonical = (opts.canonicalSiteHost ?? 'www.sideboard.cloud').toLowerCase();
-      if (opts.redirectHosts?.includes(hostname) && hostname !== canonical) {
+      const staticHosts = opts.staticHosts ?? [];
+      const servesSite = staticHosts.length > 0 && staticHosts.includes(hostname);
+      if (opts.redirectHosts?.includes(hostname) && hostname !== canonical && !servesSite) {
         res.writeHead(301, { Location: `https://${canonical}${reqUrl}` });
         res.end();
         return;

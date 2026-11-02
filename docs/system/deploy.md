@@ -6,13 +6,13 @@ Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted
 
 | Host | Serves |
 |------|--------|
-| https://www.sideboard.cloud | `site/` (`index.html`, `docs/`) |
-| https://sideboard.cloud | 301 → www |
-| https://relay.sideboard.cloud | Phone remote, legacy Slack, and `/health` |
-| https://download.sideboard.cloud | Intended custom domain for desktop artifacts. CNAME is set; TLS is not issued yet. |
+| https://www.sideboard.build and https://sideboard.build | `site/` while both domains are live |
+| https://www.sideboard.cloud and https://sideboard.cloud | Same site. A host in `SIDEBOARD_SITE_HOSTS` is served even if it is also a redirect host. |
+| https://relay.sideboard.build | Phone remote, legacy Slack, and `/health`. `relay.sideboard.cloud` still reaches this app. |
+| https://download.sideboard.build | Desktop artifacts and the auto-update feed. Tigris allows one custom domain, so this is the one with TLS. |
 | https://sideboard-downloads.t3.tigrisfiles.io | Working public Tigris host (use this until custom-domain HTTPS works). |
 
-Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). Stable alias: `https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io`. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
+Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). New builds check `https://download.sideboard.build/latest-mac.yml`. Copies already installed keep checking GitHub Releases. Stable alias: `https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io` on both domains. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
 
 ## When
 
@@ -32,23 +32,23 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 
 ## Check
 
-- https://www.sideboard.cloud/ — marketing
+- https://sideboard.build/ and https://www.sideboard.cloud/ — marketing (both hosts until the cutover)
 - https://www.sideboard.cloud/docs/ — docs page
 - https://www.sideboard.cloud/slack/ — Slack app landing
 - https://www.sideboard.cloud/privacy/ — privacy policy
 - https://www.sideboard.cloud/support/ — support
-- https://www.sideboard.cloud/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)
+- https://www.sideboard.build/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)
 - https://www.sideboard.cloud/oauth/entire-client.json — Entire CIMD. `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` is that URL. No client secret.
-- https://www.sideboard.cloud/oauth/abletime/callback — AbleTime OAuth return (opens the desktop listener)
-- https://relay.sideboard.cloud/health — JSON; Fly checks this
+- https://www.sideboard.build/oauth/abletime/callback — AbleTime OAuth return (opens the desktop listener)
+- https://relay.sideboard.build/health — JSON; Fly checks this
 
 A brief “not listening on 8080” warning during machine start is normal if Node is still booting; wait for the health check.
 
 ## First-time / domains
 
-Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for the three hosts. Phone accounts and pairings are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-slack-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. Cursor sign-in also needs `SIDEBOARD_RELAY_CURSOR_APP_ID` (the Origin app id). Entire sign-in needs `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` set to `https://www.sideboard.cloud/oauth/entire-client.json` (the client id is that metadata document; leave the secret unset). The redirect for all three is `https://relay.sideboard.cloud/remote/oauth/callback`. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
+Comments in `apps/relay/fly.toml`: create the app, set `SIDEBOARD_SLACK_APP_TOKEN` and `SIDEBOARD_SLACK_CLIENT_SECRET`, add certs for sideboard.build, www.sideboard.build, sideboard.cloud, www.sideboard.cloud, relay.sideboard.build, and relay.sideboard.cloud. Phone accounts and pairings are SQLite on the `relay_accounts` volume at `/data` (`initial_size` creates it on deploy; or `fly volumes create relay_accounts -a sideboard-slack-relay -r sjc -s 1`). Set `SIDEBOARD_RELAY_GITHUB_CLIENT_ID` and `SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET`. Cursor sign-in also needs `SIDEBOARD_RELAY_CURSOR_APP_ID` (the Origin app id). Entire sign-in needs `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` set to `https://www.sideboard.cloud/oauth/entire-client.json` (the client id is that metadata document; leave the secret unset). The redirect for all three is `https://relay.sideboard.build/remote/oauth/callback`. Register that callback on the GitHub OAuth app and the Cursor Origin app. `relay.sideboard.cloud` still reaches this process. Do not put those secrets in git or the image ([safety.md](safety.md)). Keep a single machine: the volume and the live phone sockets belong to that process.
 
 ## Don’t
 
 - Don’t `cd apps/relay` and deploy from there — `COPY site` and workspace packages need the repo root as context.
-- Don’t treat `relay.sideboard.cloud` as a place to browse the marketing site.
+- Don’t treat `relay.sideboard.build` as a place to browse the marketing site.

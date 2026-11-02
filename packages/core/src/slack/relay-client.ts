@@ -18,7 +18,7 @@ export interface SlackRelayRegisterWorkspace {
 }
 
 export interface SlackRelayClientOptions {
-  /** Full WebSocket URL including path, e.g. wss://relay.sideboard.cloud/slack/desktop */
+  /** Full WebSocket URL including path, e.g. wss://relay.sideboard.build/slack/desktop */
   url: string;
   workspaces: SlackRelayRegisterWorkspace[];
   /** Stable per-Mac destination id. */

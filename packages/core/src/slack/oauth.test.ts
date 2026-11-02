@@ -14,7 +14,7 @@ describe('slack OAuth URL', () => {
     expect(url).toContain('client_id=CLIENT');
     expect(url).toContain('state=state123');
     expect(url).toContain(encodeURIComponent(SLACK_OAUTH_REDIRECT));
-    expect(SLACK_OAUTH_REDIRECT).toBe('https://relay.sideboard.cloud/slack/callback');
+    expect(SLACK_OAUTH_REDIRECT).toBe('https://relay.sideboard.build/slack/callback');
     expect(url).not.toContain(encodeURIComponent('search:read'));
     expect(url).not.toContain(encodeURIComponent('team:read'));
     expect(url).toContain(encodeURIComponent('app_mentions:read'));
@@ -136,7 +136,7 @@ describe('exchangeSlackOAuthCode', () => {
       clientId: 'CID',
       clientSecret: 'shh',
       code: 'code-1',
-      redirectUri: 'https://relay.sideboard.cloud/slack/callback',
+      redirectUri: 'https://relay.sideboard.build/slack/callback',
       fetchImpl: (async (_url, init) => {
         posted.push(String(init?.body ?? ''));
         return new Response(

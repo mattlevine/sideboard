@@ -14,7 +14,7 @@
 export const BAKED_SLACK_CLIENT_ID = '7592788819232.11813536272562';
 
 /** Public WebSocket URL for Slack desktops on the hosted relay (path included). */
-export const BAKED_SLACK_RELAY_URL = 'wss://relay.sideboard.cloud/slack/desktop';
+export const BAKED_SLACK_RELAY_URL = 'wss://relay.sideboard.build/slack/desktop';
 
 export function hasBakedSlackOAuth(): boolean {
   return Boolean(BAKED_SLACK_CLIENT_ID.trim());

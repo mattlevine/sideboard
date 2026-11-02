@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.329] - 2026-11-01
+
+### Changed
+
+- The site, phone relay, and new Mac update checks use sideboard.build. Mac apps already installed keep updating from GitHub Releases.
+- Remote sign-in on desktop and phone uses relay.sideboard.build. A saved relay.sideboard.cloud address is rewritten to that host.
+- The sidebar help link and AbleTime browser connect use www.sideboard.build.
+- Marketing-site download buttons use download.sideboard.build.
+
 ## [0.1.328] - 2026-10-31
 
 ### Fixed

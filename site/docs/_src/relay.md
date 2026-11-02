@@ -2,7 +2,7 @@
 
 The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.
 
-Sideboard hosts a relay at `wss://relay.sideboard.cloud/remote`. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website.
+Sideboard hosts a relay at `wss://relay.sideboard.build/remote`. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website.
 
 ## What you need
 

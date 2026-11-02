@@ -133,7 +133,7 @@ type PhoneControl =
       actionLabel?: string;
     });
 
-const DEFAULT_URL = 'wss://relay.sideboard.cloud/remote';
+const DEFAULT_URL = 'wss://relay.sideboard.build/remote';
 const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 type ServerMessage =
