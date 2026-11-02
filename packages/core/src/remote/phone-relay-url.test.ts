@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { relaySocketUrl } from '../../../../apps/mobile/relay-address.ts';
+import { normalizeRelayUrl, relaySocketUrl } from '../../../../apps/mobile/relay-address.ts';
 import { createRelayLink, RELAY_ADDRESS_INVALID } from '../../../../apps/mobile/relay-link.ts';
 
 const HOSTED = 'wss://relay.sideboard.build/remote';
+
+describe('normalizeRelayUrl', () => {
+  it('moves a saved sideboard.cloud relay onto sideboard.build', () => {
+    expect(normalizeRelayUrl('wss://relay.sideboard.cloud/remote')).toBe(
+      'wss://relay.sideboard.build/remote',
+    );
+  });
+});
 
 describe('relaySocketUrl', () => {
   it('uses the hosted address only when the field is blank', () => {

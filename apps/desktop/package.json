@@ -124,6 +124,10 @@
     },
     "publish": [
       {
+        "provider": "generic",
+        "url": "https://download.sideboard.build"
+      },
+      {
         "provider": "github",
         "owner": "mattlevine",
         "repo": "sideboard",

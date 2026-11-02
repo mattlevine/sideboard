@@ -15,6 +15,15 @@ describe('normalizeRemoteRelayUrl', () => {
     );
   });
 
+  it('moves the old hosted relay onto sideboard.build', () => {
+    expect(normalizeRemoteRelayUrl('wss://relay.sideboard.cloud/remote')).toBe(
+      'wss://relay.sideboard.build/remote',
+    );
+    expect(normalizeRemoteRelayUrl('https://relay.sideboard.cloud')).toBe(
+      'wss://relay.sideboard.build/remote',
+    );
+  });
+
   it('rejects anything that is not the relay path', () => {
     expect(normalizeRemoteRelayUrl('https://example.com/docs')).toBeNull();
     expect(normalizeRemoteRelayUrl('ftp://example.com/remote')).toBeNull();

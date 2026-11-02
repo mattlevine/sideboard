@@ -32,6 +32,8 @@ export function normalizeRemoteRelayUrl(raw: string): string | null {
   url.pathname = REMOTE_RELAY_PATH;
   url.search = '';
   url.hash = '';
+  // Settings → Remote sign-in uses this URL. The old hosted name is the same relay.
+  if (url.hostname === 'relay.sideboard.cloud') url.hostname = 'relay.sideboard.build';
   return url.toString();
 }
 

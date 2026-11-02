@@ -18,6 +18,7 @@ export function normalizeRelayUrl(raw: string): string | null {
   url.pathname = '/remote';
   url.search = '';
   url.hash = '';
+  if (url.hostname === 'relay.sideboard.cloud') url.hostname = 'relay.sideboard.build';
   return url.toString();
 }
 

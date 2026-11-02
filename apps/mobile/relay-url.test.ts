@@ -7,6 +7,12 @@ describe('normalizeRelayUrl', () => {
     expect(normalizeRelayUrl('wss://relay.example.com/remote/')).toBe('wss://relay.example.com/remote');
   });
 
+  it('moves a saved sideboard.cloud relay onto sideboard.build', () => {
+    expect(normalizeRelayUrl('wss://relay.sideboard.cloud/remote')).toBe(
+      'wss://relay.sideboard.build/remote',
+    );
+  });
+
   it('keeps a local ws address', () => {
     expect(normalizeRelayUrl('ws://127.0.0.1:8787')).toBe('ws://127.0.0.1:8787/remote');
   });

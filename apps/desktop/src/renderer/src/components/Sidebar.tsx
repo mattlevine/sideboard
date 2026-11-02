@@ -662,7 +662,7 @@ export function Sidebar({
           title="Sideboard"
           aria-label="Sideboard"
           onClick={() =>
-            void window.sideboard.openExternal('https://www.sideboard.cloud')
+            void window.sideboard.openExternal('https://www.sideboard.build')
           }
         >
           <span className="sidebar-footer-icon help" aria-hidden>

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Upload desktop release artifacts to the public Tigris bucket
-# (https://download.sideboard.cloud).
+# Upload desktop release artifacts to the public Tigris bucket.
+# New builds read https://download.sideboard.build/latest-mac.yml.
+# https://download.sideboard.cloud stays on the same bucket.
 #
 # Usage:
 #   scripts/publish-tigris.sh <dir>
@@ -109,4 +110,4 @@ while read -r name; do
   s3 rm "s3://$bucket/$name"
 done < <(s3 ls "s3://$bucket/" | awk '{print $4}')
 
-echo "published https://download.sideboard.cloud/latest-mac.yml"
+echo "published https://download.sideboard.build/latest-mac.yml"

@@ -9,10 +9,10 @@ Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted
 | https://www.sideboard.build and https://sideboard.build | `site/` while both domains are live |
 | https://www.sideboard.cloud and https://sideboard.cloud | Same site. A host in `SIDEBOARD_SITE_HOSTS` is served even if it is also a redirect host. |
 | https://relay.sideboard.build | Phone remote, legacy Slack, and `/health`. `relay.sideboard.cloud` still reaches this app. |
-| https://download.sideboard.cloud | Intended custom domain for desktop artifacts. CNAME is set; TLS is not issued yet. |
+| https://download.sideboard.build | Desktop artifacts and the auto-update feed. Tigris allows one custom domain, so this is the one with TLS. |
 | https://sideboard-downloads.t3.tigrisfiles.io | Working public Tigris host (use this until custom-domain HTTPS works). |
 
-Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). Stable alias: `https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io`. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
+Desktop and npm are a different path (`pnpm release` in the README). The `v*` Release workflow uploads the Mac dmg/zip/`latest-mac.yml` to GitHub Releases, then `publish-downloads` copies them to the Tigris bucket `sideboard-downloads` (`scripts/publish-tigris.sh`). New builds check `https://download.sideboard.build/latest-mac.yml`. Copies already installed keep checking GitHub Releases. Stable alias: `https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg`. GoDaddy CNAME `download` → `sideboard-downloads.t3.tigrisbucket.io` on both domains. Repo secrets: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`.
 
 ## When
 
