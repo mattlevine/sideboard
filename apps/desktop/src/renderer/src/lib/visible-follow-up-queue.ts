@@ -68,6 +68,40 @@ export function unlandedUserTexts<T extends OptimisticUserSend>(
 }
 
 const SETTLED_THREAD_STATUSES = new Set(['idle', 'stopped', 'error', 'broken', 'archived']);
+/** Turn finished without storing this bubble. Idle and queued still mean the send can land. */
+const TURN_ENDED_STATUSES = new Set(['stopped', 'error', 'broken', 'archived']);
+
+type PendingSnapshot = {
+  messages: Array<{ role: string; text?: string; origin?: string }>;
+  queue: string[];
+  status: string;
+};
+
+/**
+ * A thread refresh clones messages and the queue without changing them.
+ * Reference inequality is not "the thread moved on" — that was dropping an
+ * in-flight send while enqueue still held the lock.
+ */
+export function pendingSnapshotChanged(prev: PendingSnapshot, next: PendingSnapshot): boolean {
+  if (prev.status !== next.status) return true;
+  if (prev.queue.length !== next.queue.length) return true;
+  for (let i = 0; i < prev.queue.length; i++) {
+    if (prev.queue[i] !== next.queue[i]) return true;
+  }
+  if (prev.messages.length !== next.messages.length) return true;
+  for (let i = 0; i < prev.messages.length; i++) {
+    const before = prev.messages[i];
+    const after = next.messages[i];
+    if (
+      before?.role !== after?.role ||
+      before?.text !== after?.text ||
+      before?.origin !== after?.origin
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function matchingUserCount(
   messages: Array<{ role: string; text?: string; origin?: string }>,
@@ -130,7 +164,10 @@ export function shouldDropStalePendingUser(input: {
     // stopped, the queue dock owns it so it is not pinned under later replies.
     return !(input.status === 'queued' && input.queue[0] === input.text);
   }
-  return SETTLED_THREAD_STATUSES.has(input.status) || input.status === 'queued';
+  // Not in the transcript and not in the queue yet. Keep it through idle
+  // and queued — the send may still be locking. Drop only after the turn
+  // ends without saving this text.
+  return TURN_ENDED_STATUSES.has(input.status);
 }
 
 /**

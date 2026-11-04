@@ -150,6 +150,7 @@ import {
 import {
   dropRemovedFollowUp,
   extraPendingFollowUps,
+  pendingSnapshotChanged,
   pendingTranscriptTexts,
   shouldDropStalePendingUser,
   shouldShowStreamingTurn,
@@ -757,9 +758,11 @@ export function ThreadPanel({
     const seen = pendingSnapshot.current;
     const threadMoved =
       seen?.text === pendingUser &&
-      (seen.messages !== thread.messages ||
-        seen.queue !== thread.queue ||
-        seen.status !== thread.status);
+      pendingSnapshotChanged(seen, {
+        messages: thread.messages,
+        queue: thread.queue,
+        status: thread.status,
+      });
     const pendingSeen = optimisticUsers.reduce<number | undefined>((best, item) => {
       if (item.text !== pendingUser) return best;
       return best == null || item.seen > best ? item.seen : best;
@@ -856,9 +859,11 @@ export function ThreadPanel({
       const seen = optimisticSnapshot.current.get(key);
       const threadMoved =
         seen != null &&
-        (seen.messages !== thread.messages ||
-          seen.queue !== thread.queue ||
-          seen.status !== thread.status);
+        pendingSnapshotChanged(seen, {
+          messages: thread.messages,
+          queue: thread.queue,
+          status: thread.status,
+        });
       return !shouldDropStalePendingUser({
         text: item.text,
         messages: thread.messages,

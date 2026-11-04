@@ -71,15 +71,19 @@ export function rewriteTrailingUserPrompt(threadId: string, from: string, to: st
 export function reuseJoinedUserBubble(
   reused: { delete(id: string): boolean },
   threadId: string,
-  last: ThreadMessage | undefined,
+  messages: ThreadMessage[],
   promptText: string,
 ): boolean {
-  return (
-    reused.delete(threadId) &&
-    last?.role === 'user' &&
-    last.origin !== 'continue' &&
-    last.text === promptText
-  );
+  if (!reused.delete(threadId)) return false;
+  // The rewritten user row can sit above a partial agent reply. Matching only
+  // the last message appends a second copy of the combined prompt.
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
+    if (message.role !== 'user') continue;
+    return message.text === promptText;
+  }
+  return false;
 }
 
 /** Swap the expanded prompt when steer joined more text after expansion. */

@@ -3,6 +3,7 @@ import {
   dropRemovedFollowUp,
   extraPendingFollowUps,
   joinSteerPrompt,
+  pendingSnapshotChanged,
   pendingTranscriptTexts,
   shouldDropStalePendingUser,
   shouldShowStreamingTurn,
@@ -180,6 +181,44 @@ describe('pendingTranscriptTexts', () => {
         status: 'stopped',
         threadMoved: true,
       }),
+    ).toBe(true);
+  });
+
+  it('keeps an in-flight send that has not reached the queue', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [{ role: 'user', text: 'Work on issue A' }],
+        queue: [],
+        status: 'idle',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [],
+        queue: [],
+        status: 'queued',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('ignores a refresh that clones the same transcript', () => {
+    const messages = [{ role: 'user', text: 'Work on issue A' }];
+    const queue = ['later'];
+    expect(
+      pendingSnapshotChanged(
+        { messages, queue, status: 'idle' },
+        { messages: [...messages], queue: [...queue], status: 'idle' },
+      ),
+    ).toBe(false);
+    expect(
+      pendingSnapshotChanged(
+        { messages, queue, status: 'running' },
+        { messages, queue, status: 'stopped' },
+      ),
     ).toBe(true);
   });
 
