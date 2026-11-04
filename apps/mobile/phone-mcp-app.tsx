@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, View } from 'react-native';
 import WebView from 'react-native-webview';
 import { askPhoneMcp, deliverPhoneMcpWaiter, nextPhoneMcpReqId } from './phone-mcp-waiters';
@@ -122,13 +122,14 @@ function PhoneMcpApp({
     };
   }, [app.id, app.tool, chatId, tearingDown]);
 
-  if (!html) return null;
+  const source = useMemo(() => (html ? { html } : null), [html]);
+  if (!source) return null;
   return (
     <View style={{ height, marginTop: 8, borderRadius: 8, overflow: 'hidden' }}>
       <WebView
         ref={webRef}
         originWhitelist={['*']}
-        source={{ html }}
+        source={source}
         scrollEnabled={false}
         onMessage={(event) => {
           void onGuest(event.nativeEvent.data, {

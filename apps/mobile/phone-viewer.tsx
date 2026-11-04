@@ -226,6 +226,12 @@ function DirectoryList({
   );
 }
 
+/** Keep the WebView source object stable so a parent re-render does not reload the document. */
+function ViewerWeb({ html }: { html: string }) {
+  const source = useMemo(() => ({ html }), [html]);
+  return <WebView originWhitelist={['*']} source={source} style={styles.web} />;
+}
+
 function ViewerBody({
   viewer,
   onOpenPath,
@@ -249,13 +255,7 @@ function ViewerBody({
     );
   }
   if (viewer.status === 'artifact' && (viewer.kind === 'html' || viewer.kind === 'svg')) {
-    return (
-      <WebView
-        originWhitelist={['*']}
-        source={{ html: viewerHtml(viewer.kind, viewer.content) }}
-        style={styles.web}
-      />
-    );
+    return <ViewerWeb html={viewerHtml(viewer.kind, viewer.content)} />;
   }
   if (viewer.status === 'artifact' && viewer.kind === 'markdown') {
     return (
@@ -271,7 +271,7 @@ function ViewerBody({
     return <DirectoryList path={viewer.path} content={viewer.content} onOpenPath={onOpenPath} />;
   }
   if (viewer.status === 'file' && viewer.mime === 'image/svg+xml') {
-    return <WebView originWhitelist={['*']} source={{ html: viewerHtml('svg', viewer.content) }} style={styles.web} />;
+    return <ViewerWeb html={viewerHtml('svg', viewer.content)} />;
   }
   if (
     viewer.status === 'file' &&

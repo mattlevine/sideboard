@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -164,6 +165,7 @@ import {
   dropRemovedFollowUp,
   extraPendingFollowUps,
   pendingTranscriptTexts,
+  shouldDropStalePendingUser,
   splitTurnQueue,
   unlandedFollowUps,
   unlandedUserTexts,
@@ -1136,17 +1138,45 @@ export function ThreadPanel({
     setChatSearchIndex(0);
   }, [thread.id]);
 
+  const pendingSnapshot = useRef<{
+    text: string;
+    messages: Thread['messages'];
+    queue: string[];
+    status: Thread['status'];
+  } | null>(null);
   useEffect(() => {
-    if (!pendingUser) return;
-    const inMessages = thread.messages.some(
-      (m) => m.role === 'user' && m.text === pendingUser,
-    );
-    if (inMessages) {
+    if (!pendingUser) {
+      pendingSnapshot.current = null;
+      return;
+    }
+    const seen = pendingSnapshot.current;
+    const threadMoved =
+      seen?.text === pendingUser &&
+      (seen.messages !== thread.messages ||
+        seen.queue !== thread.queue ||
+        seen.status !== thread.status);
+    if (
+      shouldDropStalePendingUser({
+        text: pendingUser,
+        messages: thread.messages,
+        queue: thread.queue,
+        status: thread.status,
+        threadMoved,
+      })
+    ) {
+      pendingSnapshot.current = null;
       setPendingUser(null);
       setPendingInTranscript(false);
       setPendingAttachments([]);
+      setOptimisticUsers((prev) => prev.filter((item) => item.text !== pendingUser));
       return;
     }
+    pendingSnapshot.current = {
+      text: pendingUser,
+      messages: thread.messages,
+      queue: thread.queue,
+      status: thread.status,
+    };
     const queueIndex = thread.queue.indexOf(pendingUser);
     if (queueIndex < 0) return;
     const turnBusy =
@@ -1154,10 +1184,23 @@ export function ThreadPanel({
       liveParts.length > 0 ||
       thread.status === 'running' ||
       Boolean(turnStartedAt);
+    const settled =
+      thread.status === 'idle' ||
+      thread.status === 'stopped' ||
+      thread.status === 'error' ||
+      thread.status === 'broken' ||
+      thread.status === 'archived';
+    const agentLive =
+      thread.status === 'running' ||
+      (!settled &&
+        (Boolean(liveOutput) || liveParts.length > 0 || Boolean(turnStartedAt)));
+    // After Stop, a queued addition belongs in the queue dock. Keeping
+    // pendingInTranscript would pin that bubble under every later message.
     const isCurrentTurnPrompt =
-      pendingInTranscript ||
+      (pendingInTranscript && agentLive) ||
       (!turnBusy && thread.status === 'queued' && queueIndex === 0);
     if (!isCurrentTurnPrompt) {
+      pendingSnapshot.current = null;
       setPendingUser(null);
       setPendingInTranscript(false);
       setPendingAttachments([]);
@@ -1173,13 +1216,44 @@ export function ThreadPanel({
     turnStartedAt,
   ]);
 
+  const optimisticSnapshot = useRef(
+    new Map<string, { messages: Thread['messages']; queue: string[]; status: Thread['status'] }>(),
+  );
   useEffect(() => {
-    setOptimisticUsers((prev) => {
-      if (prev.length === 0) return prev;
-      const stillPending = unlandedUserTexts(prev, thread.messages);
-      return stillPending.length === prev.length ? prev : stillPending;
+    if (optimisticUsers.length === 0) {
+      optimisticSnapshot.current.clear();
+      return;
+    }
+    const stillPending = unlandedUserTexts(optimisticUsers, thread.messages).filter((item) => {
+      const key = `${item.seen}:${item.text}`;
+      const seen = optimisticSnapshot.current.get(key);
+      const threadMoved =
+        seen != null &&
+        (seen.messages !== thread.messages ||
+          seen.queue !== thread.queue ||
+          seen.status !== thread.status);
+      return !shouldDropStalePendingUser({
+        text: item.text,
+        messages: thread.messages,
+        queue: thread.queue,
+        status: thread.status,
+        threadMoved,
+      });
     });
-  }, [thread.messages]);
+    const nextSnap = new Map<
+      string,
+      { messages: Thread['messages']; queue: string[]; status: Thread['status'] }
+    >();
+    for (const item of stillPending) {
+      nextSnap.set(`${item.seen}:${item.text}`, {
+        messages: thread.messages,
+        queue: thread.queue,
+        status: thread.status,
+      });
+    }
+    optimisticSnapshot.current = nextSnap;
+    if (stillPending.length !== optimisticUsers.length) setOptimisticUsers(stillPending);
+  }, [optimisticUsers, thread.messages, thread.queue, thread.status]);
 
   useEffect(() => {
     if (editingQueueIndex === null) return;
@@ -1342,13 +1416,20 @@ export function ThreadPanel({
     }
   }
 
+  const threadSettled =
+    thread.status === 'idle' ||
+    thread.status === 'stopped' ||
+    thread.status === 'error' ||
+    thread.status === 'broken' ||
+    thread.status === 'archived';
+  // A pending send or a queued follow-up is not the agent thinking. Leftover
+  // live paint after Stop must not keep the spinner up either.
   const showStreaming =
-    Boolean(liveOutput) ||
-    liveParts.length > 0 ||
-    thread.status === 'running' ||
-    thread.status === 'queued' ||
-    Boolean(turnStartedAt) ||
-    Boolean(pendingUser && pendingInTranscript);
+    !threadSettled &&
+    (thread.status === 'running' ||
+      Boolean(liveOutput) ||
+      liveParts.length > 0 ||
+      Boolean(turnStartedAt));
 
   const liveHasPresentPlan = liveParts.some(
     (p) => p.type === 'tool' && /present_plan$/i.test(p.name ?? ''),
@@ -1423,13 +1504,25 @@ export function ThreadPanel({
       ? pendingUser
       : null;
 
-  const pendingTranscripts = pendingTranscriptTexts({
-    optimistic: optimisticUsers,
-    messages: thread.messages,
-    currentTurnPrompt: currentTurnFromQueue,
-    pendingUser,
-    pendingInTranscript,
-  });
+  // A fresh array here busts ChatTranscript's memo, so composer keystrokes
+  // rebuild markdown (mermaid, highlight, images) on every character.
+  const pendingTranscripts = useMemo(
+    () =>
+      pendingTranscriptTexts({
+        optimistic: optimisticUsers,
+        messages: thread.messages,
+        currentTurnPrompt: currentTurnFromQueue,
+        pendingUser,
+        pendingInTranscript,
+      }),
+    [
+      optimisticUsers,
+      thread.messages,
+      currentTurnFromQueue,
+      pendingUser,
+      pendingInTranscript,
+    ],
+  );
   const shownInTranscript = new Set(pendingTranscripts);
 
   /** Follow-up while a turn is in flight (or already queued behind one). */
@@ -2234,6 +2327,12 @@ export function ThreadPanel({
 
   const chrome = workspaceChromeLabels(thread);
   const triggerOpener = pickTriggerOpener(worktreeOpeners, lastWorktreeOpener);
+  const navigateOpenUrl = useCallback(
+    (to: string) => {
+      if (openUrl) onNavigateUrl?.(openUrl, to);
+    },
+    [onNavigateUrl, openUrl],
+  );
 
   return (
     <section className="panel thread-main">
@@ -2500,7 +2599,7 @@ export function ThreadPanel({
           key={openUrl}
           url={openUrl}
           suspended={urlPreviewSuspended}
-          onNavigate={(to) => onNavigateUrl?.(openUrl, to)}
+          onNavigate={navigateOpenUrl}
           onClose={() => onCloseUrl?.(openUrl)}
         />
       ) : openFilePath ? (

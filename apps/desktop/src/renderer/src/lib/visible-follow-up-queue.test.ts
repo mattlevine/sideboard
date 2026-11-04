@@ -4,6 +4,7 @@ import {
   extraPendingFollowUps,
   joinSteerPrompt,
   pendingTranscriptTexts,
+  shouldDropStalePendingUser,
   splitTurnQueue,
   unlandedFollowUps,
   unlandedUserTexts,
@@ -125,6 +126,72 @@ describe('pendingTranscriptTexts', () => {
         pendingInTranscript: true,
       }),
     ).toEqual(['Work on issue A\nAnd B']);
+  });
+
+  it('drops a joined steer bubble once the thread settles without that exact text', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'Work on issue A\nAnd B',
+        messages: [
+          { role: 'user', text: 'Work on issue A' },
+          { role: 'agent', text: 'partial' },
+        ],
+        queue: [],
+        status: 'stopped',
+        threadMoved: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps the bubble until the thread snapshot changes', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'Work on issue A\nAnd B',
+        messages: [{ role: 'user', text: 'Work on issue A' }],
+        queue: [],
+        status: 'idle',
+        threadMoved: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the queued head while that turn is waiting to start', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [],
+        queue: ['And B'],
+        status: 'queued',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('releases a queued addition from the transcript once the turn has stopped', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [
+          { role: 'user', text: 'Work on issue A' },
+          { role: 'agent', text: 'partial' },
+        ],
+        queue: ['And B'],
+        status: 'stopped',
+        threadMoved: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps a send that is still running', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [],
+        queue: [],
+        status: 'running',
+        threadMoved: true,
+      }),
+    ).toBe(false);
   });
 
   it('hides the pending bubble once that user message lands', () => {

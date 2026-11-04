@@ -9,6 +9,28 @@ export function joinSteerPrompt(base: string, addition: string): string {
   return `${head}\n${next}`;
 }
 
+/**
+ * Steer joins onto the user prompt above a partial reply. Skip agent rows
+ * and stop at the first real user message so an older prompt is left alone.
+ */
+export function messagesWithRewrittenUserPrompt(
+  messages: ThreadMessage[],
+  from: string,
+  to: string,
+): ThreadMessage[] | null {
+  if (from === to) return null;
+  const next = messages.slice();
+  for (let i = next.length - 1; i >= 0; i--) {
+    const message = next[i];
+    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
+    if (message.role !== 'user') continue;
+    if (message.text !== from) return null;
+    next[i] = { ...message, text: to };
+    return next;
+  }
+  return null;
+}
+
 /** Latest user prompt when no agent reply has been stored after it. */
 export function trailingUnansweredUserText(messages: ThreadMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {

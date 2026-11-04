@@ -3,6 +3,7 @@ import type { GitForge } from '../git/remote-forge.js';
 import {
   joinSteerPrompt,
   livePartsShowAgentReply,
+  messagesWithRewrittenUserPrompt,
   trailingUnansweredUserText,
 } from '../composer/agent-has-replied.js';
 import { expandComposerPrompt } from '../composer/expand.js';
@@ -56,19 +57,11 @@ export type EnqueueSendHost = {
 
 /** Replace the unanswered user bubble when a steer follow-up is joined onto it. */
 export function rewriteTrailingUserPrompt(threadId: string, from: string, to: string): void {
-  if (from === to) return;
   const thread = readThread(threadId);
   if (!thread) return;
-  const messages = thread.messages.slice();
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
-    if (message.role === 'user' && message.text === from) {
-      messages[i] = { ...message, text: to };
-      updateThread(threadId, { messages });
-    }
-    return;
-  }
+  const messages = messagesWithRewrittenUserPrompt(thread.messages, from, to);
+  if (!messages) return;
+  updateThread(threadId, { messages });
 }
 
 /**

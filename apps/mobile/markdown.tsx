@@ -106,6 +106,7 @@ function ChatImage({
     onRequest?.(src);
   }, [remote, key, src, onRequest]);
   const uri = remote ? src : local;
+  const imageSource = useMemo(() => (uri ? { uri } : null), [uri]);
   if (!remote && local === undefined) {
     return <Text style={imageWait}>{alt.trim() || 'Image'}</Text>;
   }
@@ -121,11 +122,11 @@ function ChatImage({
   return (
     <>
       <Pressable onPress={() => setOpen(true)} style={imageFrame}>
-        <Image source={{ uri }} style={imageThumb} resizeMode="contain" accessibilityLabel={alt || 'Image'} />
+        <Image source={imageSource ?? undefined} style={imageThumb} resizeMode="contain" accessibilityLabel={alt || 'Image'} />
       </Pressable>
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={imageScrim} onPress={() => setOpen(false)}>
-          <Image source={{ uri }} style={imageFull} resizeMode="contain" />
+          <Image source={imageSource ?? undefined} style={imageFull} resizeMode="contain" />
         </Pressable>
       </Modal>
     </>

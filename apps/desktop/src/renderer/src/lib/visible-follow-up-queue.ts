@@ -67,6 +67,38 @@ export function unlandedUserTexts<T extends OptimisticUserSend>(
   return out;
 }
 
+const SETTLED_THREAD_STATUSES = new Set(['idle', 'stopped', 'error', 'broken', 'archived']);
+
+/**
+ * A composer bubble that never matched a stored user message.
+ * Keep it on the first paint and while a turn is still running. After the
+ * thread moves on without that text, drop it — otherwise it sits under later
+ * replies with the thinking row. A queued addition stays in the transcript
+ * only while it is the prompt about to start.
+ */
+export function shouldDropStalePendingUser(input: {
+  text: string;
+  messages: Array<{ role: string; text?: string; origin?: string }>;
+  queue: string[];
+  status: string;
+  /** A later messages/queue/status snapshot than the one that showed this bubble. */
+  threadMoved: boolean;
+}): boolean {
+  const landed = input.messages.some(
+    (message) =>
+      message.role === 'user' && message.origin !== 'continue' && message.text === input.text,
+  );
+  if (landed) return true;
+  if (!input.threadMoved) return false;
+  if (input.status === 'running') return false;
+  if (input.queue.includes(input.text)) {
+    // Waiting to start: the transcript shows that prompt. Once the turn has
+    // stopped, the queue dock owns it so it is not pinned under later replies.
+    return !(input.status === 'queued' && input.queue[0] === input.text);
+  }
+  return SETTLED_THREAD_STATUSES.has(input.status) || input.status === 'queued';
+}
+
 /**
  * Transcript bubbles for sends that have not landed yet.
  * Composer sends are in `optimistic`. Plan answers, Implement plan, and Send
