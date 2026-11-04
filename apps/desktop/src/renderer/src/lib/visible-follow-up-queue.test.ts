@@ -3,7 +3,10 @@ import {
   dropRemovedFollowUp,
   extraPendingFollowUps,
   joinSteerPrompt,
+  pendingSnapshotChanged,
   pendingTranscriptTexts,
+  shouldDropStalePendingUser,
+  shouldShowStreamingTurn,
   splitTurnQueue,
   unlandedFollowUps,
   unlandedUserTexts,
@@ -127,6 +130,139 @@ describe('pendingTranscriptTexts', () => {
     ).toEqual(['Work on issue A\nAnd B']);
   });
 
+  it('drops a joined steer bubble once the thread settles without that exact text', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'Work on issue A\nAnd B',
+        messages: [
+          { role: 'user', text: 'Work on issue A' },
+          { role: 'agent', text: 'partial' },
+        ],
+        queue: [],
+        status: 'stopped',
+        threadMoved: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps the bubble until the thread snapshot changes', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'Work on issue A\nAnd B',
+        messages: [{ role: 'user', text: 'Work on issue A' }],
+        queue: [],
+        status: 'idle',
+        threadMoved: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps the queued head while that turn is waiting to start', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [],
+        queue: ['And B'],
+        status: 'queued',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('releases a queued addition from the transcript once the turn has stopped', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [
+          { role: 'user', text: 'Work on issue A' },
+          { role: 'agent', text: 'partial' },
+        ],
+        queue: ['And B'],
+        status: 'stopped',
+        threadMoved: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps an in-flight send that has not reached the queue', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [{ role: 'user', text: 'Work on issue A' }],
+        queue: [],
+        status: 'idle',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [],
+        queue: [],
+        status: 'queued',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('ignores a refresh that clones the same transcript', () => {
+    const messages = [{ role: 'user', text: 'Work on issue A' }];
+    const queue = ['later'];
+    expect(
+      pendingSnapshotChanged(
+        { messages, queue, status: 'idle' },
+        { messages: [...messages], queue: [...queue], status: 'idle' },
+      ),
+    ).toBe(false);
+    expect(
+      pendingSnapshotChanged(
+        { messages, queue, status: 'running' },
+        { messages, queue, status: 'stopped' },
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps a send that is still running', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'And B',
+        messages: [],
+        queue: [],
+        status: 'running',
+        threadMoved: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps a resend until this copy is stored', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'yes',
+        messages: [{ role: 'user', text: 'yes' }],
+        queue: ['yes'],
+        status: 'queued',
+        threadMoved: true,
+        seen: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('drops a resend once another copy lands', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'yes',
+        messages: [
+          { role: 'user', text: 'yes' },
+          { role: 'user', text: 'yes' },
+        ],
+        queue: [],
+        status: 'running',
+        threadMoved: true,
+        seen: 1,
+      }),
+    ).toBe(true);
+  });
+
   it('hides the pending bubble once that user message lands', () => {
     expect(
       pendingTranscriptTexts({
@@ -137,6 +273,63 @@ describe('pendingTranscriptTexts', () => {
         pendingInTranscript: true,
       }),
     ).toEqual([]);
+  });
+
+  it('shows a resend that optimistic still tracks', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [{ text: 'yes', seen: 1 }],
+        messages: [{ role: 'user', text: 'yes' }],
+        currentTurnPrompt: 'yes',
+        pendingUser: 'yes',
+        pendingInTranscript: true,
+      }),
+    ).toEqual(['yes']);
+  });
+
+  it('shows the queued head when an older message has the same text', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [],
+        messages: [{ role: 'user', text: 'yes' }],
+        currentTurnPrompt: 'yes',
+        pendingUser: null,
+        pendingInTranscript: false,
+      }),
+    ).toEqual(['yes']);
+  });
+});
+
+describe('shouldShowStreamingTurn', () => {
+  it('keeps a partial reply on screen after Stop', () => {
+    expect(
+      shouldShowStreamingTurn({
+        status: 'stopped',
+        liveOutput: 'partial',
+        livePartCount: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it('hides the empty thinking row once the turn has stopped', () => {
+    expect(
+      shouldShowStreamingTurn({
+        status: 'stopped',
+        liveOutput: '',
+        livePartCount: 0,
+        turnStartedAt: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('shows the thinking row while the turn is running', () => {
+    expect(
+      shouldShowStreamingTurn({
+        status: 'running',
+        liveOutput: '',
+        livePartCount: 0,
+      }),
+    ).toBe(true);
   });
 });
 

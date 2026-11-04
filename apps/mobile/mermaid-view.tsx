@@ -58,6 +58,10 @@ function diagramHtml(chart: string): string {
 /** Finished ```mermaid fence. While the reply is still streaming, the caller shows the source. */
 export function MermaidView({ chart }: { chart: string }) {
   const html = useMemo(() => diagramHtml(chart), [chart]);
+  const source = useMemo(
+    () => ({ html, baseUrl: 'https://cdn.jsdelivr.net' }),
+    [html],
+  );
   const [height, setHeight] = useState(160);
   const [error, setError] = useState<string | null>(null);
   if (error) {
@@ -74,7 +78,7 @@ export function MermaidView({ chart }: { chart: string }) {
     <View style={[styles.frame, { height }]}>
       <WebView
         originWhitelist={['*']}
-        source={{ html, baseUrl: 'https://cdn.jsdelivr.net' }}
+        source={source}
         scrollEnabled={false}
         style={styles.web}
         onMessage={(event) => {

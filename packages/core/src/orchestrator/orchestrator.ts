@@ -1401,8 +1401,8 @@ export class Orchestrator {
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
     if (!autoContinue) clearAgentBlock(threadId);
-    const lastShown = this.requireThread(threadId).messages.at(-1);
-    if (!reuseJoinedUserBubble(this.reusedUserPrompt, threadId, lastShown, promptText)) {
+    const shown = this.requireThread(threadId).messages;
+    if (!reuseJoinedUserBubble(this.reusedUserPrompt, threadId, shown, promptText)) {
       appendMessage(threadId, {
         role: 'user',
         text: promptText,

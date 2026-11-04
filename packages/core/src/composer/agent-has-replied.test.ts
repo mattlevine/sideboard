@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { joinSteerPrompt, livePartsShowAgentReply, trailingUnansweredUserText } from './agent-has-replied.js';
+import {
+  joinSteerPrompt,
+  livePartsShowAgentReply,
+  messagesWithRewrittenUserPrompt,
+  trailingUnansweredUserText,
+} from './agent-has-replied.js';
 
 describe('joinSteerPrompt', () => {
   it('appends the next line onto the unanswered prompt', () => {
@@ -22,6 +27,35 @@ describe('trailingUnansweredUserText', () => {
         { role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' },
         { role: 'agent', text: 'On it', ts: '2026-01-01T00:00:01.000Z' },
       ]),
+    ).toBeNull();
+  });
+});
+
+describe('messagesWithRewrittenUserPrompt', () => {
+  it('updates the user prompt above a partial agent reply', () => {
+    const messages = messagesWithRewrittenUserPrompt(
+      [
+        { role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' },
+        { role: 'agent', text: 'partial', ts: '2026-01-01T00:00:01.000Z' },
+      ],
+      'Work on issue A',
+      'Work on issue A\nAnd B',
+    );
+    expect(messages?.[0]?.text).toBe('Work on issue A\nAnd B');
+    expect(messages?.[1]?.text).toBe('partial');
+  });
+
+  it('does not rewrite an older user message when a later one does not match', () => {
+    expect(
+      messagesWithRewrittenUserPrompt(
+        [
+          { role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' },
+          { role: 'agent', text: 'done', ts: '2026-01-01T00:00:01.000Z' },
+          { role: 'user', text: 'Something else', ts: '2026-01-01T00:00:02.000Z' },
+        ],
+        'Work on issue A',
+        'Work on issue A\nAnd B',
+      ),
     ).toBeNull();
   });
 });
