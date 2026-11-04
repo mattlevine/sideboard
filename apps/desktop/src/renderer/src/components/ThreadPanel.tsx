@@ -750,7 +750,6 @@ export function ThreadPanel({
     rememberComposerDraft(thread.id, prompt);
   }, [thread.id, prompt]);
   const [busy, setBusy] = useState(false);
-  const [setupRunning, setSetupRunning] = useState(false);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [pendingInTranscript, setPendingInTranscript] = useState(false);
   const [optimisticUsers, setOptimisticUsers] = useState<OptimisticUserSend[]>([]);
@@ -824,24 +823,6 @@ export function ThreadPanel({
   /** After the user closes the pane, skip auto-open until a different artifact. */
   const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
 
-  useEffect(() => {
-    setSetupRunning(false);
-    let cancelled = false;
-    if (typeof window.sideboard.getSetupLog === 'function') {
-      void window.sideboard.getSetupLog(thread.id).then((snap) => {
-        if (!cancelled && snap.running) setSetupRunning(true);
-      });
-    }
-    const off = window.sideboard.onEvent((event) => {
-      if (!('threadId' in event) || event.threadId !== thread.id) return;
-      if (event.type === 'setup_started') setSetupRunning(true);
-      if (event.type === 'setup_finished') setSetupRunning(false);
-    });
-    return () => {
-      cancelled = true;
-      off();
-    };
-  }, [thread.id]);
   const rightPane =
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
     rightSession?.tabs[0] ??
@@ -2538,83 +2519,46 @@ export function ThreadPanel({
       ) : (
         <div className="chat-scroll">
         <div className="chat" ref={chatRef}>
+          {/* Setup stays in the Setup panel. The create spinner here cycled
+              "Sending first message" for the whole install, and a send hid
+              the empty state immediately — so a PR opened with no prompt
+              looked stuck loading until you typed. */}
           {thread.messages.length === 0 &&
             !pendingUser &&
             pendingTranscripts.length === 0 &&
             !showStreaming &&
             !(thread.lastError && !isRedundantLastError(thread)) && (
               <div className="chat-empty">
-                {setupRunning ? (
+                <div className="chat-empty-mark" aria-hidden>
+                  <span className="chat-empty-cube" />
+                </div>
+                {thread.sourceType === 'orchestration' ||
+                isGlobalThread(thread) ? (
                   <>
-                    <CreateProcessingOverlay
-                      variant="inline"
-                      mode={
-                        thread.sourceType === 'orchestration' ||
-                        isGlobalThread(thread)
-                          ? 'orchestration'
-                          : thread.cowboy
-                            ? 'cowboy'
-                            : 'create'
-                      }
-                      repoName={
-                        thread.repoPath.split('/').filter(Boolean).pop() ||
-                        thread.title ||
-                        'Workspace'
-                      }
-                      selectionHint={
-                        setupRunning ? 'Running setup' : 'Starting chat'
-                      }
-                    />
-                    <h3>
-                      {thread.sourceType === 'orchestration' ||
-                      isGlobalThread(thread)
-                        ? 'Opening orchestration'
-                        : thread.cowboy
-                          ? 'Starting chat'
-                          : 'Creating worktree'}
-                    </h3>
+                    <h3>What should we orchestrate?</h3>
                     <p>
-                      {setupRunning
-                        ? 'Running setup — you can keep browsing while this finishes.'
-                        : thread.cowboy
-                          ? 'Working in the project folder — you can keep browsing while this finishes.'
-                          : 'Sending your first message — you can keep browsing while this finishes.'}
+                      {isGlobalThread(thread)
+                        ? 'Steer worktree agents across registered repos with Sideboard MCP. Slack DMs and @mentions land here.'
+                        : 'Coordinate child worktree agents from this orchestration agent.'}{' '}
+                      Use <kbd>⌘L</kbd> to focus the composer.
+                    </p>
+                  </>
+                ) : thread.cowboy ? (
+                  <>
+                    <h3>What are you changing on main?</h3>
+                    <p>
+                      This chat edits the project folder on {thread.branchName} and
+                      can push there. Archive does not delete the folder. Use{' '}
+                      <kbd>⌘L</kbd> to focus the composer.
                     </p>
                   </>
                 ) : (
                   <>
-                    <div className="chat-empty-mark" aria-hidden>
-                      <span className="chat-empty-cube" />
-                    </div>
-                    {thread.sourceType === 'orchestration' ||
-                    isGlobalThread(thread) ? (
-                      <>
-                        <h3>What should we orchestrate?</h3>
-                        <p>
-                          {isGlobalThread(thread)
-                            ? 'Steer worktree agents across registered repos with Sideboard MCP. Slack DMs and @mentions land here.'
-                            : 'Coordinate child worktree agents from this orchestration agent.'}{' '}
-                          Use <kbd>⌘L</kbd> to focus the composer.
-                        </p>
-                      </>
-                    ) : thread.cowboy ? (
-                      <>
-                        <h3>What are you changing on main?</h3>
-                        <p>
-                          This chat edits the project folder on {thread.branchName} and
-                          can push there. Archive does not delete the folder. Use{' '}
-                          <kbd>⌘L</kbd> to focus the composer.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <h3>What are you working on?</h3>
-                        <p>
-                          Ask Sideboard to explore this worktree, make changes, or
-                          summarize a PR. Use <kbd>⌘L</kbd> to focus the composer.
-                        </p>
-                      </>
-                    )}
+                    <h3>What are you working on?</h3>
+                    <p>
+                      Ask Sideboard to explore this worktree, make changes, or
+                      summarize a PR. Use <kbd>⌘L</kbd> to focus the composer.
+                    </p>
                   </>
                 )}
               </div>
