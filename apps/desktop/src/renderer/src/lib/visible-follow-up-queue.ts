@@ -69,12 +69,47 @@ export function unlandedUserTexts<T extends OptimisticUserSend>(
 
 const SETTLED_THREAD_STATUSES = new Set(['idle', 'stopped', 'error', 'broken', 'archived']);
 
+function matchingUserCount(
+  messages: Array<{ role: string; text?: string; origin?: string }>,
+  text: string,
+): number {
+  let count = 0;
+  for (const message of messages) {
+    if (message.role === 'user' && message.origin !== 'continue' && message.text === text) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/**
+ * Streaming row for the open turn. Stop marks the thread `stopped` before the
+ * partial reply is appended and before live paint is cleared, so settled
+ * status hides only the empty thinking row. Text or tool parts stay visible
+ * until that snapshot is gone.
+ */
+export function shouldShowStreamingTurn(input: {
+  status: string;
+  liveOutput: string;
+  livePartCount: number;
+  turnStartedAt?: number;
+}): boolean {
+  const hasLivePaint = Boolean(input.liveOutput) || input.livePartCount > 0;
+  if (hasLivePaint) return true;
+  if (SETTLED_THREAD_STATUSES.has(input.status)) return false;
+  return input.status === 'running' || Boolean(input.turnStartedAt);
+}
+
 /**
  * A composer bubble that never matched a stored user message.
  * Keep it on the first paint and while a turn is still running. After the
  * thread moves on without that text, drop it — otherwise it sits under later
  * replies with the thinking row. A queued addition stays in the transcript
  * only while it is the prompt about to start.
+ *
+ * `seen` is how many copies of this text were already stored when the user
+ * sent. A repeated prompt stays until a new copy lands. Omit it only for a
+ * bubble with no send identity (a plan answer): any match then counts.
  */
 export function shouldDropStalePendingUser(input: {
   text: string;
@@ -83,11 +118,10 @@ export function shouldDropStalePendingUser(input: {
   status: string;
   /** A later messages/queue/status snapshot than the one that showed this bubble. */
   threadMoved: boolean;
+  seen?: number;
 }): boolean {
-  const landed = input.messages.some(
-    (message) =>
-      message.role === 'user' && message.origin !== 'continue' && message.text === input.text,
-  );
+  const matches = matchingUserCount(input.messages, input.text);
+  const landed = input.seen == null ? matches > 0 : matches > input.seen;
   if (landed) return true;
   if (!input.threadMoved) return false;
   if (input.status === 'running') return false;
@@ -114,11 +148,9 @@ export function pendingTranscriptTexts(input: {
   const texts = unlandedUserTexts(input.optimistic, input.messages).map((item) => item.text);
   const landed = (text: string) =>
     input.messages.some((message) => message.role === 'user' && message.text === text);
-  if (
-    input.currentTurnPrompt &&
-    !texts.includes(input.currentTurnPrompt) &&
-    !landed(input.currentTurnPrompt)
-  ) {
+  // The queue head has not been consumed yet. An older message with the same
+  // text is a previous send, not this one.
+  if (input.currentTurnPrompt && !texts.includes(input.currentTurnPrompt)) {
     texts.unshift(input.currentTurnPrompt);
   }
   if (

@@ -5,6 +5,7 @@ import {
   joinSteerPrompt,
   pendingTranscriptTexts,
   shouldDropStalePendingUser,
+  shouldShowStreamingTurn,
   splitTurnQueue,
   unlandedFollowUps,
   unlandedUserTexts,
@@ -194,6 +195,35 @@ describe('pendingTranscriptTexts', () => {
     ).toBe(false);
   });
 
+  it('keeps a resend until this copy is stored', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'yes',
+        messages: [{ role: 'user', text: 'yes' }],
+        queue: ['yes'],
+        status: 'queued',
+        threadMoved: true,
+        seen: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('drops a resend once another copy lands', () => {
+    expect(
+      shouldDropStalePendingUser({
+        text: 'yes',
+        messages: [
+          { role: 'user', text: 'yes' },
+          { role: 'user', text: 'yes' },
+        ],
+        queue: [],
+        status: 'running',
+        threadMoved: true,
+        seen: 1,
+      }),
+    ).toBe(true);
+  });
+
   it('hides the pending bubble once that user message lands', () => {
     expect(
       pendingTranscriptTexts({
@@ -204,6 +234,63 @@ describe('pendingTranscriptTexts', () => {
         pendingInTranscript: true,
       }),
     ).toEqual([]);
+  });
+
+  it('shows a resend that optimistic still tracks', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [{ text: 'yes', seen: 1 }],
+        messages: [{ role: 'user', text: 'yes' }],
+        currentTurnPrompt: 'yes',
+        pendingUser: 'yes',
+        pendingInTranscript: true,
+      }),
+    ).toEqual(['yes']);
+  });
+
+  it('shows the queued head when an older message has the same text', () => {
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [],
+        messages: [{ role: 'user', text: 'yes' }],
+        currentTurnPrompt: 'yes',
+        pendingUser: null,
+        pendingInTranscript: false,
+      }),
+    ).toEqual(['yes']);
+  });
+});
+
+describe('shouldShowStreamingTurn', () => {
+  it('keeps a partial reply on screen after Stop', () => {
+    expect(
+      shouldShowStreamingTurn({
+        status: 'stopped',
+        liveOutput: 'partial',
+        livePartCount: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it('hides the empty thinking row once the turn has stopped', () => {
+    expect(
+      shouldShowStreamingTurn({
+        status: 'stopped',
+        liveOutput: '',
+        livePartCount: 0,
+        turnStartedAt: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('shows the thinking row while the turn is running', () => {
+    expect(
+      shouldShowStreamingTurn({
+        status: 'running',
+        liveOutput: '',
+        livePartCount: 0,
+      }),
+    ).toBe(true);
   });
 });
 
