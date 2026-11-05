@@ -27,7 +27,7 @@ export function WorktreeSortSelect({
           type="button"
           className={`icon-btn${open ? ' active' : ''}${className ? ` ${className}` : ''}`}
           title={`Sort: ${currentLabel}`}
-          aria-label={`Sort worktrees (${currentLabel})`}
+          aria-label={`Sort workspaces (${currentLabel})`}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
@@ -71,7 +71,7 @@ export function WorktreeSortSelect({
       <select
         className="worktree-sort-select"
         value={value}
-        aria-label="Sort worktrees"
+        aria-label="Sort workspaces"
         onChange={(e) => onChange(e.target.value as WorktreeSortMode)}
       >
         {WORKTREE_SORT_OPTIONS.map((opt) => (

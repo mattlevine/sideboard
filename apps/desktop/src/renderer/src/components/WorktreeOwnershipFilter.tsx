@@ -22,8 +22,8 @@ export function WorktreeOwnershipFilter({
   const currentLabel = current?.label ?? value;
   const connected = Boolean(githubLogin?.trim());
   const title = connected
-    ? `Show worktrees (${currentLabel}) — GitHub @${githubLogin}`
-    : `Show worktrees (${currentLabel}) — connect GitHub to tell yours from reviews`;
+    ? `Show workspaces (${currentLabel}) — GitHub @${githubLogin}`
+    : `Show workspaces (${currentLabel}) — connect GitHub to tell yours from reviews`;
 
   if (variant === 'icon') {
     return (

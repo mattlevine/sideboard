@@ -359,7 +359,7 @@ export function CreateFromPicker({
                   type="button"
                   className={`composer-picker-row${occupied ? ' is-occupied' : ''}`}
                   disabled={occupied}
-                  title={occupied ? 'Already has an active worktree' : undefined}
+                  title={occupied ? 'Already has an active workspace' : undefined}
                   onClick={() => {
                     if (occupied) return;
                     onSelect({
@@ -418,7 +418,7 @@ export function CreateFromPicker({
                 type="button"
                 className={`composer-picker-row${occupied ? ' is-occupied' : ''}`}
                 disabled={occupied}
-                title={occupied ? 'Already has an active worktree' : undefined}
+                title={occupied ? 'Already has an active workspace' : undefined}
                 onClick={() => {
                   if (occupied) return;
                   onSelect({ kind: 'branch', ref: b.name });
@@ -608,7 +608,7 @@ export function CreateFromPicker({
                     type="button"
                     className={`composer-picker-row${occupied ? ' is-occupied' : ''}`}
                     disabled={occupied}
-                    title={occupied ? 'Already has an active worktree' : undefined}
+                    title={occupied ? 'Already has an active workspace' : undefined}
                     onClick={() => {
                       if (occupied) return;
                       onSelect({

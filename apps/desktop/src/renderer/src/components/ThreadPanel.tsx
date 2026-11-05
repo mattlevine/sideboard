@@ -763,10 +763,14 @@ export function ThreadPanel({
         queue: thread.queue,
         status: thread.status,
       });
-    const pendingSeen = optimisticUsers.reduce<number | undefined>((best, item) => {
-      if (item.text !== pendingUser) return best;
-      return best == null || item.seen > best ? item.seen : best;
-    }, undefined);
+    let pendingSeen: number | undefined;
+    let pendingSeenJoins: number | undefined;
+    for (const item of optimisticUsers) {
+      if (item.text !== pendingUser) continue;
+      if (pendingSeen == null || item.seen > pendingSeen) pendingSeen = item.seen;
+      const joins = item.seenJoins ?? item.seen;
+      if (pendingSeenJoins == null || joins > pendingSeenJoins) pendingSeenJoins = joins;
+    }
     if (
       shouldDropStalePendingUser({
         text: pendingUser,
@@ -775,6 +779,7 @@ export function ThreadPanel({
         status: thread.status,
         threadMoved,
         seen: pendingSeen,
+        seenJoins: pendingSeenJoins,
       })
     ) {
       pendingSnapshot.current = null;
@@ -794,6 +799,7 @@ export function ThreadPanel({
               status: thread.status,
               threadMoved,
               seen: item.seen,
+              seenJoins: item.seenJoins,
             }),
         );
         return next.length === prev.length ? prev : next;
@@ -871,6 +877,7 @@ export function ThreadPanel({
         status: thread.status,
         threadMoved,
         seen: item.seen,
+        seenJoins: item.seenJoins,
       });
     });
     const nextSnap = new Map<

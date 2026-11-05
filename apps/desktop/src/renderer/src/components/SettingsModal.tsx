@@ -2223,7 +2223,7 @@ export function SettingsModal({
             {nav === 'history' && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Archived chats and worktrees. Restore one to bring it back to the sidebar, or open
+                  Archived chats and workspaces. Restore one to bring it back to the sidebar, or open
                   it read-only from here. Delete removes the record (not the git branch).
                 </p>
                 <div className="settings-section settings-section-card">

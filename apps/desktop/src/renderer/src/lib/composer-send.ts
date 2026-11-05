@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ThreadAttachment } from '@sideboard-ai/core';
 import {
   joinSteerPrompt,
+  userSendSeen,
   type OptimisticUserSend,
   type PendingFollowUp,
 } from './visible-follow-up-queue';
@@ -49,25 +50,21 @@ function rememberOptimistic(input: ComposerSendInput, text: string) {
   if (input.followUpBehavior === 'steer' && !input.agentReplying && input.openPromptRef.current != null) {
     const combined = joinSteerPrompt(input.openPromptRef.current, text);
     input.openPromptRef.current = combined;
+    const baseline = userSendSeen(combined, input.messages);
     input.setOptimisticUsers((prev) => {
-      if (prev.length === 0) return [{ text: combined, seen: 0 }];
+      if (prev.length === 0) return [{ text: combined, ...baseline }];
       const next = prev.slice();
       const last = next[next.length - 1]!;
-      next[next.length - 1] = { ...last, text: combined };
+      next[next.length - 1] = { ...last, text: combined, ...baseline };
       return next;
     });
     input.setPendingUser(combined);
     input.setPendingInTranscript(true);
     return;
   }
-  const seen = input.messages.reduce(
-    (count, message) =>
-      count +
-      (message.role === 'user' && message.origin !== 'continue' && message.text === text ? 1 : 0),
-    0,
-  );
+  const baseline = userSendSeen(text, input.messages);
   if (input.followUpBehavior === 'steer' && !input.agentReplying) input.openPromptRef.current = text;
-  input.setOptimisticUsers((prev) => [...prev, { text, seen }]);
+  input.setOptimisticUsers((prev) => [...prev, { text, ...baseline }]);
 }
 
 function forgetOptimistic(input: ComposerSendInput, text: string) {
@@ -83,7 +80,7 @@ function forgetOptimistic(input: ComposerSendInput, text: string) {
     if (last?.text.endsWith(suffix)) {
       restored = last.text.slice(0, -suffix.length);
       const next = prev.slice();
-      next[next.length - 1] = { ...last, text: restored };
+      next[next.length - 1] = { ...last, text: restored, ...userSendSeen(restored, input.messages) };
       return next;
     }
     const idx = prev.map((item) => item.text).lastIndexOf(text);
