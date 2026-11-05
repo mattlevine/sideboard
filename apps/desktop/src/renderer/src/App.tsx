@@ -993,9 +993,9 @@ export function App() {
     startTransition(() => {
       setPaneProgress((prev) => ({
         mode: 'archive',
-        repoName: label?.trim() || prev?.repoName || 'Worktree',
+        repoName: label?.trim() || prev?.repoName || 'Workspace',
         selectionHint:
-          n > 1 ? `${n} worktrees` : n === 1 ? 'removing worktree' : null,
+          n > 1 ? `${n} workspaces` : n === 1 ? 'removing workspace' : null,
       }));
     });
   }
@@ -1021,7 +1021,7 @@ export function App() {
       meta?.title?.trim() ||
       first?.title?.trim() ||
       first?.branchName?.replace(/^thread\//, '') ||
-      'Worktree';
+      'Workspace';
     const removesWorktree = meta?.removesWorktree !== false;
     const idSet = new Set(uniqueIds);
     const leavesSelection =
@@ -1490,28 +1490,28 @@ export function App() {
                   ? 'Opening orchestration'
                   : paneProgress.mode === 'archive'
                     ? archivingIds.size > 1
-                      ? 'Removing worktrees'
-                      : 'Removing worktree'
+                      ? 'Removing workspaces'
+                      : 'Removing workspace'
                     : paneProgress.mode === 'remove'
                       ? 'Removing project'
                       : paneProgress.mode === 'cowboy'
                         ? 'Starting chat'
-                        : 'Creating worktree'}
+                        : 'Creating workspace'}
               </h3>
               <p>
                 {paneProgress.mode === 'orchestration'
                   ? 'Preparing the coordinator chat and sending your first message…'
                   : paneProgress.mode === 'archive'
                     ? archivingIds.size > 1
-                      ? 'Tearing down worktrees — you can keep browsing while this finishes.'
-                      : 'Tearing down the worktree — you can keep browsing while this finishes.'
+                      ? 'Tearing down workspaces — you can keep browsing while this finishes.'
+                      : 'Tearing down the workspace — you can keep browsing while this finishes.'
                     : paneProgress.mode === 'remove'
                       ? 'Archiving threads and removing the project from the sidebar…'
                       : paneProgress.mode === 'cowboy'
                         ? 'Working in the project folder — you can keep browsing while this finishes.'
                         : paneProgress.awaitingFirstPrompt
                           ? 'Sending your first message — you can keep browsing while this finishes.'
-                          : 'Creating your worktree — you can keep browsing while this finishes.'}
+                          : 'Creating your workspace — you can keep browsing while this finishes.'}
               </p>
             </div>
           </div>

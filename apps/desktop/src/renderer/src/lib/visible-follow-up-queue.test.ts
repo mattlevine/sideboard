@@ -9,6 +9,7 @@ import {
   shouldShowStreamingTurn,
   splitTurnQueue,
   unlandedFollowUps,
+  steerJoinLanded,
   unlandedUserTexts,
 } from './visible-follow-up-queue';
 
@@ -102,6 +103,95 @@ describe('unlandedUserTexts', () => {
         ],
       ),
     ).toEqual([{ text: 'same', seen: 1 }]);
+  });
+
+  it('drops a joined steer bubble once both lines are stored before the reply', () => {
+    const messages = [
+      { role: 'user', text: 'do that' },
+      { role: 'user', text: 'actually review the assumptions' },
+      { role: 'agent', text: 'done' },
+    ];
+    const joined = 'do that\nactually review the assumptions';
+    expect(steerJoinLanded(joined, messages)).toBe(true);
+    expect(unlandedUserTexts([{ text: joined, seen: 0 }], messages)).toEqual([]);
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [{ text: joined, seen: 0 }],
+        messages,
+        currentTurnPrompt: null,
+        pendingUser: joined,
+        pendingInTranscript: true,
+      }),
+    ).toEqual([]);
+    expect(
+      shouldDropStalePendingUser({
+        text: joined,
+        messages,
+        queue: [],
+        status: 'idle',
+        threadMoved: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps a joined steer bubble until every line is stored', () => {
+    const messages = [{ role: 'user', text: 'do that' }];
+    const joined = 'do that\nactually review the assumptions';
+    expect(steerJoinLanded(joined, messages)).toBe(false);
+    expect(unlandedUserTexts([{ text: joined, seen: 0 }], messages)).toEqual([
+      { text: joined, seen: 0 },
+    ]);
+  });
+
+  it('keeps a later copy of the same steer until that pair is stored', () => {
+    const earlier = [
+      { role: 'user', text: 'do that' },
+      { role: 'user', text: 'actually review the assumptions' },
+      { role: 'agent', text: 'done' },
+      { role: 'user', text: 'do that' },
+    ];
+    const joined = 'do that\nactually review the assumptions';
+    const again = { text: joined, seen: 0, seenJoins: 1 };
+    expect(steerJoinLanded(joined, earlier, 1)).toBe(false);
+    expect(unlandedUserTexts([again], earlier)).toEqual([again]);
+    expect(
+      shouldDropStalePendingUser({
+        text: joined,
+        messages: earlier,
+        queue: [],
+        status: 'idle',
+        threadMoved: false,
+        seen: 0,
+        seenJoins: 1,
+      }),
+    ).toBe(false);
+    const stored = [
+      ...earlier,
+      { role: 'user', text: 'actually review the assumptions' },
+      { role: 'agent', text: 'done' },
+    ];
+    expect(steerJoinLanded(joined, stored, 1)).toBe(true);
+    expect(unlandedUserTexts([again, again], stored)).toEqual([again]);
+    expect(
+      shouldDropStalePendingUser({
+        text: joined,
+        messages: stored,
+        queue: [],
+        status: 'idle',
+        threadMoved: false,
+        seen: 0,
+        seenJoins: 1,
+      }),
+    ).toBe(true);
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [again],
+        messages: earlier,
+        currentTurnPrompt: null,
+        pendingUser: joined,
+        pendingInTranscript: true,
+      }),
+    ).toEqual([joined]);
   });
 });
 

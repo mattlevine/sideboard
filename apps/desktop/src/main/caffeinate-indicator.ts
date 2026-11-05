@@ -8,13 +8,17 @@ export function caffeinateIndicatorReasons(opts: {
   agentsRunning: number;
   whileSlackListen: boolean;
   slackListenRunning: boolean;
+  /** A phone has joined. Holds wake even when the armed-remote setting is off. */
+  phoneConnected?: boolean;
   whileSchedules: boolean;
   schedulesEnabled: boolean;
 }): CaffeinateReason[] {
   const reasons: CaffeinateReason[] = [];
   if (opts.holdHeld) reasons.push('chat');
   if (opts.whileRunning && opts.agentsRunning > 0) reasons.push('running');
-  if (opts.whileSlackListen && opts.slackListenRunning) reasons.push('slack');
+  if (opts.phoneConnected || (opts.whileSlackListen && opts.slackListenRunning)) {
+    reasons.push('slack');
+  }
   if (opts.whileSchedules && opts.schedulesEnabled) reasons.push('schedules');
   return reasons;
 }

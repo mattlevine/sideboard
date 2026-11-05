@@ -143,10 +143,14 @@ describe('formatPrGateDirective', () => {
     expect(text).toMatch(/not after every push/);
     expect(text).toMatch(/watch-fix-push/);
     expect(text).toMatch(/Greptile 5\/5/);
+    expect(text).toMatch(/third-party PR review/);
+    expect(text).toMatch(/Acknowledge it/);
+    expect(text).not.toMatch(/@greptile review/);
+    expect(text).not.toMatch(/Prompt to fix all with AI/);
     expect(text).toMatch(/gh pr checks --watch/);
     expect(text).toMatch(/wait_for_job/);
     expect(text).toMatch(/native CLI Task/);
-    expect(text).toMatch(/5\/5 and zero unresolved/);
+    expect(text).toMatch(/Cap about 5 iterations/);
     expect(looksLikeDeferredDonePromise(text)).toBe(false);
   });
 });

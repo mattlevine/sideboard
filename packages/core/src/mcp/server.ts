@@ -869,7 +869,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'set_caffeinate',
-    'Keep this Mac awake with caffeinate (like Claude Code) across turns — independent of Settings toggles. Turn ON when the user will be away from the keyboard, is driving work from Slack, or asks you to keep the machine awake. Turn OFF when they say they are done, wrapping up, going to sleep, or no longer need the Mac awake. Closing or archiving this orchestration chat also releases the hold. macOS only.',
+    'Keep this Mac awake with caffeinate across turns — independent of Settings toggles. A connected phone already holds caffeinate (lid can close on power), so do not turn this on just because they are on the phone. Turn ON when the user will be away and no phone is connected, or they ask you to keep the machine awake. Turn OFF when they say they are done, wrapping up, going to sleep, or no longer need the Mac awake. Closing or archiving this orchestration chat also releases the hold. macOS only.',
     {
       enabled: z
         .boolean()
@@ -1242,7 +1242,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'ask_git',
-    'Commit & push, open a draft PR, mark ready for review, resolve conflicts, or merge — same prompts as the desktop git buttons (including Resolve). Always steers the worktree agent; does not push or open the PR locally. Then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (Greptile 5/5, CI green). Pass a worktree thread ref (not the orchestrator). action=ready-for-review and action=merge only when the user explicitly asked (or clicked the desktop button). Do not run git or gh from the orchestration cwd.',
+    'Commit & push, open a draft PR, mark ready for review, resolve conflicts, or merge — same prompts as the desktop git buttons (including Resolve). Always steers the worktree agent; does not push or open the PR locally. Then wait_for_turn (loop while stillRunning). Do not start a checks loop on a plain push — only if the user gave a goal (CI green, a review score, until checks pass). A push can wake a third-party PR review; the worktree agent acknowledges it only inside that goal. Pass a worktree thread ref (not the orchestrator). action=ready-for-review and action=merge only when the user explicitly asked (or clicked the desktop button). Do not run git or gh from the orchestration cwd.',
     {
       ref: z.string().describe('Worktree thread id/ref'),
       action: z

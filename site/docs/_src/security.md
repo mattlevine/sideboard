@@ -19,6 +19,6 @@ We will acknowledge and work on a fix. Please give a reasonable window before pu
 - Agents run with the permissions of your local user account, on this Mac’s network. Treat inbound remote prompts as untrusted.
 - The phone app reaches this machine through a relay. Message text is encrypted between the phone and this Mac; the relay forwards ciphertext. The default is Sideboard’s relay. You can [run your own](/docs/relay/); that process is the relay, not the website. Pair it in Settings → Remote. Repos, secrets, and VPN-only endpoints stay on the Mac.
 - Linear / AbleTime (Settings → Issues), GitHub PAT (Settings → Git), and optional Vercel / Supabase / PostHog / Sentry tokens (Settings → Connectors) live in the Mac vault.
-- Optional cloud bridges should be enabled only when you intend remote control of this machine. The Mac must stay awake for the phone to reach it.
+- Optional cloud bridges should be enabled only when you intend remote control of this machine. A connected phone keeps the Mac awake (`caffeinate -dimsu`; the lid can close on power, and may still sleep on battery).
 
 See [Support](/support/) for non-security help.

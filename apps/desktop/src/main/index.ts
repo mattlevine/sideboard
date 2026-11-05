@@ -91,6 +91,7 @@ import {
   caffeinateWhileSlackListenEnabled,
   caffeinateWhileSchedulesEnabled,
   getCaffeinateHold,
+  hostKeepsMacAwake,
   setCaffeinateHold,
   claudeUserSettingsPath,
   detectAgents,
@@ -607,20 +608,24 @@ function syncCaffeinateTray(active: boolean, tooltip: string): void {
   caffeinateTray.setToolTip(tooltip);
 }
 
-function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
-  appCaffeinated: boolean;
-} {
-  const hold = getCaffeinateHold();
-  const reasons = caffeinateIndicatorReasons({
-    holdHeld: hold.held,
+function caffeinateReasons(holdHeld: boolean) {
+  return caffeinateIndicatorReasons({
+    holdHeld,
     whileRunning: caffeinateWhileRunningEnabled(),
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
     slackListenRunning: slackListenRunning || isRemoteHostRunning(),
+    phoneConnected: readRemoteStatus().phoneConnected,
     whileSchedules: caffeinateWhileSchedulesEnabled(),
     schedulesEnabled: hasEnabledSchedules(),
   });
-  return { ...hold, appCaffeinated: reasons.length > 0 };
+}
+
+function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
+  appCaffeinated: boolean;
+} {
+  const hold = getCaffeinateHold();
+  return { ...hold, appCaffeinated: caffeinateReasons(hold.held).length > 0 };
 }
 
 let dockUnreadCount = 0;
@@ -636,15 +641,7 @@ function applyDockUnreadBadge(): void {
 
 function syncCaffeinateIndicator(): void {
   const state = caffeinateUiState();
-  const reasons = caffeinateIndicatorReasons({
-    holdHeld: state.held,
-    whileRunning: caffeinateWhileRunningEnabled(),
-    agentsRunning: orch.getRuntime().running,
-    whileSlackListen: caffeinateWhileSlackListenEnabled(),
-    slackListenRunning: slackListenRunning || isRemoteHostRunning(),
-    whileSchedules: caffeinateWhileSchedulesEnabled(),
-    schedulesEnabled: hasEnabledSchedules(),
-  });
+  const reasons = caffeinateReasons(state.held);
   const active = state.appCaffeinated;
   const tooltip = caffeinateIndicatorTooltip(reasons);
 
@@ -874,17 +871,21 @@ function stopCaffeinate(): void {
   caffeinateProc = null;
 }
 
-/** Keep the Mac awake while agents run, Slack Listen, schedules, or a chat holds caffeinate. */
 function syncCaffeinate(): void {
   if (process.platform !== 'darwin') {
     stopCaffeinate();
     syncCaffeinateIndicator();
     return;
   }
-  const keepAwake =
-    (caffeinateWhileRunningEnabled() && orch.getRuntime().running > 0) ||
-    (caffeinateWhileSlackListenEnabled() && (slackListenRunning || isRemoteHostRunning())) ||
-    (caffeinateWhileSchedulesEnabled() && hasEnabledSchedules());
+  const keepAwake = hostKeepsMacAwake({
+    phoneConnected: readRemoteStatus().phoneConnected,
+    phoneRemoteArmed: slackListenRunning || isRemoteHostRunning(),
+    caffeinateWhilePhoneRemote: caffeinateWhileSlackListenEnabled(),
+    agentsRunning: orch.getRuntime().running,
+    caffeinateWhileRunning: caffeinateWhileRunningEnabled(),
+    schedulesEnabled: hasEnabledSchedules(),
+    caffeinateWhileSchedules: caffeinateWhileSchedulesEnabled(),
+  });
   if (keepAwake && !caffeinateProc) {
     try {
       caffeinateProc = spawn('caffeinate', ['-dimsu'], {

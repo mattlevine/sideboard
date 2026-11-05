@@ -1767,11 +1767,12 @@ export function SettingsModal({
                   <div className="settings-toggle-row">
                     <div>
                       <div className="settings-section-title">
-                        Caffeinate while the phone remote is connected
+                        Caffeinate while the phone remote is armed
                       </div>
                       <p className="settings-hint">
-                        Keep the Mac awake so the phone can reach the orchestrator (macOS only;
-                        lid-close may still sleep on battery).
+                        A connected phone already keeps this Mac awake, including with the lid
+                        closed on power (battery may still sleep). This also stays awake while the
+                        remote is running and no phone has joined (macOS only).
                       </p>
                     </div>
                     <button
@@ -2222,7 +2223,7 @@ export function SettingsModal({
             {nav === 'history' && (
               <div className="settings-body">
                 <p className="settings-lead">
-                  Archived chats and worktrees. Restore one to bring it back to the sidebar, or open
+                  Archived chats and workspaces. Restore one to bring it back to the sidebar, or open
                   it read-only from here. Delete removes the record (not the git branch).
                 </p>
                 <div className="settings-section settings-section-card">

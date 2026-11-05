@@ -162,7 +162,7 @@ Compact-boundary thinking may append onto `Compressing context…` (it is not `r
 
 Session seed (`buildSessionSeed`): after pinning summaries, skip oversized newest blocks instead of aborting the newest-first walk — one fat tool dump must not drop every recent turn.
 
-Git-button expansion and PR-goal detection (`expandCanonicalGitRequest`, `mentionsPrGoal`) run on the raw user prompt, not `expandComposerPrompt` output. Do not inject peer/fleet merge notices into sibling worktrees when a PR lands — isolated checkouts stay isolated until the user or that chat's orchestrator asks. Worktree `notify_orchestrator` queues the parent Global chat (`followUp: 'queue'`) — never add `send_to_chat` to the worktree MCP profile, and never treat that wake-up prompt as a git command.
+Git-button expansion and PR-goal detection (`expandCanonicalGitRequest`, `mentionsPrGoal`) run on the raw user prompt, not `expandComposerPrompt` output. Expansions that push note that a push can wake a third-party PR review; the agent addresses it only when this chat already has a goal. A plain push does not start a watch. Do not inject peer/fleet merge notices into sibling worktrees when a PR lands — isolated checkouts stay isolated until the user or that chat's orchestrator asks. Worktree `notify_orchestrator` queues the parent Global chat (`followUp: 'queue'`) — never add `send_to_chat` to the worktree MCP profile, and never treat that wake-up prompt as a git command.
 
 Taken soccer nicknames: `takenSlugsFromThread` / `collectTakenTeamSlugs` must record the bare team token from ticket-prefixed dirs (`eng-12-ajax` → `ajax`).
 

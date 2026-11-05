@@ -38,16 +38,75 @@ export function joinSteerPrompt(base: string, addition: string): string {
   return `${head}\n${next}`;
 }
 
-export type OptimisticUserSend = { text: string; seen: number };
+export type OptimisticUserSend = {
+  text: string;
+  /** Exact copies of `text` already stored when the user sent. */
+  seen: number;
+  /**
+   * Times `text` was already the join of one unanswered user run when the
+   * user sent. Omitted on older rows; those compare joins against `seen`.
+   */
+  seenJoins?: number;
+};
+
+type TranscriptMessage = { role: string; text?: string; origin?: string };
 
 /**
- * Optimistic sends that have not landed yet.
- * `seen` is how many matching user messages existed when the user sent, so an
- * older copy of the same text does not hide the new one.
+ * How many times `text` is the join of one unanswered user run
+ * (`joinSteerPrompt` of two or more lines). An agent or summary starts a new
+ * run. A match consumes that run so a later pair counts again.
  */
+export function countSteerJoins(text: string, messages: TranscriptMessage[]): number {
+  if (!text.includes('\n')) return 0;
+  let parts: string[] = [];
+  let count = 0;
+  const runMatches = () => {
+    if (parts.length < 2) return false;
+    let acc = parts[0] ?? '';
+    for (let i = 1; i < parts.length; i++) acc = joinSteerPrompt(acc, parts[i] ?? '');
+    return acc === text;
+  };
+  for (const message of messages) {
+    if (message.role === 'user' && message.origin !== 'continue') {
+      parts.push(message.text ?? '');
+      if (runMatches()) {
+        count += 1;
+        parts = [];
+      }
+    } else if (message.role === 'agent' || message.role === 'summary') {
+      parts = [];
+    }
+  }
+  return count;
+}
+
+/**
+ * A steer that arrived before any reply is one composer bubble
+ * (`joinSteerPrompt`) but two stored user messages. It has landed when a new
+ * run was stored after `seen` (the join count at send time).
+ */
+export function steerJoinLanded(
+  text: string,
+  messages: TranscriptMessage[],
+  seen = 0,
+): boolean {
+  return countSteerJoins(text, messages) > seen;
+}
+
+/** Baselines for a composer bubble, captured when the user sends. */
+export function userSendSeen(
+  text: string,
+  messages: TranscriptMessage[],
+): { seen: number; seenJoins: number } {
+  return {
+    seen: matchingUserCount(messages, text),
+    seenJoins: countSteerJoins(text, messages),
+  };
+}
+
 export function unlandedUserTexts<T extends OptimisticUserSend>(
   optimistic: T[],
-  messages: Array<{ role: string; text?: string; origin?: string }>,
+  messages: TranscriptMessage[],
 ): T[] {
   const counts = new Map<string, number>();
   for (const message of messages) {
@@ -55,8 +114,19 @@ export function unlandedUserTexts<T extends OptimisticUserSend>(
     const text = message.text ?? '';
     counts.set(text, (counts.get(text) ?? 0) + 1);
   }
+  const joinCounts = new Map<string, number>();
   const out: T[] = [];
   for (const item of optimistic) {
+    let joins = joinCounts.get(item.text);
+    if (joins == null) {
+      joins = countSteerJoins(item.text, messages);
+      joinCounts.set(item.text, joins);
+    }
+    const joinBaseline = item.seenJoins ?? item.seen;
+    if (joins > joinBaseline) {
+      joinCounts.set(item.text, joins - 1);
+      continue;
+    }
     const now = counts.get(item.text) ?? 0;
     if (now > item.seen) {
       counts.set(item.text, now - 1);
@@ -103,10 +173,7 @@ export function pendingSnapshotChanged(prev: PendingSnapshot, next: PendingSnaps
   return false;
 }
 
-function matchingUserCount(
-  messages: Array<{ role: string; text?: string; origin?: string }>,
-  text: string,
-): number {
+function matchingUserCount(messages: TranscriptMessage[], text: string): number {
   let count = 0;
   for (const message of messages) {
     if (message.role === 'user' && message.origin !== 'continue' && message.text === text) {
@@ -147,16 +214,23 @@ export function shouldShowStreamingTurn(input: {
  */
 export function shouldDropStalePendingUser(input: {
   text: string;
-  messages: Array<{ role: string; text?: string; origin?: string }>;
+  messages: TranscriptMessage[];
   queue: string[];
   status: string;
   /** A later messages/queue/status snapshot than the one that showed this bubble. */
   threadMoved: boolean;
   seen?: number;
+  /** Join-run count at send time. Falls back to `seen` when omitted. */
+  seenJoins?: number;
 }): boolean {
   const matches = matchingUserCount(input.messages, input.text);
   const landed = input.seen == null ? matches > 0 : matches > input.seen;
-  if (landed) return true;
+  const joinBaseline = input.seenJoins ?? input.seen ?? 0;
+  const joinLanded =
+    input.seen == null && input.seenJoins == null
+      ? countSteerJoins(input.text, input.messages) > 0
+      : countSteerJoins(input.text, input.messages) > joinBaseline;
+  if (landed || joinLanded) return true;
   if (!input.threadMoved) return false;
   if (input.status === 'running') return false;
   if (input.queue.includes(input.text)) {
@@ -177,14 +251,24 @@ export function shouldDropStalePendingUser(input: {
  */
 export function pendingTranscriptTexts(input: {
   optimistic: OptimisticUserSend[];
-  messages: Array<{ role: string; text?: string; origin?: string }>;
+  messages: TranscriptMessage[];
   currentTurnPrompt: string | null;
   pendingUser: string | null;
   pendingInTranscript: boolean;
 }): string[] {
   const texts = unlandedUserTexts(input.optimistic, input.messages).map((item) => item.text);
-  const landed = (text: string) =>
-    input.messages.some((message) => message.role === 'user' && message.text === text);
+  const landed = (text: string) => {
+    const tracked = input.optimistic.find((item) => item.text === text);
+    if (tracked) {
+      const joins = countSteerJoins(text, input.messages);
+      const exact = matchingUserCount(input.messages, text);
+      return joins > (tracked.seenJoins ?? tracked.seen) || exact > tracked.seen;
+    }
+    return (
+      input.messages.some((message) => message.role === 'user' && message.text === text) ||
+      steerJoinLanded(text, input.messages)
+    );
+  };
   // The queue head has not been consumed yet. An older message with the same
   // text is a previous send, not this one.
   if (input.currentTurnPrompt && !texts.includes(input.currentTurnPrompt)) {

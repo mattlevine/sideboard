@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.333] - 2026-11-05
+
+### Added
+
+- A connected phone keeps this Mac awake, so the lid can close on power. On battery the lid can still sleep. Settings → Advanced → Caffeinate while the phone remote is armed also holds that wake while the remote is running and no phone has joined.
+
+### Changed
+
+- The board, create, and archive screens say workspace. Worktree stays the name of the git folder.
+- A push can wake a third-party pull-request review. The agent addresses that review only when this chat already has a goal, such as CI green or a review score.
+
+### Fixed
+
+- A message sent before the agent replies no longer stays on screen under the reply once it has been saved. Sending that same pair again stays visible until the new pair is saved.
+
 ## [0.1.332] - 2026-11-05
 
 ### Fixed

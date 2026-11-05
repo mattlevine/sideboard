@@ -36,6 +36,7 @@ export {
 } from './store/run-log.js';
 export * from './store/schedules.js';
 export { armSchedules, fireSchedule, formatScheduledPrompt } from './orchestrator/schedule-runner.js';
+export { hostKeepsMacAwake } from './host/awake.js';
 export { headlessHostBlockedReason, lanRelayUrls, startHeadlessHost } from './host/serve.js';
 export {
   claimDesktopHost,

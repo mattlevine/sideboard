@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrandMark } from './BrandMark';
 
 const STEPS_THREAD = [
-  'Creating worktree',
+  'Creating workspace',
   'Running setup',
   'Sending first message',
   'Almost ready',
@@ -30,7 +30,7 @@ const STEPS_REMOVE = [
 
 const STEPS_ARCHIVE = [
   'Stopping agents',
-  'Removing worktree',
+  'Removing workspace',
   'Cleaning up',
   'Almost done',
 ] as const;

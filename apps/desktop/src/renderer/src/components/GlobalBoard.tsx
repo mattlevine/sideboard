@@ -193,7 +193,7 @@ export function GlobalBoard({
         <h2>Board</h2>
         <span className="thread-meta">
           {runtime
-            ? `${runtime.running}/${runtime.maxConcurrent} running · ${worktreeCount} worktree${worktreeCount === 1 ? '' : 's'}`
+            ? `${runtime.running}/${runtime.maxConcurrent} running · ${worktreeCount} workspace${worktreeCount === 1 ? '' : 's'}`
             : '…'}
         </span>
         <div className="actions">
@@ -225,7 +225,7 @@ export function GlobalBoard({
           <button
             type="button"
             onClick={onAddToBoard}
-            title="Create a worktree from a ticket, PR, or branch"
+            title="Create a workspace from a ticket, PR, or branch"
           >
             Add to Board
           </button>
@@ -299,8 +299,8 @@ export function GlobalBoard({
             <div className="chat-empty-mark" aria-hidden>
               <span className="chat-empty-cube" />
             </div>
-            <h3>No worktrees yet</h3>
-            <p>Add a ticket, PR, or branch to create a worktree.</p>
+            <h3>No workspaces yet</h3>
+            <p>Add a ticket, PR, or branch to create a workspace.</p>
             <div className="chat-empty-action">
               <button type="button" className="primary" onClick={onAddToBoard}>
                 Add to Board
@@ -430,13 +430,13 @@ function WorktreeCard({
             type="button"
             className="board-archive-worktree"
             disabled={archiving}
-            title="Archive this worktree — all chats move to Settings → History"
+            title="Archive this workspace — all chats move to Settings → History"
             onClick={(e) => {
               e.stopPropagation();
               onArchive();
             }}
           >
-            {archiving ? 'Archiving…' : 'Archive worktree'}
+            {archiving ? 'Archiving…' : 'Archive workspace'}
           </button>
         </div>
       )}

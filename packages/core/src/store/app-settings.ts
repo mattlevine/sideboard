@@ -376,8 +376,9 @@ export interface AdvancedAppSettings {
    */
   caffeinateWhileRunning?: boolean;
   /**
-   * Keep the Mac awake with `caffeinate` while Slack Listen is connected
-   * (so Personal/Work stay reachable with the lid closed on AC). Default off.
+   * Also keep the Mac awake while the phone remote is armed and no phone has
+   * joined. A connected phone already holds `caffeinate -dimsu` (lid can close
+   * on AC; battery may still sleep). Default off.
    */
   caffeinateWhileSlackListen?: boolean;
   /**
