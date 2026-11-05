@@ -1,10 +1,17 @@
-import { existsSync } from 'node:fs';
+import { chmodSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { run } from '../git/run.js';
 import {
   resolveAgentExecutable,
   type CliAgentKind,
 } from '../store/app-settings.js';
 import type { AgentKind } from '../types/thread.js';
+import {
+  CLAUDE_NATIVE_INSTALL,
+  OPENCODE_NATIVE_INSTALL,
+  installClaudeNative,
+  installOpenCodeNative,
+} from './install-native.js';
 import {
   enrichPathWithNpmGlobalBin,
   isConductorBundledCli,
@@ -45,11 +52,10 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
   claude: {
     agent: 'claude',
     kind: 'cli',
-    summary: 'Install the Claude Code CLI, then complete login in a terminal.',
+    summary: 'Install Claude Code, then complete login in a terminal.',
     docsUrl: 'https://code.claude.com/docs/en/install',
-    installCommand: 'npm install -g @anthropic-ai/claude-code',
+    installCommand: CLAUDE_NATIVE_INSTALL,
     loginCommand: 'claude auth login',
-    npmPackage: '@anthropic-ai/claude-code',
     updateArgs: ['update'],
   },
   codex: {
@@ -65,12 +71,12 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
   opencode: {
     agent: 'opencode',
     kind: 'cli',
-    summary: 'Install OpenCode (curl installer or npm), then authenticate providers.',
+    summary: 'Install OpenCode, then authenticate providers.',
     docsUrl: 'https://opencode.ai/docs',
-    // Prefer the official installer; npm package name is opencode-ai.
-    installCommand: 'curl -fsSL https://opencode.ai/install | bash',
+    // npm package `opencode-ai` ships the same kind of non-executable native stub
+    // as Claude. The curl installer writes ~/.opencode/bin/opencode.
+    installCommand: OPENCODE_NATIVE_INSTALL,
     loginCommand: 'opencode auth login',
-    npmPackage: 'opencode-ai@latest',
     updateArgs: ['upgrade'],
   },
   cursor: {
@@ -247,7 +253,17 @@ export async function installNpmGlobalPackage(opts: {
   }
 
   enrichPathWithNpmGlobalBin();
-  const binPath = opts.cliBin ? await whichOnPath(opts.cliBin) : null;
+  const binPath = opts.cliBin ? await resolveCliAfterNpmInstall(opts.cliBin) : null;
+  if (opts.cliBin && !binPath) {
+    return {
+      ok: false,
+      command: opts.installCommand,
+      exitCode: 0,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      message: `Installed ${opts.npmPackage}, but \`${opts.cliBin}\` is not on PATH.`,
+    };
+  }
   return {
     ok: true,
     command: opts.installCommand,
@@ -257,10 +273,35 @@ export async function installNpmGlobalPackage(opts: {
     // Library-only packages (`@cursor/sdk`) have no CLI to look for.
     message: !opts.cliBin
       ? `Installed ${opts.npmPackage}`
-      : binPath
-        ? `Installed ${opts.npmPackage} → ${binPath}`
-        : `Installed ${opts.npmPackage} (CLI not yet on PATH)`,
+      : `Installed ${opts.npmPackage} → ${binPath}`,
   };
+}
+
+/**
+ * `which` skips non-executable files. After `npm i -g`, look in the prefix
+ * bin, chmod the shim, and search again. Returns null when the CLI is absent.
+ */
+async function resolveCliAfterNpmInstall(cliBin: string): Promise<string | null> {
+  const found = await whichOnPath(cliBin);
+  if (found) return found;
+
+  const prefix = await run('npm', ['prefix', '-g'], { reject: false, timeoutMs: 8_000 });
+  if (prefix.exitCode !== 0) return null;
+  const root = prefix.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('/'))
+    .pop();
+  if (!root) return null;
+  const candidate = join(root, 'bin', cliBin);
+  if (!existsSync(candidate)) return null;
+  try {
+    chmodSync(candidate, 0o755);
+  } catch {
+    // Prefix may be root-owned. which still fails and the caller reports it.
+  }
+  enrichPathWithNpmGlobalBin();
+  return whichOnPath(cliBin);
 }
 
 async function resolveExistingCli(agent: AgentKind): Promise<string | null> {
@@ -318,6 +359,9 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
   if (existing && info.updateArgs?.length) {
     return runVendorUpdate(existing, info.updateArgs);
   }
+
+  if (agent === 'claude') return installClaudeNative();
+  if (agent === 'opencode') return installOpenCodeNative();
 
   if (info.npmPackage && !isCurlInstaller(info.installCommand)) {
     const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];

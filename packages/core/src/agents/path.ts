@@ -5,6 +5,8 @@ import { delimiter, join } from 'node:path';
 
 const EXTRA_BIN_DIRS = [
   '.local/bin',
+  // Official OpenCode installer (`curl https://opencode.ai/install | bash`).
+  '.opencode/bin',
   '.cargo/bin',
   '.nvm/current/bin',
   '.asdf/shims',

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.332] - 2026-11-05
+
+### Fixed
+
+- Settings → Agents installs Claude Code and OpenCode with their official installers. A global npm install could finish and still leave a command that will not run.
+- An npm install that leaves the CLI off PATH is reported as a failure. A global shim that is present but not executable is made runnable.
+
 ## [0.1.331] - 2026-11-04
 
 ### Fixed

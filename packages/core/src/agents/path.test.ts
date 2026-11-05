@@ -30,6 +30,16 @@ describe('ensureAgentPath', () => {
     expect(matches.length).toBeLessThanOrEqual(1);
   });
 
+  it('includes the OpenCode installer bin (~/.opencode/bin)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'sb-opencode-bin-'));
+    const opencodeBin = join(home, '.opencode', 'bin');
+    mkdirSync(opencodeBin, { recursive: true });
+    const env = { HOME: home, PATH: '/usr/bin' };
+    const parts = ensureAgentPath(env).split(':');
+    expect(parts).toContain(opencodeBin);
+    expect(parts.indexOf(opencodeBin)).toBeLessThan(parts.indexOf('/usr/bin'));
+  });
+
   it('includes Conductor bundled CLI bin as a fallback after Homebrew', () => {
     const home = mkdtempSync(join(tmpdir(), 'sb-conductor-bin-'));
     const conductorBin = join(
