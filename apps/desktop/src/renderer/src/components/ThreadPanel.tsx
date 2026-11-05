@@ -150,6 +150,7 @@ import {
 import {
   dropRemovedFollowUp,
   extraPendingFollowUps,
+  joinsClaimedBefore,
   pendingSnapshotChanged,
   pendingTranscriptTexts,
   shouldDropStalePendingUser,
@@ -763,14 +764,11 @@ export function ThreadPanel({
         queue: thread.queue,
         status: thread.status,
       });
-    let pendingSeen: number | undefined;
-    let pendingSeenJoins: number | undefined;
-    for (const item of optimisticUsers) {
-      if (item.text !== pendingUser) continue;
-      if (pendingSeen == null || item.seen > pendingSeen) pendingSeen = item.seen;
-      const joins = item.seenJoins ?? item.seen;
-      if (pendingSeenJoins == null || joins > pendingSeenJoins) pendingSeenJoins = joins;
+    let latestIndex = -1;
+    for (let i = 0; i < optimisticUsers.length; i++) {
+      if (optimisticUsers[i]?.text === pendingUser) latestIndex = i;
     }
+    const latest = latestIndex >= 0 ? optimisticUsers[latestIndex] : undefined;
     if (
       shouldDropStalePendingUser({
         text: pendingUser,
@@ -778,8 +776,12 @@ export function ThreadPanel({
         queue: thread.queue,
         status: thread.status,
         threadMoved,
-        seen: pendingSeen,
-        seenJoins: pendingSeenJoins,
+        seen: latest?.seen,
+        seenJoins: latest?.seenJoins,
+        joinsClaimed:
+          latestIndex >= 0
+            ? joinsClaimedBefore(optimisticUsers, latestIndex, thread.messages)
+            : 0,
       })
     ) {
       pendingSnapshot.current = null;
@@ -789,19 +791,19 @@ export function ThreadPanel({
       // A resend of the same text keeps its own optimistic row until that
       // copy is stored. Matching on text alone would drop it with this one.
       setOptimisticUsers((prev) => {
-        const next = prev.filter(
-          (item) =>
-            item.text !== pendingUser ||
-            !shouldDropStalePendingUser({
-              text: item.text,
-              messages: thread.messages,
-              queue: thread.queue,
-              status: thread.status,
-              threadMoved,
-              seen: item.seen,
-              seenJoins: item.seenJoins,
-            }),
-        );
+        const next = prev.filter((item, index) => {
+          if (item.text !== pendingUser) return true;
+          return !shouldDropStalePendingUser({
+            text: item.text,
+            messages: thread.messages,
+            queue: thread.queue,
+            status: thread.status,
+            threadMoved,
+            seen: item.seen,
+            seenJoins: item.seenJoins,
+            joinsClaimed: joinsClaimedBefore(prev, index, thread.messages),
+          });
+        });
         return next.length === prev.length ? prev : next;
       });
       return;
@@ -860,7 +862,9 @@ export function ThreadPanel({
       optimisticSnapshot.current.clear();
       return;
     }
-    const stillPending = unlandedUserTexts(optimisticUsers, thread.messages).filter((item) => {
+    const unlanded = new Set(unlandedUserTexts(optimisticUsers, thread.messages));
+    const stillPending = optimisticUsers.filter((item, index) => {
+      if (!unlanded.has(item)) return false;
       const key = `${item.seen}:${item.text}`;
       const seen = optimisticSnapshot.current.get(key);
       const threadMoved =
@@ -878,6 +882,7 @@ export function ThreadPanel({
         threadMoved,
         seen: item.seen,
         seenJoins: item.seenJoins,
+        joinsClaimed: joinsClaimedBefore(optimisticUsers, index, thread.messages),
       });
     });
     const nextSnap = new Map<

@@ -9,6 +9,7 @@ import {
   shouldShowStreamingTurn,
   splitTurnQueue,
   unlandedFollowUps,
+  joinsClaimedBefore,
   steerJoinLanded,
   unlandedUserTexts,
 } from './visible-follow-up-queue';
@@ -192,6 +193,45 @@ describe('unlandedUserTexts', () => {
         pendingInTranscript: true,
       }),
     ).toEqual([joined]);
+  });
+
+  it('keeps the later copy after an earlier copy of the same joined text lands', () => {
+    const joined = 'do that\nactually review the assumptions';
+    const first = { text: joined, seen: 0, seenJoins: 0 };
+    const second = { text: joined, seen: 0, seenJoins: 0 };
+    const stored = [
+      { role: 'user', text: 'do that' },
+      { role: 'user', text: 'actually review the assumptions' },
+      { role: 'agent', text: 'done' },
+    ];
+    const copies = [first, second];
+    expect(unlandedUserTexts(copies, stored)).toEqual([second]);
+    expect(joinsClaimedBefore(copies, 0, stored)).toBe(0);
+    expect(joinsClaimedBefore(copies, 1, stored)).toBe(1);
+    expect(
+      shouldDropStalePendingUser({
+        text: joined,
+        messages: stored,
+        queue: [],
+        status: 'idle',
+        threadMoved: true,
+        seen: 0,
+        seenJoins: 0,
+        joinsClaimed: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDropStalePendingUser({
+        text: joined,
+        messages: stored,
+        queue: [],
+        status: 'idle',
+        threadMoved: true,
+        seen: 0,
+        seenJoins: 0,
+        joinsClaimed: 1,
+      }),
+    ).toBe(false);
   });
 });
 
