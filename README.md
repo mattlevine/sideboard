@@ -12,7 +12,7 @@ Sideboard started as a local port when Conductor moved that tier into a paid clo
 
 `attach` / `adopt` remain the door back to the native harness — move in and out of Sideboard as you choose.
 
-Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. The Mac must stay awake for the phone to reach it, and for automations to fire — opt in from Settings → Advanced.
+Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. A connected phone keeps the Mac awake so the lid can close on power (battery may still sleep). Automations opt in from Settings → Advanced.
 
 ![Sideboard desktop — chat with a log preview, worktree files, and the run panel](docs/assets/sideboard-desktop-review-v7.png)
 
@@ -36,7 +36,7 @@ Spawning worktrees is the shared primitive. When Conductor moved fleet orchestra
 | Orchestrate the fleet (agent-visible) | Human board, or a cloud API | MCP + Global board, on this Mac |
 | Stay on the corporate VPN | Cloud sandboxes leave it | Agents run as you, on this laptop’s network |
 | Away from the desk | Product cloud / shared sandbox | Phone app paired to this Mac; pick which desktop to open |
-| Keep going when you step away | Cloud sandbox keeps running | The phone reaches this Mac only while it is awake (caffeinate while the phone remote is connected) |
+| Keep going when you step away | Cloud sandbox keeps running | A connected phone keeps this Mac awake (lid can close on power; compute stays here) |
 | Run work on a schedule | Cloud cron / always-on sandbox | Local automations on this Mac; opt-in caffeinate so due jobs can fire |
 | See the whole fleet as one board | App-locked or thin | First-class global board |
 | Drop into the native CLI mid-session | Weak or one-way | `attach` keeps the same session |
@@ -298,7 +298,7 @@ Once connected, agents get tools to:
 - **Automations** — `list_schedules` / `create_schedule` / `update_schedule` / `delete_schedule` / `run_schedule` (orchestration and worktree). `threadId=self` continues this chat; omit `threadId` to start a new Global chat when due. Jobs fire only while Sideboard.app is running. The desktop lists them in the sidebar after **Board**. Creating or enabling a future job turns on **Settings → Advanced → Caffeinate while automations are enabled**. Orchestration chats can also `set_caffeinate`.
 - **Setup / run** — `run_setup` (also runs automatically on new worktrees), `list_run_scripts`, `run_dev_script`, `stop_dev_script`, `get_run_log`
 - **Inspect / review / PRs** — `get_diff`; `get_pr_checks` (snapshot); `request_review` (opens a Review chat tab on a worktree thread). The review stays in chat so you can read it and type next steps before the PR or ticket author is notified — no immediate Post/Keep picker. `ask_git` (commit & push, draft PR, ready for review, resolve conflicts, merge — same prompts as the desktop git buttons). If a goal is given (Greptile 5/5, CI green), the worktree agent watch-fix-pushes until it lands. Merge only when the user explicitly asked.
-- **Keep the Mac awake** — `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while the phone remote is connected, and while automations are enabled.
+- **Keep the Mac awake** — a connected phone holds `caffeinate -dimsu` (lid can close on power; battery may still sleep). `set_caffeinate` from an orchestration chat (released when that chat closes). Independent Advanced toggles: while agents are running, while the phone remote is armed and no phone has joined, and while automations are enabled.
 
 Ready-for-review land (`confirm_land`) and `purge_chat` stay human-only. Coordinators commit, push, and open PRs by asking the worktree agent. They merge only when the user explicitly asked.
 
@@ -376,7 +376,7 @@ The Sideboard phone app is the remote surface for the **same local orchestrator*
 
 **What stays on this Mac.** Agents, worktrees, repos, and secrets. **What leaves:** a routing token so the relay can find this Mac. Message text is encrypted between the phone and this Mac; the relay forwards ciphertext. The default relay is `relay.sideboard.build`. The relay does not host worktrees. Run your own with [docs/self-hosted-relay.md](docs/self-hosted-relay.md) — that service is the relay only, not the website.
 
-The phone reaches this Mac while Sideboard.app is open, or while `sideboard serve` owns the host after you quit the window. It cannot reach a sleeping Mac. Enable **Settings → Advanced → Caffeinate while the phone remote is connected**, or `set_caffeinate` from an orchestration chat when you step away.
+The phone reaches this Mac while Sideboard.app is open, or while `sideboard serve` owns the host after you quit the window. A connected phone keeps the Mac awake (`caffeinate -dimsu`), so the lid can close on power; on battery the lid can still sleep. **Settings → Advanced → Caffeinate while the phone remote is armed** also holds that wake while the remote is running and no phone has joined. `set_caffeinate` from an orchestration chat is a separate hold, released when that chat closes.
 
 ```bash
 sideboard serve          # automations + phone relay; exits if the app is already the host

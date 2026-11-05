@@ -1767,11 +1767,12 @@ export function SettingsModal({
                   <div className="settings-toggle-row">
                     <div>
                       <div className="settings-section-title">
-                        Caffeinate while the phone remote is connected
+                        Caffeinate while the phone remote is armed
                       </div>
                       <p className="settings-hint">
-                        Keep the Mac awake so the phone can reach the orchestrator (macOS only;
-                        lid-close may still sleep on battery).
+                        A connected phone already keeps this Mac awake, including with the lid
+                        closed on power (battery may still sleep). This also stays awake while the
+                        remote is running and no phone has joined (macOS only).
                       </p>
                     </div>
                     <button

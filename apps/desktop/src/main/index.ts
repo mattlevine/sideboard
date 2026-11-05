@@ -91,6 +91,7 @@ import {
   caffeinateWhileSlackListenEnabled,
   caffeinateWhileSchedulesEnabled,
   getCaffeinateHold,
+  hostKeepsMacAwake,
   setCaffeinateHold,
   claudeUserSettingsPath,
   detectAgents,
@@ -617,6 +618,7 @@ function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
     slackListenRunning: slackListenRunning || isRemoteHostRunning(),
+    phoneConnected: readRemoteStatus().phoneConnected,
     whileSchedules: caffeinateWhileSchedulesEnabled(),
     schedulesEnabled: hasEnabledSchedules(),
   });
@@ -642,6 +644,7 @@ function syncCaffeinateIndicator(): void {
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
     slackListenRunning: slackListenRunning || isRemoteHostRunning(),
+    phoneConnected: readRemoteStatus().phoneConnected,
     whileSchedules: caffeinateWhileSchedulesEnabled(),
     schedulesEnabled: hasEnabledSchedules(),
   });
@@ -874,17 +877,22 @@ function stopCaffeinate(): void {
   caffeinateProc = null;
 }
 
-/** Keep the Mac awake while agents run, Slack Listen, schedules, or a chat holds caffeinate. */
+/** Keep the Mac awake while a phone is connected, agents run, or an Advanced toggle says so. Chat holds use their own caffeinate process. */
 function syncCaffeinate(): void {
   if (process.platform !== 'darwin') {
     stopCaffeinate();
     syncCaffeinateIndicator();
     return;
   }
-  const keepAwake =
-    (caffeinateWhileRunningEnabled() && orch.getRuntime().running > 0) ||
-    (caffeinateWhileSlackListenEnabled() && (slackListenRunning || isRemoteHostRunning())) ||
-    (caffeinateWhileSchedulesEnabled() && hasEnabledSchedules());
+  const keepAwake = hostKeepsMacAwake({
+    phoneConnected: readRemoteStatus().phoneConnected,
+    phoneRemoteArmed: slackListenRunning || isRemoteHostRunning(),
+    caffeinateWhilePhoneRemote: caffeinateWhileSlackListenEnabled(),
+    agentsRunning: orch.getRuntime().running,
+    caffeinateWhileRunning: caffeinateWhileRunningEnabled(),
+    schedulesEnabled: hasEnabledSchedules(),
+    caffeinateWhileSchedules: caffeinateWhileSchedulesEnabled(),
+  });
   if (keepAwake && !caffeinateProc) {
     try {
       caffeinateProc = spawn('caffeinate', ['-dimsu'], {

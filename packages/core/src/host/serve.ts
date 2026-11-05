@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os';
 import { bootstrapSystemCa } from '../http/system-ca.js';
 import { caffeinateWhileRunningEnabled, caffeinateWhileSchedulesEnabled, caffeinateWhileSlackListenEnabled, loadAppSettings } from '../store/app-settings.js';
+import { hostKeepsMacAwake } from './awake.js';
 import {
   claimDesktopHost,
   isDesktopHostAlive,
@@ -97,10 +98,15 @@ export async function startHeadlessHost(opts?: {
   };
 
   const refreshAwake = () => {
-    const keep =
-      (caffeinateWhileSchedulesEnabled() && hasEnabledSchedules()) ||
-      (caffeinateWhileSlackListenEnabled() && phoneConnected) ||
-      (caffeinateWhileRunningEnabled() && agentsRunning > 0);
+    const keep = hostKeepsMacAwake({
+      phoneConnected,
+      phoneRemoteArmed: true,
+      caffeinateWhilePhoneRemote: caffeinateWhileSlackListenEnabled(),
+      agentsRunning,
+      caffeinateWhileRunning: caffeinateWhileRunningEnabled(),
+      schedulesEnabled: hasEnabledSchedules(),
+      caffeinateWhileSchedules: caffeinateWhileSchedulesEnabled(),
+    });
     if (keep && !caffeinate && process.platform === 'darwin') {
       try {
         caffeinate = spawn('caffeinate', ['-dimsu'], { stdio: 'ignore' });

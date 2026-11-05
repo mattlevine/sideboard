@@ -129,9 +129,11 @@ export function startRemoteHost(): void {
       onActivity();
     },
     onStatus: (status) => {
+      const phoneChanged = remotePhoneConnected !== status.phoneConnected;
       remoteConnected = status.connected;
       remotePhoneConnected = status.phoneConnected;
       if (status.phoneConnected) remotePairingCode = null;
+      if (phoneChanged) onActivity();
     },
     onLog: (line) => {
       remoteLastLog = line;

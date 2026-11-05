@@ -396,13 +396,15 @@ export function formatLinearReminder(opts: {
 
 /**
  * Watch-fix-push loop only when the user gives a goal (not after every push).
+ * A commit in that loop can wake a third-party PR reviewer. Greptile is one
+ * example of a named goal, not a special procedure.
  */
 export function formatPrGateDirective(): string {
   return [
     'If a goal is given (not after every push):',
     '- Enter a watch-fix-push loop and stay in it until that goal is met or you are blocked (examples: “Greptile 5/5”, “CI green”, “until checks pass”). Do not stop after one red run or one review cycle.',
     '- Wait with `/long-running`: detach `gh pr checks --watch` (add `-R <origin>` when needed), then loop `wait_for_job` until stillRunning is false. Do not end the turn — a native CLI Task or bash notify does not resume this chat. Do not ask the human to poll.',
-    '- Greptile 5/5: wait for the greptile check; read the latest `N/5` from the PR body or Greptile’s most recently *updated* issue comment; also fetch unresolved review comments / the “Prompt to fix all with AI” block. Done = **5/5 and zero unresolved Greptile comments**. If Greptile is idle, comment `@greptile review`. Cap about 5 iterations, then report leftovers. Do not merge unless asked.',
+    '- A commit or push can start or refresh a third-party PR review (Greptile, CodeRabbit, Bugbot, Copilot, or another bot on the PR). Read that reviewer’s latest comment and unresolved threads, including any score or fix-it block they posted. Acknowledge it: make the requested changes, push, and wait for the refreshed review. Done = the goal the user named, with that reviewer’s unresolved comments addressed. Do not invent a vendor trigger. Cap about 5 iterations, then report leftovers. Do not merge unless asked.',
   ].join('\n');
 }
 

@@ -230,7 +230,29 @@ export function expandCanonicalGitRequest(
           : 'Investigate that failing check (`gh pr checks`, `gh run view --log-failed`), fix it, commit, and push. Loop only if a goal to keep going until it passes was given.';
   }
   if (!expansion) return prompt;
+  if (expansionPushes(action, trimmed)) expansion = withPushReview(expansion);
   return `${trimmed}\n\n(Sideboard git request — do not ask for clarification: ${expansion})`;
 }
 
 const FIX_CI_RE = /^Fix CI: .+\.$/;
+
+/**
+ * Every expansion that pushes. A plain push does not start a watch. If this
+ * chat already has a goal, the review a push wakes is part of that goal.
+ */
+const PUSH_WAKES_REVIEW =
+  'A push can start or refresh a third-party PR review (whichever bot this repo runs). If this chat already has a goal to keep going until CI or that review is clean, read the reviewer’s latest comment and unresolved threads and address them. Do not start that loop on a plain push.';
+
+const CHECKS_LOOP_UNLESS_GOAL = / ?Do not start a checks loop unless a goal was given\./g;
+
+function withPushReview(expansion: string): string {
+  const base = expansion.replace(CHECKS_LOOP_UNLESS_GOAL, '').trim();
+  if (base.includes('third-party PR review')) return base;
+  return `${base} ${PUSH_WAKES_REVIEW}`;
+}
+
+function expansionPushes(action: AgentGitAction | null, prompt: string): boolean {
+  if (action === 'ready-for-review' || action === 'merge') return false;
+  if (action) return true;
+  return prompt === 'Address review comments.' || FIX_CI_RE.test(prompt);
+}

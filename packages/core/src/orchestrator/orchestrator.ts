@@ -1542,7 +1542,7 @@ export class Orchestrator {
       ]
         .filter(Boolean)
         .join('\n\n') || undefined;
-    // Goal-scoped playbook (Greptile 5/5, CI green) only when this request names one.
+    // Goal-scoped playbook only when this request names one (CI, a review score, until checks pass).
     const prGateDirective =
       thread.agent !== 'brightsy' &&
       !isOrchestratorThread(thread) &&

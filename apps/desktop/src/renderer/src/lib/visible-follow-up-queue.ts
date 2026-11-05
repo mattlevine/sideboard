@@ -45,6 +45,34 @@ export type OptimisticUserSend = { text: string; seen: number };
  * `seen` is how many matching user messages existed when the user sent, so an
  * older copy of the same text does not hide the new one.
  */
+/**
+ * A steer that arrived before any reply is one composer bubble
+ * (`joinSteerPrompt`) but two stored user messages. Once that run is in the
+ * transcript, the joined bubble has landed.
+ */
+export function steerJoinLanded(
+  text: string,
+  messages: Array<{ role: string; text?: string; origin?: string }>,
+): boolean {
+  if (!text.includes('\n')) return false;
+  let parts: string[] = [];
+  const runMatches = () => {
+    if (parts.length < 2) return false;
+    let acc = parts[0] ?? '';
+    for (let i = 1; i < parts.length; i++) acc = joinSteerPrompt(acc, parts[i] ?? '');
+    return acc === text;
+  };
+  for (const message of messages) {
+    if (message.role === 'user' && message.origin !== 'continue') {
+      parts.push(message.text ?? '');
+      if (runMatches()) return true;
+    } else if (message.role === 'agent' || message.role === 'summary') {
+      parts = [];
+    }
+  }
+  return runMatches();
+}
+
 export function unlandedUserTexts<T extends OptimisticUserSend>(
   optimistic: T[],
   messages: Array<{ role: string; text?: string; origin?: string }>,
@@ -57,6 +85,7 @@ export function unlandedUserTexts<T extends OptimisticUserSend>(
   }
   const out: T[] = [];
   for (const item of optimistic) {
+    if (steerJoinLanded(item.text, messages)) continue;
     const now = counts.get(item.text) ?? 0;
     if (now > item.seen) {
       counts.set(item.text, now - 1);
@@ -156,7 +185,7 @@ export function shouldDropStalePendingUser(input: {
 }): boolean {
   const matches = matchingUserCount(input.messages, input.text);
   const landed = input.seen == null ? matches > 0 : matches > input.seen;
-  if (landed) return true;
+  if (landed || steerJoinLanded(input.text, input.messages)) return true;
   if (!input.threadMoved) return false;
   if (input.status === 'running') return false;
   if (input.queue.includes(input.text)) {
@@ -184,7 +213,8 @@ export function pendingTranscriptTexts(input: {
 }): string[] {
   const texts = unlandedUserTexts(input.optimistic, input.messages).map((item) => item.text);
   const landed = (text: string) =>
-    input.messages.some((message) => message.role === 'user' && message.text === text);
+    input.messages.some((message) => message.role === 'user' && message.text === text) ||
+    steerJoinLanded(text, input.messages);
   // The queue head has not been consumed yet. An older message with the same
   // text is a previous send, not this one.
   if (input.currentTurnPrompt && !texts.includes(input.currentTurnPrompt)) {

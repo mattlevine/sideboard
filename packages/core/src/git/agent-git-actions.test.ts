@@ -45,6 +45,9 @@ describe('expandCanonicalGitRequest', () => {
     expect(out.startsWith('Commit and push.')).toBe(true);
     expect(out).toMatch(/do not ask for clarification/);
     expect(out).toMatch(/git push -u origin HEAD/);
+    expect(out).toMatch(/third-party PR review/);
+    expect(out).toMatch(/plain push/);
+    expect(out).not.toMatch(/unless a goal was given/);
     expect(expandCanonicalGitRequest('Merge PR.')).toMatch(/gh stack merge/);
     const intoParent = expandCanonicalGitRequest(
       agentGitPrompt('merge', { prBase: 'matt/parent' }),
@@ -64,10 +67,16 @@ describe('expandCanonicalGitRequest', () => {
       /--web --assignee @me/,
     );
     expect(expandCanonicalGitRequest('Ready for review.')).toMatch(/gh pr ready/);
+    expect(expandCanonicalGitRequest('Ready for review.')).not.toMatch(/third-party PR review/);
+    expect(expandCanonicalGitRequest('Merge PR.')).not.toMatch(/third-party PR review/);
+    expect(expandCanonicalGitRequest('Address review comments.')).toMatch(/third-party PR review/);
+    expect(expandCanonicalGitRequest('Fix CI: lint.')).toMatch(/third-party PR review/);
   });
 
   it('uses the origin CLI when the checkout is Cursor', () => {
     const forge = { forge: 'cursor' as const };
+    expect(expandCanonicalGitRequest('Commit and push.', forge)).toMatch(/third-party PR review/);
+    expect(expandCanonicalGitRequest('Commit and push.', forge)).toMatch(/Use `origin`, not `gh`/);
     expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.', forge)).toMatch(
       /origin pr create --draft --push/,
     );
@@ -84,6 +93,8 @@ describe('expandCanonicalGitRequest', () => {
 
   it('uses entire trail when the checkout is Entire', () => {
     const forge = { forge: 'entire' as const };
+    expect(expandCanonicalGitRequest('Commit and push.', forge)).toMatch(/third-party PR review/);
+    expect(expandCanonicalGitRequest('Commit and push.', forge)).toMatch(/Use `entire`, not `gh`/);
     expect(expandCanonicalGitRequest('Commit, push, and open a draft PR.', forge)).toMatch(
       /entire trail create --title/,
     );

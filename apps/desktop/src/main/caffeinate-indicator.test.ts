@@ -39,6 +39,7 @@ describe('caffeinateIndicatorReasons', () => {
     expect(
       caffeinateIndicatorReasons({ ...off, whileSlackListen: true, slackListenRunning: true }),
     ).toEqual(['slack']);
+    expect(caffeinateIndicatorReasons({ ...off, phoneConnected: true })).toEqual(['slack']);
     expect(
       caffeinateIndicatorReasons({ ...off, whileSchedules: true, schedulesEnabled: true }),
     ).toEqual(['schedules']);
