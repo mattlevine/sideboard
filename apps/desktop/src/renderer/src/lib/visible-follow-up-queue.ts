@@ -93,6 +93,29 @@ export function steerJoinLanded(
   return countSteerJoins(text, messages) > seen;
 }
 
+/**
+ * Joins of `items[index].text` already spent on earlier copies in this list.
+ * A later resend stays pending while an earlier copy of the same joined text
+ * is the one that landed.
+ */
+export function joinsClaimedBefore(
+  items: ReadonlyArray<Pick<OptimisticUserSend, 'text' | 'seen' | 'seenJoins'>>,
+  index: number,
+  messages: TranscriptMessage[],
+): number {
+  const text = items[index]?.text ?? '';
+  if (!text.includes('\n')) return 0;
+  const total = countSteerJoins(text, messages);
+  let claimed = 0;
+  for (let i = 0; i < index; i++) {
+    const prev = items[i];
+    if (!prev || prev.text !== text) continue;
+    const baseline = prev.seenJoins ?? prev.seen;
+    if (total - claimed > baseline) claimed += 1;
+  }
+  return claimed;
+}
+
 /** Baselines for a composer bubble, captured when the user sends. */
 export function userSendSeen(
   text: string,
@@ -222,14 +245,18 @@ export function shouldDropStalePendingUser(input: {
   seen?: number;
   /** Join-run count at send time. Falls back to `seen` when omitted. */
   seenJoins?: number;
+  /** Joins of this text already attributed to earlier copies in the same list. */
+  joinsClaimed?: number;
 }): boolean {
   const matches = matchingUserCount(input.messages, input.text);
   const landed = input.seen == null ? matches > 0 : matches > input.seen;
   const joinBaseline = input.seenJoins ?? input.seen ?? 0;
+  const claimed = input.joinsClaimed ?? 0;
+  const joinsLeft = countSteerJoins(input.text, input.messages) - claimed;
   const joinLanded =
     input.seen == null && input.seenJoins == null
-      ? countSteerJoins(input.text, input.messages) > 0
-      : countSteerJoins(input.text, input.messages) > joinBaseline;
+      ? joinsLeft > 0 && claimed === 0
+      : joinsLeft > joinBaseline;
   if (landed || joinLanded) return true;
   if (!input.threadMoved) return false;
   if (input.status === 'running') return false;
