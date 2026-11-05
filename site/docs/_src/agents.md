@@ -3,9 +3,9 @@
 Sideboard shells out to each agent’s own CLI. Install the ones you want on your PATH and authenticate. Cursor uses a user-installed `@cursor/sdk` plus a `CURSOR_API_KEY` (Settings → Agents → Cursor → Install). Sideboard does not pack the Cursor SDK — so agents can update it without a new Sideboard build.
 
 ```bash
-npm i -g @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | bash
 npm i -g @openai/codex
-npm i -g opencode-ai@latest
+curl -fsSL https://opencode.ai/install | bash
 npm i -g @cursor/sdk
 export CURSOR_API_KEY="cursor_..."
 ```

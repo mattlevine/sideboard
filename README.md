@@ -107,7 +107,7 @@ Sideboard shells out to each agent’s CLI. Install the ones you want on your `P
 #### Claude Code
 
 ```bash
-npm install -g @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | bash
 claude          # complete login on first run
 ```
 
@@ -125,11 +125,7 @@ Docs: [github.com/openai/codex](https://github.com/openai/codex)
 #### OpenCode
 
 ```bash
-# Recommended (macOS / Linux)
 curl -fsSL https://opencode.ai/install | bash
-
-# Or via npm (package name is opencode-ai, not opencode)
-npm install -g opencode-ai@latest
 opencode auth login
 ```
 

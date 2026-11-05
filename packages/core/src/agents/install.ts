@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { chmodSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { run } from '../git/run.js';
 import {
   resolveAgentExecutable,
@@ -41,15 +42,25 @@ export interface AgentSetupActionResult {
   exitCode?: number | null;
 }
 
+/**
+ * Official installer. Does not need Node.
+ * `npm i -g @anthropic-ai/claude-code` can exit 0 on a new Mac while leaving
+ * `bin/claude.exe` as a mode-644 stub (optional native package not linked).
+ * `/usr/bin/which` skips non-executable files, so Settings reported
+ * "Installed (CLI not yet on PATH)" and Claude stayed unusable.
+ * This script writes an executable `~/.local/bin/claude`.
+ */
+const CLAUDE_NATIVE_INSTALL = 'curl -fsSL https://claude.ai/install.sh | bash';
+const OPENCODE_NATIVE_INSTALL = 'curl -fsSL https://opencode.ai/install | bash';
+
 const SETUP: Record<AgentKind, AgentSetupInfo> = {
   claude: {
     agent: 'claude',
     kind: 'cli',
-    summary: 'Install the Claude Code CLI, then complete login in a terminal.',
+    summary: 'Install Claude Code, then complete login in a terminal.',
     docsUrl: 'https://code.claude.com/docs/en/install',
-    installCommand: 'npm install -g @anthropic-ai/claude-code',
+    installCommand: CLAUDE_NATIVE_INSTALL,
     loginCommand: 'claude auth login',
-    npmPackage: '@anthropic-ai/claude-code',
     updateArgs: ['update'],
   },
   codex: {
@@ -65,12 +76,12 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
   opencode: {
     agent: 'opencode',
     kind: 'cli',
-    summary: 'Install OpenCode (curl installer or npm), then authenticate providers.',
+    summary: 'Install OpenCode, then authenticate providers.',
     docsUrl: 'https://opencode.ai/docs',
-    // Prefer the official installer; npm package name is opencode-ai.
-    installCommand: 'curl -fsSL https://opencode.ai/install | bash',
+    // npm package `opencode-ai` ships the same kind of non-executable native stub
+    // as Claude. The curl installer writes ~/.opencode/bin/opencode.
+    installCommand: OPENCODE_NATIVE_INSTALL,
     loginCommand: 'opencode auth login',
-    npmPackage: 'opencode-ai@latest',
     updateArgs: ['upgrade'],
   },
   cursor: {
@@ -247,7 +258,17 @@ export async function installNpmGlobalPackage(opts: {
   }
 
   enrichPathWithNpmGlobalBin();
-  const binPath = opts.cliBin ? await whichOnPath(opts.cliBin) : null;
+  const binPath = opts.cliBin ? await resolveCliAfterNpmInstall(opts.cliBin) : null;
+  if (opts.cliBin && !binPath) {
+    return {
+      ok: false,
+      command: opts.installCommand,
+      exitCode: 0,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      message: `Installed ${opts.npmPackage}, but \`${opts.cliBin}\` is not on PATH.`,
+    };
+  }
   return {
     ok: true,
     command: opts.installCommand,
@@ -257,10 +278,35 @@ export async function installNpmGlobalPackage(opts: {
     // Library-only packages (`@cursor/sdk`) have no CLI to look for.
     message: !opts.cliBin
       ? `Installed ${opts.npmPackage}`
-      : binPath
-        ? `Installed ${opts.npmPackage} → ${binPath}`
-        : `Installed ${opts.npmPackage} (CLI not yet on PATH)`,
+      : `Installed ${opts.npmPackage} → ${binPath}`,
   };
+}
+
+/**
+ * `which` skips non-executable files. After `npm i -g`, look in the prefix
+ * bin, chmod the shim, and search again. Returns null when the CLI is absent.
+ */
+async function resolveCliAfterNpmInstall(cliBin: string): Promise<string | null> {
+  const found = await whichOnPath(cliBin);
+  if (found) return found;
+
+  const prefix = await run('npm', ['prefix', '-g'], { reject: false, timeoutMs: 8_000 });
+  if (prefix.exitCode !== 0) return null;
+  const root = prefix.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('/'))
+    .pop();
+  if (!root) return null;
+  const candidate = join(root, 'bin', cliBin);
+  if (!existsSync(candidate)) return null;
+  try {
+    chmodSync(candidate, 0o755);
+  } catch {
+    // Prefix may be root-owned. which still fails and the caller reports it.
+  }
+  enrichPathWithNpmGlobalBin();
+  return whichOnPath(cliBin);
 }
 
 async function resolveExistingCli(agent: AgentKind): Promise<string | null> {
@@ -301,6 +347,87 @@ function isCurlInstaller(command: string): boolean {
   return /curl\s| \|\s*bash/.test(command);
 }
 
+/**
+ * Run a vendor curl|bash installer and require the CLI to show up on PATH.
+ * Sideboard is macOS-only; these scripts write under the user home.
+ */
+async function installCurlScript(opts: {
+  command: string;
+  bin: string;
+  label: string;
+  expected: string;
+}): Promise<AgentSetupActionResult> {
+  const result = await run('bash', ['-c', opts.command], {
+    reject: false,
+    timeoutMs: 300_000,
+  });
+  if (result.exitCode === 0) {
+    // `run` → ensureAgentPath picks up the new home bin dir once it exists.
+    const binPath = await whichOnPath(opts.bin);
+    if (binPath) {
+      return {
+        ok: true,
+        command: opts.command,
+        exitCode: 0,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        message: `Installed ${opts.label} → ${binPath}`,
+      };
+    }
+    return {
+      ok: false,
+      command: opts.command,
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      message: `${opts.label} installer finished, but \`${opts.bin}\` is not on PATH. Expected ${opts.expected}.`,
+    };
+  }
+
+  const detail = result.stderr.trim() || result.stdout.trim();
+  try {
+    await openInSystemTerminal(opts.command);
+    return {
+      ok: false,
+      openedTerminal: true,
+      command: opts.command,
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      message: `${opts.label} install failed (exit ${result.exitCode}). Opened Terminal with: ${opts.command}`,
+    };
+  } catch {
+    return {
+      ok: false,
+      command: opts.command,
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      message: detail
+        ? `${opts.label} install failed (exit ${result.exitCode}). ${detail}`
+        : `${opts.label} install failed (exit ${result.exitCode})`,
+    };
+  }
+}
+
+export function installClaudeNative(): Promise<AgentSetupActionResult> {
+  return installCurlScript({
+    command: CLAUDE_NATIVE_INSTALL,
+    bin: 'claude',
+    label: 'Claude Code',
+    expected: '~/.local/bin/claude',
+  });
+}
+
+export function installOpenCodeNative(): Promise<AgentSetupActionResult> {
+  return installCurlScript({
+    command: OPENCODE_NATIVE_INSTALL,
+    bin: 'opencode',
+    label: 'OpenCode',
+    expected: '~/.opencode/bin/opencode',
+  });
+}
+
 /** Install or update a CLI agent. */
 export async function installAgent(agent: AgentKind): Promise<AgentSetupActionResult> {
   const info = getAgentSetupInfo(agent);
@@ -318,6 +445,9 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
   if (existing && info.updateArgs?.length) {
     return runVendorUpdate(existing, info.updateArgs);
   }
+
+  if (agent === 'claude') return installClaudeNative();
+  if (agent === 'opencode') return installOpenCodeNative();
 
   if (info.npmPackage && !isCurlInstaller(info.installCommand)) {
     const cliBin = agent === 'cursor' ? null : CLI_BIN[agent];

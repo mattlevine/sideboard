@@ -1,3 +1,6 @@
+import { accessSync, constants, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const runMock = vi.fn();
@@ -32,6 +35,100 @@ describe('agent install helpers', () => {
     runMock.mockReset();
     for (const key of Object.keys(exeOverrides)) {
       delete exeOverrides[key];
+    }
+  });
+
+  it('runs claude update when Claude is already on PATH', async () => {
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'which' && args?.[0] === 'claude') {
+        return { stdout: '/Users/me/.local/bin/claude\n', stderr: '', exitCode: 0 };
+      }
+      if (file === '/Users/me/.local/bin/claude' && args?.[0] === 'update') {
+        return { stdout: 'up to date\n', stderr: '', exitCode: 0 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('claude');
+    expect(result.ok).toBe(true);
+    expect(result.message).toMatch(/Updated/);
+    expect(runMock).not.toHaveBeenCalledWith('bash', expect.anything(), expect.anything());
+  });
+
+  it('installs Claude Code with the native installer, not npm', async () => {
+    let installed = false;
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'bash') {
+        installed = true;
+        return { stdout: 'Installation complete\n', stderr: '', exitCode: 0 };
+      }
+      if (file === 'which' && args?.[0] === 'claude') {
+        return installed
+          ? { stdout: '/Users/me/.local/bin/claude\n', stderr: '', exitCode: 0 }
+          : { stdout: '', stderr: '', exitCode: 1 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { getAgentSetupInfo, installAgent } = await import('./install.js');
+    expect(getAgentSetupInfo('claude').installCommand).toBe(
+      'curl -fsSL https://claude.ai/install.sh | bash',
+    );
+    expect(getAgentSetupInfo('claude').npmPackage).toBeUndefined();
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    try {
+      const result = await installAgent('claude');
+      expect(result.ok).toBe(true);
+      expect(result.message).toBe('Installed Claude Code → /Users/me/.local/bin/claude');
+      expect(runMock).toHaveBeenCalledWith(
+        'bash',
+        ['-c', 'curl -fsSL https://claude.ai/install.sh | bash'],
+        expect.objectContaining({ reject: false, timeoutMs: 300_000 }),
+      );
+      expect(runMock).not.toHaveBeenCalledWith('npm', expect.anything(), expect.anything());
+    } finally {
+      platform.mockRestore();
+    }
+  });
+
+  it('does not report Claude as installed when the native installer leaves no CLI', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    try {
+      runMock.mockImplementation(async (file: string) => {
+        if (file === 'bash') return { stdout: 'done\n', stderr: '', exitCode: 0 };
+        if (file === 'which') return { stdout: '', stderr: '', exitCode: 1 };
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+      const { installAgent } = await import('./install.js');
+      const result = await installAgent('claude');
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/not on PATH/);
+      expect(result.message).not.toMatch(/Installed @anthropic-ai\/claude-code/);
+    } finally {
+      platform.mockRestore();
+    }
+  });
+
+  it('opens Terminal when the Claude native installer fails', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
+    try {
+      runMock.mockImplementation(async (file: string) => {
+        if (file === 'bash') {
+          return { stdout: '', stderr: 'Download failed', exitCode: 1 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+      const { installAgent } = await import('./install.js');
+      const result = await installAgent('claude');
+      expect(result.ok).toBe(false);
+      expect(result.openedTerminal).toBe(true);
+      expect(result.command).toContain('https://claude.ai/install.sh');
+      expect(runMock).toHaveBeenCalledWith(
+        'osascript',
+        expect.anything(),
+        expect.objectContaining({ reject: false }),
+      );
+    } finally {
+      platform.mockRestore();
     }
   });
 
@@ -176,8 +273,8 @@ describe('agent install helpers', () => {
     });
     const { installAgent } = await import('./install.js');
     const result = await installAgent('codex');
-    expect(result.ok).toBe(true);
-    expect(result.message).toBe('Installed @openai/codex (CLI not yet on PATH)');
+    expect(result.ok).toBe(false);
+    expect(result.message).toBe('Installed @openai/codex, but `codex` is not on PATH.');
   });
 
   it('runs opencode upgrade when OpenCode is already on PATH', async () => {
@@ -203,6 +300,59 @@ describe('agent install helpers', () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+
+  it('installs OpenCode with the native installer', async () => {
+    let installed = false;
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'bash') {
+        installed = true;
+        return { stdout: 'installed\n', stderr: '', exitCode: 0 };
+      }
+      if (file === 'which' && args?.[0] === 'opencode') {
+        return installed
+          ? { stdout: '/Users/me/.opencode/bin/opencode\n', stderr: '', exitCode: 0 }
+          : { stdout: '', stderr: '', exitCode: 1 };
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('opencode');
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe('Installed OpenCode → /Users/me/.opencode/bin/opencode');
+    expect(runMock).toHaveBeenCalledWith(
+      'bash',
+      ['-c', 'curl -fsSL https://opencode.ai/install | bash'],
+      expect.objectContaining({ reject: false, timeoutMs: 300_000 }),
+    );
+    expect(runMock).not.toHaveBeenCalledWith('npm', expect.anything(), expect.anything());
+  });
+
+  it('chmods an npm global shim that which skipped', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'sb-npm-bin-'));
+    const binDir = join(root, 'bin');
+    mkdirSync(binDir);
+    const cli = join(binDir, 'codex');
+    writeFileSync(cli, '#!/bin/sh\necho ok\n', { mode: 0o644 });
+    runMock.mockImplementation(async (file: string, args?: string[]) => {
+      if (file === 'npm' && args?.[0] === 'prefix') {
+        return { stdout: `${root}\n`, stderr: '', exitCode: 0 };
+      }
+      if (file === 'npm') return { stdout: 'ok', stderr: '', exitCode: 0 };
+      if (file === 'which' && args?.[0] === 'codex') {
+        try {
+          accessSync(cli, constants.X_OK);
+          return { stdout: `${cli}\n`, stderr: '', exitCode: 0 };
+        } catch {
+          return { stdout: '', stderr: '', exitCode: 1 };
+        }
+      }
+      return { stdout: '', stderr: '', exitCode: 0 };
+    });
+    const { installAgent } = await import('./install.js');
+    const result = await installAgent('codex');
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe(`Installed @openai/codex → ${cli}`);
   });
 
   it('opens Terminal for login with absolute codex path + PATH export', async () => {
