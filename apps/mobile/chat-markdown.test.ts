@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
+import { taskListPlugin } from './task-lists';
 
 const require = createRequire(new URL('./package.json', import.meta.url));
 const MarkdownIt = createRequire(require.resolve('react-native-markdown-display'))('markdown-it');
 
 /** Same options as chatMarkdown in chat-markdown.ts. */
-const markdown = MarkdownIt({ typographer: true, linkify: true });
+const markdown = MarkdownIt({ typographer: true, linkify: true }).use(taskListPlugin);
 
 function hrefs(source: string): string[] {
   const found: string[] = [];
@@ -28,7 +29,9 @@ describe('phone chat urls', () => {
     const parser = readFileSync(new URL('./chat-markdown.ts', import.meta.url), 'utf8');
     const bubble = readFileSync(new URL('./markdown.tsx', import.meta.url), 'utf8');
     expect(parser).toContain('linkify: true');
+    expect(parser).toContain('.use(taskListPlugin)');
     expect(bubble).toContain('markdownit={chatMarkdown}');
+    expect(bubble).toContain('preparePhoneMarkdown');
   });
 
   it('turns a bare https url into a link and leaves fenced code alone', () => {
