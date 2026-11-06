@@ -101,7 +101,25 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   font-weight: 500;
 }
 .nav-links a:hover { color: var(--text) }
+.nav-x {
+  order: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  flex: none;
+}
+.nav-x:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+.nav-x svg { display: block }
 .nav-inner > .btn {
+  order: 3;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -783,8 +801,10 @@ article th { color: var(--text); background: var(--card) }
    Those same screens use a hamburger instead of the link row. */
 @media (max-width: 720px), ((hover: none) and (pointer: coarse)) {
   a[href*="Sideboard-latest-arm64.dmg"] { display: none }
-  .nav-burger { display: inline-flex }
+  .nav-x { order: 1 }
+  .nav-burger { order: 2; display: inline-flex }
   .nav-links {
+    order: 3;
     display: none;
     flex: 1 0 100%;
     flex-direction: column;
