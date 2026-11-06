@@ -21,15 +21,12 @@ const shared = {
     lineHeight: 26,
     letterSpacing: -0.2,
   },
-  text: {
-    color: text,
-    fontSize: 16,
-    lineHeight: 26,
-    letterSpacing: -0.2,
-  },
   textgroup: {
     color: text,
   },
+  // Leaf `text` is applied after inherited heading, strong, strike, link, and
+  // table styles. A fontSize or color here flattens those. Base type is `body`.
+  text: {},
   paragraph: {
     marginTop: 0,
     marginBottom: 10,
@@ -207,7 +204,6 @@ export const fenceChrome = StyleSheet.create({
 
 export const askMarkdown = StyleSheet.create({
   ...shared,
-  body: { ...shared.body, fontSize: 16, lineHeight: 22 },
-  text: { ...shared.text, fontSize: 16, lineHeight: 22, fontWeight: '500' },
+  body: { ...shared.body, fontSize: 16, lineHeight: 22, fontWeight: '500' },
   paragraph: { marginTop: 0, marginBottom: 4 },
 });

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Image, Linking, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import Markdown, { hasParents, type RenderRules } from 'react-native-markdown-display';
-import { linkifyChatUrls, parseChatLink } from './chat-link';
+import { parseChatLink } from './chat-link';
+import { markdownBlockRules } from './markdown-blocks';
+import { preparePhoneMarkdown } from './prepare-markdown';
 import { chatMarkdown } from './chat-markdown';
 import { chatSearchQuery, highlightSegments } from './chat-search';
 import { highlightCode } from './code-highlight';
@@ -163,6 +165,7 @@ function markdownRules(
   findPaint: FindPaint,
 ): RenderRules {
   return {
+    ...markdownBlockRules(),
     fence: (node) => {
       const info = (node as { sourceInfo?: string }).sourceInfo;
       const language = fenceLanguage(info);
@@ -245,7 +248,7 @@ function markdownRules(
         style={[
           inheritedStyles,
           styles.text,
-          // Body color on this node would cover the desktop link blue.
+          // Link color last, so body and textgroup color do not cover it.
           hasParents(parent, 'link') || hasParents(parent, 'blocklink') ? styles.link : null,
         ]}
       >
@@ -272,18 +275,6 @@ function markdownRules(
         </Text>
       );
     },
-    // Cells size to their text. A flex row with flex:1 measures that text at width 0, so only borders show.
-    table: (node, children, _parent, styles) => (
-      <ScrollView
-        key={node.key}
-        horizontal
-        nestedScrollEnabled
-        showsHorizontalScrollIndicator={false}
-        style={styles.table_scroll}
-      >
-        <View style={styles._VIEW_SAFE_table}>{children}</View>
-      </ScrollView>
-    ),
     image: (node) => {
       const src = typeof node.attributes?.src === 'string' ? node.attributes.src : '';
       const alt = typeof node.attributes?.alt === 'string' ? node.attributes.alt : '';
@@ -387,7 +378,7 @@ export function MarkdownText({
       ),
     [streaming, chatId, findQuery, findLocal, longPress],
   );
-  const body = linkifyChatUrls(source);
+  const body = preparePhoneMarkdown(source);
   if (!body.trim()) return null;
   return (
     <Markdown
