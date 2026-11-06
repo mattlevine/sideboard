@@ -431,7 +431,7 @@ export async function listPrs(
 
 /** `gh pr view` / `pr list` fields needed at create time (badges + draft). */
 const PR_INFO_JSON_FIELDS =
-  'number,title,headRefName,url,isCrossRepository,author,isDraft,labels';
+  'number,title,headRefName,url,isCrossRepository,author,isDraft,labels,state';
 
 function prInfoFromGhView(view: Record<string, unknown>): PrInfo {
   const author = view.author as { login?: string } | null | undefined;

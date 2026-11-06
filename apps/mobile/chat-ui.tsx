@@ -456,7 +456,7 @@ export function CreateChatSheet(props: {
                 </View>
                 <TextInput
                   style={[styles.search, { marginHorizontal: 0 }]}
-                  placeholder="Search"
+                  placeholder={tab === 'prs' ? 'Name or PR number' : 'Search'}
                   placeholderTextColor={palette.muted}
                   value={query}
                   onChangeText={(value) => {
