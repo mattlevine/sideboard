@@ -1,21 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-WHGVCBFR');</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privacy — Sideboard</title>
 <meta name="description" content="What Sideboard collects, how phone messages are used, how long they are kept, and how to request access or deletion.">
+<link rel="canonical" href="https://www.sideboard.build/privacy/">
 <meta property="og:title" content="Privacy — Sideboard">
-<meta property="og:description" content="What Sideboard collects, how phone messages are used, and how to request deletion.">
+<meta property="og:description" content="What Sideboard collects, how phone messages are used, how long they are kept, and how to request access or deletion.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://www.sideboard.cloud/privacy/">
-<meta property="og:image" content="https://www.sideboard.cloud/desktop.png">
+<meta property="og:site_name" content="Sideboard">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://www.sideboard.build/privacy/">
+<meta property="og:image" content="https://www.sideboard.build/board.png">
+<meta property="og:image:alt" content="Sideboard board — workspaces across New, Draft, Review, Approved, and Merged">
+<meta property="og:image:width" content="2718">
+<meta property="og:image:height" content="1676">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Privacy — Sideboard">
+<meta name="twitter:description" content="What Sideboard collects, how phone messages are used, how long they are kept, and how to request access or deletion.">
+<meta name="twitter:image" content="https://www.sideboard.build/board.png">
+<meta name="theme-color" content="#09090b">
 <link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
 <link rel="stylesheet" href="/styles.css?v=20261106-1">
 <style>article h2{font-size:22px;margin:36px 0 10px}article p,article li{font-size:16px;line-height:1.65;color:#b3bcc4}article ul{padding-left:1.2em}</style>
 </head>
 <body>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WHGVCBFR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <header class="nav">
 <div class="nav-inner">
 <a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
@@ -33,16 +50,17 @@
 <article style="max-width:720px;margin:0 auto;padding:56px 40px 110px">
 <span style="display:inline-flex;align-items:center;padding:5px 15px;border-radius:999px;background:rgba(15,126,212,.16);color:#7cbcf0;font-size:12.5px;letter-spacing:.04em">Privacy</span>
 <h1 style="font-weight:700;font-size:44px;line-height:1.1;letter-spacing:-.02em;margin:18px 0 8px;color:#edf0f3">Privacy policy</h1>
-<p style="margin:0;color:#8b949c;font-size:14px">Last updated 1 November 2026. Sideboard is a local Mac app plus a phone relay at <code>relay.sideboard.build</code>.</p>
+<p style="margin:0;color:#8b949c;font-size:14px">Last updated 6 November 2026. Sideboard is a local Mac app plus a phone relay at <code>relay.sideboard.build</code>.</p>
 
 <h2>What this covers</h2>
-<p>This policy describes data handled by the Sideboard desktop and CLI on your computer, the Sideboard phone app, and the hosted relay. The marketing site at www.sideboard.cloud does not require an account.</p>
+<p>This policy describes data handled by the Sideboard desktop and CLI on your computer, the Sideboard phone app, and the hosted relay. The marketing site at www.sideboard.build does not require an account.</p>
 
 <h2>What we collect</h2>
 <ul>
 <li><strong>On your Mac.</strong> This Mac’s name, a host secret used to register with the relay, thread/worktree metadata, and chat you have with agents. Optional tokens for GitHub, Linear, AbleTime, Vercel, Supabase, PostHog, and Sentry also live in the encrypted vault on disk — not in the renderer or in git.</li>
 <li><strong>On your phone.</strong> The pairing session for each Mac you connect (device name and a session token), stored on the phone so you can pick a desktop later.</li>
 <li><strong>Through the relay.</strong> A routing token so the relay can attach the socket, plus the handshake and ciphertext. Prompt text and the phone token stay inside those frames. Signing the Mac in uses your git host (GitHub today): Sideboard stores that GitHub user id, the email GitHub returns, and a hash of each Mac’s host secret. The relay does not receive git repos, vault tokens, or VPN-only traffic.</li>
+<li><strong>On the marketing site.</strong> www.sideboard.build loads Google Tag Manager (<code>GTM-WHGVCBFR</code>), which sends page views to Google Analytics. Google may receive the page URL, a rough location, and device information, and may set cookies. That data is handled under <a href="https://policies.google.com/privacy">Google’s privacy policy</a>.</li>
 <li><strong>We do not</strong> sell message text. We do not use it to train Sideboard models — Sideboard does not host a model.</li>
 </ul>
 
@@ -65,7 +83,7 @@
 </article>
 <footer class="foot">
 <div class="foot-inner">
-<a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.cloud</a>
+<a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.build</a>
 <nav>
 <a href="/docs/">Docs</a>
 <a href="/docs/remote/">Phone</a>

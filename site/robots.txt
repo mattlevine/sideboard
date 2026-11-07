@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+Disallow: /oauth/
+Disallow: /docs/_src/
+
+Sitemap: https://www.sideboard.build/sitemap.xml

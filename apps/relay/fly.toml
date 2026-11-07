@@ -25,7 +25,9 @@
 # GitHub OAuth App authorization callback URL:
 #   https://relay.sideboard.build/remote/oauth/callback
 #
-# Custom domains (both names serve the site until the .cloud cutover):
+# Custom domains. HTML canonical host is www.sideboard.build.
+# sideboard.build, sideboard.cloud, and www.sideboard.cloud 301 there.
+# /oauth/ stays on the host that registered it (Entire does not follow redirects).
 #   fly certs add relay.sideboard.cloud -a sideboard-slack-relay
 #   fly certs add www.sideboard.cloud -a sideboard-slack-relay
 #   fly certs add sideboard.cloud -a sideboard-slack-relay
@@ -40,7 +42,7 @@
 # HTTPS GET /slack/callback exchanges Slack OAuth (client secret stays on this app).
 # Desktops poll GET /slack/oauth/result?state=…
 # GET / on the site hosts serves the static marketing site (repo site/).
-# Hosts in SIDEBOARD_SITE_HOSTS are served even if they are also redirect hosts.
+# Non-canonical SIDEBOARD_SITE_HOSTS 301 to SIDEBOARD_SITE_CANONICAL, except /oauth/.
 # relay.sideboard.build is the phone remote. GET /health stays JSON for Fly checks.
 
 app = 'sideboard-slack-relay'
@@ -52,7 +54,7 @@ primary_region = 'sjc'
   HOST = '0.0.0.0'
   SIDEBOARD_SITE_ROOT = '/app/site'
   SIDEBOARD_SITE_HOSTS = 'www.sideboard.build,sideboard.build,www.sideboard.cloud,sideboard.cloud'
-  SIDEBOARD_SITE_REDIRECT_HOSTS = 'sideboard.build,sideboard.cloud'
+  SIDEBOARD_SITE_REDIRECT_HOSTS = 'sideboard.build,www.sideboard.cloud,sideboard.cloud'
   SIDEBOARD_SITE_CANONICAL = 'www.sideboard.build'
   SIDEBOARD_RELAY_PUBLIC_ORIGIN = 'https://relay.sideboard.build'
   SIDEBOARD_RELAY_ACCOUNTS_PATH = '/data/relay-accounts.sqlite'

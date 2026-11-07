@@ -1,20 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-WHGVCBFR');</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sideboard — orchestrate a fleet of coding agents on your Mac</title>
 <meta name="description" content="Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.">
+<link rel="canonical" href="https://www.sideboard.build/">
 <meta property="og:title" content="Sideboard — orchestrate a fleet of coding agents on your Mac">
 <meta property="og:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://www.sideboard.cloud/">
-<meta property="og:image" content="https://www.sideboard.cloud/board.png?v=4">
+<meta property="og:site_name" content="Sideboard">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://www.sideboard.build/">
+<meta property="og:image" content="https://www.sideboard.build/board.png">
+<meta property="og:image:alt" content="Sideboard board — workspaces across New, Draft, Review, Approved, and Merged">
+<meta property="og:image:width" content="2718">
+<meta property="og:image:height" content="1676">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sideboard — orchestrate a fleet of coding agents on your Mac">
+<meta name="twitter:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
+<meta name="twitter:image" content="https://www.sideboard.build/board.png">
+<meta name="theme-color" content="#09090b">
 <link rel="icon" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
 <link rel="stylesheet" href="/styles.css?v=20261106-1">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "name": "Sideboard",
+      "url": "https://www.sideboard.build/",
+      "logo": "https://www.sideboard.build/favicon.png",
+      "email": "support@sideboard.cloud",
+      "sameAs": [
+        "https://github.com/mattlevine/sideboard",
+        "https://x.com/sideboard_build",
+        "https://www.npmjs.com/package/@sideboard-ai/cli"
+      ]
+    },
+    {
+      "@type": "WebSite",
+      "name": "Sideboard",
+      "url": "https://www.sideboard.build/"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "Sideboard",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS",
+      "url": "https://www.sideboard.build/",
+      "downloadUrl": "https://download.sideboard.build/Sideboard-latest-arm64.dmg",
+      "image": "https://www.sideboard.build/board.png",
+      "description": "Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.",
+      "license": "https://www.apache.org/licenses/LICENSE-2.0",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How is this different from Conductor?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, CLI. Use Conductor if you want their finished workspace UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is this different from Orca?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (phone, CLI, MCP) so you can reach this Mac."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I pay Sideboard for models?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Bring the Claude, Codex, OpenCode, or Cursor subscriptions you already have. Sideboard is Apache-2.0. The desktop and CLI are free. You are not renting a sandbox from us."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it keep running if I close the laptop?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "On power, a connected phone keeps this Mac awake, including with the lid closed. On battery, closing the lid can still sleep it. Automations still opt in from Settings → Advanced. Agents that must keep running after this Mac sleeps belong in a cloud sandbox."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use it without the desktop app?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. npm i -g @sideboard-ai/cli ships the CLI and the stdio MCP server. The desktop is the board. The phone app talks to that desktop."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-WHGVCBFR" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <header class="nav">
   <div class="nav-inner">
     <a class="brand" href="/"><span class="mark" aria-hidden="true"><i></i><i></i></span>Sideboard</a>
@@ -318,7 +420,7 @@ sideboard land &lt;thread&gt;</pre>
 
 <footer class="foot">
   <div class="foot-inner">
-    <a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.cloud</a>
+    <a class="brand" href="/"><span class="mark mark-sm" aria-hidden="true"><i></i><i></i></span>sideboard.build</a>
     <nav>
       <a href="/docs/">Docs</a>
       <a href="/docs/remote/">Phone</a>

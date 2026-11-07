@@ -72,6 +72,7 @@ describe('relay static marketing site', () => {
     await writeFile(path.join(root, 'index.html'), '<!DOCTYPE html><title>Home</title><h1>Sideboard</h1>');
     await writeFile(path.join(root, 'docs/index.html'), '<!DOCTYPE html><title>Docs</title><h1>Docs</h1>');
     await writeFile(path.join(root, 'styles.css'), 'body{color:#111}');
+    await writeFile(path.join(root, 'sitemap.xml'), '<urlset></urlset>');
 
     const handle = await startRelayServer({
       appToken: 'xapp-test',
@@ -87,9 +88,17 @@ describe('relay static marketing site', () => {
     expect(home.headers.get('content-type')).toMatch(/text\/html/);
     expect(await home.text()).toContain('Sideboard');
 
-    const docs = await fetch(`${origin}/docs`);
+    const bareDocs = await fetch(`${origin}/docs`, { redirect: 'manual' });
+    expect(bareDocs.status).toBe(301);
+    expect(bareDocs.headers.get('location')).toBe('/docs/');
+
+    const docs = await fetch(`${origin}/docs/`);
     expect(docs.status).toBe(200);
     expect(await docs.text()).toContain('Docs');
+
+    const sitemap = await fetch(`${origin}/sitemap.xml`);
+    expect(sitemap.status).toBe(200);
+    expect(sitemap.headers.get('content-type')).toMatch(/application\/xml/);
 
     const css = await fetch(`${origin}/styles.css`);
     expect(css.status).toBe(200);
@@ -131,26 +140,44 @@ describe('relay static marketing site', () => {
     expect(apex.location).toBe('https://www.sideboard.cloud/docs');
   });
 
-  it('serves a host that is listed as both a site host and a redirect', async () => {
+  it('301s alias hosts to the canonical site and keeps oauth documents put', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'sideboard-site-'));
+    await mkdir(path.join(root, 'oauth'));
     await writeFile(path.join(root, 'index.html'), '<!DOCTYPE html><h1>Site</h1>');
+    await writeFile(path.join(root, 'oauth/entire-client.json'), '{"client_id":"entire"}');
     const handle = await startRelayServer({
       appToken: 'xapp-test',
       skipSocketMode: true,
       staticRoot: root,
       staticHosts: ['www.sideboard.build', 'sideboard.build', 'www.sideboard.cloud'],
-      redirectHosts: ['sideboard.build', 'sideboard.cloud'],
+      redirectHosts: ['sideboard.build', 'sideboard.cloud', 'www.sideboard.cloud'],
       canonicalSiteHost: 'www.sideboard.build',
     });
     handles.push(handle);
 
-    const build = await request(handle.port, '/', 'sideboard.build');
-    expect(build.status).toBe(200);
-    expect(build.body).toContain('Site');
+    const www = await request(handle.port, '/', 'www.sideboard.build');
+    expect(www.status).toBe(200);
+    expect(www.body).toContain('Site');
+
+    const apex = await request(handle.port, '/', 'sideboard.build');
+    expect(apex.status).toBe(301);
+    expect(apex.location).toBe('https://www.sideboard.build/');
 
     const cloud = await request(handle.port, '/docs', 'sideboard.cloud');
     expect(cloud.status).toBe(301);
     expect(cloud.location).toBe('https://www.sideboard.build/docs');
+
+    const cloudHome = await request(handle.port, '/', 'www.sideboard.cloud');
+    expect(cloudHome.status).toBe(301);
+    expect(cloudHome.location).toBe('https://www.sideboard.build/');
+
+    const oauth = await request(handle.port, '/oauth/entire-client.json', 'www.sideboard.cloud');
+    expect(oauth.status).toBe(200);
+    expect(oauth.body).toContain('entire');
+
+    const slack = await request(handle.port, '/slack/', 'www.sideboard.build');
+    expect(slack.status).toBe(301);
+    expect(slack.location).toBe('https://www.sideboard.build/docs/remote/');
   });
 
   it('keeps JSON on / when staticRoot is unset', async () => {

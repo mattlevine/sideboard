@@ -6,8 +6,8 @@ Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted
 
 | Host | Serves |
 |------|--------|
-| https://www.sideboard.build and https://sideboard.build | `site/` while both domains are live |
-| https://www.sideboard.cloud and https://sideboard.cloud | Same site. A host in `SIDEBOARD_SITE_HOSTS` is served even if it is also a redirect host. |
+| https://www.sideboard.build | Marketing site. Canonical host. |
+| https://sideboard.build, https://www.sideboard.cloud, https://sideboard.cloud | 301 to www.sideboard.build, except `/oauth/` (Entire’s client document stays on www.sideboard.cloud and does not follow redirects). |
 | https://relay.sideboard.build | Phone remote, legacy Slack, and `/health`. `relay.sideboard.cloud` still reaches this app. |
 | https://download.sideboard.build | Desktop artifacts and the auto-update feed. Tigris allows one custom domain, so this is the one with TLS. |
 | https://sideboard-downloads.t3.tigrisfiles.io | Working public Tigris host (use this until custom-domain HTTPS works). |
@@ -32,11 +32,12 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 
 ## Check
 
-- https://sideboard.build/ and https://www.sideboard.cloud/ — marketing (both hosts until the cutover)
-- https://www.sideboard.cloud/docs/ — docs page
-- https://www.sideboard.cloud/slack/ — Slack app landing
-- https://www.sideboard.cloud/privacy/ — privacy policy
-- https://www.sideboard.cloud/support/ — support
+- https://www.sideboard.build/ — marketing (apex and the .cloud names 301 here)
+- https://www.sideboard.build/docs/ — docs page
+- https://www.sideboard.build/robots.txt and https://www.sideboard.build/sitemap.xml
+- https://www.sideboard.build/slack/ — 301 to /docs/remote/
+- https://www.sideboard.build/privacy/ — privacy policy
+- https://www.sideboard.build/support/ — support
 - https://www.sideboard.build/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)
 - https://www.sideboard.cloud/oauth/entire-client.json — Entire CIMD. `SIDEBOARD_RELAY_ENTIRE_CLIENT_ID` is that URL. No client secret.
 - https://www.sideboard.build/oauth/abletime/callback — AbleTime OAuth return (opens the desktop listener)
