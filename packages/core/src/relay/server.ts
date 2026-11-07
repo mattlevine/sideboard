@@ -19,14 +19,7 @@ import {
   SLACK_RELAY_PING_INTERVAL_MS,
 } from '../slack/relay-protocol.js';
 import { SlackRelayHub } from '../slack/relay-hub.js';
-import {
-  CANONICAL_SITE_HOST,
-  directorySlashLocation,
-  hostnameAllowed,
-  marketingRedirectLocation,
-  requestHostname,
-  tryServeStatic,
-} from './static.js';
+import { CANONICAL_SITE_HOST, serveMarketingSite } from './static.js';
 import { RemoteHub } from '../remote/hub.js';
 import { REMOTE_PING_INTERVAL_MS, REMOTE_RELAY_PATH } from '../remote/protocol.js';
 import { assertRelayAccountsDurable, RelayAccountStore } from './accounts.js';
@@ -296,34 +289,14 @@ export async function startRelayServer(
         });
         return;
       }
-      const hostname = requestHostname(req);
-      const canonical = (opts.canonicalSiteHost ?? CANONICAL_SITE_HOST).toLowerCase();
-      if (opts.staticRoot && (req.method === 'GET' || req.method === 'HEAD')) {
-        const location = marketingRedirectLocation({
-          requestUrl: reqUrl,
-          hostname,
-          canonicalHost: canonical,
-          staticHosts: opts.staticHosts,
-          redirectHosts: opts.redirectHosts,
-        });
-        if (location) {
-          res.writeHead(301, { Location: location });
-          res.end();
-          return;
-        }
-        if (hostnameAllowed(hostname, opts.staticHosts)) {
-          const slash = await directorySlashLocation(opts.staticRoot, reqUrl);
-          if (slash) {
-            res.writeHead(301, { Location: slash });
-            res.end();
-            return;
-          }
-        }
-      }
       if (
         opts.staticRoot &&
-        hostnameAllowed(hostname, opts.staticHosts) &&
-        (await tryServeStatic(req, res, opts.staticRoot))
+        (await serveMarketingSite(req, res, {
+          root: opts.staticRoot,
+          canonicalHost: opts.canonicalSiteHost ?? CANONICAL_SITE_HOST,
+          staticHosts: opts.staticHosts,
+          redirectHosts: opts.redirectHosts,
+        }))
       ) {
         return;
       }

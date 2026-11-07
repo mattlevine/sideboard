@@ -144,6 +144,49 @@ function sendFile(
 }
 
 /**
+ * Marketing GET/HEAD: canonical redirect, directory slash, then a static file.
+ * Returns false when this request should fall through to the relay JSON routes.
+ */
+export async function serveMarketingSite(
+  req: IncomingMessage,
+  res: ServerResponse,
+  opts: {
+    root: string;
+    canonicalHost: string;
+    staticHosts?: string[];
+    redirectHosts?: string[];
+  },
+): Promise<boolean> {
+  const reqUrl = req.url || '/';
+  const hostname = requestHostname(req);
+  const canonical = opts.canonicalHost.toLowerCase();
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    const location = marketingRedirectLocation({
+      requestUrl: reqUrl,
+      hostname,
+      canonicalHost: canonical,
+      staticHosts: opts.staticHosts,
+      redirectHosts: opts.redirectHosts,
+    });
+    if (location) {
+      res.writeHead(301, { Location: location });
+      res.end();
+      return true;
+    }
+    if (hostnameAllowed(hostname, opts.staticHosts)) {
+      const slash = await directorySlashLocation(opts.root, reqUrl);
+      if (slash) {
+        res.writeHead(301, { Location: slash });
+        res.end();
+        return true;
+      }
+    }
+  }
+  if (!hostnameAllowed(hostname, opts.staticHosts)) return false;
+  return tryServeStatic(req, res, opts.root);
+}
+
+/**
  * Serve a file from `root` for GET/HEAD. Directory URLs map to `index.html`.
  * Returns false when this request is not a static hit (caller should 404 / fall through).
  */

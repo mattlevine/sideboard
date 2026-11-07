@@ -65,7 +65,8 @@ pnpm --filter @sideboard-ai/desktop typecheck
 2. Include tests when changing adapters, MCP, or git land paths.
 3. Run build + tests before opening the PR (`pnpm --filter @sideboard-ai/core test`, etc.).
 4. Update docs/README (and `site/` when the public story changes) if behavior or the CLI/MCP/skills surface changes. Recurring process guides go in `.claude/skills/<name>/SKILL.md`, not `.sideboard/skills`.
+5. Sign the [Contributor License Agreement](CLA.md) when the CLA check asks you to. Comment on the pull request with the exact sentence from that file. One signature covers later pull requests from the same GitHub account. Accounts whose login ends in `[bot]` are exempt.
 
 ## License
 
-By contributing, you agree your contributions are licensed under the Apache-2.0 License (see [LICENSE](LICENSE)).
+Contributions are licensed under the Apache-2.0 License (see [LICENSE](LICENSE)). The [Contributor License Agreement](CLA.md) is how you confirm that. You keep your copyright.

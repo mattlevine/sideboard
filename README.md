@@ -530,4 +530,4 @@ Older threads that already point at a repo-local path keep working; new threads 
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE). Contributions welcome under [CONTRIBUTING.md](CONTRIBUTING.md).
+Apache-2.0 — see [LICENSE](LICENSE). Contributions welcome under [CONTRIBUTING.md](CONTRIBUTING.md) and the [Contributor License Agreement](CLA.md).
