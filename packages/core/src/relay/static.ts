@@ -15,6 +15,7 @@ const TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp',
+  '.xml': 'application/xml; charset=utf-8',
   '.woff2': 'font/woff2',
 };
 
@@ -26,6 +27,74 @@ export function requestHostname(req: IncomingMessage): string {
 export function hostnameAllowed(host: string, allowed?: string[]): boolean {
   if (!allowed || allowed.length === 0) return true;
   return allowed.includes(host);
+}
+
+/** Public marketing host. Other site names 301 here. */
+export const CANONICAL_SITE_HOST = 'www.sideboard.build';
+
+/** Client-metadata and OAuth return URLs stay on the host that registered them. */
+export function isOAuthSitePath(pathname: string): boolean {
+  return pathname === '/oauth' || pathname.startsWith('/oauth/');
+}
+
+function isLegacySlackLanding(pathname: string): boolean {
+  return pathname === '/slack' || pathname === '/slack/';
+}
+
+/**
+ * Absolute Location for a marketing GET that should not be served on this host.
+ * Aliases 301 to the canonical host. `/slack/` lands on the phone docs.
+ * `/oauth/` returns null so a registered client-metadata URL is not redirected.
+ */
+export function marketingRedirectLocation(opts: {
+  requestUrl: string;
+  hostname: string;
+  canonicalHost: string;
+  staticHosts?: string[];
+  redirectHosts?: string[];
+}): string | null {
+  let pathname = '/';
+  let search = '';
+  try {
+    const url = new URL(opts.requestUrl, 'http://relay.local');
+    pathname = url.pathname;
+    search = url.search;
+  } catch {
+    return null;
+  }
+  const hostname = opts.hostname.toLowerCase();
+  const canonical = opts.canonicalHost.toLowerCase();
+  const staticHosts = opts.staticHosts ?? [];
+  const listedSite = staticHosts.length > 0 && staticHosts.includes(hostname);
+  const listedRedirect = (opts.redirectHosts ?? []).includes(hostname);
+  const alias = hostname !== canonical && (listedSite || listedRedirect);
+  const onCanonical = hostname === canonical;
+  if (isLegacySlackLanding(pathname) && (onCanonical || alias)) {
+    return `https://${canonical}/docs/remote/${search}`;
+  }
+  if (alias && !isOAuthSitePath(pathname)) {
+    return `https://${canonical}${pathname}${search}`;
+  }
+  return null;
+}
+
+/**
+ * Directory URL missing its trailing slash (`/docs` → `/docs/`).
+ * Null when the path is a file, already slashed, or under `/oauth/`.
+ */
+export async function directorySlashLocation(root: string, requestUrl: string): Promise<string | null> {
+  let url: URL;
+  try {
+    url = new URL(requestUrl, 'http://relay.local');
+  } catch {
+    return null;
+  }
+  if (isOAuthSitePath(url.pathname) || url.pathname.endsWith('/')) return null;
+  const candidate = resolveStaticPath(root, requestUrl);
+  if (!candidate) return null;
+  if ((await fileSize(candidate)) != null) return null;
+  if ((await fileSize(path.join(candidate, 'index.html'))) == null) return null;
+  return `${url.pathname}/${url.search}`;
 }
 
 /** Resolve a GET path under `root`, or null if it would escape the tree. */

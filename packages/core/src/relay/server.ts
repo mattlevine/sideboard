@@ -19,7 +19,14 @@ import {
   SLACK_RELAY_PING_INTERVAL_MS,
 } from '../slack/relay-protocol.js';
 import { SlackRelayHub } from '../slack/relay-hub.js';
-import { hostnameAllowed, requestHostname, tryServeStatic } from './static.js';
+import {
+  CANONICAL_SITE_HOST,
+  directorySlashLocation,
+  hostnameAllowed,
+  marketingRedirectLocation,
+  requestHostname,
+  tryServeStatic,
+} from './static.js';
 import { RemoteHub } from '../remote/hub.js';
 import { REMOTE_PING_INTERVAL_MS, REMOTE_RELAY_PATH } from '../remote/protocol.js';
 import { assertRelayAccountsDurable, RelayAccountStore } from './accounts.js';
@@ -47,14 +54,15 @@ export interface RelayServerOptions {
   skipSocketMode?: boolean;
   /** Optional marketing site root (Fly: `/app/site`). `/health` stays JSON. */
   staticRoot?: string;
-  /** Hostnames that get the marketing site (e.g. `www.sideboard.cloud`). Empty = any host. */
+  /** Hostnames that may serve site files (e.g. `www.sideboard.build`). Empty = any host. */
   staticHosts?: string[];
   /**
-   * Apex (or aliases) that 301 to `canonicalSiteHost`.
-   * A host listed in `staticHosts` is served instead, so both names can stay up.
+   * Hosts that 301 to `canonicalSiteHost`.
+   * A non-canonical name also listed in `staticHosts` 301s the same way, and still
+   * serves `/oauth/` so a registered client-metadata URL is not redirected.
    */
   redirectHosts?: string[];
-  /** Canonical public site host (default `www.sideboard.cloud`). */
+  /** Canonical public site host (default `www.sideboard.build`). */
   canonicalSiteHost?: string;
   /**
    * SQLite file for Sideboard accounts. When set, a Mac must sign in before
@@ -220,7 +228,7 @@ export async function startRelayServer(
         res,
         200,
         'Slack connected',
-        '<h1>Slack workspace connected</h1><p>Open <strong>Sideboard → Settings → Remote → Slack</strong>. Confirm Relay connected, name this Mac, then DM @Sideboard.</p><p>Need the app? <a href="https://www.sideboard.cloud/slack/">Download Sideboard</a>.</p>',
+        '<h1>Slack workspace connected</h1><p>Open <strong>Sideboard → Settings → Remote → Slack</strong>. Confirm Relay connected, name this Mac, then DM @Sideboard.</p><p>Need the app? <a href="https://www.sideboard.build/">Download Sideboard</a>.</p>',
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -289,13 +297,28 @@ export async function startRelayServer(
         return;
       }
       const hostname = requestHostname(req);
-      const canonical = (opts.canonicalSiteHost ?? 'www.sideboard.cloud').toLowerCase();
-      const staticHosts = opts.staticHosts ?? [];
-      const servesSite = staticHosts.length > 0 && staticHosts.includes(hostname);
-      if (opts.redirectHosts?.includes(hostname) && hostname !== canonical && !servesSite) {
-        res.writeHead(301, { Location: `https://${canonical}${reqUrl}` });
-        res.end();
-        return;
+      const canonical = (opts.canonicalSiteHost ?? CANONICAL_SITE_HOST).toLowerCase();
+      if (opts.staticRoot && (req.method === 'GET' || req.method === 'HEAD')) {
+        const location = marketingRedirectLocation({
+          requestUrl: reqUrl,
+          hostname,
+          canonicalHost: canonical,
+          staticHosts: opts.staticHosts,
+          redirectHosts: opts.redirectHosts,
+        });
+        if (location) {
+          res.writeHead(301, { Location: location });
+          res.end();
+          return;
+        }
+        if (hostnameAllowed(hostname, opts.staticHosts)) {
+          const slash = await directorySlashLocation(opts.staticRoot, reqUrl);
+          if (slash) {
+            res.writeHead(301, { Location: slash });
+            res.end();
+            return;
+          }
+        }
       }
       if (
         opts.staticRoot &&

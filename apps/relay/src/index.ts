@@ -19,15 +19,16 @@ import { startRelayServer } from '@sideboard-ai/core';
  *   HOST                           bind address (default 0.0.0.0)
  *   SIDEBOARD_SITE_ROOT            optional. Set only to serve the marketing site
  *                                  (the hosted Fly app). A self-hosted relay leaves this unset.
- *   SIDEBOARD_SITE_HOSTS           hosts that serve the site (default: www.sideboard.cloud)
- *   SIDEBOARD_SITE_REDIRECT_HOSTS  hosts that 301 to the canonical site (default: sideboard.cloud)
- *   SIDEBOARD_SITE_CANONICAL       canonical site host (default: www.sideboard.cloud)
+ *   SIDEBOARD_SITE_HOSTS           hosts that may serve site files (default: the canonical host).
+ *                                  Non-canonical names 301, except `/oauth/`.
+ *   SIDEBOARD_SITE_REDIRECT_HOSTS  extra hosts that 301 to the canonical site
+ *   SIDEBOARD_SITE_CANONICAL       canonical site host (default: www.sideboard.build)
  *
  * Phone and Mac connect at wss://<host>/remote. A self-hosted process is that
  * relay only: no marketing site unless SIDEBOARD_SITE_ROOT is set.
  * Slack desktops use wss://relay.sideboard.build/slack/desktop when
  * SIDEBOARD_SLACK_APP_TOKEN is set. GET /slack/callback exchanges Slack OAuth.
- * GET / on www.sideboard.cloud serves the marketing site. GET
+ * GET / on www.sideboard.build serves the marketing site. GET
  * /oauth/abletime/callback bounces AbleTime OAuth to the desktop listener.
  * GET /health stays JSON for Fly checks.
  */
@@ -43,9 +44,13 @@ async function main(): Promise<void> {
   };
   const staticRoot = process.env.SIDEBOARD_SITE_ROOT?.trim() || '';
   const canonicalSiteHost =
-    process.env.SIDEBOARD_SITE_CANONICAL?.trim().toLowerCase() || 'www.sideboard.cloud';
+    process.env.SIDEBOARD_SITE_CANONICAL?.trim().toLowerCase() || 'www.sideboard.build';
   const staticHosts = csv(process.env.SIDEBOARD_SITE_HOSTS, [canonicalSiteHost]);
-  const redirectHosts = csv(process.env.SIDEBOARD_SITE_REDIRECT_HOSTS, ['sideboard.cloud']);
+  const redirectHosts = csv(process.env.SIDEBOARD_SITE_REDIRECT_HOSTS, [
+    'sideboard.build',
+    'www.sideboard.cloud',
+    'sideboard.cloud',
+  ]);
   const accountsPath =
     process.env.SIDEBOARD_RELAY_ACCOUNTS_PATH?.trim() ||
     (process.env.NODE_ENV === 'production'

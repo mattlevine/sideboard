@@ -61,9 +61,9 @@ Also true, and useful on the way:
 - **Local-first / phone-remote** — agents stay on this Mac (VPN, private git, internal APIs); the phone app is how you reach them ([pair it](#phone))
 - **Portable process skills** — recurring guides are Claude Code project skills (`.claude/skills/<name>/SKILL.md`). Sideboard `/name`, Claude Code, and `attach` all load that path ([Process skills](#process-skills))
 
-Docs: [www.sideboard.cloud/docs](https://www.sideboard.cloud/docs/) · [Settings](#settings) · [Phone](#phone) · [Automations](#automations)
+Docs: [www.sideboard.build/docs](https://www.sideboard.build/docs/) · [Settings](#settings) · [Phone](#phone) · [Automations](#automations)
 
-Marketing site: [www.sideboard.cloud](https://www.sideboard.cloud) · [docs](https://www.sideboard.cloud/docs/) (same Fly app as the relay; `relay.sideboard.build` is the phone remote). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
+Marketing site: [www.sideboard.build](https://www.sideboard.build) · [docs](https://www.sideboard.build/docs/) (same Fly app as the relay; `relay.sideboard.build` is the phone remote). Desktop downloads: [latest Mac build](https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg). CLI stays on npm (`@sideboard-ai/cli`).
 
 ## Install
 
