@@ -40,9 +40,12 @@ export function phoneBoardKey(sidebar: PhoneSidebar): string {
     .join('\n---\n');
   const defaults = sidebar.defaults;
   const defaultsKey = defaults
-    ? [defaults.orchestration, defaults.worktree]
-        .map((row) => [row.agent, row.model ?? '', row.effort, row.fast ? '1' : '0'].join('\t'))
-        .join('\n')
+    ? [
+        defaults.followUp,
+        [defaults.orchestration, defaults.worktree]
+          .map((row) => [row.agent, row.model ?? '', row.effort, row.fast ? '1' : '0'].join('\t'))
+          .join('\n'),
+      ].join('\n')
     : '';
   return `${orchestration}\n===\n${projects}\n===\n${defaultsKey}`;
 }

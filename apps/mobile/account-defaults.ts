@@ -12,6 +12,8 @@ export type PhoneAgentDefaults = {
 export type PhoneAccountDefaults = {
   orchestration: PhoneAgentDefaults;
   worktree: PhoneAgentDefaults;
+  /** Mac Settings → Advanced. Steer interrupts the live turn; queue waits. */
+  followUp?: 'steer' | 'queue';
 };
 
 const AGENTS = new Set<AgentId>(['claude', 'codex', 'opencode', 'cursor', 'brightsy']);

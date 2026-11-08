@@ -1637,6 +1637,7 @@ export default function App() {
           placeholder={composerPlaceholder({
             orchestration: orchestration.some((row) => row.id === activeChatId),
             status: activeChat?.status,
+            followUp: accountDefaultsRef.current?.followUp,
           })}
           onChangeDraft={setDraft}
           onSend={() => sendText(draft)}

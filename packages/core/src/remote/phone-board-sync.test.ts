@@ -28,12 +28,17 @@ describe('phone board sync', () => {
     const base = board();
     const changed = board({
       defaults: {
+        followUp: 'steer',
         orchestration: { agent: 'cursor', model: null, effort: 'high', fast: false, autonomy: 'full' },
         worktree: { agent: 'codex', model: 'gpt-5', effort: 'low', fast: false, autonomy: 'full' },
       },
     });
     expect(phoneBoardKey(changed)).not.toBe(phoneBoardKey(base));
     expect(phoneBoardKey(changed)).toBe(phoneBoardKey(changed));
+    const queued = board({
+      defaults: { ...changed.defaults!, followUp: 'queue' },
+    });
+    expect(phoneBoardKey(queued)).not.toBe(phoneBoardKey(changed));
   });
 
   it('changes when a workspace source ticket becomes blocked', () => {

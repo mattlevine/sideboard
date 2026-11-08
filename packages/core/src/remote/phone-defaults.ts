@@ -1,4 +1,5 @@
 import {
+  followUpBehavior,
   resolveOrchestratorDefaults,
   resolveThreadDefaults,
 } from '../store/app-settings.js';
@@ -14,10 +15,11 @@ export interface PhoneAgentDefaults {
   autonomy: Autonomy;
 }
 
-/** Settings → Agents: orchestration default and worktree default. */
+/** Settings → Agents, plus Settings → Advanced follow-up behavior. */
 export interface PhoneAccountDefaults {
   orchestration: PhoneAgentDefaults;
   worktree: PhoneAgentDefaults;
+  followUp: 'steer' | 'queue';
 }
 
 function row(resolved: PhoneAgentDefaults): PhoneAgentDefaults {
@@ -34,5 +36,6 @@ export function phoneAccountDefaults(): PhoneAccountDefaults {
   return {
     orchestration: row(resolveOrchestratorDefaults()),
     worktree: row(resolveThreadDefaults()),
+    followUp: followUpBehavior(),
   };
 }

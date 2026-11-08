@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { updateDefaultsSettings, updateProjectProfileSettings } from '../store/app-settings.js';
+import { updateAdvancedSettings, updateDefaultsSettings, updateProjectProfileSettings } from '../store/app-settings.js';
 import { removeWorkspace } from '../store/workspaces.js';
 import { clearTurnLive, noteTurnLiveEvent } from '../store/turn-live.js';
 import { createEmptyThread, updateThread, writeThread } from '../store/thread-store.js';
@@ -461,6 +461,9 @@ describe('phone orchestration chats', () => {
       model: 'default',
       effort: 'high',
     });
+    expect(sidebar.defaults?.followUp).toBe('steer');
+    updateAdvancedSettings({ followUpBehavior: 'queue' });
+    expect(listPhoneSidebar().defaults?.followUp).toBe('queue');
     expect(createPhoneChat().chat.agent).toBe('cursor');
 
     writeFileSync(
