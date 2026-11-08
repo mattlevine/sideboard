@@ -79,11 +79,11 @@ export interface CloudConnectStatus {
 import type { RemoteHostStatus, SlackListenStatus } from './listen-status.js';
 export type { RemoteHostStatus, SlackListenStatus };
 
+import type { SlackOrgIpc } from './slack-org.js';
 import type { WorktreeOpener, WorktreeOpenerId } from './worktree-opener.js';
 export type { WorktreeOpener, WorktreeOpenerId };
 
-/** Shared typed surface for Electron preload ↔ renderer (and docs). */
-export interface IpcApi extends McpUiIpc, GitHostIpcApi {
+export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc {
   detectAgents(): Promise<AgentStatus[]>;
   /** Install recipe + docs for Settings → Agents. */
   getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;
@@ -220,7 +220,7 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi {
   /** Add a workspace from a pasted bot (xoxb-) or user (xoxp-) token. */
   connectSlackToken(token: string): Promise<SlackWorkspaceInfo[]>;
   /** Browser OAuth — opens Slack, waits for localhost callback. */
-  startSlackOAuth(): Promise<SlackWorkspaceInfo[]>;
+  startSlackOAuth(clientId?: string): Promise<SlackWorkspaceInfo[]>;
   /** Abort an in-progress Slack browser sign-in (closes the localhost waiter). */
   cancelSlackOAuth(): Promise<void>;
   disconnectSlackWorkspace(teamId: string): Promise<SlackWorkspaceInfo[]>;

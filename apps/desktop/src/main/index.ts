@@ -21,6 +21,12 @@ import {
   type UrlPreviewBounds,
 } from './url-preview';
 import {
+  registerSlackDesktop,
+  slackListenIsRunning,
+  stopSlackListenDaemon,
+  syncSlackListenDaemon,
+} from './slack-desktop';
+import {
   bindArtifactPreviewProtocol,
   registerArtifactPreviewScheme,
 } from './artifact-preview';
@@ -120,11 +126,6 @@ import {
   removeBoardPin,
   type AddBoardPinInput,
   getGitHubStatus,
-  listSlackWorkspaces,
-  connectSlackToken,
-  disconnectSlackWorkspace,
-  startSlackOAuth,
-  isSlackOAuthCancelled,
   startLinearOAuth,
   isLinearOAuthCancelled,
   startAbleTimeOAuth,
@@ -139,12 +140,7 @@ import {
   type OptionalServiceId,
   ensureAbleTimeTask,
   toAbleTimeIssueInfo,
-  resolveSlackListenMode,
-  slackAppLevelToken,
-  slackRelayUrl,
-  hasBakedSlackOAuth,
   followUpBehavior,
-  ensureSlackDeviceIdentity,
   loadAppSettings,
   toPublicAppSettings,
   loadBrightsyConfig,
@@ -208,7 +204,6 @@ import {
   type ClaudeHarnessSettings,
   type CliAgentKind,
   type CloudConnectStatus,
-  type SlackListenStatus,
   type DefaultsSettingsPatch,
   type IntegrationsSettings,
   type IssueSource,
@@ -291,11 +286,6 @@ let cloudConnectAbort: AbortController | null = null;
 let cloudConnectRunning = false;
 let cloudConnectLastError: string | null = null;
 let cloudConnectLastLog: string | null = null;
-
-let slackListenAbort: AbortController | null = null;
-let slackListenRunning = false;
-let slackListenLastError: string | null = null;
-let slackListenLastLog: string | null = null;
 
 function readCloudConnectStatus(): CloudConnectStatus {
   const settings = loadAppSettings();
@@ -411,52 +401,6 @@ async function setCloudConnect(opts: {
     startCloudConnectDaemon();
   }
   return readCloudConnectStatus();
-}
-
-function readSlackListenStatus(): SlackListenStatus {
-  const settings = loadAppSettings();
-  const workspaceCount = listSlackWorkspaces().length;
-  const hasAppToken = Boolean(slackAppLevelToken(settings));
-  const mode = resolveSlackListenMode({
-    relayUrl: slackRelayUrl(),
-    workspaceCount,
-  });
-  const device =
-    workspaceCount > 0 || settings.integrations.slackDeviceId
-      ? ensureSlackDeviceIdentity(settings)
-      : null;
-  return {
-    enabled: workspaceCount > 0,
-    running: slackListenRunning,
-    hasAppToken,
-    bakedOAuth: hasBakedSlackOAuth(),
-    mode,
-    workspaceCount,
-    deviceLabel: device?.deviceLabel ?? null,
-    lastError: slackListenLastError,
-    lastLog: slackListenLastLog,
-  };
-}
-
-function stopSlackListenDaemon(): void {
-  if (slackListenAbort) {
-    slackListenAbort.abort();
-    slackListenAbort = null;
-  }
-  slackListenRunning = false;
-  syncCaffeinate();
-}
-
-function syncSlackListenDaemon(): SlackListenStatus {
-  stopSlackListenDaemon();
-  return readSlackListenStatus();
-}
-
-function setSlackListen(opts: { enabled: boolean }): SlackListenStatus {
-  updateIntegrationsSettings({ slackListenEnabled: opts.enabled });
-  if (opts.enabled) return syncSlackListenDaemon();
-  stopSlackListenDaemon();
-  return readSlackListenStatus();
 }
 
 async function stopOpenFileWatcher(): Promise<void> {
@@ -614,7 +558,7 @@ function caffeinateReasons(holdHeld: boolean) {
     whileRunning: caffeinateWhileRunningEnabled(),
     agentsRunning: orch.getRuntime().running,
     whileSlackListen: caffeinateWhileSlackListenEnabled(),
-    slackListenRunning: slackListenRunning || isRemoteHostRunning(),
+    slackListenRunning: slackListenIsRunning() || isRemoteHostRunning(),
     phoneConnected: readRemoteStatus().phoneConnected,
     whileSchedules: caffeinateWhileSchedulesEnabled(),
     schedulesEnabled: hasEnabledSchedules(),
@@ -879,7 +823,7 @@ function syncCaffeinate(): void {
   }
   const keepAwake = hostKeepsMacAwake({
     phoneConnected: readRemoteStatus().phoneConnected,
-    phoneRemoteArmed: slackListenRunning || isRemoteHostRunning(),
+    phoneRemoteArmed: slackListenIsRunning() || isRemoteHostRunning(),
     caffeinateWhilePhoneRemote: caffeinateWhileSlackListenEnabled(),
     agentsRunning: orch.getRuntime().running,
     caffeinateWhileRunning: caffeinateWhileRunningEnabled(),
@@ -1099,7 +1043,12 @@ function registerIpc(): void {
       // Renderer cannot clear the app-level Socket Mode token.
       if (!next.slackAppToken?.trim()) delete next.slackAppToken;
       const saved = updateIntegrationsSettings(next);
-      if (next.slackAppToken || 'slackDeviceLabel' in next || 'slackDeviceId' in next) {
+      if (
+        next.slackAppToken ||
+        'slackDeviceLabel' in next ||
+        'slackDeviceId' in next ||
+        'remoteRelayUrl' in next
+      ) {
         stopSlackListenDaemon();
         syncSlackListenDaemon();
       }
@@ -1126,36 +1075,7 @@ function registerIpc(): void {
   );
   ipcMain.handle('getGitHubStatus', () => getGitHubStatus());
   registerGitHostIpc();
-  ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());
-  ipcMain.handle('connectSlackToken', async (_e, token: string) => {
-    await connectSlackToken(token);
-    syncSlackListenDaemon();
-    return listSlackWorkspaces();
-  });
-  let slackOauthAbort: AbortController | null = null;
-  ipcMain.handle('startSlackOAuth', async () => {
-    slackOauthAbort?.abort();
-    const ac = new AbortController();
-    slackOauthAbort = ac;
-    try {
-      await startSlackOAuth({
-        openUrl: (url) => shell.openExternal(url),
-        signal: ac.signal,
-      });
-      syncSlackListenDaemon();
-      return listSlackWorkspaces();
-    } catch (err) {
-      if (isSlackOAuthCancelled(err)) {
-        throw new Error('Slack sign-in cancelled');
-      }
-      throw err;
-    } finally {
-      if (slackOauthAbort === ac) slackOauthAbort = null;
-    }
-  });
-  ipcMain.handle('cancelSlackOAuth', () => {
-    slackOauthAbort?.abort();
-  });
+  registerSlackDesktop(syncCaffeinate);
   let linearOauthAbort: AbortController | null = null;
   ipcMain.handle('startLinearOAuth', async () => {
     linearOauthAbort?.abort();
@@ -1250,21 +1170,12 @@ function registerIpc(): void {
       return { ...toAbleTimeIssueInfo(task), created: task.created };
     },
   );
-  ipcMain.handle('disconnectSlackWorkspace', (_e, teamId: string) => {
-    const list = disconnectSlackWorkspace(teamId);
-    syncSlackListenDaemon();
-    return list;
-  });
-  ipcMain.handle('getSlackListenStatus', () => readSlackListenStatus());
   ipcMain.handle('getRemoteStatus', () => readRemoteStatus());
   ipcMain.handle('requestRemotePairingCode', () => requestRemotePairing());
   ipcMain.handle('startRemoteAccountLogin', (_e, provider: RelayAccountProvider) =>
     signInRemoteAccount(provider, (url) => shell.openExternal(url)),
   );
   ipcMain.handle('disconnectRemoteAccount', () => signOutRemoteAccount());
-  ipcMain.handle('setSlackListen', (_e, opts: { enabled: boolean }) =>
-    setSlackListen(opts),
-  );
   ipcMain.handle('getCaffeinateHold', () => caffeinateUiState());
   ipcMain.handle('listIssues', async (_e, path: string, opts?: ListIssuesOptions) =>
     listIssues(await resolveRepoRoot(path), opts),
@@ -2006,7 +1917,7 @@ app.whenReady().then(async () => {
   bindRemoteHostActivity(syncCaffeinate);
   bindPhoneOpenFile((request) => showPhoneFile(mainWindow, request));
   bindPhoneOpenArtifact((request) => showPhoneArtifact(mainWindow, request));
-  stopSlackListenDaemon();
+  syncSlackListenDaemon();
   startRemoteHost();
 
   app.on('activate', () => {

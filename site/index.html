@@ -38,7 +38,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       "name": "Sideboard",
       "url": "https://www.sideboard.build/",
       "logo": "https://www.sideboard.build/favicon.png",
-      "email": "support@sideboard.cloud",
+      "email": "support@sideboard.build",
       "sameAs": [
         "https://github.com/mattlevine/sideboard",
         "https://x.com/sideboard_build",
@@ -125,6 +125,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       <a href="#product">Product</a>
       <a href="/docs/">Docs</a>
       <a href="/docs/remote/">Phone</a>
+      <a href="/slack/">Slack</a>
       <a href="https://github.com/mattlevine/sideboard" target="_blank" rel="noopener">GitHub</a>
     </nav>
     <a class="nav-x" href="https://x.com/sideboard_build" target="_blank" rel="noopener noreferrer" aria-label="Sideboard on X"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M18.244 2H21l-6.52 7.455L22.152 22h-6.01l-4.707-6.17L6.04 22H3.28l6.973-7.97L2 2h6.163l4.255 5.593zM17.276 20.346h1.527L7.334 3.567H5.695z"/></svg></a>
@@ -346,7 +347,7 @@ sideboard land &lt;thread&gt;</pre>
 
 <section class="section wrap">
   <h2>Accessible from other systems.</h2>
-  <p class="sub">The Mac is the runtime. Everything else is a remote. Register MCP once and any of your agents can see the fleet. The phone app is how you get in when you are away from the desk. The CLI is how you script it.</p>
+  <p class="sub">The Mac is the runtime. The phone, CLI, and MCP reach it. Slack is how an agent tells a teammate a PR is ready and reads the reply.</p>
   <div class="reach">
     <div class="card">
       <h3>CLI</h3>
@@ -359,6 +360,10 @@ sideboard land &lt;thread&gt;</pre>
     <div class="card">
       <h3>Phone</h3>
       <p>Pair from Settings → Remote, then pick Work or Personal. Agents never leave that Mac.</p>
+    </div>
+    <div class="card">
+      <h3>Slack</h3>
+      <p>Settings → Collaboration. Add via browser once per team. Agents post as @Sideboard and read the reply. <a href="/slack/">How it works</a>.</p>
     </div>
   </div>
 </section>
@@ -389,6 +394,10 @@ sideboard land &lt;thread&gt;</pre>
     <details>
       <summary>Does it keep running if I close the laptop?</summary>
       <p>On power, a connected phone keeps this Mac awake, including with the lid closed. On battery, closing the lid can still sleep it. Automations still opt in from Settings → Advanced. Agents that must keep running after this Mac sleeps belong in a cloud sandbox.</p>
+    </details>
+    <details>
+      <summary>Can agents message my team in Slack?</summary>
+      <p>Yes. Settings → Collaboration → Add via browser installs the Sideboard Slack app into one workspace. Click it again for another team. Agents post as @Sideboard — a PR to review, for example — and read the reply. The phone app is still how you reach this Mac. <a href="/slack/">Slack</a>.</p>
     </details>
     <details>
       <summary>Can I use it without the desktop app?</summary>
@@ -424,6 +433,7 @@ sideboard land &lt;thread&gt;</pre>
     <nav>
       <a href="/docs/">Docs</a>
       <a href="/docs/remote/">Phone</a>
+      <a href="/slack/">Slack</a>
       <a href="/privacy/">Privacy</a>
       <a href="/support/">Support</a>
       <a href="https://www.npmjs.com/package/@sideboard-ai/cli">npm</a>

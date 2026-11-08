@@ -4,7 +4,7 @@
 
 Please **do not** post a public issue for security reports.
 
-Email [support@sideboard.cloud](mailto:support@sideboard.cloud) privately with:
+Email [support@sideboard.build](mailto:support@sideboard.build) privately with:
 
 - Description of the issue
 - Steps to reproduce

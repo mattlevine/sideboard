@@ -126,18 +126,45 @@ export function RemoteSettings({
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        The Sideboard phone app chats with the Global orchestrator on this Mac. Agents stay here.
-        Sign in with GitHub, Cursor, or Entire so this Mac can register on the relay. Each
-        project keeps its own origin. Repos on this Mac do not have to share a git host.
+        Name this Mac and set the relay. The phone and Slack both use them. Connect Slack
+        teams under Collaboration.
       </p>
+
+      <div className="settings-section settings-section-card">
+        <div className="settings-section-title">This Mac</div>
+        <p className="settings-hint">
+          Name shown in the phone’s desktop list and on Slack replies (<code>Work: …</code>). A
+          phone can pair with more than one Mac and you pick which one to open. Address this Mac
+          in a Slack DM with <code>work:</code> or <code>personal:</code> at the start. Keep Sideboard
+          open.
+        </p>
+        <div className="settings-key-row" style={{ marginTop: 12 }}>
+          <input
+            type="text"
+            value={labelDraft}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            placeholder="Work"
+          />
+          <button
+            type="button"
+            disabled={
+              busy ||
+              !labelDraft.trim() ||
+              labelDraft.trim() === (settings.integrations.slackDeviceLabel?.trim() || '')
+            }
+            onClick={() => void saveLabel()}
+          >
+            Save name
+          </button>
+        </div>
+      </div>
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Relay</div>
         <p className="settings-hint">
-          Message text goes through this address. Leave it blank to use Sideboard’s relay.
-          To run your own, deploy the relay service (not the website) and paste the same{' '}
-          <code>wss://…/remote</code> address here and in the phone app. Saving a different
-          relay signs this Mac out.
+          Leave this blank to use Sideboard’s relay. The phone and Slack both use it. To run your
+          own, deploy the relay service (not the website) and paste the same address here and in
+          the phone app. Saving a different relay signs this Mac out.
         </p>
         <div className="settings-key-row" style={{ marginTop: 12 }}>
           <input
@@ -157,13 +184,29 @@ export function RemoteSettings({
         </div>
       </div>
 
+      <div className="settings-group">
+        <div className="settings-group-title">Phone</div>
+        <p className="settings-group-hint">
+          The phone chats with the orchestrator on this Mac. Agents stay here. The relay only
+          carries message text. Sign in, then show a code the phone can scan.
+        </p>
+
       <div className="settings-section settings-section-card">
-        <div className="settings-section-title">Relay account</div>
+        <div className="settings-section-title">Phone sign-in</div>
         <p className="settings-hint">
           {signedIn
-            ? `Signed in${settings.integrations.remoteAccountEmail ? ` as ${settings.integrations.remoteAccountEmail}` : ''}.`
-            : 'Sign in with GitHub, Cursor, or Entire before pairing a phone.'}
+            ? `Signed in${settings.integrations.remoteAccountEmail ? ` as ${settings.integrations.remoteAccountEmail}` : ''}. The phone uses this account to reach this Mac.`
+            : 'Sign in with GitHub, Cursor, or Entire. The phone uses this account to reach this Mac. Each project keeps its own origin.'}
         </p>
+        <p className="settings-status-text" style={{ marginTop: 10 }}>
+          <span
+            className={`settings-dot ${remote?.connected ? 'ok' : ''}`}
+            style={{ display: 'inline-block', marginRight: 8 }}
+          />
+          {status}
+          {remote?.deviceLabel ? <span className="settings-hint"> · {remote.deviceLabel}</span> : null}
+        </p>
+        {remote?.lastError ? <p className="settings-hint">{remote.lastError}</p> : null}
         <div className="settings-key-row" style={{ marginTop: 12 }}>
           {signedIn ? null : (
             <button
@@ -207,42 +250,6 @@ export function RemoteSettings({
       </div>
 
       <div className="settings-section settings-section-card">
-        <div className="settings-section-title">This Mac</div>
-        <p className="settings-hint">
-          Name shown in the phone’s desktop list. A phone can pair with more than one Mac and
-          you pick which one to open. Keep Sideboard open. The relay only carries message text.
-        </p>
-        <p className="settings-status-text" style={{ marginTop: 10 }}>
-          <span
-            className={`settings-dot ${remote?.connected ? 'ok' : ''}`}
-            style={{ display: 'inline-block', marginRight: 8 }}
-          />
-          {status}
-          {remote?.deviceLabel ? <span className="settings-hint"> · {remote.deviceLabel}</span> : null}
-        </p>
-        {remote?.lastError ? <p className="settings-hint">{remote.lastError}</p> : null}
-        <div className="settings-key-row" style={{ marginTop: 12 }}>
-          <input
-            type="text"
-            value={labelDraft}
-            onChange={(e) => setLabelDraft(e.target.value)}
-            placeholder="Work"
-          />
-          <button
-            type="button"
-            disabled={
-              busy ||
-              !labelDraft.trim() ||
-              labelDraft.trim() === (settings.integrations.slackDeviceLabel?.trim() || '')
-            }
-            onClick={() => void saveLabel()}
-          >
-            Save name
-          </button>
-        </div>
-      </div>
-
-      <div className="settings-section settings-section-card">
         <div className="settings-section-title">Pair a phone</div>
         <p className="settings-hint">
           Scan this code with the Sideboard phone app. It pins this Mac and expires in 10 minutes.
@@ -278,6 +285,7 @@ export function RemoteSettings({
         >
           {pairing ? 'Getting code…' : 'Show pairing code'}
         </button>
+      </div>
       </div>
     </div>
   );

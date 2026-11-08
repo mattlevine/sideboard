@@ -7,7 +7,8 @@ Desktop Settings splits connections by job. The phone app is remote control. Lin
 | **Settings → Agents** | Default agent / model / effort, default orchestrator agent / model / effort, then harness setup |
 | **Settings → Git** | GitHub (`gh` / SSH / PAT), Cursor (`origin` login), and Entire (`entire login`) for this Mac and worktree agents |
 | **Settings → Issues** | Issue source, Linear, AbleTime |
-| **Settings → Remote** | Relay address, sign-in (GitHub, Cursor, or Entire), this Mac’s name, phone pairing code |
+| **Settings → Remote** | This Mac’s name, relay address, phone sign-in, pairing code. The phone and Slack both use the name and relay. |
+| **Settings → Collaboration** | Slack. Add via browser once per team so agents can post as @Sideboard and read the reply. |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
 Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is the `posthog_api` tool (the key is not copied onto the agent). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
@@ -20,7 +21,11 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 **Settings → Remote** shows the relay address, Relay connected, this Mac’s name, and **Show pairing code**. Start `apps/mobile` from the Run menu (**Mobile**) or with `pnpm --filter @sideboard-ai/mobile start`, set the phone’s **Relay** field to the same address, then scan that QR code. Paste the line under the code if you can’t scan. The phone keeps every Mac it has paired and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options render as buttons on the phone.
 
-A URL saved in **Settings → Remote → Relay** is the relay this Mac uses. Leave it blank for Sideboard’s relay. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
+A URL saved in **Settings → Remote → Relay** is the relay this Mac uses. Leave it blank for Sideboard’s relay. The phone uses `/remote` and Slack uses `/slack/desktop` on that host. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
+
+## Slack
+
+Slack is how agents notify teammates and read the reply. It is not the remote. **Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. You can also paste an `xoxb-` or `xoxp-` token. Posts go out as `@Sideboard`. Name this Mac on Settings → Remote; replies are prefixed with that name. The community workspace at [sideboard-ai.slack.com](https://sideboard-ai.slack.com) is for product questions, not the app in your team. Public page: [www.sideboard.build/slack/](https://www.sideboard.build/slack/).
 
 ## Related
 

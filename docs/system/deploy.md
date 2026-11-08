@@ -1,6 +1,6 @@
 # Deploy (marketing site + relay)
 
-The static site in `site/` is not a separate host. It ships inside Sideboard’s own relay (`apps/relay`): phone remote, public site, and legacy Slack. One deploy updates all three. The Fly app id is `sideboard-slack-relay` because Fly cannot rename apps; that id is not a Slack-only service. Do not create a second app named `sideboard-relay`.
+The static site in `site/` is not a separate host. It ships inside Sideboard’s own relay (`apps/relay`): phone remote, public site, and Slack collaboration. One deploy updates all three. The Fly app id is `sideboard-slack-relay` because Fly cannot rename apps; that id is not a Slack-only service. Do not create a second app named `sideboard-relay`.
 
 Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted-relay.md) and `apps/relay/Dockerfile.relay`. That image is the relay only. It does not contain `site/`, and the process serves the website only when `SIDEBOARD_SITE_ROOT` is set (this Fly app sets it).
 
@@ -8,7 +8,7 @@ Someone running their own phone relay uses [self-hosted-relay.md](../self-hosted
 |------|--------|
 | https://www.sideboard.build | Marketing site. Canonical host. |
 | https://sideboard.build, https://www.sideboard.cloud, https://sideboard.cloud | 301 to www.sideboard.build, except `/oauth/` (Entire’s client document stays on www.sideboard.cloud and does not follow redirects). |
-| https://relay.sideboard.build | Phone remote, legacy Slack, and `/health`. `relay.sideboard.cloud` still reaches this app. |
+| https://relay.sideboard.build | Phone remote, Slack collaboration, and `/health`. `relay.sideboard.cloud` still reaches this app. |
 | https://download.sideboard.build | Desktop artifacts and the auto-update feed. Tigris allows one custom domain, so this is the one with TLS. |
 | https://sideboard-downloads.t3.tigrisfiles.io | Working public Tigris host (use this until custom-domain HTTPS works). |
 
@@ -35,7 +35,7 @@ Needs `flyctl` logged in (`fly auth whoami`). The image is built from the workin
 - https://www.sideboard.build/ — marketing (apex and the .cloud names 301 here)
 - https://www.sideboard.build/docs/ — docs page
 - https://www.sideboard.build/robots.txt and https://www.sideboard.build/sitemap.xml
-- https://www.sideboard.build/slack/ — 301 to /docs/remote/
+- https://www.sideboard.build/slack/ — Slack collaboration (Settings → Collaboration)
 - https://www.sideboard.build/privacy/ — privacy policy
 - https://www.sideboard.build/support/ — support
 - https://www.sideboard.build/oauth/abletime-client.json — AbleTime CIMD (`redirect_uris` is the HTTPS site callback)

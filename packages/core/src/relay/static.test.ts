@@ -145,6 +145,11 @@ describe('relay static marketing site', () => {
     await mkdir(path.join(root, 'oauth'));
     await writeFile(path.join(root, 'index.html'), '<!DOCTYPE html><h1>Site</h1>');
     await writeFile(path.join(root, 'oauth/entire-client.json'), '{"client_id":"entire"}');
+    await mkdir(path.join(root, 'slack'));
+    await writeFile(
+      path.join(root, 'slack/index.html'),
+      '<p>Settings → Collaboration</p>',
+    );
     const handle = await startRelayServer({
       appToken: 'xapp-test',
       skipSocketMode: true,
@@ -176,8 +181,12 @@ describe('relay static marketing site', () => {
     expect(oauth.body).toContain('entire');
 
     const slack = await request(handle.port, '/slack/', 'www.sideboard.build');
-    expect(slack.status).toBe(301);
-    expect(slack.location).toBe('https://www.sideboard.build/docs/remote/');
+    expect(slack.status).toBe(200);
+    expect(slack.body).toContain('Settings → Collaboration');
+
+    const slackAlias = await request(handle.port, '/slack/', 'sideboard.cloud');
+    expect(slackAlias.status).toBe(301);
+    expect(slackAlias.location).toBe('https://www.sideboard.build/slack/');
   });
 
   it('keeps JSON on / when staticRoot is unset', async () => {

@@ -11,6 +11,8 @@
 #   fly apps create sideboard-slack-relay
 #   fly secrets set SIDEBOARD_SLACK_APP_TOKEN=xapp-… -a sideboard-slack-relay
 #   fly secrets set SIDEBOARD_SLACK_CLIENT_SECRET=… -a sideboard-slack-relay
+#   # 32 bytes, base64. Encrypts per-company Slack secrets in the account database.
+#   fly secrets set SIDEBOARD_SLACK_TOKEN_KEY=… -a sideboard-slack-relay
 #
 #   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_ID=… -a sideboard-slack-relay
 #   fly secrets set SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=… -a sideboard-slack-relay

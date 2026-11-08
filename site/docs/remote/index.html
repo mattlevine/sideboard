@@ -68,7 +68,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </tr>
 <tr>
 <td><strong>Settings → Remote</strong></td>
-<td>Relay address, relay account (GitHub, the git host), this Mac’s name, phone pairing code</td>
+<td>This Mac’s name, relay address, phone sign-in, pairing code. The phone and Slack both use the name and relay.</td>
+</tr>
+<tr>
+<td><strong>Settings → Collaboration</strong></td>
+<td>Slack. Add via browser once per team so agents can post as @Sideboard and read the reply.</td>
 </tr>
 <tr>
 <td><strong>Settings → Connectors</strong></td>
@@ -79,7 +83,9 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <h2>Phone</h2>
 <p>The phone app is remote control for the <strong>local</strong> orchestrator. Agents, worktrees, and repos stay on this Mac. Message text is encrypted between the phone and this Mac; the relay at <code>/remote</code> forwards ciphertext. The default is <code>relay.sideboard.build</code>. To run your own, see <a href="/docs/relay/">Run your own relay</a> — that service is the relay only, not this website. The Mac must stay awake — enable <strong>Settings → Advanced → Caffeinate while the phone remote is connected</strong>, or <code>set_caffeinate</code> from the orchestration chat. Quit the window and leave <code>sideboard serve</code> running to keep the relay (it exits if the app is already the host). <code>sideboard serve --lan</code> prints <code>ws://&lt;lan-ip&gt;:&lt;port&gt;/remote</code> for the phone’s Relay field. A blocked chat shows <strong>Needs you</strong> and the reason.</p>
 <p><strong>Settings → Remote</strong> signs this Mac in with its git host (GitHub today), then shows a pairing QR code. Settings → Git is where this Mac’s <code>gh</code>, SSH, or PAT credentials live. Scan that code in the Sideboard phone app. Paste the line under the code if you can’t scan. The phone lists every Mac it has paired, using the name from Settings → Remote, and you choose which desktop to open. Replies stream while the agent writes, with the desktop’s markdown, code colors, and diagrams. The open workspace has Chat, All files, Changes, Checks, and Review. Opening a file from Changes shows the same unified diff as the desktop. Files you open stay on a row underneath. All files filters the worktree, and selecting text in a file adds that range to the chat. Tapping a file path or an artifact opens it on the phone. Send <code>stop</code> to cancel a turn. <code>ask_user</code> options show up as buttons.</p>
-<p>Product questions: <a href="/support/">Support</a>.</p>
+<h2>Slack</h2>
+<p>Slack is collaboration, not remote control. From <strong>Settings → Collaboration → Add via browser</strong>, install the Sideboard app into one workspace. Click it again for another team. Agents post as <strong>@Sideboard</strong> (a PR to review, for example) and read the reply. Name this Mac and set the relay on Settings → Remote; the phone and Slack both use them. See <a href="/slack/">Slack</a>.</p>
+<p>Product questions: <a href="/support/">Support</a>, or the community Slack at <a href="https://sideboard-ai.slack.com">sideboard-ai.slack.com</a>.</p>
 <p>See <a href="/docs/agents/">Agents</a>.</p>
 </article>
 </div>

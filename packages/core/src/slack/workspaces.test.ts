@@ -74,7 +74,7 @@ describe('slack workspaces store', () => {
     expect(ws?.bot_token).toBe('xoxb-bot');
     expect(ws?.user_token).toBe('xoxp-user');
     expect(mod.slackTokenFor(ws!, 'write')).toBe('xoxb-bot');
-    expect(mod.slackTokenFor(ws!, 'read')).toBe('xoxp-user');
+    expect(mod.slackTokenFor(ws!, 'read')).toBe('xoxb-bot');
   });
 
   it('disconnect removes a team', async () => {

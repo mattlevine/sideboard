@@ -130,14 +130,11 @@ export async function connectSlackToken(rawToken: string): Promise<SlackWorkspac
 
 export function slackTokenFor(
   ws: SlackWorkspace,
-  kind: 'write' | 'read' = 'read',
+  _kind: 'write' | 'read' = 'read',
 ): string {
-  // Prefer the bot token so chat.postMessage lands as the app, not the user
-  // (user tokens from OAuth often lack chat:write).
-  const token = (kind === 'write'
-    ? ws.bot_token || ws.user_token
-    : ws.user_token || ws.bot_token
-  )?.trim();
+  // Bot token for both. Posting and reading the reply use bot scopes.
+  // A pasted user token is only a fallback when this workspace has no bot token.
+  const token = (ws.bot_token || ws.user_token)?.trim();
   if (!token) {
     throw new Error(`Slack workspace ${ws.team_name} has no token`);
   }
@@ -150,7 +147,7 @@ export function requireSlackWorkspace(teamId: string): SlackWorkspace {
     const connected = listSlackWorkspaces();
     const hint =
       connected.length === 0
-        ? 'Connect a workspace in Settings → Remote → Slack.'
+        ? 'Connect a workspace in Settings → Collaboration.'
         : `Connected: ${connected.map((t) => `${t.team_name} (${t.team_id})`).join(', ')}`;
     throw new Error(`Unknown Slack team_id "${teamId}". ${hint}`);
   }

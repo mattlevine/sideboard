@@ -1,7 +1,7 @@
-import { randomBytes } from 'node:crypto';
 import { loadAppSettings } from '../store/app-settings.js';
 import { upsertSlackWorkspace, type SlackWorkspaceInfo } from './workspaces.js';
 import { BAKED_SLACK_CLIENT_ID } from './baked-app.js';
+import { slackOAuthState } from './oauth-state.js';
 import { slackOAuthRedirectUri } from './oauth-redirect.js';
 import {
   slackOAuthResultUrl,
@@ -33,16 +33,6 @@ export const SLACK_BOT_SCOPES = [
   'users:read.email',
 ].join(',');
 
-/** User history for MCP `slack_read` / `slack_list_*`. No `search:read` (Marketplace). */
-export const SLACK_USER_SCOPES = [
-  'channels:history',
-  'channels:read',
-  'groups:history',
-  'im:history',
-  'mpim:history',
-  'users:read',
-].join(',');
-
 /** Public client id plus optional local secret (custom Slack app only — not baked). */
 export function slackOAuthCredentials(): { clientId: string; clientSecret: string | null } {
   const settings = loadAppSettings();
@@ -56,7 +46,7 @@ export function slackOAuthCredentials(): { clientId: string; clientSecret: strin
     '';
   if (!clientId) {
     throw new Error(
-      'Slack browser sign-in needs a Slack app Client ID (Settings → Remote → Slack, or SIDEBOARD_SLACK_CLIENT_ID). You can still paste an xoxb- or xoxp- token.',
+      'Slack browser sign-in needs a Slack app Client ID (Settings → Collaboration, or SIDEBOARD_SLACK_CLIENT_ID). You can still paste an xoxb- or xoxp- token.',
     );
   }
   return { clientId, clientSecret: clientSecret || null };
@@ -88,7 +78,6 @@ export function slackOAuthAuthorizeUrl(clientId: string, state: string): string 
   const params = new URLSearchParams({
     client_id: clientId,
     scope: SLACK_BOT_SCOPES,
-    user_scope: SLACK_USER_SCOPES,
     redirect_uri: slackOAuthRedirectUri(),
     state,
   });
@@ -136,12 +125,14 @@ export async function startSlackOAuth(opts?: {
   fetchImpl?: typeof fetch;
   resultUrlForState?: (state: string) => string;
   pollIntervalMs?: number;
+  /** Company app to install. Omit to use the Sideboard Slack app. */
+  clientId?: string;
 }): Promise<SlackWorkspaceInfo> {
   if (opts?.signal?.aborted) {
     throw new SlackOAuthCancelledError();
   }
-  const { clientId } = slackOAuthCredentials();
-  const state = randomBytes(16).toString('hex');
+  const clientId = opts?.clientId?.trim() || slackOAuthCredentials().clientId;
+  const state = slackOAuthState(clientId, BAKED_SLACK_CLIENT_ID);
   const authorizeUrl = slackOAuthAuthorizeUrl(clientId, state);
   const timeoutMs = opts?.timeoutMs ?? 5 * 60_000;
   const pollIntervalMs = opts?.pollIntervalMs ?? 400;
