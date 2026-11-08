@@ -1,3 +1,12 @@
 {
-   "signedContributors": []
+  "signedContributors": [
+    {
+      "name": "mattlevine",
+      "id": 836225,
+      "comment_id": 6726705692,
+      "created_at": "2026-11-08T20:28:38Z",
+      "repoId": 1320657451,
+      "pullRequestNo": 378
+    }
+  ]
 }
