@@ -14,7 +14,10 @@ export interface SlackRelayRegisterWorkspace {
   /** Slack user who owns this Sideboard (OAuth authed_user). */
   userId: string;
   botToken: string;
-  userToken: string;
+  /** Slack user token. Omit when listenGrant is set. */
+  userToken?: string;
+  /** Relay grant for the OAuth user. Not a Slack API token. */
+  listenGrant?: string;
 }
 
 export interface SlackRelayClientOptions {
@@ -86,9 +89,14 @@ export async function runSlackRelayClient(opts: SlackRelayClientOptions): Promis
   const deviceId = opts.deviceId.trim();
   if (!url) throw new Error('Relay URL is empty');
   if (!deviceId) throw new Error('Relay needs a deviceId for this Mac');
-  if (opts.workspaces.length === 0) {
+  if (
+    opts.workspaces.length === 0 ||
+    opts.workspaces.some(
+      (ws) => !ws.botToken.trim() || !ws.userId.trim() || (!ws.userToken?.trim() && !ws.listenGrant?.trim()),
+    )
+  ) {
     throw new Error(
-      'Relay needs a connected Slack workspace with bot + user tokens (Add via browser).',
+      'Relay needs Add via browser so this Mac can prove which Slack user it is.',
     );
   }
 
@@ -211,7 +219,8 @@ function connectSession(
           deviceId: opts.deviceId.trim(),
           deviceLabel: opts.deviceLabel?.trim() || undefined,
           botToken: wsInfo.botToken,
-          userToken: wsInfo.userToken,
+          ...(wsInfo.userToken?.trim() ? { userToken: wsInfo.userToken.trim() } : {}),
+          ...(wsInfo.listenGrant?.trim() ? { listenGrant: wsInfo.listenGrant.trim() } : {}),
         });
       }
       pingOnce();

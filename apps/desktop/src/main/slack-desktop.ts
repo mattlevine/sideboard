@@ -1,7 +1,6 @@
 import { shell } from 'electron';
 import { ipcMain } from 'electron';
 import {
-  BAKED_SLACK_CLIENT_ID,
   connectSlackToken,
   createSlackOrgApp,
   disconnectSlackWorkspace,
@@ -55,7 +54,6 @@ export function readSlackListenStatus(): SlackListenStatus {
   const hasAppToken = Boolean(slackAppLevelToken(settings));
   const mode = resolveSlackListenMode({
     relayUrl: activeSlackRelayUrl(),
-    workspaceCount,
   });
   const device =
     workspaceCount > 0 || settings.integrations.slackDeviceId
@@ -173,10 +171,7 @@ export function registerSlackDesktop(notify: () => void): void {
     slackOauthAbort = ac;
     try {
       await startSlackOAuth({
-        clientId:
-          typeof clientId === 'string' && clientId.trim()
-            ? clientId.trim()
-            : BAKED_SLACK_CLIENT_ID,
+        ...(typeof clientId === 'string' && clientId.trim() ? { clientId: clientId.trim() } : {}),
         openUrl: (url) => shell.openExternal(url),
         signal: ac.signal,
       });

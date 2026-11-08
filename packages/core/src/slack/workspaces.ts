@@ -14,6 +14,8 @@ export interface SlackWorkspace {
   user_id?: string;
   bot_token?: string;
   user_token?: string;
+  /** Relay proof of OAuth authed_user. Not a Slack API token. */
+  listen_grant?: string;
   scopes?: string;
   connected_at: string;
 }
@@ -61,6 +63,15 @@ function toInfo(ws: SlackWorkspace): SlackWorkspaceInfo {
     has_user_token: Boolean(ws.user_token),
     connected_at: ws.connected_at,
   };
+}
+
+/** Bot token plus a user token or listen grant. A pasted bot token alone cannot Listen. */
+export function slackWorkspaceCanListen(ws: SlackWorkspace): boolean {
+  return Boolean(
+    ws.bot_token?.trim() &&
+      ws.user_id?.trim() &&
+      (ws.user_token?.trim() || ws.listen_grant?.trim()),
+  );
 }
 
 export function listSlackWorkspaces(): SlackWorkspaceInfo[] {

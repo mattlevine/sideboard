@@ -7,6 +7,7 @@ import { clientIdFromOAuthState, slackOAuthState } from '../slack/oauth-state.js
 import { GITHUB_ACCOUNT_ISSUER, RelayAccountStore } from './accounts.js';
 import { startRelayServer } from './server.js';
 import { SlackAppStore } from './slack-apps.js';
+import { SlackListenGrantStore } from './slack-grants.js';
 import { parseSlackTokenKey } from '../slack/secret-box.js';
 
 function sign(secret: string, body: string, timestamp: number): Record<string, string> {
@@ -125,6 +126,21 @@ describe('per-company Slack apps on the relay', () => {
     expect(slackCalls[0]).toContain('client_secret=org-secret');
     expect(slackCalls[0]).not.toContain('baked-secret');
     expect(first.hub.botTokenFor('T1')).toBe('xoxb-org');
+    const resultRes = await fetch(
+      `${origin}/slack/oauth/result?state=${encodeURIComponent(state)}`,
+    );
+    expect(resultRes.status).toBe(200);
+    const result = (await resultRes.json()) as {
+      bot_token?: string;
+      user_id?: string;
+      listen_grant?: string;
+      bot_user_id?: string;
+    };
+    expect(result.bot_token).toBe('xoxb-org');
+    expect(result.user_id).toBe('U1');
+    expect(result.listen_grant && result.listen_grant.length > 20).toBe(true);
+    expect(result.bot_user_id).toBeUndefined();
+    const listenGrant = result.listen_grant!;
 
     const event = JSON.stringify({
       type: 'event_callback',
@@ -183,5 +199,9 @@ describe('per-company Slack apps on the relay', () => {
     const stored = new SlackAppStore(file, parseSlackTokenKey(key));
     expect(stored.listBots()).toEqual([{ teamId: 'T1', botToken: 'xoxb-org' }]);
     stored.close();
+    const grants = new SlackListenGrantStore(file);
+    expect(grants.verify('T1', 'U1', listenGrant)).toBe(true);
+    expect(grants.verify('T1', 'U2', listenGrant)).toBe(false);
+    grants.close();
   });
 });

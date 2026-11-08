@@ -22,7 +22,12 @@ import {
   type SlackInboundMessage,
   type SlackSocketModeOptions,
 } from './socket-mode.js';
-import { listSlackWorkspacesRaw, slackTokenFor, disconnectSlackWorkspace } from './workspaces.js';
+import {
+  listSlackWorkspacesRaw,
+  slackTokenFor,
+  slackWorkspaceCanListen,
+  disconnectSlackWorkspace,
+} from './workspaces.js';
 import { getSlackReplyTarget, setSlackReplyTarget } from './reply-target.js';
 import { slackRelayUrl } from './baked-app.js';
 import { runSlackRelayClient } from './relay-client.js';
@@ -764,12 +769,10 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
     if (!relay) {
       throw new Error('Slack Listen needs the hosted relay URL.');
     }
-    const withIdentity = connected.filter(
-      (w) => w.bot_token?.trim() && w.user_token?.trim() && w.user_id?.trim(),
-    );
+    const withIdentity = connected.filter(slackWorkspaceCanListen);
     if (withIdentity.length === 0) {
       throw new Error(
-        'Slack Listen needs Add via browser (bot token + your Slack user id). Paste-only bot tokens cannot prove which Slack user owns this Mac.',
+        'Slack Listen needs Add via browser so this Mac can prove which Slack user it is. A pasted bot token cannot.',
       );
     }
     const device = ensureSlackDeviceIdentity();
@@ -781,12 +784,17 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
       WebSocketImpl: opts.WebSocketImpl,
       deviceId: device.deviceId,
       deviceLabel: device.deviceLabel,
-      workspaces: withIdentity.map((w) => ({
-        teamId: w.team_id,
-        userId: w.user_id!.trim(),
-        botToken: w.bot_token!.trim(),
-        userToken: w.user_token!.trim(),
-      })),
+      workspaces: withIdentity.map((w) => {
+        const userToken = w.user_token?.trim();
+        const listenGrant = w.listen_grant?.trim();
+        return {
+          teamId: w.team_id,
+          userId: w.user_id!.trim(),
+          botToken: w.bot_token!.trim(),
+          ...(userToken ? { userToken } : {}),
+          ...(listenGrant ? { listenGrant } : {}),
+        };
+      }),
       onEvent: onInbound,
       onUninstalled: (teamId) => { disconnectSlackWorkspace(teamId); log(`dropped workspace ${teamId} after Slack uninstall`); },
     });
@@ -798,14 +806,9 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
 /** How Listen will receive Slack events on this machine. */
 export function resolveSlackListenMode(opts?: {
   relayUrl?: string | null;
-  workspaceCount?: number;
 }): 'relay' | null {
   const relay = (opts?.relayUrl ?? slackRelayUrl()).trim();
-  const count =
-    opts?.workspaceCount ??
-    listSlackWorkspacesRaw().filter(
-      (w) => w.bot_token?.trim() && w.user_token?.trim() && w.user_id?.trim(),
-    ).length;
+  const count = listSlackWorkspacesRaw().filter(slackWorkspaceCanListen).length;
   if (relay && count > 0) return 'relay';
   return null;
 }

@@ -19,8 +19,10 @@ export type SlackRelayClientMessage =
       /** Human label, e.g. "Personal" / "Work". */
       deviceLabel?: string;
       botToken: string;
-      /** User token proves identity (auth.test user_id must match). */
-      userToken: string;
+      /** Slack user token. auth.test user_id must match. Omit when listenGrant is set. */
+      userToken?: string;
+      /** Relay grant for OAuth authed_user. Not a Slack API token. */
+      listenGrant?: string;
     }
   | { type: 'claim'; eventId: string }
   | { type: 'ping' };
@@ -69,7 +71,8 @@ export function parseSlackRelayClientMessage(raw: string): SlackRelayClientMessa
         typeof parsed.deviceLabel === 'string' ? parsed.deviceLabel.trim() : undefined;
       const botToken = typeof parsed.botToken === 'string' ? parsed.botToken.trim() : '';
       const userToken = typeof parsed.userToken === 'string' ? parsed.userToken.trim() : '';
-      if (!teamId || !userId || !deviceId || !botToken || !userToken) return null;
+      const listenGrant = typeof parsed.listenGrant === 'string' ? parsed.listenGrant.trim() : '';
+      if (!teamId || !userId || !deviceId || !botToken || (!userToken && !listenGrant)) return null;
       return {
         type: 'register',
         teamId,
@@ -77,7 +80,8 @@ export function parseSlackRelayClientMessage(raw: string): SlackRelayClientMessa
         deviceId,
         deviceLabel: deviceLabel || undefined,
         botToken,
-        userToken,
+        ...(userToken ? { userToken } : {}),
+        ...(listenGrant ? { listenGrant } : {}),
       };
     }
     return null;

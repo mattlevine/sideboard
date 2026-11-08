@@ -13,6 +13,8 @@ export interface SlackOAuthTokenPayload {
   /** Bot user id from oauth.v2.access. Not returned to the desktop poll. */
   bot_user_id?: string;
   user_token?: string;
+  /** Relay proof of authed_user. Not a Slack user token. Desktop poll only. */
+  listen_grant?: string;
   scopes: string;
 }
 

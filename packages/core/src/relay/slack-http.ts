@@ -14,6 +14,7 @@ import {
   verifySlackRequestSignature,
 } from '../slack/events-api.js';
 import { slackEventsUrl, slackOrgManifest } from '../slack/org-manifest.js';
+import type { SlackListenGrants } from '../slack/listen-grant.js';
 import type { SlackRelayHub } from '../slack/relay-hub.js';
 import type { RelayAccountStore } from './accounts.js';
 import type { SlackAppStore } from './slack-apps.js';
@@ -29,6 +30,7 @@ export interface SlackHttpContext {
   accounts: RelayAccountStore | null;
   apps: SlackAppStore | null;
   hub: SlackRelayHub;
+  grants: SlackListenGrants;
   pending: SlackOAuthPendingStore;
   bakedClientId: string;
   bakedClientSecret: string;
@@ -165,6 +167,7 @@ async function handleEvents(ctx: SlackHttpContext, registrationId: string): Prom
   const life = lifecycleFromEventsBody(body);
   if (life?.kind === 'app_uninstalled') {
     ctx.apps.deleteByTeam(life.teamId);
+    ctx.grants.revokeTeam(life.teamId);
     ctx.hub.uninstallTeam(life.teamId);
     return;
   }
@@ -212,7 +215,14 @@ async function handleCallback(ctx: SlackHttpContext, url: URL): Promise<boolean>
         botUserId: payload.bot_user_id ?? '',
       });
     }
-    ctx.pending.put(state, { ok: true, payload: publicPayload(payload) });
+    const listenGrant = payload.user_id ? ctx.grants.issue(payload.team_id, payload.user_id) : null;
+    ctx.pending.put(state, {
+      ok: true,
+      payload: publicPayload({
+        ...payload,
+        ...(listenGrant ? { listen_grant: listenGrant } : {}),
+      }),
+    });
     if (payload.bot_token) {
       ctx.hub.rememberBot(payload.team_id, payload.bot_token);
       if (payload.user_id) void ctx.hub.handleAppHomeOpened(payload.team_id, payload.user_id);
@@ -252,6 +262,7 @@ function publicPayload(payload: SlackOAuthTokenPayload): SlackOAuthTokenPayload 
     user_id: payload.user_id,
     bot_token: payload.bot_token,
     user_token: payload.user_token,
+    listen_grant: payload.listen_grant,
     scopes: payload.scopes,
   };
 }

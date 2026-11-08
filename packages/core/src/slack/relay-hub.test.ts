@@ -23,6 +23,44 @@ describe('SlackRelayHub', () => {
     expect(JSON.parse(sent[0]!)).toEqual({ type: 'pong' });
   });
 
+  it('registers with a listen grant and rejects a grant for another user', async () => {
+    const { socket, sent } = fakeSocket();
+    const hub = new SlackRelayHub({
+      authTest: async () => ({ ok: true, team_id: 'T1', user_id: 'Bbot' }),
+    });
+    hub.setListenGrantVerifier(
+      (team, user, grant) => team === 'T1' && user === 'Umatt' && grant === 'grant-1',
+    );
+    await hub.register(socket, 'T1', 'Uother', 'dev', 'Personal', 'xoxb-bot', '', 'grant-1');
+    expect(JSON.parse(sent[0]!)).toMatchObject({
+      type: 'error',
+      message: 'listen grant was rejected',
+    });
+    expect(hub.sessionFor('T1', 'Uother', 'dev')).toBeNull();
+    sent.length = 0;
+    await hub.register(socket, 'T1', 'Umatt', 'dev', 'Personal', 'xoxb-bot', '', 'grant-1');
+    expect(JSON.parse(sent[0]!)).toMatchObject({
+      type: 'registered',
+      teamId: 'T1',
+      userId: 'Umatt',
+    });
+  });
+
+  it('uses a listen grant when the saved user token no longer auths', async () => {
+    const { socket, sent } = fakeSocket();
+    const hub = new SlackRelayHub({
+      authTest: async (token) => {
+        if (token.startsWith('xoxp-')) throw new Error('invalid_auth');
+        return { ok: true, team_id: 'T1', user_id: 'Bbot' };
+      },
+    });
+    hub.setListenGrantVerifier(
+      (team, user, grant) => team === 'T1' && user === 'Umatt' && grant === 'grant-1',
+    );
+    await hub.register(socket, 'T1', 'Umatt', 'dev', 'Personal', 'xoxb-bot', 'xoxp-dead', 'grant-1');
+    expect(JSON.parse(sent[0]!)).toMatchObject({ type: 'registered', userId: 'Umatt' });
+  });
+
   it('rejects register when user token identity does not match claimed user', async () => {
     const { socket, sent } = fakeSocket();
     const hub = new SlackRelayHub({

@@ -10,6 +10,8 @@ import { SlackEventDeduper } from '../slack/events-api.js';
 import { parseSlackTokenKey } from '../slack/secret-box.js';
 import { handleSlackHttp } from './slack-http.js';
 import { SlackAppStore } from './slack-apps.js';
+import { SlackListenGrantStore } from './slack-grants.js';
+import { MemorySlackListenGrants, type SlackListenGrants } from '../slack/listen-grant.js';
 import { runSlackSocketMode } from '../slack/socket-mode.js';
 import {
   parseSlackRelayClientMessage,
@@ -154,6 +156,10 @@ export async function startRelayServer(
       onBotAccepted: (teamId, botToken, botUserId) => slackApps.saveBot(teamId, botToken, botUserId),
     });
   }
+  const listenGrants: SlackListenGrants = accountsPath
+    ? new SlackListenGrantStore(accountsPath)
+    : new MemorySlackListenGrants();
+  hub.setListenGrantVerifier((teamId, userId, grant) => listenGrants.verify(teamId, userId, grant));
   const slackDedupe = new SlackEventDeduper();
   const accountSessions = new RelayLoginSessions();
   const relayOAuth = opts.relayOAuth ?? {};
@@ -206,6 +212,7 @@ export async function startRelayServer(
           accounts: accountStore,
           apps: slackApps,
           hub,
+          grants: listenGrants,
           pending,
           bakedClientId: clientId,
           bakedClientSecret: clientSecret,
@@ -409,6 +416,7 @@ export async function startRelayServer(
             void hub.handleAppHomeOpened(event.teamId, event.userId);
             return;
           }
+          listenGrants.revokeTeam(event.teamId);
           hub.uninstallTeam(event.teamId);
         },
       }).catch((err) => {
@@ -435,6 +443,7 @@ export async function startRelayServer(
       });
       await socketModeDone.catch(() => undefined);
       slackApps?.close();
+      listenGrants.close();
       accountStore?.close();
     },
   };

@@ -1,5 +1,5 @@
 import { loadAppSettings } from '../store/app-settings.js';
-import { upsertSlackWorkspace, type SlackWorkspaceInfo } from './workspaces.js';
+import { getSlackWorkspace, upsertSlackWorkspace, type SlackWorkspaceInfo } from './workspaces.js';
 import { BAKED_SLACK_CLIENT_ID } from './baked-app.js';
 import { slackOAuthState } from './oauth-state.js';
 import { slackOAuthRedirectUri } from './oauth-redirect.js';
@@ -103,13 +103,15 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 function upsertFromPayload(payload: SlackOAuthTokenPayload): SlackWorkspaceInfo {
+  const existing = getSlackWorkspace(payload.team_id);
   return upsertSlackWorkspace({
     team_id: payload.team_id,
-    team_name: payload.team_name,
-    user_id: payload.user_id,
-    bot_token: payload.bot_token,
-    user_token: payload.user_token,
-    scopes: payload.scopes,
+    team_name: payload.team_name || existing?.team_name || payload.team_id,
+    user_id: payload.user_id || existing?.user_id,
+    bot_token: payload.bot_token || existing?.bot_token,
+    user_token: payload.user_token || existing?.user_token,
+    listen_grant: payload.listen_grant || existing?.listen_grant,
+    scopes: payload.scopes || existing?.scopes,
     connected_at: new Date().toISOString(),
   });
 }
@@ -165,6 +167,7 @@ export async function startSlackOAuth(opts?: {
       user_id?: string;
       bot_token?: string;
       user_token?: string;
+      listen_grant?: string;
       scopes?: string;
     };
     try {
@@ -180,6 +183,7 @@ export async function startSlackOAuth(opts?: {
         user_id: data.user_id?.trim() || undefined,
         bot_token: data.bot_token?.trim() || undefined,
         user_token: data.user_token?.trim() || undefined,
+        listen_grant: data.listen_grant?.trim() || undefined,
         scopes: data.scopes?.trim() || '',
       });
     }

@@ -68,6 +68,8 @@ export class SlackRelayHub {
   private guardBotUser: ((teamId: string, botUserId: string) => string | null) | null = null;
   private onBotAccepted: ((teamId: string, botToken: string, botUserId: string) => void) | null =
     null;
+  private verifyListenGrant: ((teamId: string, userId: string, grant: string) => boolean) | null =
+    null;
 
   constructor(opts: SlackRelayHubOptions = {}) {
     this.fetchImpl = opts.fetchImpl;
@@ -88,6 +90,13 @@ export class SlackRelayHub {
   }): void {
     this.guardBotUser = hooks.guardBotUser ?? null;
     this.onBotAccepted = hooks.onBotAccepted ?? null;
+  }
+
+  /** Accept a relay listen grant in place of a Slack user token. */
+  setListenGrantVerifier(
+    verify: ((teamId: string, userId: string, grant: string) => boolean) | null,
+  ): void {
+    this.verifyListenGrant = verify;
   }
 
   sessionFor(teamId: string, userId: string, deviceId: string): SlackRelaySession | null {
@@ -135,7 +144,8 @@ export class SlackRelayHub {
         msg.deviceId,
         msg.deviceLabel,
         msg.botToken,
-        msg.userToken,
+        msg.userToken ?? '',
+        msg.listenGrant,
       );
     }
   }
@@ -148,6 +158,7 @@ export class SlackRelayHub {
     deviceLabel: string | undefined,
     botToken: string,
     userToken: string,
+    listenGrant?: string,
   ): Promise<void> {
     const claimedTeam = teamId.trim();
     const claimedUser = userId.trim();
@@ -155,34 +166,50 @@ export class SlackRelayHub {
     const label = (deviceLabel?.trim() || claimedDevice).slice(0, 64);
     const bot = botToken.trim();
     const user = userToken.trim();
+    const grant = listenGrant?.trim() ?? '';
     let botUserId = '';
-    if (!claimedTeam || !claimedUser || !claimedDevice || !bot || !user) {
+    if (!claimedTeam || !claimedUser || !claimedDevice || !bot || (!user && !grant)) {
       this.send(socket, {
         type: 'error',
-        message: 'register needs teamId, userId, deviceId, botToken, and userToken',
+        message: 'register needs teamId, userId, deviceId, botToken, and a user token or listen grant',
       });
       return;
     }
 
     try {
-      const userAuth = await this.authTest(user);
-      const userTeam = userAuth.team_id?.trim();
-      const userAuthId = userAuth.user_id?.trim();
-      if (!userTeam || !userAuthId) {
-        this.send(socket, {
-          type: 'error',
-          message: 'user token auth.test did not return team_id/user_id',
-        });
-        return;
+      let proved = false;
+      if (user) {
+        try {
+          const userAuth = await this.authTest(user);
+          const userTeam = userAuth.team_id?.trim();
+          const userAuthId = userAuth.user_id?.trim();
+          if (!userTeam || !userAuthId) {
+            if (!grant) {
+              this.send(socket, {
+                type: 'error',
+                message: 'user token auth.test did not return team_id/user_id',
+              });
+              return;
+            }
+          } else if (userTeam !== claimedTeam || userAuthId !== claimedUser) {
+            this.send(socket, {
+              type: 'error',
+              message: `User token identity ${userTeam}/${userAuthId} does not match claimed ${claimedTeam}/${claimedUser}`,
+            });
+            this.log(
+              `register rejected: claimed ${claimedTeam}/${claimedUser} user-token ${userTeam}/${userAuthId}`,
+            );
+            return;
+          } else {
+            proved = true;
+          }
+        } catch (err) {
+          if (!grant) throw err;
+        }
       }
-      if (userTeam !== claimedTeam || userAuthId !== claimedUser) {
-        this.send(socket, {
-          type: 'error',
-          message: `User token identity ${userTeam}/${userAuthId} does not match claimed ${claimedTeam}/${claimedUser}`,
-        });
-        this.log(
-          `register rejected: claimed ${claimedTeam}/${claimedUser} user-token ${userTeam}/${userAuthId}`,
-        );
+      if (!proved && !this.verifyListenGrant?.(claimedTeam, claimedUser, grant)) {
+        this.send(socket, { type: 'error', message: 'listen grant was rejected' });
+        this.log(`register rejected: ${claimedTeam}/${claimedUser} listen grant`);
         return;
       }
 

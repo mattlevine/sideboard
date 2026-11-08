@@ -23,35 +23,53 @@ describe('resolveSlackListenMode', () => {
     process.env.SIDEBOARD_SLACK_APP_TOKEN = 'xapp-local';
     delete process.env.SIDEBOARD_SLACK_RELAY_URL;
     const { resolveSlackListenMode } = await import('./listen.js');
-    expect(
-      resolveSlackListenMode({
-        relayUrl: 'ws://127.0.0.1:9/slack/desktop',
-        workspaceCount: 1,
-      }),
-    ).toBe('relay');
+    const { upsertSlackWorkspace } = await import('./workspaces.js');
+    upsertSlackWorkspace({
+      team_id: 'T1',
+      team_name: 'Acme',
+      user_id: 'U1',
+      bot_token: 'xoxb',
+      listen_grant: 'grant',
+      connected_at: new Date().toISOString(),
+    });
+    expect(resolveSlackListenMode({ relayUrl: 'ws://127.0.0.1:9/slack/desktop' })).toBe('relay');
   });
 
-  it('uses relay when a workspace is connected', async () => {
+  it('uses relay when OAuth proved the Slack user', async () => {
     process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-listen-mode-'));
     delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
     const { resolveSlackListenMode } = await import('./listen.js');
-    expect(
-      resolveSlackListenMode({
-        relayUrl: 'ws://127.0.0.1:9/slack/desktop',
-        workspaceCount: 1,
-      }),
-    ).toBe('relay');
+    const { upsertSlackWorkspace } = await import('./workspaces.js');
+    upsertSlackWorkspace({
+      team_id: 'T1',
+      team_name: 'Acme',
+      user_id: 'U1',
+      bot_token: 'xoxb',
+      listen_grant: 'grant',
+      connected_at: new Date().toISOString(),
+    });
+    expect(resolveSlackListenMode({ relayUrl: 'ws://127.0.0.1:9/slack/desktop' })).toBe('relay');
+  });
+
+  it('stays off for a pasted bot token', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-listen-mode-'));
+    delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
+    const { resolveSlackListenMode } = await import('./listen.js');
+    const { upsertSlackWorkspace } = await import('./workspaces.js');
+    upsertSlackWorkspace({
+      team_id: 'T1',
+      team_name: 'Acme',
+      user_id: 'B1',
+      bot_token: 'xoxb',
+      connected_at: new Date().toISOString(),
+    });
+    expect(resolveSlackListenMode({ relayUrl: 'ws://127.0.0.1:9/slack/desktop' })).toBeNull();
   });
 
   it('returns null with no workspaces', async () => {
     process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-listen-mode-'));
     delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
     const { resolveSlackListenMode } = await import('./listen.js');
-    expect(
-      resolveSlackListenMode({
-        relayUrl: 'ws://127.0.0.1:9/slack/desktop',
-        workspaceCount: 0,
-      }),
-    ).toBeNull();
+    expect(resolveSlackListenMode({ relayUrl: 'ws://127.0.0.1:9/slack/desktop' })).toBeNull();
   });
 });

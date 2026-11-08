@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { slackOAuthAuthorizeUrl, SLACK_OAUTH_REDIRECT, startSlackOAuth, SLACK_BOT_SCOPES } from './oauth.js';
+import { listSlackWorkspacesRaw } from './workspaces.js';
 import { BAKED_SLACK_CLIENT_ID, hasBakedSlackOAuth } from './baked-app.js';
 import { exchangeSlackOAuthCode, SlackOAuthPendingStore } from './oauth-exchange.js';
 
@@ -143,6 +144,46 @@ describe('baked Sideboard Slack app', () => {
     });
     expect(info).toMatchObject({ team_id: 'T1', team_name: 'Acme', has_bot_token: true });
     expect(calls).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps an existing user token when a later sign-in only has a listen grant', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-slack-oauth-keep-user-'));
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          team_id: 'T1',
+          team_name: 'Acme',
+          user_id: 'U1',
+          bot_token: 'xoxb-bot',
+          user_token: 'xoxp-user',
+          scopes: 'chat:write',
+        }),
+        { status: 200 },
+      )) as typeof fetch;
+    await startSlackOAuth({ openUrl: () => undefined, timeoutMs: 5_000, pollIntervalMs: 1, fetchImpl });
+    await startSlackOAuth({
+      openUrl: () => undefined,
+      timeoutMs: 5_000,
+      pollIntervalMs: 1,
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            team_id: 'T1',
+            team_name: 'Acme',
+            user_id: 'U1',
+            bot_token: 'xoxb-new',
+            listen_grant: 'grant-1',
+            scopes: 'chat:write',
+          }),
+          { status: 200 },
+        )) as typeof fetch,
+    });
+    const saved = listSlackWorkspacesRaw().find((ws) => ws.team_id === 'T1');
+    expect(saved?.user_token).toBe('xoxp-user');
+    expect(saved?.listen_grant).toBe('grant-1');
+    expect(saved?.bot_token).toBe('xoxb-new');
   });
 });
 

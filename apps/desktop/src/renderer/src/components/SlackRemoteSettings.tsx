@@ -73,9 +73,6 @@ export function SlackRemoteSettings({
                   <span className="settings-dot ok" style={{ display: 'inline-block', marginRight: 8 }} />
                   {ws.team_name}
                   <span className="settings-hint"> · {ws.team_id}</span>
-                  {!ws.has_user_token ? (
-                    <span className="settings-hint"> · reconnect via browser</span>
-                  ) : null}
                 </p>
               </div>
               <button
