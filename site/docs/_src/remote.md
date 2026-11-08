@@ -7,7 +7,7 @@ Desktop Settings splits connections by job. The phone app is remote control. Lin
 | **Settings → Agents** | Default agent / model / effort, default orchestrator agent / model / effort, then harness setup |
 | **Settings → Git** | GitHub (`gh` / SSH / PAT), Cursor (`origin` login), and Entire (`entire login`) for this Mac and worktree agents |
 | **Settings → Issues** | Issue source, Linear, AbleTime |
-| **Settings → Remote** | This Mac’s name, relay address, phone sign-in, pairing code. The phone and Slack both use the name and relay. |
+| **Settings → Remote** | This Mac’s name, phone relay, phone sign-in, pairing code. Slack uses the Mac name. Slack sign-in and Listen stay on Sideboard’s Slack relay. |
 | **Settings → Collaboration** | Slack. Add via browser once per team so agents can post as @Sideboard and read the reply. |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
@@ -21,7 +21,7 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 ## Slack
 
-Slack is collaboration, not remote control. From **Settings → Collaboration → Add via browser**, install the Sideboard app into one workspace. Click it again for another team. Agents post as **@Sideboard** (a PR to review, for example) and read the reply. Name this Mac and set the relay on Settings → Remote; the phone and Slack both use them. See [Slack](/slack/).
+Slack is collaboration, not remote control. From **Settings → Collaboration → Add via browser**, install the Sideboard app into one workspace. Click it again for another team. Agents post as **@Sideboard** (a PR to review, for example) and read the reply. Name this Mac on Settings → Remote. The relay address there is for the phone. Slack sign-in and Listen stay on Sideboard’s Slack relay. See [Slack](/slack/).
 
 Product questions: [Support](/support/), or the community Slack at [sideboard-ai.slack.com](https://sideboard-ai.slack.com).
 

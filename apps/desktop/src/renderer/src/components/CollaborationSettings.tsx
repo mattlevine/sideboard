@@ -13,7 +13,7 @@ export function CollaborationSettings({
     <div className="settings-body">
       <p className="settings-lead">
         Connect Slack teams so agents can find people, send messages, and read replies. This
-        Mac’s name and the relay are on Remote.
+        Mac’s name is on Remote. Slack sign-in stays on Sideboard’s Slack relay.
       </p>
       <SlackRemoteSettings busy={busy} setBusy={setBusy} setError={setError} />
     </div>

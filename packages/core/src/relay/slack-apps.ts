@@ -181,10 +181,21 @@ export class SlackAppStore {
     }));
   }
 
-  deleteByTeam(teamId: string): void {
+  /**
+   * Slack removed the install. Drop the bot token and team so a reinstall can
+   * record again. Keep the client id, secrets, and registration id — the events
+   * URL in the Slack app is that registration id.
+   */
+  clearInstall(teamId: string): void {
     const id = teamId.trim();
     if (!id) return;
-    this.db.prepare('DELETE FROM slack_apps WHERE team_id = ?').run(id);
+    this.db
+      .prepare(
+        `UPDATE slack_apps
+         SET team_id = NULL, bot_token_enc = NULL, bot_user_id = NULL
+         WHERE team_id = ?`,
+      )
+      .run(id);
   }
 
   private row(registrationId: string): SlackAppRow | null {

@@ -166,7 +166,7 @@ async function handleEvents(ctx: SlackHttpContext, registrationId: string): Prom
   }
   const life = lifecycleFromEventsBody(body);
   if (life?.kind === 'app_uninstalled') {
-    ctx.apps.deleteByTeam(life.teamId);
+    ctx.apps.clearInstall(life.teamId);
     ctx.grants.revokeTeam(life.teamId);
     ctx.hub.uninstallTeam(life.teamId);
     return;

@@ -70,4 +70,24 @@ describe('slack app store', () => {
     expect(store.botUserMismatch('T1', 'B2')).toMatch(/company/);
     expect(store.botUserMismatch('T1', 'B1')).toBeNull();
   });
+
+  it('clears the install and keeps the client secret for a reinstall', () => {
+    const store = open();
+    const created = store.create('acct-1');
+    store.saveCredentials(created.registrationId, created.writeToken, {
+      clientId: 'C1',
+      clientSecret: 'secret',
+      signingSecret: 'sign',
+    });
+    store.recordInstall({ clientId: 'C1', teamId: 'T1', botToken: 'xoxb-bot', botUserId: 'B1' });
+    store.clearInstall('T1');
+    expect(store.listBots()).toEqual([]);
+    expect(store.clientSecretFor('C1')).toBe('secret');
+    expect(store.getByRegistration(created.registrationId)?.signingSecret).toBe('sign');
+    expect(store.getByRegistration(created.registrationId)?.teamId).toBeNull();
+    expect(
+      store.recordInstall({ clientId: 'C1', teamId: 'T1', botToken: 'xoxb-again', botUserId: 'B1' }),
+    ).toBe(true);
+    expect(store.listBots()).toEqual([{ teamId: 'T1', botToken: 'xoxb-again' }]);
+  });
 });

@@ -10,7 +10,6 @@ import {
   listSlackWorkspaces,
   loadAppSettings,
   mergeSlackClientIds,
-  remoteRelayUrl,
   resolveSlackListenMode,
   runSlackListen,
   saveSlackOrgCredentials,
@@ -34,26 +33,12 @@ export function slackListenIsRunning(): boolean {
   return slackListenRunning;
 }
 
-/** Slack listens on the same relay as the phone, at `/slack/desktop`. */
-function activeSlackRelayUrl(): string {
-  if (process.env.SIDEBOARD_SLACK_RELAY_URL?.trim()) return slackRelayUrl();
-  try {
-    const url = new URL(remoteRelayUrl(loadAppSettings().integrations.remoteRelayUrl));
-    url.pathname = '/slack/desktop';
-    url.search = '';
-    url.hash = '';
-    return url.toString();
-  } catch {
-    return slackRelayUrl();
-  }
-}
-
 export function readSlackListenStatus(): SlackListenStatus {
   const settings = loadAppSettings();
   const workspaceCount = listSlackWorkspaces().length;
   const hasAppToken = Boolean(slackAppLevelToken(settings));
   const mode = resolveSlackListenMode({
-    relayUrl: activeSlackRelayUrl(),
+    relayUrl: slackRelayUrl(),
   });
   const device =
     workspaceCount > 0 || settings.integrations.slackDeviceId
@@ -101,7 +86,7 @@ async function listenLoop(ac: AbortController): Promise<void> {
     try {
       await runSlackListen({
         signal: ac.signal,
-        relayUrl: activeSlackRelayUrl(),
+        relayUrl: slackRelayUrl(),
         onLog: (line) => {
           slackListenLastLog = line;
         },
