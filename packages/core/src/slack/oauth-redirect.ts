@@ -1,3 +1,5 @@
+import { oauthReturnPage } from '../relay/oauth-return-page.js';
+
 /**
  * Slack-registered redirect URI (HTTPS). Provider paths are namespaced under
  * `/slack/…` so the same host can serve other OAuth relays later.
@@ -27,10 +29,9 @@ export function escapeHtml(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
+/** Slack OAuth return. Same Sideboard card as the git-host callback. */
 export function slackOAuthHtmlPage(title: string, body: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
-<style>body{font-family:ui-sans-serif,system-ui,sans-serif;padding:48px 24px;max-width:36rem;margin:0 auto;color:#1a1a1a}
-h1{font-size:1.25rem}p{line-height:1.5;color:#444}</style></head><body>${body}</body></html>`;
+  return oauthReturnPage(title, body);
 }
 
 export function parseSlackOAuthCallbackUrl(reqUrl: string): URL | null {

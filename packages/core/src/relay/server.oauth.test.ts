@@ -39,6 +39,8 @@ describe('relay Slack OAuth exchange', () => {
     expect(cb.status).toBe(200);
     const html = await cb.text();
     expect(html).toContain('Slack workspace connected');
+    expect(html).toContain('class="brand"');
+    expect(html).toContain('>Sideboard</div>');
     expect(html).toContain('Settings → Remote');
     expect(html).not.toContain('from-slack');
     expect(html).not.toContain('xoxb-bot');

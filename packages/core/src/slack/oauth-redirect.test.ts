@@ -7,6 +7,7 @@ import {
   SLACK_RELAY_DESKTOP_PATH,
   parseSlackOAuthCallbackUrl,
   parseSlackOAuthResultUrl,
+  slackOAuthHtmlPage,
   slackOAuthRedirectUri,
 } from './oauth-redirect.js';
 import { slackOAuthResultUrl, slackRelayHttpOrigin } from './oauth-exchange.js';
@@ -49,6 +50,15 @@ describe('Slack OAuth HTTPS callback', () => {
       if (prev === undefined) delete process.env.SIDEBOARD_SLACK_OAUTH_REDIRECT;
       else process.env.SIDEBOARD_SLACK_OAUTH_REDIRECT = prev;
     }
+  });
+
+  it('renders the callback with the Sideboard mark', () => {
+    const html = slackOAuthHtmlPage('Slack connected', '<h1>Slack workspace connected</h1><p>Done</p>');
+    expect(html).toContain('class="brand"');
+    expect(html).toContain('>Sideboard</div>');
+    expect(html).toContain('<h1>Slack workspace connected</h1>');
+    expect(html).toContain('--bg: #09090b');
+    expect(html).not.toContain('color:#1a1a1a');
   });
 
   it('maps the desktop WebSocket URL to the HTTP result origin', () => {

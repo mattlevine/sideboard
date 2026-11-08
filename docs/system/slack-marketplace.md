@@ -70,7 +70,7 @@ Deploy via [deploy.md](deploy.md). Pages live in `site/` (privacy, support, `/sl
 
 They install as a brand-new customer, including **uninstall**.
 
-- **App Home** (Home tab on): first-run “download Sideboard / name this Mac / DM the bot”, plus support email. Messages tab can stay for DMs. **Done in code** — apply the manifest (home tab + `app_home_opened`) in the Slack dashboard.
+- **App Home** (Home tab off): clicking the app opens the Messages tab so you can type. Setup (download, name this Mac, support email) is the reply when no Mac is online, plus `/slack/`. **Done** — `home_tab_enabled: false`, Messages tab writable. Apply that manifest in the Slack dashboard.
 - Subscribe to `app_uninstalled` and delete that workspace’s tokens on the Mac + any relay state. **Done in code** — apply `app_uninstalled` in the dashboard, then reinstall.
 - Post-OAuth success page: “Open Sideboard → Settings → Collaboration” (not a dead end). Confirm the relay on Settings → Remote. **Done.**
 - Meaningful errors when no Mac is online (not “something went wrong”). **Done** — relay posts a setup reply.
