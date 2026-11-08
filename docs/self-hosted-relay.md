@@ -64,7 +64,7 @@ relay.example.com {
 }
 ```
 
-Caddy forwards the WebSocket upgrade and appends the client address to `X-Forwarded-For`. Compose sets `SIDEBOARD_RELAY_TRUST_PROXY=1`, so this process uses that last hop as the client address.
+Caddy forwards the WebSocket upgrade and appends the client address to `X-Forwarded-For`. Compose sets `SIDEBOARD_RELAY_TRUST_PROXY=1`, so this process uses that last hop as the client address. A client-sent `Fly-Client-IP` is ignored.
 
 The desktop sends a JSON ping every 20 seconds. Keep the proxy idle timeout above that. Caddy’s `reverse_proxy` does. A shorter timeout drops a quiet Mac. One Nginx example is `proxy_read_timeout 3600s` together with the `Upgrade` and `Connection` headers.
 

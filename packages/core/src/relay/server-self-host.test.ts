@@ -46,10 +46,13 @@ describe('relay client address', () => {
     delete process.env.SIDEBOARD_RELAY_TRUST_PROXY;
     const headers = { 'x-forwarded-for': '1.1.1.1, 203.0.113.5' };
     expect(relayClientIp(fakeReq(headers))).toBe('127.0.0.1');
+    expect(relayClientIp(fakeReq({ 'fly-client-ip': '198.51.100.10', ...headers }))).toBe(
+      '198.51.100.10',
+    );
     process.env.SIDEBOARD_RELAY_TRUST_PROXY = '1';
     expect(relayClientIp(fakeReq(headers))).toBe('203.0.113.5');
     expect(relayClientIp(fakeReq({ 'fly-client-ip': '198.51.100.10', ...headers }))).toBe(
-      '198.51.100.10',
+      '203.0.113.5',
     );
   });
 });

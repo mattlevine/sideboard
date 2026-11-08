@@ -83,12 +83,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
 
 /**
  * Client address for the phone-socket cap.
- * Fly’s `Fly-Client-IP` wins. With `SIDEBOARD_RELAY_TRUST_PROXY=1`, the last
- * `X-Forwarded-For` hop is the address the trusted proxy appended.
+ * With `SIDEBOARD_RELAY_TRUST_PROXY=1`, the last `X-Forwarded-For` hop is the
+ * address the trusted proxy appended. A client-supplied `Fly-Client-IP` is
+ * ignored on that path: Caddy does not overwrite it, so it cannot skip the cap.
+ * On Fly, leave the flag unset. Fly overwrites `Fly-Client-IP`.
  */
 export function relayClientIp(req: IncomingMessage): string {
-  const fly = req.headers['fly-client-ip'];
-  if (typeof fly === 'string' && fly.trim()) return fly.trim();
   if (process.env.SIDEBOARD_RELAY_TRUST_PROXY === '1') {
     const forwarded = req.headers['x-forwarded-for'];
     const raw = Array.isArray(forwarded) ? forwarded.join(',') : forwarded;
@@ -99,6 +99,8 @@ export function relayClientIp(req: IncomingMessage): string {
       .pop();
     if (hop) return hop;
   }
+  const fly = req.headers['fly-client-ip'];
+  if (typeof fly === 'string' && fly.trim()) return fly.trim();
   return req.socket.remoteAddress ?? 'unknown';
 }
 

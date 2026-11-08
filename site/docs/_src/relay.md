@@ -58,7 +58,7 @@ relay.example.com {
 }
 ```
 
-Caddy forwards the WebSocket upgrade. Compose sets `SIDEBOARD_RELAY_TRUST_PROXY=1`, so the relay uses the client address Caddy appends. The desktop sends a JSON ping every 20 seconds. Keep the proxy idle timeout above that. Caddy’s `reverse_proxy` does.
+Caddy forwards the WebSocket upgrade. Compose sets `SIDEBOARD_RELAY_TRUST_PROXY=1`, so the relay uses the client address Caddy appends. A client-sent `Fly-Client-IP` is ignored. The desktop sends a JSON ping every 20 seconds. Keep the proxy idle timeout above that. Caddy’s `reverse_proxy` does.
 
 Run one copy. A second machine will not see the sockets or the sign-in in progress on the first.
 
