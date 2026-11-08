@@ -407,7 +407,7 @@ Slack is collaboration. Agents notify a teammate that a PR is ready and read the
 
 **Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. You can also paste an `xoxb-` or `xoxp-` token and choose **Add workspace**. Each team stays until you disconnect it. Posts go out as `@Sideboard`.
 
-Name this Mac and set the relay on **Settings → Remote**. The phone and Slack both use them. A reply can come back prefixed with that name (`Work: …`). Start a DM with `work:` or `personal:` when more than one Mac is listening.
+Name this Mac on **Settings → Remote**. The phone and Slack both use that name. The relay address there is for the phone. Slack sign-in and Listen stay on Sideboard’s Slack relay. A reply can come back prefixed with that name (`Work: …`). Start a DM with `work:` or `personal:` when more than one Mac is listening.
 
 The community workspace at [sideboard-ai.slack.com](https://sideboard-ai.slack.com) is for product questions. It is not the same as installing the app into your team. Support: support@sideboard.build. Public page: [www.sideboard.build/slack/](https://www.sideboard.build/slack/).
 

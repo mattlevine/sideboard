@@ -123,18 +123,28 @@ export async function connectSlackToken(rawToken: string): Promise<SlackWorkspac
   if (!teamId) throw new Error('Slack auth.test did not return a team_id');
   const existing = getSlackWorkspace(teamId);
   const kind = tokenKind(token);
+  const authUserId = auth.user_id?.trim();
+  // A bot token's auth.test user is the bot, not the person who finished OAuth.
+  const userId =
+    kind === 'bot' ? existing?.user_id || authUserId : authUserId || existing?.user_id;
   const next: SlackWorkspace = {
     team_id: teamId,
     team_name: auth.team?.trim() || existing?.team_name || teamId,
-    user_id: auth.user_id?.trim() || existing?.user_id,
+    user_id: userId,
     bot_token: kind === 'bot' ? token : existing?.bot_token,
     user_token: kind === 'user' || kind === 'unknown' ? token : existing?.user_token,
+    listen_grant:
+      existing?.user_id && userId && existing.user_id !== userId ? undefined : existing?.listen_grant,
     scopes: existing?.scopes,
     connected_at: existing?.connected_at || new Date().toISOString(),
   };
   if (kind === 'unknown' && auth.bot_id) {
     next.bot_token = token;
     next.user_token = existing?.user_token;
+    next.user_id = existing?.user_id || authUserId;
+    if (existing?.user_id && next.user_id && existing.user_id !== next.user_id) {
+      next.listen_grant = undefined;
+    }
   }
   return upsertSlackWorkspace(next);
 }

@@ -126,8 +126,8 @@ export function RemoteSettings({
   return (
     <div className="settings-body">
       <p className="settings-lead">
-        Name this Mac and set the relay. The phone and Slack both use them. Connect Slack
-        teams under Collaboration.
+        Name this Mac and set the phone relay. Slack uses the Mac name. Connect Slack teams
+        under Collaboration.
       </p>
 
       <div className="settings-section settings-section-card">
@@ -162,9 +162,10 @@ export function RemoteSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Relay</div>
         <p className="settings-hint">
-          Leave this blank to use Sideboard’s relay. The phone and Slack both use it. To run your
-          own, deploy the relay service (not the website) and paste the same address here and in
-          the phone app. Saving a different relay signs this Mac out.
+          Leave this blank to use Sideboard’s relay for the phone. Slack sign-in and Listen stay
+          on Sideboard’s Slack relay. To run your own phone relay, deploy the relay service (not
+          the website) and paste the same address here and in the phone app. Saving a different
+          relay signs this Mac out.
         </p>
         <div className="settings-key-row" style={{ marginTop: 12 }}>
           <input

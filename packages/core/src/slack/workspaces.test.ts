@@ -77,6 +77,34 @@ describe('slack workspaces store', () => {
     expect(mod.slackTokenFor(ws!, 'read')).toBe('xoxb-bot');
   });
 
+  it('keeps the listen grant and OAuth user when a bot token is pasted', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        team: 'Acme',
+        team_id: 'T1',
+        user_id: 'UBOT',
+        bot_id: 'B1',
+      }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = await load();
+    mod.upsertSlackWorkspace({
+      team_id: 'T1',
+      team_name: 'Acme',
+      user_id: 'UHUMAN',
+      bot_token: 'xoxb-old',
+      listen_grant: 'grant-1',
+      connected_at: '2026-01-01T00:00:00.000Z',
+    });
+    await mod.connectSlackToken('xoxb-new');
+    const ws = mod.getSlackWorkspace('T1');
+    expect(ws?.bot_token).toBe('xoxb-new');
+    expect(ws?.user_id).toBe('UHUMAN');
+    expect(ws?.listen_grant).toBe('grant-1');
+  });
+
   it('disconnect removes a team', async () => {
     const mod = await load();
     mod.upsertSlackWorkspace({
