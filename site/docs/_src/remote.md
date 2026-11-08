@@ -21,7 +21,7 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 ## Slack
 
-Slack is collaboration, not remote control. From **Settings → Collaboration → Add via browser**, install the Sideboard app into one workspace. Click it again for another team. Agents post as **@Sideboard** (a PR to review, for example) and read the reply. Name this Mac on Settings → Remote. The relay address there is for the phone. Slack sign-in and Listen stay on Sideboard’s Slack relay. See [Slack](/slack/).
+Slack is collaboration, not remote control. From **Settings → Collaboration → Add via browser**, install the Sideboard app into one workspace. Click it again for another team. That install is how the team signs in. Slack issues the bot token during the install. To reconnect a team, disconnect it and add it via browser again. Agents post as **@Sideboard** (a PR to review, for example) and read the reply. Name this Mac on Settings → Remote. The relay address there is for the phone. Slack sign-in and Listen stay on Sideboard’s Slack relay. See [Slack](/slack/).
 
 Product questions: [Support](/support/), or the community Slack at [sideboard-ai.slack.com](https://sideboard-ai.slack.com).
 

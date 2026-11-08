@@ -43,7 +43,7 @@ export function registerSlackTools(server: McpServer): void {
       if (teams.length === 0) {
         return text({
           teams: [],
-          hint: 'No Slack workspaces connected. Add one in Settings → Collaboration (paste xoxb-/xoxp- or Add via browser).',
+          hint: 'No Slack workspaces connected. Add one in Settings → Collaboration with Add via browser.',
         });
       }
       return text({

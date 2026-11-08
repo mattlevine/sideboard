@@ -1,6 +1,12 @@
 # Phone relay only. This file does not serve the Sideboard website.
-# From the repo root, with the public origin and the OAuth clients you use:
+# Required in the shell before Compose parses this file:
+#   SIDEBOARD_RELAY_PUBLIC_ORIGIN
+#   SIDEBOARD_RELAY_GITHUB_CLIENT_ID
+#   SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET
+# From the repo root:
 #   docker compose -f apps/relay/docker-compose.yml up --build -d
+# Publish 8080 only to the TLS proxy on this host. TRUST_PROXY treats the
+# last X-Forwarded-For hop as the client.
 services:
   relay:
     build:
@@ -11,13 +17,14 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: "8080"
-      SIDEBOARD_RELAY_PUBLIC_ORIGIN: ${SIDEBOARD_RELAY_PUBLIC_ORIGIN}
-      SIDEBOARD_RELAY_GITHUB_CLIENT_ID: ${SIDEBOARD_RELAY_GITHUB_CLIENT_ID}
-      SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET: ${SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET}
+      SIDEBOARD_RELAY_PUBLIC_ORIGIN: ${SIDEBOARD_RELAY_PUBLIC_ORIGIN:?set SIDEBOARD_RELAY_PUBLIC_ORIGIN}
+      SIDEBOARD_RELAY_GITHUB_CLIENT_ID: ${SIDEBOARD_RELAY_GITHUB_CLIENT_ID:?set SIDEBOARD_RELAY_GITHUB_CLIENT_ID}
+      SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET: ${SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET:?set SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET}
       SIDEBOARD_RELAY_CURSOR_APP_ID: ${SIDEBOARD_RELAY_CURSOR_APP_ID:-}
       SIDEBOARD_RELAY_ENTIRE_CLIENT_ID: ${SIDEBOARD_RELAY_ENTIRE_CLIENT_ID:-}
       SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET: ${SIDEBOARD_RELAY_ENTIRE_CLIENT_SECRET:-}
       SIDEBOARD_RELAY_ACCOUNTS_PATH: /data/relay-accounts.sqlite
+      SIDEBOARD_RELAY_TRUST_PROXY: "1"
     volumes:
       - relay-accounts:/data
     restart: unless-stopped

@@ -332,7 +332,6 @@ export type { McpUiView } from './mcp-ui/meta.js';
 export { mcpUiContentSecurityPolicy } from './mcp-ui/meta.js';
 export {
   listSlackWorkspaces,
-  connectSlackToken,
   disconnectSlackWorkspace,
   getSlackWorkspace,
 } from './slack/workspaces.js';

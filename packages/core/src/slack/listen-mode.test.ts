@@ -51,7 +51,7 @@ describe('resolveSlackListenMode', () => {
     expect(resolveSlackListenMode({ relayUrl: 'ws://127.0.0.1:9/slack/desktop' })).toBe('relay');
   });
 
-  it('stays off for a pasted bot token', async () => {
+  it('stays off when the workspace has only a bot token', async () => {
     process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-listen-mode-'));
     delete process.env.SIDEBOARD_SLACK_APP_TOKEN;
     const { resolveSlackListenMode } = await import('./listen.js');

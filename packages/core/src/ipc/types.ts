@@ -217,8 +217,6 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc {
   getGitHubStatus(): Promise<GitHubStatus>;
   /** Connected Slack workspaces (no tokens). */
   getSlackWorkspaces(): Promise<SlackWorkspaceInfo[]>;
-  /** Add a workspace from a pasted bot (xoxb-) or user (xoxp-) token. */
-  connectSlackToken(token: string): Promise<SlackWorkspaceInfo[]>;
   /** Browser OAuth — opens Slack, waits for localhost callback. */
   startSlackOAuth(clientId?: string): Promise<SlackWorkspaceInfo[]>;
   /** Abort an in-progress Slack browser sign-in (closes the localhost waiter). */

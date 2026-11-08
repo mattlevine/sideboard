@@ -24,7 +24,6 @@ export function SlackRemoteSettings({
 }) {
   const [slackWorkspaces, setSlackWorkspaces] = useState<SlackWorkspaceInfo[]>([]);
   const [slackListen, setSlackListen] = useState<SlackListenStatus | null>(null);
-  const [slackTokenDraft, setSlackTokenDraft] = useState('');
   const [slackOauthBusy, setSlackOauthBusy] = useState(false);
 
   useEffect(() => {
@@ -60,7 +59,8 @@ export function SlackRemoteSettings({
       <div className="settings-section-title">Slack</div>
       <p className="settings-hint">
         Click <strong>Add via browser</strong> to install the Sideboard Slack app into a workspace.
-        Each click adds one team and leaves the others connected. Listening starts automatically.
+        Each click adds one team and leaves the others connected. To reconnect a team, Disconnect
+        it and Add via browser again. Listening starts automatically.
         Until the Slack app has <strong>Public Distribution</strong> on, Slack only offers the home
         workspace (Brightsy) — that is a Slack app setting, not a Sideboard picker.
       </p>
@@ -105,39 +105,9 @@ export function SlackRemoteSettings({
         </p>
       )}
       <div className="row" style={{ marginTop: 10, gap: 8 }}>
-        <input
-          type="password"
-          value={slackTokenDraft}
-          onChange={(e) => setSlackTokenDraft(e.target.value)}
-          placeholder="xoxb-… or xoxp-…"
-          style={{ flex: 1 }}
-          autoComplete="off"
-        />
         <button
           type="button"
           className="primary"
-          disabled={locked || !slackTokenDraft.trim()}
-          onClick={() => {
-            setBusy(true);
-            setError(null);
-            void window.sideboard
-              .connectSlackToken(slackTokenDraft.trim())
-              .then((list) => {
-                setSlackWorkspaces(list);
-                setSlackTokenDraft('');
-                return window.sideboard.getSlackListenStatus();
-              })
-              .then((status) => {
-                if (status) setSlackListen(status);
-              })
-              .catch((err) => setError(errorText(err)))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Add workspace
-        </button>
-        <button
-          type="button"
           disabled={locked}
           onClick={() => {
             setSlackOauthBusy(true);

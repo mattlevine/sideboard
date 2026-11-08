@@ -11,7 +11,8 @@ import { startRelayServer } from '@sideboard-ai/core';
  *   SIDEBOARD_SLACK_TOKEN_KEY      32-byte key (base64 or 64 hex) for company Slack secrets
  *   SIDEBOARD_SLACK_CLIENT_ID      optional; defaults to the public Sideboard Slack app id
  *   SIDEBOARD_RELAY_ACCOUNTS_PATH   SQLite file (Fly: /data/relay-accounts.sqlite on a volume)
- *   SIDEBOARD_RELAY_PUBLIC_ORIGIN   OAuth origin (https://relay.example.com)
+ *   SIDEBOARD_RELAY_PUBLIC_ORIGIN   OAuth origin (https://relay.example.com). Required when NODE_ENV=production.
+ *   SIDEBOARD_RELAY_TRUST_PROXY     1 behind a reverse proxy. Client address is the last X-Forwarded-For hop.
  *   SIDEBOARD_RELAY_GITHUB_CLIENT_ID / SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET
  *   SIDEBOARD_RELAY_CURSOR_APP_ID     optional Origin app id (app_…). No client secret.
  *   SIDEBOARD_RELAY_ENTIRE_CLIENT_ID  optional Entire OIDC client. PKCE; secret optional.
@@ -78,7 +79,10 @@ async function main(): Promise<void> {
   if (!process.env.SIDEBOARD_SLACK_TOKEN_KEY?.trim()) {
     console.log('warning: SIDEBOARD_SLACK_TOKEN_KEY is unset; per-company Slack apps are off');
   }
-  if (!process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim()) {
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    !process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim()
+  ) {
     console.log('warning: SIDEBOARD_RELAY_PUBLIC_ORIGIN is unset; sign-in redirects use the listen address');
   }
   // The public Slack app delivers DMs through Socket Mode. Skip that only

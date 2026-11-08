@@ -81,10 +81,36 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function relayClientIp(req: IncomingMessage): string {
+/**
+ * Client address for the phone-socket cap.
+ * With `SIDEBOARD_RELAY_TRUST_PROXY=1`, the last `X-Forwarded-For` hop is the
+ * address the trusted proxy appended. A client-supplied `Fly-Client-IP` is
+ * ignored on that path: Caddy does not overwrite it, so it cannot skip the cap.
+ * On Fly, leave the flag unset. Fly overwrites `Fly-Client-IP`.
+ */
+export function relayClientIp(req: IncomingMessage): string {
+  if (process.env.SIDEBOARD_RELAY_TRUST_PROXY === '1') {
+    const forwarded = req.headers['x-forwarded-for'];
+    const raw = Array.isArray(forwarded) ? forwarded.join(',') : forwarded;
+    const hop = raw
+      ?.split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .pop();
+    if (hop) return hop;
+  }
   const fly = req.headers['fly-client-ip'];
   if (typeof fly === 'string' && fly.trim()) return fly.trim();
   return req.socket.remoteAddress ?? 'unknown';
+}
+
+/** Production OAuth redirects need the public https origin. Dev may omit it. */
+export function assertRelayPublicOrigin(env: NodeJS.ProcessEnv = process.env): void {
+  if (env.NODE_ENV !== 'production') return;
+  if (env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim()) return;
+  throw new Error(
+    'SIDEBOARD_RELAY_PUBLIC_ORIGIN is required in production. Set it to the public https origin with no path, for example https://relay.example.com.',
+  );
 }
 
 /** Protocol ping so Fly and NAT keep an idle WebSocket. */
@@ -123,6 +149,7 @@ export function startRelaySocketPing(
 export async function startRelayServer(
   opts: RelayServerOptions,
 ): Promise<RelayServerHandle> {
+  assertRelayPublicOrigin();
   const log = opts.onLog ?? console.log;
   const appToken = opts.appToken?.trim() ?? '';
   if (!opts.skipSocketMode && !appToken.startsWith('xapp-')) {
@@ -187,6 +214,20 @@ export async function startRelayServer(
     process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim() ||
     `http://127.0.0.1:${boundPort}`;
 
+  const healthBody = () => ({
+    ok: true as const,
+    service: 'sideboard-relay' as const,
+    sessions: hub.listSessions().length,
+    oauth: Boolean(clientSecret),
+    phoneSockets: remoteSockets,
+    accounts: Boolean(accountStore),
+    providers: {
+      github: Boolean(relayOAuth.github),
+      cursor: Boolean(relayOAuth.cursor),
+      entire: Boolean(relayOAuth.entire),
+    },
+  });
+
   const httpServer: Server = createServer((req, res) => {
     void (async () => {
       const reqUrl = req.url || '/';
@@ -236,12 +277,7 @@ export async function startRelayServer(
         return;
       }
       if (req.url === '/health') {
-        sendJson(res, 200, {
-          ok: true,
-          service: 'sideboard-relay',
-          sessions: hub.listSessions().length,
-          oauth: Boolean(clientSecret),
-        });
+        sendJson(res, 200, healthBody());
         return;
       }
       if (
@@ -256,12 +292,7 @@ export async function startRelayServer(
         return;
       }
       if (req.url === '/') {
-        sendJson(res, 200, {
-          ok: true,
-          service: 'sideboard-relay',
-          sessions: hub.listSessions().length,
-          oauth: Boolean(clientSecret),
-        });
+        sendJson(res, 200, healthBody());
         return;
       }
       res.writeHead(404);
@@ -295,7 +326,10 @@ export async function startRelayServer(
       const ip = relayClientIp(req);
       const count = remoteByIp.get(ip) ?? 0;
       if (count >= 20 || remoteSockets >= 4000) {
-        socket.destroy();
+        log(`remote rate limit: ${ip} (${count} on this address, ${remoteSockets} open)`);
+        target.handleUpgrade(req, socket, head, (ws) => {
+          ws.close(4029, 'too many connections');
+        });
         return;
       }
     }

@@ -395,7 +395,7 @@ A phone can pair with more than one Mac. Name each one in **Settings → Remote*
 
 Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user`, the phone shows the options.
 
-**Settings → Remote → Relay** is the address this Mac, the phone, and Slack share. The phone uses `wss://host/remote`. Slack uses `wss://host/slack/desktop` on the same host. Leave it blank for Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Steps to deploy the relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
+**Settings → Remote → Relay** is the phone relay for this Mac. The phone uses `wss://host/remote`. Leave it blank for Sideboard’s relay. Slack sign-in and Listen stay on Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Steps to deploy the phone relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
 
 The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts Metro and opens the iOS Simulator when that app is installed. If Simulator.app is missing, Metro stays up and Expo Go opens on a simulator that is already booted. Pair from **Settings → Remote**.
 
@@ -405,7 +405,7 @@ More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
 
 Slack is collaboration. Agents notify a teammate that a PR is ready and read the reply. It is not how you reach this Mac — that is the phone.
 
-**Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. You can also paste an `xoxb-` or `xoxp-` token and choose **Add workspace**. Each team stays until you disconnect it. Posts go out as `@Sideboard`.
+**Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. That browser install is how a team signs in. Slack issues the bot token during the install. To reconnect a team, disconnect it and add it via browser again. Each team stays until you disconnect it. Posts go out as `@Sideboard`.
 
 Name this Mac on **Settings → Remote**. The phone and Slack both use that name. The relay address there is for the phone. Slack sign-in and Listen stay on Sideboard’s Slack relay. A reply can come back prefixed with that name (`Work: …`). Start a DM with `work:` or `personal:` when more than one Mac is listening.
 

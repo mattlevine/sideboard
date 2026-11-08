@@ -772,7 +772,7 @@ export async function runSlackListen(opts: SlackListenOptions = {}): Promise<voi
     const withIdentity = connected.filter(slackWorkspaceCanListen);
     if (withIdentity.length === 0) {
       throw new Error(
-        'Slack Listen needs Add via browser so this Mac can prove which Slack user it is. A pasted bot token cannot.',
+        'Slack Listen needs Add via browser so this Mac can prove which Slack user it is. A bot token alone cannot.',
       );
     }
     const device = ensureSlackDeviceIdentity();
