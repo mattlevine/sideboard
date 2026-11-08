@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -27,7 +28,7 @@ import {
 } from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { useSavedRelayUrl } from './use-saved-relay-url';
-import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
+import { pickDocuments, pickPhotos, releaseAudioSession, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
 import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
 import { PhoneCodeRefChips } from './phone-file-select';
@@ -317,6 +318,18 @@ export default function App() {
   }
   const link = linkRef.current;
   const panes = usePhonePanes((payload) => link.send(phoneCommand(payload)), () => activeChatIdRef.current);
+
+  useEffect(() => {
+    const giveBack = () => {
+      if (recordingRef.current) return;
+      void releaseAudioSession();
+    };
+    giveBack();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') giveBack();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     headerOkRef.current = true;

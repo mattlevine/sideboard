@@ -4,6 +4,8 @@ import {
   IOSOutputFormat,
   requestRecordingPermissionsAsync,
   setAudioModeAsync,
+  setIsAudioActiveAsync,
+  type AudioMode,
   type AudioRecorder,
   type RecordingOptions,
 } from 'expo-audio';
@@ -107,19 +109,76 @@ const WAV: RecordingOptions = {
   },
 };
 
+/**
+ * Ambient, mixing, inactive. Opening the app and finishing dictation both
+ * land here so Spotify can keep playing. playAndRecord is only held while
+ * the mic is on.
+ */
+const IDLE_AUDIO: Partial<AudioMode> = {
+  allowsRecording: false,
+  playsInSilentMode: false,
+  interruptionMode: 'mixWithOthers',
+  shouldPlayInBackground: false,
+};
+
+/** Exclusive for the length of a dictation, then IDLE_AUDIO hands the session back. */
+const RECORDING_AUDIO: Partial<AudioMode> = {
+  allowsRecording: true,
+  playsInSilentMode: true,
+  interruptionMode: 'doNotMix',
+  shouldPlayInBackground: false,
+};
+
+let settled = Promise.resolve();
+let micHeld = false;
+
+/** Deactivate our session and tell the other app it can resume. */
+export function releaseAudioSession(): Promise<void> {
+  const run = settled.then(async () => {
+    if (micHeld) return;
+    try {
+      await setIsAudioActiveAsync(false);
+    } catch {
+      // Already inactive.
+    }
+    try {
+      await setAudioModeAsync(IDLE_AUDIO);
+    } catch {
+      // Inactive is enough for the other app to resume.
+    }
+  });
+  settled = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 export async function startMic(): Promise<AudioRecorder> {
-  const perm = await requestRecordingPermissionsAsync();
-  if (!perm.granted) throw new Error('Microphone access is off.');
-  await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-  const recording = new AudioModule.AudioRecorder(WAV);
-  await recording.prepareToRecordAsync();
-  recording.record();
-  return recording;
+  await settled;
+  micHeld = true;
+  try {
+    const perm = await requestRecordingPermissionsAsync();
+    if (!perm.granted) throw new Error('Microphone access is off.');
+    await setAudioModeAsync(RECORDING_AUDIO);
+    const recording = new AudioModule.AudioRecorder(WAV);
+    await recording.prepareToRecordAsync();
+    recording.record();
+    return recording;
+  } catch (err) {
+    micHeld = false;
+    await releaseAudioSession();
+    throw err;
+  }
 }
 
 export async function stopMic(recording: AudioRecorder): Promise<string> {
-  await recording.stop();
-  await setAudioModeAsync({ allowsRecording: false });
+  try {
+    await recording.stop();
+  } finally {
+    micHeld = false;
+    await releaseAudioSession();
+  }
   const uri = recording.uri;
   if (!uri) throw new Error('No recording.');
   return new File(uri).base64();
