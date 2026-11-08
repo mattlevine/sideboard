@@ -10,7 +10,11 @@ export interface SlackOAuthTokenPayload {
   team_name: string;
   user_id?: string;
   bot_token?: string;
+  /** Bot user id from oauth.v2.access. Not returned to the desktop poll. */
+  bot_user_id?: string;
   user_token?: string;
+  /** Relay proof of authed_user. Not a Slack user token. Desktop poll only. */
+  listen_grant?: string;
   scopes: string;
 }
 
@@ -23,6 +27,7 @@ interface OauthV2Access {
   error?: string;
   access_token?: string;
   scope?: string;
+  bot_user_id?: string;
   authed_user?: {
     id?: string;
     scope?: string;
@@ -117,6 +122,7 @@ export async function exchangeSlackOAuthCode(opts: {
     team_name: data.team?.name?.trim() || teamId,
     user_id: data.authed_user?.id?.trim() || undefined,
     bot_token: data.access_token?.trim() || undefined,
+    bot_user_id: data.bot_user_id?.trim() || undefined,
     user_token: data.authed_user?.access_token?.trim() || undefined,
     scopes: [data.scope, data.authed_user?.scope].filter(Boolean).join(','),
   };

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.335] - 2026-11-07
+
+### Changed
+
+- Slack is collaboration under Settings → Collaboration. The phone stays the remote. Browser sign-in asks for bot scopes only, and reads and posts go out as @Sideboard.
+
+### Fixed
+
+- DMs and @mentions still reach the Mac that connected that Slack user. The relay keeps a listen grant for that person. A pasted bot token does not start Listen.
+
 ## [0.1.334] - 2026-11-05
 
 ### Fixed

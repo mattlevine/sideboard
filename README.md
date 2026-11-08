@@ -395,11 +395,21 @@ A phone can pair with more than one Mac. Name each one in **Settings → Remote*
 
 Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user`, the phone shows the options.
 
-**Settings → Remote → Relay** is the address both this Mac and the phone use (`wss://host/remote`). Leave it blank for Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Steps to deploy the relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
+**Settings → Remote → Relay** is the address this Mac, the phone, and Slack share. The phone uses `wss://host/remote`. Slack uses `wss://host/slack/desktop` on the same host. Leave it blank for Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Steps to deploy the relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
 
 The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts Metro and opens the iOS Simulator when that app is installed. If Simulator.app is missing, Metro stays up and Expo Go opens on a simulator that is already booted. Pair from **Settings → Remote**.
 
 More detail: [docs/remote-integrations.md](docs/remote-integrations.md).
+
+## Slack
+
+Slack is collaboration. Agents notify a teammate that a PR is ready and read the reply. It is not how you reach this Mac — that is the phone.
+
+**Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. You can also paste an `xoxb-` or `xoxp-` token and choose **Add workspace**. Each team stays until you disconnect it. Posts go out as `@Sideboard`.
+
+Name this Mac and set the relay on **Settings → Remote**. The phone and Slack both use them. A reply can come back prefixed with that name (`Work: …`). Start a DM with `work:` or `personal:` when more than one Mac is listening.
+
+The community workspace at [sideboard-ai.slack.com](https://sideboard-ai.slack.com) is for product questions. It is not the same as installing the app into your team. Support: support@sideboard.build. Public page: [www.sideboard.build/slack/](https://www.sideboard.build/slack/).
 
 ## Connectors
 

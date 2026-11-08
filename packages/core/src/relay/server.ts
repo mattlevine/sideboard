@@ -1,18 +1,17 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { SLACK_RELAY_DESKTOP_PATH } from '../slack/oauth-redirect.js';
 import {
-  parseSlackOAuthCallbackUrl,
-  parseSlackOAuthResultUrl,
-  slackOAuthHtmlPage,
-  escapeHtml,
-  SLACK_RELAY_DESKTOP_PATH,
-} from '../slack/oauth-redirect.js';
-import {
-  exchangeSlackOAuthCode,
   SlackOAuthPendingStore,
   slackOAuthRelayClientId,
   slackOAuthRelayRedirectUri,
 } from '../slack/oauth-exchange.js';
+import { SlackEventDeduper } from '../slack/events-api.js';
+import { parseSlackTokenKey } from '../slack/secret-box.js';
+import { handleSlackHttp } from './slack-http.js';
+import { SlackAppStore } from './slack-apps.js';
+import { SlackListenGrantStore } from './slack-grants.js';
+import { MemorySlackListenGrants, type SlackListenGrants } from '../slack/listen-grant.js';
 import { runSlackSocketMode } from '../slack/socket-mode.js';
 import {
   parseSlackRelayClientMessage,
@@ -66,6 +65,8 @@ export interface RelayServerOptions {
   relayOAuth?: RelayOAuthConfig;
   /** Public origin for OAuth redirects, e.g. `https://relay.sideboard.build`. */
   relayPublicOrigin?: string;
+  /** AES key for company Slack secrets. Defaults to SIDEBOARD_SLACK_TOKEN_KEY. */
+  slackTokenKey?: string;
 }
 
 export interface RelayServerHandle {
@@ -73,11 +74,6 @@ export interface RelayServerHandle {
   url: string;
   hub: SlackRelayHub;
   close: () => Promise<void>;
-}
-
-function sendHtml(res: ServerResponse, status: number, title: string, body: string): void {
-  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(slackOAuthHtmlPage(title, body));
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -148,6 +144,23 @@ export async function startRelayServer(
   const accountsPath = opts.accountsPath?.trim() ?? '';
   if (accountsPath) assertRelayAccountsDurable(accountsPath);
   const accountStore = accountsPath ? new RelayAccountStore(accountsPath) : null;
+  const slackTokenKey = (opts.slackTokenKey ?? process.env.SIDEBOARD_SLACK_TOKEN_KEY ?? '').trim();
+  const slackApps =
+    accountsPath && slackTokenKey
+      ? new SlackAppStore(accountsPath, parseSlackTokenKey(slackTokenKey))
+      : null;
+  if (slackApps) {
+    for (const row of slackApps.listBots()) hub.rememberBot(row.teamId, row.botToken);
+    hub.setBotHooks({
+      guardBotUser: (teamId, botUserId) => slackApps.botUserMismatch(teamId, botUserId),
+      onBotAccepted: (teamId, botToken, botUserId) => slackApps.saveBot(teamId, botToken, botUserId),
+    });
+  }
+  const listenGrants: SlackListenGrants = accountsPath
+    ? new SlackListenGrantStore(accountsPath)
+    : new MemorySlackListenGrants();
+  hub.setListenGrantVerifier((teamId, userId, grant) => listenGrants.verify(teamId, userId, grant));
+  const slackDedupe = new SlackEventDeduper();
   const accountSessions = new RelayLoginSessions();
   const relayOAuth = opts.relayOAuth ?? {};
   const authMarks = new Map<object, () => void>();
@@ -169,84 +182,10 @@ export async function startRelayServer(
     onAuthorized: (socket) => authMarks.get(socket)?.(),
   });
 
-  const handleCallback = async (reqUrl: string, res: ServerResponse): Promise<boolean> => {
-    const url = parseSlackOAuthCallbackUrl(reqUrl);
-    if (!url) return false;
-    const error = url.searchParams.get('error')?.trim();
-    const state = url.searchParams.get('state')?.trim() ?? '';
-    const code = url.searchParams.get('code')?.trim() ?? '';
-    if (error) {
-      if (state) pending.put(state, { ok: false, error: `Slack OAuth: ${error}` });
-      sendHtml(
-        res,
-        400,
-        'Slack',
-        `<h1>Authorization cancelled</h1><p>${escapeHtml(error)}</p>`,
-      );
-      return true;
-    }
-    if (!state || !code) {
-      sendHtml(res, 400, 'Slack', '<h1>Invalid callback</h1><p>State or code missing.</p>');
-      return true;
-    }
-    if (!clientSecret) {
-      pending.put(state, {
-        ok: false,
-        error: 'Relay is missing SIDEBOARD_SLACK_CLIENT_SECRET',
-      });
-      sendHtml(
-        res,
-        500,
-        'Slack',
-        '<h1>Relay misconfigured</h1><p>OAuth client secret is not set on the relay.</p>',
-      );
-      return true;
-    }
-    try {
-      const payload = await exchangeSlackOAuthCode({
-        clientId,
-        clientSecret,
-        code,
-        redirectUri,
-        fetchImpl: opts.fetchImpl,
-      });
-      pending.put(state, { ok: true, payload });
-      if (payload.bot_token) {
-        hub.rememberBot(payload.team_id, payload.bot_token);
-        if (payload.user_id) {
-          void hub.handleAppHomeOpened(payload.team_id, payload.user_id);
-        }
-      }
-      sendHtml(
-        res,
-        200,
-        'Slack connected',
-        '<h1>Slack workspace connected</h1><p>Open <strong>Sideboard → Settings → Remote → Slack</strong>. Confirm Relay connected, name this Mac, then DM @Sideboard.</p><p>Need the app? <a href="https://www.sideboard.build/">Download Sideboard</a>.</p>',
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      pending.put(state, { ok: false, error: message });
-      sendHtml(res, 400, 'Slack', `<h1>Could not connect Slack</h1><p>${escapeHtml(message)}</p>`);
-    }
-    return true;
-  };
-
-  const handleResult = (reqUrl: string, res: ServerResponse): boolean => {
-    const url = parseSlackOAuthResultUrl(reqUrl);
-    if (!url) return false;
-    const state = url.searchParams.get('state')?.trim() ?? '';
-    const value = pending.take(state);
-    if (!value) {
-      sendJson(res, 404, { ok: false, error: 'pending' });
-      return true;
-    }
-    if (!value.ok) {
-      sendJson(res, 400, { ok: false, error: value.error });
-      return true;
-    }
-    sendJson(res, 200, { ok: true, ...value.payload });
-    return true;
-  };
+  const publicOrigin = (): string =>
+    opts.relayPublicOrigin?.trim() ||
+    process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim() ||
+    `http://127.0.0.1:${boundPort}`;
 
   const httpServer: Server = createServer((req, res) => {
     void (async () => {
@@ -259,17 +198,33 @@ export async function startRelayServer(
           store: accountStore,
           oauth: relayOAuth,
           sessions: accountSessions,
-          publicOrigin:
-            opts.relayPublicOrigin?.trim() ||
-            process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim() ||
-            `http://127.0.0.1:${boundPort}`,
+          publicOrigin: publicOrigin(),
           fetchImpl: opts.fetchImpl,
         }))
       ) {
         return;
       }
-      if (await handleCallback(reqUrl, res)) return;
-      if (handleResult(reqUrl, res)) return;
+      if (
+        await handleSlackHttp({
+          req,
+          res,
+          reqUrl,
+          accounts: accountStore,
+          apps: slackApps,
+          hub,
+          grants: listenGrants,
+          pending,
+          bakedClientId: clientId,
+          bakedClientSecret: clientSecret,
+          redirectUri,
+          publicOrigin: publicOrigin(),
+          fetchImpl: opts.fetchImpl,
+          dedupe: slackDedupe,
+          log,
+        })
+      ) {
+        return;
+      }
       const ableTimeBounce = ableTimeOAuthLocalBounceUrl(reqUrl);
       if (ableTimeBounce && (req.method === 'GET' || req.method === 'HEAD')) {
         res.writeHead(200, {
@@ -461,6 +416,7 @@ export async function startRelayServer(
             void hub.handleAppHomeOpened(event.teamId, event.userId);
             return;
           }
+          listenGrants.revokeTeam(event.teamId);
           hub.uninstallTeam(event.teamId);
         },
       }).catch((err) => {
@@ -486,6 +442,8 @@ export async function startRelayServer(
         httpServer.close((err) => (err ? reject(err) : resolve()));
       });
       await socketModeDone.catch(() => undefined);
+      slackApps?.close();
+      listenGrants.close();
       accountStore?.close();
     },
   };

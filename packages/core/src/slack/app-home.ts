@@ -2,10 +2,10 @@ import { slackApi } from './api.js';
 
 export const SLACK_APP_HOME_DOWNLOAD =
   'https://sideboard-downloads.t3.tigrisfiles.io/Sideboard-latest-arm64.dmg';
-export const SLACK_APP_HOME_LANDING = 'https://www.sideboard.cloud/slack/';
-export const SLACK_APP_HOME_PRIVACY = 'https://www.sideboard.cloud/privacy/';
-export const SLACK_APP_HOME_SUPPORT = 'https://www.sideboard.cloud/support/';
-export const SLACK_APP_HOME_SUPPORT_EMAIL = 'support@sideboard.cloud';
+export const SLACK_APP_HOME_LANDING = 'https://www.sideboard.build/slack/';
+export const SLACK_APP_HOME_PRIVACY = 'https://www.sideboard.build/privacy/';
+export const SLACK_APP_HOME_SUPPORT = 'https://www.sideboard.build/support/';
+export const SLACK_APP_HOME_SUPPORT_EMAIL = 'support@sideboard.build';
 
 /** Posted in Slack when a DM/@mention arrives and no Mac is registered. */
 export const SLACK_NO_MAC_ONLINE_REPLY = [
@@ -38,7 +38,7 @@ export function slackAppHomeView(opts?: SlackAppHomeViewOpts): {
         '',
         '*First run*',
         '1. Download Sideboard for Apple Silicon and keep it open.',
-        '2. Settings → Remote → Slack → Add via browser. Name this Mac (`Work`, `Personal`, …).',
+        '2. Settings → Collaboration → Add via browser. Name this Mac on Settings → Remote (`Work`, `Personal`, …).',
         '3. Wait until status shows Relay connected, then DM @Sideboard.',
       ].join('\n');
 

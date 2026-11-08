@@ -40,6 +40,7 @@ import { GitSettings, type GitSettingsPanel } from './GitSettings';
 import { GitSettingsNav } from './GitSettingsNav';
 import { IssuesSettings } from './IssuesSettings';
 import { ManagedAccountsPanel } from './ManagedAccountsPanel';
+import { CollaborationSettings } from './CollaborationSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
@@ -50,6 +51,7 @@ export type SettingsNavId =
   | 'git'
   | 'issues'
   | 'remote'
+  | 'collaboration'
   | 'connectors'
   | 'environment'
   | 'advanced'
@@ -60,6 +62,7 @@ const SETTINGS_NAV_TITLES: Record<Exclude<SettingsNavId, 'agents'>, string> = {
   git: 'Git',
   issues: 'Issues',
   remote: 'Remote',
+  collaboration: 'Collaboration',
   connectors: 'Connectors',
   environment: 'Environment',
   advanced: 'Advanced',
@@ -305,7 +308,7 @@ const AGENT_PANELS: Array<{
     label: 'Brightsy',
     envKey: null,
     blurb:
-      'Hosted chat via the Brightsy CLI (`brightsy login`) — no local file edits. Connect a team below for Brightsy schema and files. Slack (Remote) is how you remote-control this Mac.',
+      'Hosted chat via the Brightsy CLI (`brightsy login`) — no local file edits. Connect a team below for Brightsy schema and files. The phone (Settings → Remote) is how you reach this Mac.',
     docsUrl: 'https://www.npmjs.com/package/@brightsy/cli',
   },
 ];
@@ -835,66 +838,29 @@ export function SettingsModal({
                 setGitPanel(id);
               }}
             />
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'issues' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('issues');
-                setAgentPanel(null);
-              }}
-            >
-              Issues
-            </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'remote' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('remote');
-                setAgentPanel(null);
-              }}
-            >
-              Remote
-            </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'connectors' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('connectors');
-                setAgentPanel(null);
-              }}
-            >
-              Connectors
-            </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'environment' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('environment');
-                setAgentPanel(null);
-              }}
-            >
-              Environment
-            </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'advanced' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('advanced');
-                setAgentPanel(null);
-              }}
-            >
-              Advanced
-            </button>
-            <button
-              type="button"
-              className={`settings-nav-btn${nav === 'history' ? ' active' : ''}`}
-              onClick={() => {
-                setNav('history');
-                setAgentPanel(null);
-              }}
-            >
-              History
-            </button>
+            {(
+              [
+                ['issues', 'Issues'],
+                ['remote', 'Remote'],
+                ['collaboration', 'Collaboration'],
+                ['connectors', 'Connectors'],
+                ['environment', 'Environment'],
+                ['advanced', 'Advanced'],
+                ['history', 'History'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={`settings-nav-btn${nav === id ? ' active' : ''}`}
+                onClick={() => {
+                  setNav(id);
+                  setAgentPanel(null);
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </aside>
 
           <div className="settings-main">
@@ -996,6 +962,10 @@ export function SettingsModal({
                 setBusy={setBusy}
                 setError={setError}
               />
+            )}
+
+            {nav === 'collaboration' && (
+              <CollaborationSettings busy={busy} setBusy={setBusy} setError={setError} />
             )}
 
             {nav === 'connectors' && (
@@ -1457,8 +1427,8 @@ export function SettingsModal({
                     <div className="settings-section-title">Brightsy teams</div>
                     <p className="settings-hint">
                       Uses <code>brightsy teams</code> / <code>switch</code>. Connected teams
-                      unlock hosted Brightsy chat and the Brightsy schema/files datasource. Slack
-                      (Remote) is the remote path for this Mac.
+                      unlock hosted Brightsy chat and the Brightsy schema/files datasource. The phone
+                      (Settings → Remote) is how you reach this Mac.
                     </p>
                     {!brightsySession?.connected ? (
                       <p className="settings-hint">

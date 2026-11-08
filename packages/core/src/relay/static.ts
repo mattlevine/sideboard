@@ -37,13 +37,9 @@ export function isOAuthSitePath(pathname: string): boolean {
   return pathname === '/oauth' || pathname.startsWith('/oauth/');
 }
 
-function isLegacySlackLanding(pathname: string): boolean {
-  return pathname === '/slack' || pathname === '/slack/';
-}
-
 /**
  * Absolute Location for a marketing GET that should not be served on this host.
- * Aliases 301 to the canonical host. `/slack/` lands on the phone docs.
+ * Aliases 301 to the canonical host. `/slack/` is the collaboration page.
  * `/oauth/` returns null so a registered client-metadata URL is not redirected.
  */
 export function marketingRedirectLocation(opts: {
@@ -68,10 +64,6 @@ export function marketingRedirectLocation(opts: {
   const listedSite = staticHosts.length > 0 && staticHosts.includes(hostname);
   const listedRedirect = (opts.redirectHosts ?? []).includes(hostname);
   const alias = hostname !== canonical && (listedSite || listedRedirect);
-  const onCanonical = hostname === canonical;
-  if (isLegacySlackLanding(pathname) && (onCanonical || alias)) {
-    return `https://${canonical}/docs/remote/${search}`;
-  }
   if (alias && !isOAuthSitePath(pathname)) {
     return `https://${canonical}${pathname}${search}`;
   }

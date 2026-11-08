@@ -16,6 +16,7 @@ Canonical terms: [docs/system/glossary.md](../../../docs/system/glossary.md).
 | **Workspace** | Isolated checkout for one task/PR (`create_workspace`) |
 | **Chat** | One conversation/session (`send_to_chat`) |
 | **Agent** | Harness that runs a chat (Claude, Codex, Cursor, OpenCode) |
-| **Phone app** | Remote for this Mac (Settings → Remote). Not Slack |
+| **Phone app** | Remote for this Mac (Settings → Remote) |
+| **Slack** | Collaboration (Settings → Collaboration). Agents post as @Sideboard and read replies. Not the remote |
 
 Git **worktree** is the mechanism under a workspace. Store type `Thread` is a chat record. Do not use **thread** in UI or MCP names.

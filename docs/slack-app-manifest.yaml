@@ -10,16 +10,16 @@
 
 display_information:
   name: Sideboard
-  description: Drive Sideboard agents from Slack DMs and @mentions.
+  description: Notify teammates about a PR and read the reply.
   background_color: "#111827"
   long_description: >-
-    Sideboard is a local control plane for AI coding agents. This Slack app sends
-    DMs and @mentions to the Sideboard orchestrator on the Mac you installed
-    (not a rented VM and not a downloadable shell script) and posts replies
-    back in-thread. Agents can list channels, read, and post across workspaces
-    you connect in Settings → Remote. Slack message text is not used to train
-    LLMs; Sideboard does not host a model. No public Event URL — inbound uses
-    Socket Mode.
+    Sideboard is a local control plane for AI coding agents. This Slack app
+    lets an agent on your Mac notify a teammate (a PR to review, for example)
+    and read the reply. Posts go out as @Sideboard. Connect each team from
+    Settings → Collaboration. Name this Mac on Settings → Remote. Slack message
+    text is not used to train LLMs; Sideboard does not host a model. Agents
+    stay on the Mac you installed — not a rented VM and not a downloadable
+    shell script. Inbound uses Socket Mode.
 
 features:
   app_home:
@@ -51,13 +51,6 @@ oauth_config:
       - mpim:read
       - users:read
       - users:read.email
-    user:
-      - channels:history
-      - channels:read
-      - groups:history
-      - im:history
-      - mpim:history
-      - users:read
 
 settings:
   org_deploy_enabled: false

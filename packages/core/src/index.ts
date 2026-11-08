@@ -347,7 +347,11 @@ export {
   SLACK_OAUTH_REDIRECT,
   slackOAuthResultUrl,
 } from './slack/oauth.js';
+export { createSlackOrgApp, saveSlackOrgCredentials } from './slack/org-app-client.js';
+export { mergeSlackClientIds } from './slack/client-ids.js';
+export type { SlackOrgRegistration } from './slack/org-app-client.js';
 export {
+  BAKED_SLACK_CLIENT_ID,
   BAKED_SLACK_RELAY_URL,
   slackRelayUrl,
 } from './slack/baked-app.js';

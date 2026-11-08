@@ -8,6 +8,7 @@ import { startRelayServer } from '@sideboard-ai/core';
  * Env:
  *   SIDEBOARD_SLACK_APP_TOKEN      optional xapp-… — Slack Listen is off when this is unset
  *   SIDEBOARD_SLACK_CLIENT_SECRET  optional — only for the legacy Slack OAuth callback
+ *   SIDEBOARD_SLACK_TOKEN_KEY      32-byte key (base64 or 64 hex) for company Slack secrets
  *   SIDEBOARD_SLACK_CLIENT_ID      optional; defaults to the public Sideboard Slack app id
  *   SIDEBOARD_RELAY_ACCOUNTS_PATH   SQLite file (Fly: /data/relay-accounts.sqlite on a volume)
  *   SIDEBOARD_RELAY_PUBLIC_ORIGIN   OAuth origin (https://relay.example.com)
@@ -73,6 +74,9 @@ async function main(): Promise<void> {
   }
   if (!entireClientId) {
     console.log('warning: Entire OAuth client id is unset; Entire sign-in is off on this relay');
+  }
+  if (!process.env.SIDEBOARD_SLACK_TOKEN_KEY?.trim()) {
+    console.log('warning: SIDEBOARD_SLACK_TOKEN_KEY is unset; per-company Slack apps are off');
   }
   if (!process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim()) {
     console.log('warning: SIDEBOARD_RELAY_PUBLIC_ORIGIN is unset; sign-in redirects use the listen address');

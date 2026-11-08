@@ -7,7 +7,8 @@ Desktop Settings splits connections by job. The phone app is remote control. Lin
 | **Settings → Agents** | Default agent / model / effort, default orchestrator agent / model / effort, then harness setup |
 | **Settings → Git** | GitHub (`gh` / SSH / PAT), Cursor (`origin` login), and Entire (`entire login`) for this Mac and worktree agents |
 | **Settings → Issues** | Issue source, Linear, AbleTime |
-| **Settings → Remote** | Relay address, relay account (GitHub, Cursor, or Entire), this Mac’s name, phone pairing code |
+| **Settings → Remote** | This Mac’s name, relay address, phone sign-in, pairing code. The phone and Slack both use the name and relay. |
+| **Settings → Collaboration** | Slack. Add via browser once per team so agents can post as @Sideboard and read the reply. |
 | **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
 Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is the `posthog_api` tool (the key is not copied onto the agent). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
@@ -18,6 +19,10 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 **Settings → Remote** signs this Mac in with GitHub, Cursor, or Entire, then shows a pairing QR code. Each registered project keeps its own origin, so the repos on this Mac do not have to share a git host. Settings → Git → GitHub is where this Mac’s `gh`, SSH, or PAT credentials live. Settings → Git → Cursor is the Origin CLI login for Cursor repos. Settings → Git → Entire is the Entire CLI login; those repos use Trails instead of pull requests. Scan that code in the Sideboard phone app. Paste the line under the code if you can’t scan. The phone lists every Mac it has paired, using the name from Settings → Remote, and you choose which desktop to open. Replies stream while the agent writes, with the desktop’s markdown, code colors, and diagrams. The open workspace has Chat, All files, Changes, Checks, and Review. Opening a file from Changes shows the same unified diff as the desktop. Files you open stay on a row underneath. All files filters the worktree, and selecting text in a file adds that range to the chat. Tapping a file path or an artifact opens it on the phone. Send `stop` to cancel a turn. `ask_user` options show up as buttons.
 
-Product questions: [Support](/support/).
+## Slack
+
+Slack is collaboration, not remote control. From **Settings → Collaboration → Add via browser**, install the Sideboard app into one workspace. Click it again for another team. Agents post as **@Sideboard** (a PR to review, for example) and read the reply. Name this Mac and set the relay on Settings → Remote; the phone and Slack both use them. See [Slack](/slack/).
+
+Product questions: [Support](/support/), or the community Slack at [sideboard-ai.slack.com](https://sideboard-ai.slack.com).
 
 See [Agents](/docs/agents/).

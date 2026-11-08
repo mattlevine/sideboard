@@ -13,6 +13,7 @@ import {
   resolveViewerProfile,
 } from './account-profile.js';
 import { normalizeRemoteRelayUrl, remoteRelayUrl } from '../remote/protocol.js';
+import { mergeSlackClientIds } from '../slack/client-ids.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
 import { loadSecretVault, saveSecretVault, type SettingsSecretVault } from './secret-vault.js';
@@ -219,8 +220,13 @@ export interface IntegrationsSettings {
    * When the preferred tracker is not connected, runtime falls back to GitHub Issues.
    */
   issueSource?: IssueSource;
-  /** Slack app Client ID for browser OAuth (Settings → Remote → Slack). */
+  /** Slack app Client ID for browser OAuth (Settings → Collaboration). */
   slackClientId?: string;
+  /**
+   * Every company Slack app this Mac can sign in to. One entry per Slack team.
+   * `slackClientId` is included when reading older settings.
+   */
+  slackClientIds?: string[];
   /** Slack app Client Secret for browser OAuth. */
   slackClientSecret?: string;
   /**
@@ -749,6 +755,12 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
   if (typeof source.slackClientId === 'string') {
     const id = source.slackClientId.trim();
     if (id) out.slackClientId = id;
+  }
+  if (Array.isArray(source.slackClientIds)) {
+    const ids = mergeSlackClientIds(
+      source.slackClientIds.filter((id): id is string => typeof id === 'string'),
+    );
+    if (ids.length > 0) out.slackClientIds = ids;
   }
   if (typeof source.slackClientSecret === 'string') {
     const secret = source.slackClientSecret.trim();
@@ -1398,6 +1410,7 @@ export function updateIntegrationsSettings(
     linearClientSecret?: string | null;
     issueSource?: IssueSource | null;
     slackClientId?: string | null;
+    slackClientIds?: string[] | null;
     slackClientSecret?: string | null;
     slackAppToken?: string | null;
     slackListenEnabled?: boolean | null;
@@ -1460,6 +1473,11 @@ export function updateIntegrationsSettings(
     } else {
       integrations.slackClientId = patch.slackClientId.trim();
     }
+  }
+  if ('slackClientIds' in patch) {
+    const ids = mergeSlackClientIds(patch.slackClientIds ?? []);
+    if (ids.length === 0) delete integrations.slackClientIds;
+    else integrations.slackClientIds = ids;
   }
   if ('slackClientSecret' in patch) {
     if (patch.slackClientSecret == null || patch.slackClientSecret.trim() === '') {
@@ -2118,7 +2136,7 @@ export function brightsyCloudConnectEnabled(
   return Boolean(settings.brightsy.cloudConnectEnabled);
 }
 
-/** Slack Socket Mode inbound (Settings → Remote → Slack). Default off. */
+/** Slack Socket Mode inbound (Settings → Collaboration). Default off. */
 export function slackListenEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {

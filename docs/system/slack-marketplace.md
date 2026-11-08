@@ -40,11 +40,11 @@ Marketplace rejects `search:read` and dislikes broad user `*:history` without a 
 | Bot `channels:history` / `groups:history` | Yes | MCP `slack_read` + `slack_replies` in channels the bot is in |
 | Bot `team:read` | **Dropped** | Workspace name comes from `auth.test` |
 | Bot `users:read.email` | Yes | `users.lookupByEmail` for `slack_post to=email` |
-| User `channels:read` + `*:history` + `users:read` | Yes (MCP) | `slack_list_*` / `slack_read` as the installer; Slack allows user history for MCP |
+| User `channels:read` + `*:history` + `users:read` | **Dropped** | Reads use the bot token. User history is unsuitable when the bot already has the same history. |
 | User `chat:write` | **Dropped** | Posts as `@Sideboard` with the bot token |
 | User `search:read` | **Dropped** | Unsuitable for Marketplace; MCP `slack_search` removed |
 
-Code is updated (`docs/slack-app-manifest.yaml`, `packages/core/src/slack/oauth.ts`, Add to Slack on `/slack/`). **Still apply the manifest in the Slack dashboard** — every workspace must reinstall.
+OAuth requests bot scopes only (`docs/slack-app-manifest.yaml`, `packages/core/src/slack/oauth.ts`). The public page is `/slack/` (Settings → Collaboration). It does not publish an Add to Slack URL. **Still apply the manifest in the Slack dashboard** — every workspace must reinstall.
 
 ### 2. Public Distribution
 
@@ -54,17 +54,17 @@ Slack dashboard → **Manage Distribution** → complete their SSL/OAuth checkli
 - Drop `http://127.0.0.1:19847/slack/callback` from the **production** redirect list (local override via `SIDEBOARD_SLACK_OAUTH_REDIRECT` is enough).
 - Confirm **Add to Slack** URL works from a workspace that is **not** Brightsy.
 
-### 3. Pages on www.sideboard.cloud
+### 3. Pages on www.sideboard.build
 
 Marketplace landing must be a **public web page for the Slack app**, not GitHub. Privacy + support must be linked from it, no login.
 
 | Page | URL (proposed) | Must include |
 |------|----------------|--------------|
-| Slack landing | `/slack/` | What it does in Slack, how it works (Mac must be awake — Settings → Advanced caffeinate while Listen is on, or `set_caffeinate` from a chat), Add to Slack, path after install, LLM inaccuracy disclaimer, link to privacy |
+| Slack landing | `/slack/` | Collaboration: notify a teammate and read the reply. Connect from Settings → Collaboration. Phone stays the remote. LLM inaccuracy disclaimer, link to privacy. No public Add to Slack button. |
 | Privacy | `/privacy/` | Data collected, use, retention, access/transfer/delete, contact email (not GitHub-only) |
 | Support | `/support/` | Email or form, no extra account, respond within **2 business days** |
 
-Deploy via [deploy.md](deploy.md). Pages live in `site/` (privacy, support, `/slack/`). Footer on the marketing homepage links Privacy + Support. Redeploy the Fly relay after this lands so www.sideboard.cloud serves the updated copy.
+Deploy via [deploy.md](deploy.md). Pages live in `site/` (privacy, support, `/slack/`). Redeploy the Fly relay after this lands so www.sideboard.build serves the updated copy.
 
 ### 4. Product UX Slack will test
 
@@ -72,7 +72,7 @@ They install as a brand-new customer, including **uninstall**.
 
 - **App Home** (Home tab on): first-run “download Sideboard / name this Mac / DM the bot”, plus support email. Messages tab can stay for DMs. **Done in code** — apply the manifest (home tab + `app_home_opened`) in the Slack dashboard.
 - Subscribe to `app_uninstalled` and delete that workspace’s tokens on the Mac + any relay state. **Done in code** — apply `app_uninstalled` in the dashboard, then reinstall.
-- Post-OAuth success page: “Open Sideboard → Settings → Remote → Slack” (not a dead end). **Done.**
+- Post-OAuth success page: “Open Sideboard → Settings → Collaboration” (not a dead end). Confirm the relay on Settings → Remote. **Done.**
 - Meaningful errors when no Mac is online (not “something went wrong”). **Done** — relay posts a setup reply.
 - LLM disclaimer on landing + long description; Security & Compliance: models are the user’s local agents (Claude / Codex / OpenCode / Cursor); Slack text is not used to train LLMs.
 
@@ -97,7 +97,7 @@ They install as a brand-new customer, including **uninstall**.
 | P2 | Tested install, onboard, e2e, **uninstall** on a non-dev workspace | Unmet | Script a Brightsy-external workspace run; record video | Date, workspace (not Brightsy), what was tested: |
 | P3 | ≥ 5 active workspaces (28 days) | Unmet | Human: get 5 real teams on Listen | Count / date: |
 | P4 | ≥ 10 weekly active users | Unmet | Same | Count / date: |
-| P5 | Prepared to maintain + support (2 business days) | Pages ready | Support page + monitored inbox — apply after Fly deploy | support@sideboard.cloud |
+| P5 | Prepared to maintain + support (2 business days) | Pages ready | Support page + monitored inbox — apply after Fly deploy | support@sideboard.build |
 | P6 | Meets guidelines (no forbidden scopes / remote-exec / LLM training) | Code ready | Apply dropped scopes in the Slack dashboard; paste **Scope reasons** below. Framing: agents run on the Mac they installed; relay carries message text only; not a downloadable shell script. | See Scope reasons |
 | P7 | Not private beta / unfinished | Unmet | Desktop + Slack path used in production by those 5 teams | |
 
@@ -107,11 +107,10 @@ Do not submit while any row is Unmet. Slack returns incomplete apps and **resets
 
 ### URLs
 
-- Landing: https://www.sideboard.cloud/slack/
-- Privacy: https://www.sideboard.cloud/privacy/
-- Support: https://www.sideboard.cloud/support/
-- Direct install (302 → `https://slack.com/oauth/v2/authorize?...`): not wired yet — Add to Slack on `/slack/` hits authorize directly
-- Add to Slack button: https://www.sideboard.cloud/slack/#install
+- Landing: https://www.sideboard.build/slack/
+- Privacy: https://www.sideboard.build/privacy/
+- Support: https://www.sideboard.build/support/
+- Direct install: not on the public page. Users connect from Settings → Collaboration → Add via browser.
 
 ### Scope reasons
 
@@ -164,29 +163,9 @@ Same history/replies APIs in private channels the bot was added to.
 **`users:read.email`**  
 `users.lookupByEmail` and email fields on `users.list` so `slack_post to=name@company.com` resolves to a user. We do not send email.
 
-#### User token — paste (MCP only)
+#### User token
 
-User scopes only when the app acts as the installer. User `*:history` is justified as MCP (`slack_read` / `slack_list_*`), which Slack’s data rules allow.
-
-**`channels:read`**  
-MCP `slack_list_channels` prefers the user token so the agent lists public channels the installer can see, including ones the bot is not in.
-
-**`channels:history`**  
-MCP `slack_read` (and thread replies) in public channels the installer can access, so the agent can pull context the bot token cannot see.
-
-**`groups:history`**  
-Same `slack_read` for private channels the installer is in.
-
-**`im:history`**  
-`slack_read` on the installer’s DMs when they ask the agent to read that conversation.
-
-**`mpim:history`**  
-Same for the installer’s group DMs.
-
-**`users:read`**  
-Resolve people while acting as the installer (`slack_list_users` / destination lookup) when the bot token is missing or insufficient.
-
-User `chat:write` and `search:read` are **not requested**. Posting is as `@Sideboard` with the bot token. Agents list/read channels instead of `search.messages`.
+Not requested. OAuth omits `user_scope`. Reads and posts use the bot token. A pasted `xoxp-` token is a fallback on this Mac only and is not part of the Marketplace install. Listen still delivers DMs and @mentions only to the Slack user who finished OAuth on that Mac. The relay stores a listen grant for that `authed_user`; the shared bot token is not enough to claim someone else.
 
 ### Security & compliance (LLM)
 
@@ -199,14 +178,14 @@ User `chat:write` and `search:read` are **not requested**. Posting is as `@Sideb
 
 - Service is free; no paid Sideboard account.
 - Install: latest Apple Silicon DMG from GitHub Releases.
-- After Slack OAuth: open desktop → Settings → Remote → Slack → wait until Relay connected.
+- After Slack OAuth: open desktop → Settings → Collaboration. Relay connected is on Settings → Remote.
 - Uninstall: Slack → App → Remove, then confirm Sideboard drops the workspace.
 - We cannot give them a Slack workspace login (Slack forbids that). They install into **their** workspace.
 
 ### Contacts
 
 - Developer:
-- Support (same as `/support/`): support@sideboard.cloud; community Slack: https://sideboard-ai.slack.com
+- Support (same as `/support/`): support@sideboard.build; community Slack: https://sideboard-ai.slack.com
 
 ## Don’t
 

@@ -37,7 +37,7 @@ Cowboy mode uses the project folder on the default branch (no extra worktree). L
 
 The **phone app** is how you reach this Mac away from the desk. Pair it from **Settings → Remote**, then pick that desktop in the app. One phone can hold several Macs. Message text crosses the relay. Agents, worktrees, repos, and secrets stay on the Mac.
 
-Do not call this Slack. Sideboard no longer uses a Slack app. The public page at `/slack/` only points at the phone.
+Slack is collaboration, not the remote. **Settings → Collaboration** connects teams one at a time. Agents post as @Sideboard and read replies. The public page is `/slack/`. Do not describe Slack as how you reach this Mac.
 
 ## Do not say thread
 

@@ -2,12 +2,13 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { slackOAuthAuthorizeUrl, SLACK_OAUTH_REDIRECT, startSlackOAuth, SLACK_BOT_SCOPES, SLACK_USER_SCOPES } from './oauth.js';
+import { slackOAuthAuthorizeUrl, SLACK_OAUTH_REDIRECT, startSlackOAuth, SLACK_BOT_SCOPES } from './oauth.js';
+import { listSlackWorkspacesRaw } from './workspaces.js';
 import { BAKED_SLACK_CLIENT_ID, hasBakedSlackOAuth } from './baked-app.js';
 import { exchangeSlackOAuthCode, SlackOAuthPendingStore } from './oauth-exchange.js';
 
 describe('slack OAuth URL', () => {
-  it('includes client_id, user history scopes, and https redirect', () => {
+  it('includes bot scopes and the https redirect, and no user token scopes', () => {
     const url = slackOAuthAuthorizeUrl('CLIENT', 'state123');
     expect(url).toContain('https://slack.com/oauth/v2/authorize?');
     expect(url).not.toContain('brightsy.slack.com');
@@ -21,16 +22,12 @@ describe('slack OAuth URL', () => {
     expect(url).toContain(encodeURIComponent('reactions:write'));
     expect(url).toContain(encodeURIComponent('im:write'));
     expect(url).toContain(encodeURIComponent('chat:write.public'));
-    expect(url).toContain('user_scope=');
-    expect(url).toContain(encodeURIComponent('channels:history'));
-    const userScope = new URL(url).searchParams.get('user_scope') ?? '';
-    expect(userScope.split(',')).not.toContain('search:read');
-    expect(userScope.split(',')).not.toContain('chat:write');
+    expect(url).not.toContain('user_scope=');
+    expect(new URL(url).searchParams.get('user_scope')).toBeNull();
     expect(new URL(url).searchParams.get('scope')).toBe(SLACK_BOT_SCOPES);
-    expect(userScope).toBe(SLACK_USER_SCOPES);
   });
 
-  it('the old Slack install page points at the phone app', async () => {
+  it('the Slack page explains collaboration and does not publish an install URL', async () => {
     const { readFileSync } = await import('node:fs');
     const { dirname, join } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
@@ -38,10 +35,12 @@ describe('slack OAuth URL', () => {
       join(dirname(fileURLToPath(import.meta.url)), '../../../../site/slack/index.html'),
       'utf8',
     );
-    expect(html).toContain('url=/docs/remote/');
-    expect(html).toContain('Sideboard no longer uses a Slack app');
+    expect(html).toContain('Settings → Collaboration');
+    expect(html).toContain('sideboard-ai.slack.com');
+    expect(html).not.toContain('no longer uses a Slack app');
     expect(html).not.toContain('scope=');
     expect(html).not.toContain('user_scope=');
+    expect(html).not.toContain('slack.com/oauth');
   });
 });
 
@@ -68,6 +67,25 @@ describe('baked Sideboard Slack app', () => {
     const creds = slackOAuthCredentials();
     expect(creds.clientId).toBe(BAKED_SLACK_CLIENT_ID);
     expect(creds.clientSecret).toBeNull();
+  });
+
+  it('signs in to the client id you pick', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-slack-oauth-pick-'));
+    const ac = new AbortController();
+    let opened = '';
+    const pending = startSlackOAuth({
+      clientId: 'ORG.SECOND',
+      openUrl: (url) => {
+        opened = url;
+        ac.abort();
+      },
+      signal: ac.signal,
+      fetchImpl: async () => new Response(JSON.stringify({ ok: false, error: 'pending' }), { status: 404 }),
+    });
+    await expect(pending).rejects.toMatchObject({ name: 'SlackOAuthCancelledError' });
+    const url = new URL(opened);
+    expect(url.searchParams.get('client_id')).toBe('ORG.SECOND');
+    expect(url.searchParams.get('state')?.startsWith('c.')).toBe(true);
   });
 
   it('AbortSignal cancels a waiting Slack sign-in', async () => {
@@ -126,6 +144,46 @@ describe('baked Sideboard Slack app', () => {
     });
     expect(info).toMatchObject({ team_id: 'T1', team_name: 'Acme', has_bot_token: true });
     expect(calls).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps an existing user token when a later sign-in only has a listen grant', async () => {
+    process.env.SIDEBOARD_APP_DATA = mkdtempSync(join(tmpdir(), 'sb-slack-oauth-keep-user-'));
+    const fetchImpl = (async () =>
+      new Response(
+        JSON.stringify({
+          ok: true,
+          team_id: 'T1',
+          team_name: 'Acme',
+          user_id: 'U1',
+          bot_token: 'xoxb-bot',
+          user_token: 'xoxp-user',
+          scopes: 'chat:write',
+        }),
+        { status: 200 },
+      )) as typeof fetch;
+    await startSlackOAuth({ openUrl: () => undefined, timeoutMs: 5_000, pollIntervalMs: 1, fetchImpl });
+    await startSlackOAuth({
+      openUrl: () => undefined,
+      timeoutMs: 5_000,
+      pollIntervalMs: 1,
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            team_id: 'T1',
+            team_name: 'Acme',
+            user_id: 'U1',
+            bot_token: 'xoxb-new',
+            listen_grant: 'grant-1',
+            scopes: 'chat:write',
+          }),
+          { status: 200 },
+        )) as typeof fetch,
+    });
+    const saved = listSlackWorkspacesRaw().find((ws) => ws.team_id === 'T1');
+    expect(saved?.user_token).toBe('xoxp-user');
+    expect(saved?.listen_grant).toBe('grant-1');
+    expect(saved?.bot_token).toBe('xoxb-new');
   });
 });
 
