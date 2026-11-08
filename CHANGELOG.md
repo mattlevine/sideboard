@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.337] - 2026-11-08
+
+### Added
+
+- A self-hosted phone relay requires a public origin, counts clients behind the proxy, and reports phone sockets and account storage on `/health`. The guide covers Compose, TLS, backup, upgrade, and the 3-Mac limit.
+
+### Changed
+
+- Adding a Slack team is Add via browser. The pasted bot-token control is gone. Slack stays on Sideboard’s relay unless you run a separate Slack app.
+
+### Fixed
+
+- Behind a trusted proxy, a client-sent `Fly-Client-IP` cannot skip the per-address socket cap.
+
 ## [0.1.336] - 2026-11-07
 
 ### Fixed
