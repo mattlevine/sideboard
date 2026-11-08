@@ -17,8 +17,17 @@ export function desktopStatus(desktop: { expired: boolean; online: boolean | nul
 }
 
 /** Same composer hints as the desktop, without the chat title. */
-export function composerPlaceholder(input: { orchestration: boolean; status?: string }): string {
-  if (input.status === 'running' || input.status === 'queued') return 'Queued when you send…';
+export function composerPlaceholder(input: {
+  orchestration: boolean;
+  status?: string;
+  /** Mac Settings → Advanced. Omitted before the sidebar arrives; steer is the default. */
+  followUp?: 'steer' | 'queue';
+}): string {
+  if (input.status === 'running' || input.status === 'queued') {
+    return input.followUp === 'queue'
+      ? 'Queued when you send…'
+      : 'Steer — send now to add to the chat…';
+  }
   if (input.orchestration) return 'Describe a goal — spawn and steer worktree agents via MCP';
   return 'Ask to make changes, @mention files, run /commands';
 }

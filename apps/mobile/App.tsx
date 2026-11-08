@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -27,7 +28,7 @@ import {
 } from './chat-ui';
 import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { useSavedRelayUrl } from './use-saved-relay-url';
-import { pickDocuments, pickPhotos, startMic, stopMic, takePhoto, type PickedFile } from './media';
+import { pickDocuments, pickPhotos, releaseAudioSession, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
 import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
 import { PhoneCodeRefChips } from './phone-file-select';
@@ -271,6 +272,7 @@ export default function App() {
   const historyLoadingRef = useRef(false);
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recordingRef = useRef<AudioRecorder | null>(null);
+  const micBusyRef = useRef(false);
   const dictateApplyRef = useRef<(text: string) => void>(() => undefined);
   const dictateIdRef = useRef<string | null>(null);
   const sourceQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -317,6 +319,25 @@ export default function App() {
   }
   const link = linkRef.current;
   const panes = usePhonePanes((payload) => link.send(phoneCommand(payload)), () => activeChatIdRef.current);
+
+  useEffect(() => {
+    const releaseIfIdle = () => {
+      if (!recordingRef.current) void releaseAudioSession();
+    };
+    const dropRecording = () => {
+      const current = recordingRef.current;
+      if (!current) return;
+      recordingRef.current = null;
+      setListening(false);
+      void stopMic(current).catch(() => undefined);
+    };
+    releaseIfIdle();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'background') dropRecording();
+      else if (state === 'active') releaseIfIdle();
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     headerOkRef.current = true;
@@ -999,6 +1020,8 @@ export default function App() {
   }
 
   async function toggleMic(apply: (text: string) => void) {
+    if (micBusyRef.current) return;
+    micBusyRef.current = true;
     try {
       setError(null);
       const current = recordingRef.current;
@@ -1013,12 +1036,18 @@ export default function App() {
         return;
       }
       dictateApplyRef.current = apply;
-      recordingRef.current = await startMic();
-      setListening(true);
+      const recording = await startMic();
+      if (AppState.currentState === 'background') void stopMic(recording).catch(() => undefined);
+      else {
+        recordingRef.current = recording;
+        setListening(true);
+      }
     } catch (err) {
       recordingRef.current = null;
       setListening(false);
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      micBusyRef.current = false;
     }
   }
 
@@ -1624,6 +1653,7 @@ export default function App() {
           placeholder={composerPlaceholder({
             orchestration: orchestration.some((row) => row.id === activeChatId),
             status: activeChat?.status,
+            followUp: accountDefaultsRef.current?.followUp,
           })}
           onChangeDraft={setDraft}
           onSend={() => sendText(draft)}
