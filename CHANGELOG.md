@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.336] - 2026-11-07
+
+### Fixed
+
+- Slack Listen registers on the relay that stored the OAuth listen grant, not a custom phone relay.
+- Pasting a bot token keeps that grant and the Slack user from browser sign-in.
+- Uninstalling a company Slack app clears the install and keeps the client secret, signing secret, and events URL.
+
 ## [0.1.335] - 2026-11-07
 
 ### Changed
