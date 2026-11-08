@@ -46,7 +46,7 @@ export function slackOAuthCredentials(): { clientId: string; clientSecret: strin
     '';
   if (!clientId) {
     throw new Error(
-      'Slack browser sign-in needs a Slack app Client ID (Settings → Collaboration, or SIDEBOARD_SLACK_CLIENT_ID). You can still paste an xoxb- or xoxp- token.',
+      'Slack browser sign-in needs a Slack app Client ID (Settings → Collaboration, or SIDEBOARD_SLACK_CLIENT_ID).',
     );
   }
   return { clientId, clientSecret: clientSecret || null };

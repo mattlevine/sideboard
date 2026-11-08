@@ -21,11 +21,11 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 **Settings → Remote** shows the relay address, Relay connected, this Mac’s name, and **Show pairing code**. Start `apps/mobile` from the Run menu (**Mobile**) or with `pnpm --filter @sideboard-ai/mobile start`, set the phone’s **Relay** field to the same address, then scan that QR code. Paste the line under the code if you can’t scan. The phone keeps every Mac it has paired and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options render as buttons on the phone.
 
-A URL saved in **Settings → Remote → Relay** is the relay this Mac uses. Leave it blank for Sideboard’s relay. The phone uses `/remote` and Slack uses `/slack/desktop` on that host. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
+A URL saved in **Settings → Remote → Relay** is the phone relay this Mac uses. Leave it blank for Sideboard’s relay. The phone uses `/remote` on that host. Slack sign-in and Listen stay on Sideboard’s relay. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
 
 ## Slack
 
-Slack is how agents notify teammates and read the reply. It is not the remote. **Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. You can also paste an `xoxb-` or `xoxp-` token. Posts go out as `@Sideboard`. Name this Mac on Settings → Remote; replies are prefixed with that name. The community workspace at [sideboard-ai.slack.com](https://sideboard-ai.slack.com) is for product questions, not the app in your team. Public page: [www.sideboard.build/slack/](https://www.sideboard.build/slack/).
+Slack is how agents notify teammates and read the reply. It is not the remote. **Settings → Collaboration → Add via browser** installs the Sideboard Slack app into one workspace. Click it again for another team. That install is how the team signs in. Slack issues the bot token during the install. To reconnect a team, disconnect it and add it via browser again. Posts go out as `@Sideboard`. Name this Mac on Settings → Remote; replies are prefixed with that name. The community workspace at [sideboard-ai.slack.com](https://sideboard-ai.slack.com) is for product questions, not the app in your team. Public page: [www.sideboard.build/slack/](https://www.sideboard.build/slack/).
 
 ## Related
 

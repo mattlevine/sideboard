@@ -165,7 +165,7 @@ Same history/replies APIs in private channels the bot was added to.
 
 #### User token
 
-Not requested. OAuth omits `user_scope`. Reads and posts use the bot token. A pasted `xoxp-` token is a fallback on this Mac only and is not part of the Marketplace install. Listen still delivers DMs and @mentions only to the Slack user who finished OAuth on that Mac. The relay stores a listen grant for that `authed_user`; the shared bot token is not enough to claim someone else.
+Not requested. OAuth omits `user_scope`. Reads and posts use the bot token Slack issues during Add via browser. A stored user token is only a fallback for an older workspace row that has no bot token. Listen still delivers DMs and @mentions only to the Slack user who finished OAuth on that Mac. The relay stores a listen grant for that `authed_user`; the shared bot token is not enough to claim someone else.
 
 ### Security & compliance (LLM)
 

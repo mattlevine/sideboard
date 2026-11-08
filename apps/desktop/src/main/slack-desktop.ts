@@ -1,7 +1,6 @@
 import { shell } from 'electron';
 import { ipcMain } from 'electron';
 import {
-  connectSlackToken,
   createSlackOrgApp,
   disconnectSlackWorkspace,
   ensureSlackDeviceIdentity,
@@ -145,11 +144,6 @@ function forgetSlackClientId(clientId: string) {
 export function registerSlackDesktop(notify: () => void): void {
   onActivity = notify;
   ipcMain.handle('getSlackWorkspaces', () => listSlackWorkspaces());
-  ipcMain.handle('connectSlackToken', async (_e, token: string) => {
-    await connectSlackToken(token);
-    syncSlackListenDaemon();
-    return listSlackWorkspaces();
-  });
   ipcMain.handle('startSlackOAuth', async (_e, clientId?: string) => {
     slackOauthAbort?.abort();
     const ac = new AbortController();

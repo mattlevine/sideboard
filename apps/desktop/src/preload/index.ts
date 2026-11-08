@@ -66,7 +66,6 @@ const api: IpcApi = {
   getEntireGitStatus: () => ipcRenderer.invoke('getEntireGitStatus'),
   loginEntireGit: () => ipcRenderer.invoke('loginEntireGit'),
   getSlackWorkspaces: () => ipcRenderer.invoke('getSlackWorkspaces'),
-  connectSlackToken: (token) => ipcRenderer.invoke('connectSlackToken', token),
   startSlackOAuth: (clientId) => ipcRenderer.invoke('startSlackOAuth', clientId),
   cancelSlackOAuth: () => ipcRenderer.invoke('cancelSlackOAuth'),
   createSlackOrgApp: () => ipcRenderer.invoke('createSlackOrgApp'),
