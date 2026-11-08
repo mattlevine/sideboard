@@ -81,6 +81,12 @@ async function main(): Promise<void> {
   if (!process.env.SIDEBOARD_RELAY_PUBLIC_ORIGIN?.trim()) {
     console.log('warning: SIDEBOARD_RELAY_PUBLIC_ORIGIN is unset; sign-in redirects use the listen address');
   }
+  // The public Slack app delivers DMs through Socket Mode. Skip that only
+  // when this process has no xapp- token (a phone-only self-hosted relay).
+  const skipSocketMode = !appToken.startsWith('xapp-');
+  if (skipSocketMode) {
+    console.log('warning: SIDEBOARD_SLACK_APP_TOKEN is unset; Slack Listen is off');
+  }
 
   const ac = new AbortController();
   const shutdown = () => ac.abort();
@@ -90,7 +96,7 @@ async function main(): Promise<void> {
   const handle = await startRelayServer({
     appToken,
     clientSecret,
-    skipSocketMode: true,
+    skipSocketMode,
     port,
     host,
     accountsPath,
