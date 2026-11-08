@@ -51,12 +51,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <article>
 <p>The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.</p>
 <p>Sideboard hosts a relay at <code>wss://relay.sideboard.build/remote</code>. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website.</p>
+<p><strong>Settings → Remote</strong> changes the phone only. Slack sign-in and Listen stay on Sideboard’s relay. Running Slack on a relay you operate is a separate Slack app, not these steps, and not a pasted bot token. Add a team with <strong>Add via browser</strong>.</p>
 <h2>What you need</h2>
 <ul>
 <li>A host with a public HTTPS name. Phones connect with <code>wss://</code>.</li>
-<li>A GitHub OAuth App that you control. The relay holds the client secret.</li>
-<li>One machine. The account database and the live sockets belong to that process.</li>
-<li>A disk volume for the account file.</li>
+<li>A GitHub OAuth App that you control. The relay holds the client secret. Cursor and Entire are optional.</li>
+<li>One machine. The account database, the live sockets, and an in-progress sign-in belong to that process.</li>
+<li>A disk volume for the account file. On Linux in production the process refuses to keep accounts on the container’s root filesystem.</li>
 </ul>
 <h2>GitHub OAuth App</h2>
 <p>In GitHub: Settings → Developer settings → OAuth Apps → New OAuth App.</p>
@@ -74,25 +75,47 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 </tr>
 </tbody></table>
 <p>Use your relay’s public origin. Copy the client id and generate a client secret. Keep them on the relay. Do not put them in the desktop app or the phone.</p>
+<p>Cursor sign-in uses an Origin app id in <code>SIDEBOARD_RELAY_CURSOR_APP_ID</code>. Register the same callback on that app. There is no client secret.</p>
+<p>Entire sign-in uses a public OIDC client. <code>SIDEBOARD_RELAY_ENTIRE_CLIENT_ID</code> is the HTTPS URL of a Client ID Metadata Document you host (Entire fetches it and does not follow redirects). The document’s <code>client_id</code> is that URL, and <code>redirect_uris</code> contains this relay’s callback. Sideboard’s own relay uses <code>https://www.sideboard.cloud/oauth/entire-client.json</code>. Leave the client secret unset. Each project still uses its own <code>origin</code> remote, so GitHub, Cursor, and Entire repos can sit on the same Mac.</p>
 <h2>Run</h2>
-<p>From a checkout of the Sideboard repo:</p>
+<p>You need Docker Compose, a DNS name such as <code>relay.example.com</code> that points at this machine, and ports 80 and 443 open for the TLS proxy. Leave port 8080 reachable from that proxy only.</p>
+<p>From the repo root (<code>git clone https://github.com/mattlevine/sideboard.git</code>):</p>
 <pre>export SIDEBOARD_RELAY_PUBLIC_ORIGIN=https://relay.example.com
 export SIDEBOARD_RELAY_GITHUB_CLIENT_ID=your-client-id
 export SIDEBOARD_RELAY_GITHUB_CLIENT_SECRET=your-client-secret
+# optional:
+# export SIDEBOARD_RELAY_CURSOR_APP_ID=app_your-origin-app-id
+# export SIDEBOARD_RELAY_ENTIRE_CLIENT_ID=https://example.com/oauth/entire-client.json
 docker compose -f apps/relay/docker-compose.yml up --build -d</pre>
-<p>The image is <code>apps/relay/Dockerfile.relay</code>. It does not include the website. Compose publishes port 8080 and stores accounts on a volume at <code>/data</code>.</p>
+<p>Compose refuses to start when the public origin or the GitHub client id or secret is missing. In production the process also exits when <code>SIDEBOARD_RELAY_PUBLIC_ORIGIN</code> is unset.</p>
+<p>The image is <code>apps/relay/Dockerfile.relay</code>. It does not include the website. Compose publishes port 8080 and stores accounts on a volume at <code>/data/relay-accounts.sqlite</code>.</p>
+<p>Confirm the process before TLS with <code>curl -fsS http://127.0.0.1:8080/health</code>.</p>
 <p><code>SIDEBOARD_RELAY_PUBLIC_ORIGIN</code> is the public <code>https://</code> origin with no path. Put TLS in front of port 8080. With Caddy:</p>
 <pre>relay.example.com {
   reverse_proxy 127.0.0.1:8080
 }</pre>
-<p>Open <code>https://relay.example.com/health</code>. You should see JSON with <code>"service": "sideboard-relay"</code>. <code>/</code> on this host is that same JSON.</p>
-<p>Run one copy. A second machine will not see the sockets or the accounts on the first.</p>
+<p>Caddy forwards the WebSocket upgrade. Compose sets <code>SIDEBOARD_RELAY_TRUST_PROXY=1</code>, so the relay uses the client address Caddy appends. A client-sent <code>Fly-Client-IP</code> is ignored. The desktop sends a JSON ping every 20 seconds. Keep the proxy idle timeout above that. Caddy’s <code>reverse_proxy</code> does.</p>
+<p>Run one copy. A second machine will not see the sockets or the sign-in in progress on the first.</p>
 <h2>Use it</h2>
 <p>On each Mac, open <strong>Settings → Remote → Relay</strong> and paste:</p>
 <pre>wss://relay.example.com/remote</pre>
-<p>Save. Sideboard signs this Mac out of the previous relay. <strong>Sign in with GitHub</strong>, name the Mac, then <strong>Show pairing code</strong>.</p>
+<p>Save. Sideboard signs this Mac out of the previous relay. <strong>Sign in with GitHub, Cursor, or Entire</strong>, name the Mac, then <strong>Show pairing code</strong>.</p>
 <p>On the phone, open <strong>Pair a Mac</strong>, set <strong>Relay</strong> to that same address, and scan the QR code. The phone remembers it. Paste the line under the code if you can’t scan.</p>
-<p>Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch.</p>
+<p>Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch. Slack does not follow this address.</p>
+<p>Each account can register 3 Macs. A slot stays after you reinstall or replace that Mac. There is no forget control yet.</p>
+<h2>What it stores</h2>
+<p>The account file holds the git-host identity, the Mac’s name, and hashes of the Mac credential and the phone session token. Message text stays encrypted between the phone and the Mac. Prompts, repos, and secrets are not stored.</p>
+<p>A restart drops live sockets and a sign-in that has not finished. Pairings resume from the account file.</p>
+<p>Stop the relay, then archive the Docker volume whose name ends in <code>relay-accounts</code> (<code>docker volume ls</code>; with this file it is <code>relay_relay-accounts</code>). It holds <code>relay-accounts.sqlite</code> and the <code>-wal</code> and <code>-shm</code> files. Copying the database while the process is running can drop the latest writes.</p>
+<pre>docker compose -f apps/relay/docker-compose.yml stop relay
+docker run --rm -v relay_relay-accounts:/data -v "$PWD":/backup alpine tar czf /backup/relay-accounts.tgz -C /data .
+docker compose -f apps/relay/docker-compose.yml start relay</pre>
+<p>To upgrade, back up that volume, <code>git pull</code>, then run the same <code>docker compose</code> command. The volume stays.</p>
+<h2>Check</h2>
+<p>Open <code>https://relay.example.com/health</code>. You should see JSON with <code>"service": "sideboard-relay"</code>, <code>"accounts": true</code>, and <code>"providers": { "github": true }</code>. <code>phoneSockets</code> counts open phone connections. <code>/</code> on this host is that same JSON.</p>
+<p>Logs:</p>
+<pre>docker compose -f apps/relay/docker-compose.yml logs -f relay</pre>
+<p><code>sign in required</code> means sign in on this relay again. <code>host secret rejected</code> means this Mac’s device id is already registered with a different secret. <code>This account already has the maximum number of Macs.</code> means the 3-Mac limit. <code>remote rate limit</code> means 20 phone sockets are already open for that client address. A phone that drops while idle needs a longer proxy timeout.</p>
 <p>See <a href="/docs/remote/">Phone</a> for pairing, and <a href="/support/">Support</a> for product questions.</p>
 </article>
 </div>
