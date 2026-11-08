@@ -132,21 +132,8 @@ const RECORDING_AUDIO: Partial<AudioMode> = {
 let settled = Promise.resolve();
 let micHeld = false;
 
-/** Deactivate our session and tell the other app it can resume. */
-export function releaseAudioSession(): Promise<void> {
-  const run = settled.then(async () => {
-    if (micHeld) return;
-    try {
-      await setIsAudioActiveAsync(false);
-    } catch {
-      // Already inactive.
-    }
-    try {
-      await setAudioModeAsync(IDLE_AUDIO);
-    } catch {
-      // Inactive is enough for the other app to resume.
-    }
-  });
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = settled.then(task, task);
   settled = run.then(
     () => undefined,
     () => undefined,
@@ -154,32 +141,56 @@ export function releaseAudioSession(): Promise<void> {
   return run;
 }
 
-export async function startMic(): Promise<AudioRecorder> {
-  await settled;
-  micHeld = true;
+/** Deactivate our session. Caller must already be on the mic queue. */
+async function idleSession(): Promise<void> {
+  if (micHeld) return;
   try {
-    const perm = await requestRecordingPermissionsAsync();
-    if (!perm.granted) throw new Error('Microphone access is off.');
-    await setAudioModeAsync(RECORDING_AUDIO);
-    const recording = new AudioModule.AudioRecorder(WAV);
-    await recording.prepareToRecordAsync();
-    recording.record();
-    return recording;
-  } catch (err) {
-    micHeld = false;
-    await releaseAudioSession();
-    throw err;
+    await setIsAudioActiveAsync(false);
+  } catch {
+    // Already inactive.
+  }
+  try {
+    await setAudioModeAsync(IDLE_AUDIO);
+  } catch {
+    // Inactive is enough for the other app to resume.
   }
 }
 
-export async function stopMic(recording: AudioRecorder): Promise<string> {
-  try {
-    await recording.stop();
-  } finally {
-    micHeld = false;
-    await releaseAudioSession();
-  }
-  const uri = recording.uri;
-  if (!uri) throw new Error('No recording.');
-  return new File(uri).base64();
+/** Deactivate our session and tell the other app it can resume. */
+export function releaseAudioSession(): Promise<void> {
+  return enqueue(() => idleSession());
+}
+
+export function startMic(): Promise<AudioRecorder> {
+  return enqueue(async () => {
+    if (micHeld) throw new Error('Microphone is already on.');
+    micHeld = true;
+    try {
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) throw new Error('Microphone access is off.');
+      await setAudioModeAsync(RECORDING_AUDIO);
+      const recording = new AudioModule.AudioRecorder(WAV);
+      await recording.prepareToRecordAsync();
+      recording.record();
+      return recording;
+    } catch (err) {
+      micHeld = false;
+      await idleSession();
+      throw err;
+    }
+  });
+}
+
+export function stopMic(recording: AudioRecorder): Promise<string> {
+  return enqueue(async () => {
+    try {
+      await recording.stop();
+    } finally {
+      micHeld = false;
+      await idleSession();
+    }
+    const uri = recording.uri;
+    if (!uri) throw new Error('No recording.');
+    return new File(uri).base64();
+  });
 }

@@ -272,6 +272,7 @@ export default function App() {
   const historyLoadingRef = useRef(false);
   const historyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recordingRef = useRef<AudioRecorder | null>(null);
+  const micBusyRef = useRef(false);
   const dictateApplyRef = useRef<(text: string) => void>(() => undefined);
   const dictateIdRef = useRef<string | null>(null);
   const sourceQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -320,13 +321,20 @@ export default function App() {
   const panes = usePhonePanes((payload) => link.send(phoneCommand(payload)), () => activeChatIdRef.current);
 
   useEffect(() => {
-    const giveBack = () => {
-      if (recordingRef.current) return;
-      void releaseAudioSession();
+    const releaseIfIdle = () => {
+      if (!recordingRef.current) void releaseAudioSession();
     };
-    giveBack();
+    const dropRecording = () => {
+      const current = recordingRef.current;
+      if (!current) return;
+      recordingRef.current = null;
+      setListening(false);
+      void stopMic(current).catch(() => undefined);
+    };
+    releaseIfIdle();
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') giveBack();
+      if (state === 'background') dropRecording();
+      else if (state === 'active') releaseIfIdle();
     });
     return () => sub.remove();
   }, []);
@@ -1012,6 +1020,8 @@ export default function App() {
   }
 
   async function toggleMic(apply: (text: string) => void) {
+    if (micBusyRef.current) return;
+    micBusyRef.current = true;
     try {
       setError(null);
       const current = recordingRef.current;
@@ -1026,12 +1036,18 @@ export default function App() {
         return;
       }
       dictateApplyRef.current = apply;
-      recordingRef.current = await startMic();
-      setListening(true);
+      const recording = await startMic();
+      if (AppState.currentState === 'background') void stopMic(recording).catch(() => undefined);
+      else {
+        recordingRef.current = recording;
+        setListening(true);
+      }
     } catch (err) {
       recordingRef.current = null;
       setListening(false);
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      micBusyRef.current = false;
     }
   }
 
