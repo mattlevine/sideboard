@@ -14,7 +14,6 @@ import { isJobContinuePrompt } from '../mcp/wait-for-job.js';
 import {
   awaitDeferredOrchestratorReply,
   formatSlackTurnReply,
-  SLACK_LISTEN_INPUT_REQUIRED_REPLY,
   SLACK_LISTEN_STOPPED_REPLY,
   SLACK_LISTEN_TIMEOUT_REPLY,
 } from './deferred-reply.js';
