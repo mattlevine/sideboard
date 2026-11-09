@@ -141,14 +141,43 @@ export function looksLikeDeferredDonePromise(text: string | null | undefined): b
     /\bi(?:['’]ll| will)\s+(?:keep|continue)\s+(?:watching|waiting|polling|checking)\b/i.test(
       unquoted,
     ) ||
-    /\bi(?:['’]ll| will)\s+come back when\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+come back (?:when|with|once|later)\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+get back\b/i.test(unquoted) ||
     /\bget back to (?:you|me)\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+(?:follow up|report back|circle back|check back)\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+reply (?:when|once|later|after|shortly)\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+ping you\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+ping when\b/i.test(unquoted) ||
     /\bi(?:['’]ll| will)\s+(?:message|dm|slack) you when\b/i.test(unquoted)
   );
+}
+
+/**
+ * Orchestrator status updates are longer than a worktree farewell: a PR list,
+ * then a closing line like "I'll ping when the approvals land." The short-message
+ * check misses those. Look at the closing lines too.
+ */
+export function orchestratorPromisedLaterReport(text: string | null | undefined): boolean {
+  if (looksLikeDeferredDonePromise(text)) return true;
+  const t = (text ?? '').trim();
+  if (!t || t.length <= DEFERRED_DONE_MAX_CHARS) return false;
+  const lines = t.split('\n').map((line) => line.trim()).filter(Boolean);
+  const closing: string[] = [];
+  let size = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i]!;
+    if (closing.length === 0 && line.length > DEFERRED_DONE_MAX_CHARS) {
+      closing.push(line.slice(-DEFERRED_DONE_MAX_CHARS));
+      break;
+    }
+    if (closing.length > 0 && size + line.length + 1 > DEFERRED_DONE_MAX_CHARS) break;
+    closing.unshift(line);
+    size += line.length + 1;
+    if (closing.length >= 4) break;
+  }
+  const slice = closing.join('\n');
+  if (!slice || slice === t) return false;
+  return looksLikeDeferredDonePromise(slice);
 }
 
 /** Host-queued keep-alive — not something the human typed. */
@@ -260,7 +289,7 @@ export function planJobContinue(opts: {
   // The orchestrator cwd is synthetic — detached jobs live in child worktrees.
   // A farewell still has to continue, or Slack/desktop never hears the outcome.
   if (opts.isOrchestrator) {
-    if (looksLikeDeferredDonePromise(opts.chatText) && !opts.alreadyNudged) {
+    if (orchestratorPromisedLaterReport(opts.chatText) && !opts.alreadyNudged) {
       return { action: 'nudge', prompt: formatOrchestratorDeferredContinuePrompt() };
     }
     return { action: 'none' };

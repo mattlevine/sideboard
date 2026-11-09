@@ -18,6 +18,7 @@ import {
   formatOrchestratorDeferredContinuePrompt,
   isJobContinuePrompt,
   looksLikeDeferredDonePromise,
+  orchestratorPromisedLaterReport,
   MCP_WAIT_JOB_STILL_RUNNING_HINT,
   planJobContinue,
   stopDetachedJob,
@@ -38,6 +39,33 @@ describe('looksLikeDeferredDonePromise', () => {
     );
     expect(looksLikeDeferredDonePromise('I will follow up once the approvals land.')).toBe(true);
     expect(looksLikeDeferredDonePromise("I'll report back when they're approved.")).toBe(true);
+    expect(looksLikeDeferredDonePromise("I'll ping when the approvals land.")).toBe(true);
+    expect(looksLikeDeferredDonePromise("I'll come back with the verdicts.")).toBe(true);
+  });
+
+  it('treats a long status update that closes with a ping as an orchestrator promise', () => {
+    const body = [
+      'Reviews are in flight on the 3 open Brightsy PRs.',
+      ...Array.from({ length: 12 }, (_, i) => `* PR ${i} — still reading the diff and the failing check.`),
+      "I'll ping when the approvals land.",
+    ].join('\n');
+    expect(body.length).toBeGreaterThan(480);
+    expect(looksLikeDeferredDonePromise(body)).toBe(false);
+    expect(orchestratorPromisedLaterReport(body)).toBe(true);
+    expect(
+      orchestratorPromisedLaterReport(
+        `${body.slice(0, 500)}\nI'll come back with approve / changes verdicts.`,
+      ),
+    ).toBe(true);
+    const done = [
+      'Done — all three are approved and still open.',
+      ...Array.from({ length: 12 }, (_, i) => `* PR ${i} — merged.`),
+      'Say the word if you want any of them merged.',
+    ].join('\n');
+    expect(orchestratorPromisedLaterReport(done)).toBe(false);
+    expect(orchestratorPromisedLaterReport(formatOrchestratorDeferredContinuePrompt())).toBe(
+      false,
+    );
   });
 
   it('matches Claude / Cursor / Codex background-notify farewells', () => {
@@ -192,6 +220,24 @@ describe('planJobContinue', () => {
       expect(d.prompt).toMatch(/already idle/);
       expect(d.prompt).not.toMatch(/detached-job/);
     }
+  });
+
+  it('nudges an orchestrator whose long status ends with a ping', () => {
+    const chatText = [
+      'Reviews are in flight on the 3 open Brightsy PRs.',
+      ...Array.from({ length: 12 }, () => '* still reading the diff and the failing check.'),
+      "I'll ping when the approvals land.",
+    ].join('\n');
+    expect(looksLikeDeferredDonePromise(chatText)).toBe(false);
+    const d = planJobContinue({
+      runningJobIds: [],
+      chatText,
+      queueLength: 0,
+      continueCount: 0,
+      alreadyNudged: false,
+      isOrchestrator: true,
+    });
+    expect(d.action).toBe('nudge');
   });
 
   it('does not nudge an orchestrator twice or for a finished report', () => {

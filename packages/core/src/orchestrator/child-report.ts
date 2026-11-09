@@ -1,4 +1,4 @@
-import { looksLikeDeferredDonePromise } from '../mcp/wait-for-job.js';
+import { orchestratorPromisedLaterReport } from '../mcp/wait-for-job.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { readThread } from '../store/thread-store.js';
 import { lastAgentReply } from '../threads/injected-notices.js';
@@ -34,7 +34,7 @@ export function parentOwesDeferredReport(parent: Thread | null | undefined): boo
   if (parent.status !== 'idle') return false;
   if (parent.queue.length > 0) return false;
   const last = lastAgentReply(parent.messages);
-  return looksLikeDeferredDonePromise(last?.text);
+  return orchestratorPromisedLaterReport(last?.text);
 }
 
 export function childFinishedReportPrompt(child: Thread): string {

@@ -140,7 +140,7 @@ import {
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
-  looksLikeDeferredDonePromise,
+  orchestratorPromisedLaterReport,
   planJobContinue,
   turnWatchedDetachedJob,
 } from '../mcp/wait-for-job.js';
@@ -2061,7 +2061,7 @@ export class Orchestrator {
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
           const finished = readThread(threadId);
           if (finished && isOrchestratorThread(finished)) {
-            if (!looksLikeDeferredDonePromise(chatText)) clearParentReportWake(threadId);
+            if (!orchestratorPromisedLaterReport(chatText)) clearParentReportWake(threadId);
           } else if (finished) {
             notifyParentOfChildReport(finished, (id, prompt) => this.send(id, prompt));
           }

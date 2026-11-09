@@ -16,7 +16,7 @@ import {
 } from '../store/global-workspace.js';
 import {
   isJobContinuePrompt,
-  looksLikeDeferredDonePromise,
+  orchestratorPromisedLaterReport,
 } from '../mcp/wait-for-job.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { readThread } from '../store/thread-store.js';
@@ -73,7 +73,7 @@ export function slackShouldHoldDeferredReply(opts: {
   queue: readonly string[];
   status: string;
 }): boolean {
-  if (!looksLikeDeferredDonePromise(opts.reply)) return false;
+  if (!orchestratorPromisedLaterReport(opts.reply)) return false;
   if (opts.queue.some((item) => isJobContinuePrompt(item))) return true;
   return opts.status === 'running' || opts.status === 'queued';
 }
