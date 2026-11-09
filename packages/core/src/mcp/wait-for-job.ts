@@ -141,7 +141,13 @@ export function looksLikeDeferredDonePromise(text: string | null | undefined): b
     /\bi(?:['’]ll| will)\s+(?:keep|continue)\s+(?:watching|waiting|polling|checking)\b/i.test(
       unquoted,
     ) ||
-    /\bi(?:['’]ll| will)\s+come back when\b/i.test(unquoted)
+    /\bi(?:['’]ll| will)\s+come back when\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+get back\b/i.test(unquoted) ||
+    /\bget back to (?:you|me)\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+(?:follow up|report back|circle back|check back)\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+reply (?:when|once|later|after|shortly)\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+ping you\b/i.test(unquoted) ||
+    /\bi(?:['’]ll| will)\s+(?:message|dm|slack) you when\b/i.test(unquoted)
   );
 }
 
@@ -200,6 +206,23 @@ export function formatDeferredDoneContinuePrompt(): string {
   ].join(' ');
 }
 
+/**
+ * Orchestrator farewell. Child agents are the work, not a detached job in
+ * the synthetic home. One nudge: wait out children that are still running,
+ * or read idle children and reply now.
+ */
+export function formatOrchestratorDeferredContinuePrompt(): string {
+  return [
+    'You ended the turn after promising to report later.',
+    'This chat does not resume on its own. Slack and the desktop only see a reply when you finish a turn with the outcome.',
+    'list_chats for the child agents on this orchestration chat.',
+    'If any child is still running (taskState submitted or working, stillRunning true), loop wait_for_turn until stillRunning is false, then read get_turn_result.',
+    'If every child is already idle, read get_turn_result now. Idle means the work finished — do not treat that as “nothing is happening.”',
+    'Then reply with what happened. Do not promise a later update.',
+    'If you have not started the work yet, start it in this turn and wait until it finishes before you reply.',
+  ].join(' ');
+}
+
 /** True when this turn started or waited on a detached job. */
 export function turnWatchedDetachedJob(
   parts: ReadonlyArray<{
@@ -230,10 +253,18 @@ export function planJobContinue(opts: {
   agent?: string | null;
   watchedJob?: boolean;
 }): JobContinueDecision {
-  if (opts.isOrchestrator) return { action: 'none' };
   if (opts.agent === 'brightsy') return { action: 'none' };
   if (opts.queueLength > 0) return { action: 'none' };
   if (opts.continueCount >= MAX_JOB_CONTINUES) return { action: 'none' };
+
+  // The orchestrator cwd is synthetic — detached jobs live in child worktrees.
+  // A farewell still has to continue, or Slack/desktop never hears the outcome.
+  if (opts.isOrchestrator) {
+    if (looksLikeDeferredDonePromise(opts.chatText) && !opts.alreadyNudged) {
+      return { action: 'nudge', prompt: formatOrchestratorDeferredContinuePrompt() };
+    }
+    return { action: 'none' };
+  }
 
   const farewell = looksLikeDeferredDonePromise(opts.chatText);
   if (opts.runningJobIds.length > 0 && (farewell || opts.watchedJob)) {

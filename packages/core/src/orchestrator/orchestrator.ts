@@ -126,6 +126,10 @@ import {
   notifyParentOfChildHalt,
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
+import {
+  clearParentReportWake,
+  notifyParentOfChildReport,
+} from './child-report.js';
 import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
 import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
@@ -136,6 +140,7 @@ import {
 import {
   isJobContinuePrompt,
   listRunningDetachedJobs,
+  looksLikeDeferredDonePromise,
   planJobContinue,
   turnWatchedDetachedJob,
 } from '../mcp/wait-for-job.js';
@@ -1468,6 +1473,7 @@ export class Orchestrator {
           slackInbound
             ? [
                 'This turn is a Slack DM or @mention. Your reply is posted back in Slack — keep it concise. Sideboard signs it with this Mac\'s destination name; do not prefix the name yourself.',
+                'Do not end the turn by saying you will get back to them. If a child is still running, loop wait_for_turn until stillRunning is false, then reply with the outcome. If the agents are already idle, read get_turn_result and reply now. Ending the turn does not send a later Slack message.',
                 SLACK_REPLY_FORMATTING,
               ].join('\n')
             : null,
@@ -2053,6 +2059,12 @@ export class Orchestrator {
         if (exitCode === 0) {
           this.crashContinued.delete(threadId);
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
+          const finished = readThread(threadId);
+          if (finished && isOrchestratorThread(finished)) {
+            if (!looksLikeDeferredDonePromise(chatText)) clearParentReportWake(threadId);
+          } else if (finished) {
+            notifyParentOfChildReport(finished, (id, prompt) => this.send(id, prompt));
+          }
         } else {
           const blob = [chatText, detail].filter(Boolean).join('\n');
           const failedOver = await isolateQuotaFailover(() =>

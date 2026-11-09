@@ -14,6 +14,10 @@ import {
   ensureSlackCoordinator,
   findSlackCoordinator,
 } from '../store/global-workspace.js';
+import {
+  isJobContinuePrompt,
+  looksLikeDeferredDonePromise,
+} from '../mcp/wait-for-job.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { readThread } from '../store/thread-store.js';
 import { SlackApiError, slackApi } from './api.js';
@@ -58,6 +62,81 @@ export const SLACK_LISTEN_INPUT_REQUIRED_REPLY = [
   'The picker is in the Sideboard app — not in Slack.',
   'Reply here after you answer it on the Mac, or send "stop".',
 ].join(' ');
+
+/**
+ * A farewell ("I'll get back to you") is not the Slack answer when Sideboard
+ * already queued a continue, or the coordinator is still turning. Hold the
+ * post until that follow-up finishes.
+ */
+export function slackShouldHoldDeferredReply(opts: {
+  reply: string;
+  queue: readonly string[];
+  status: string;
+}): boolean {
+  if (!looksLikeDeferredDonePromise(opts.reply)) return false;
+  if (opts.queue.some((item) => isJobContinuePrompt(item))) return true;
+  return opts.status === 'running' || opts.status === 'queued';
+}
+
+const SLACK_DEFERRED_HOLD_LIMIT = 3;
+
+async function waitUntilOrchestratorContinueSettles(
+  orch: { waitForTurn: (threadId: string, timeoutMs: number) => Promise<unknown> },
+  threadId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const thread = readThread(threadId);
+    if (!thread || thread.status === 'stopped' || thread.status === 'archived') return;
+    if (thread.status === 'running' || thread.status === 'queued') {
+      const remaining = Math.max(1, timeoutMs - (Date.now() - start));
+      await orch.waitForTurn(threadId, remaining);
+      return;
+    }
+    if (!thread.queue.some((item) => isJobContinuePrompt(item))) return;
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  }
+  throw new Error('wait_for_turn timed out');
+}
+
+/**
+ * Slack inbound already waited out the first turn. If that reply only promised
+ * a later update, wait through the host continue so the posted message is the
+ * outcome.
+ */
+export async function awaitDeferredOrchestratorReply(
+  orch: {
+    waitForTurn: (threadId: string, timeoutMs: number) => Promise<unknown>;
+    getTurnResult: (threadId: string) => OutboundTurnSnapshot;
+  },
+  threadId: string,
+  initial: string,
+  timeoutMs: number,
+  aborted?: () => boolean,
+): Promise<{ reply: string; interrupted: boolean }> {
+  let reply = initial;
+  const deadline = Date.now() + timeoutMs;
+  for (let i = 0; i < SLACK_DEFERRED_HOLD_LIMIT; i++) {
+    if (aborted?.()) return { reply: '', interrupted: true };
+    const thread = readThread(threadId);
+    if (!thread || thread.status === 'stopped' || thread.status === 'archived') {
+      return { reply: '', interrupted: true };
+    }
+    if (!slackShouldHoldDeferredReply({ reply, queue: thread.queue, status: thread.status })) {
+      return { reply, interrupted: false };
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return { reply, interrupted: false };
+    await waitUntilOrchestratorContinueSettles(orch, threadId, remaining);
+    const latest = readThread(threadId);
+    if (!latest || latest.status === 'stopped' || latest.status === 'archived') {
+      return { reply: '', interrupted: true };
+    }
+    reply = formatSlackTurnReply(orch.getTurnResult(threadId));
+  }
+  return { reply, interrupted: false };
+}
 
 export function formatSlackTurnReply(result: OutboundTurnSnapshot): string {
   return outboundReplyFromTurn(result, {
@@ -523,7 +602,12 @@ async function relayCoordinatorReplyToSlack(
   const lastUser = thread
     ? [...thread.messages].reverse().find((m) => m.role === 'user')
     : undefined;
-  if (lastUser && isSlackInboundUserPrompt(lastUser.text)) return;
+  // Inbound turns post from handleSlackInbound. A host continue (the
+  // "you promised to report later" nudge) is still that same Slack reply —
+  // posting here too would send the outcome twice.
+  if (lastUser && (isSlackInboundUserPrompt(lastUser.text) || isJobContinuePrompt(lastUser.text))) {
+    return;
+  }
   const result = getOrchestrator().getTurnResult(threadId);
   const text = formatSlackTurnReply(result);
   if (!text) return;
@@ -659,6 +743,18 @@ export async function handleSlackInbound(
       }
     }
     reply = formatSlackTurnReply(orch.getTurnResult(fresh.id));
+    const held = await awaitDeferredOrchestratorReply(
+      orch,
+      fresh.id,
+      reply,
+      14 * 60 * 1000,
+      () => slackInboundSuperseded(opts),
+    );
+    if (held.interrupted) {
+      await dropProgress(`turn finished ${msg.ts} (deferred reply interrupted)`);
+      return;
+    }
+    reply = held.reply;
   } catch (err) {
     if (slackInboundSuperseded(opts)) {
       await dropProgress(`turn error ${msg.ts} (superseded)`);
