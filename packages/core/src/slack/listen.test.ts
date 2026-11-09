@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatOrchestratorDeferredContinuePrompt } from '../mcp/wait-for-job.js';
 import { Orchestrator } from '../orchestrator/orchestrator.js';
 import {
   createGlobalChat,
@@ -23,6 +24,7 @@ import {
   handleSlackInbound,
   interruptSlackCoordinatorForInbound,
   isSlackInboundUserPrompt,
+  slackShouldHoldDeferredReply,
   SLACK_LISTEN_INPUT_REQUIRED_REPLY,
   SLACK_LISTEN_STOPPED_REPLY,
   SLACK_SEEN_REACTION,
@@ -519,6 +521,75 @@ describe('handleSlackInbound interrupt', () => {
         (t) => t.status !== 'archived' && isSlackCoordinatorThread(t),
       ),
     ).toHaveLength(0);
+  });
+
+  it('holds a deferred farewell until the continue turn reports the outcome', async () => {
+    ensureSlackCoordinator('T1', 'Umatt', 'claude');
+    let waits = 0;
+    vi.spyOn(Orchestrator.prototype, 'send').mockImplementation(async (id) => readThread(id)!);
+    vi.spyOn(Orchestrator.prototype, 'waitForTurn').mockImplementation(async (id) => {
+      waits += 1;
+      if (waits === 1) {
+        updateThread(id, {
+          status: 'idle',
+          queue: [formatOrchestratorDeferredContinuePrompt()],
+        });
+        setTimeout(() => {
+          const live = readThread(id);
+          if (live && waits === 1) updateThread(id, { status: 'running' });
+        }, 15);
+        return readThread(id)!;
+      }
+      updateThread(id, { status: 'idle', queue: [] });
+      return readThread(id)!;
+    });
+    vi.spyOn(Orchestrator.prototype, 'getTurnResult').mockImplementation(() => ({
+      text: waits < 2 ? "I'll get back to you when the PRs are approved." : 'Approved 2 PRs.',
+      status: 'idle',
+      taskState: 'completed',
+      sessionId: null,
+      lastError: null,
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+      usage: null,
+    }));
+    const replies: string[] = [];
+    await handleSlackInbound(msg({ text: 'approve the open PRs', userId: 'Umatt', ts: '11.0' }), {
+      agent: 'claude',
+      progressDelayMs: 60_000,
+      postReply: async (_m, text) => {
+        replies.push(text);
+      },
+      addReaction: async () => undefined,
+    });
+    expect(waits).toBe(2);
+    expect(replies.some((r) => /get back to you/i.test(r))).toBe(false);
+    expect(replies.some((r) => r.includes('Approved 2 PRs.'))).toBe(true);
+  });
+
+  it('posts a deferred farewell when nothing will continue the turn', () => {
+    expect(
+      slackShouldHoldDeferredReply({
+        reply: "I'll get back to you when the PRs are approved.",
+        queue: [formatOrchestratorDeferredContinuePrompt()],
+        status: 'idle',
+      }),
+    ).toBe(true);
+    expect(
+      slackShouldHoldDeferredReply({
+        reply: "I'll get back to you when the PRs are approved.",
+        queue: [],
+        status: 'idle',
+      }),
+    ).toBe(false);
+    expect(
+      slackShouldHoldDeferredReply({
+        reply: 'Approved 2 PRs.',
+        queue: [],
+        status: 'idle',
+      }),
+    ).toBe(false);
   });
 
   it('posts one Thinking… message, edits it with live tools, then replaces it with the answer', async () => {

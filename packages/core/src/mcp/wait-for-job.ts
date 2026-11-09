@@ -19,16 +19,25 @@ import {
 } from '../paths/workspace-scratch.js';
 import { jobTreeAlive, processGroupAlive } from './job-process.js';
 import { mcpWaitForTurnTimeoutMs } from './wait-for-turn.js';
+import {
+  formatOrchestratorDeferredContinuePrompt,
+  looksLikeDeferredDonePromise,
+  orchestratorPromisedLaterReport,
+} from '../orchestrator/deferred-report.js';
 
 export { jobTreeAlive, processGroupAlive };
+export {
+  DEFERRED_DONE_MAX_CHARS,
+  formatOrchestratorDeferredContinuePrompt,
+  looksLikeDeferredDonePromise,
+  orchestratorPromisedLaterReport,
+} from '../orchestrator/deferred-report.js';
 
 export const MCP_WAIT_FOR_JOB_MAX_MS = 45_000;
 export const MAX_JOB_CONTINUES = 8;
 /** Keep wait JSON under the 8k tool-result store cap so the log pane can parse `delta`. */
 export const MAX_JOB_DELTA_LINES = 80;
 export const MAX_JOB_DELTA_CHARS = 4_000;
-/** Farewells are short. Long replies that quote the phrase are explanations. */
-export const DEFERRED_DONE_MAX_CHARS = 480;
 
 const GH_WATCH_REFRESH = 'Refreshing run status every 3 seconds.';
 
@@ -121,30 +130,6 @@ export function listRunningDetachedJobs(worktreePath: string): string[] {
   return running.sort();
 }
 
-/** Last assistant text promised results later instead of waiting. */
-export function looksLikeDeferredDonePromise(text: string | null | undefined): boolean {
-  const t = (text ?? '').trim();
-  if (!t || t.length > DEFERRED_DONE_MAX_CHARS) return false;
-  const unquoted = t
-    .replace(/`[^`]*`/g, ' ')
-    .replace(/["“”][^"“”]*["“”]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!unquoted) return false;
-  return (
-    /\b(i['’]?ll|i will)\s+let you know\b/i.test(unquoted) ||
-    /\blet you know when\b/i.test(unquoted) ||
-    /\b(check back|ping me)\s+when\b/i.test(unquoted) ||
-    /\bi(?:['’]ll| will)\s+(report|update you)\s+when\b/i.test(unquoted) ||
-    /\bwill notify (?:me|you) when\b/i.test(unquoted) ||
-    /\bi(?:['’]ll| will) be notified when\b/i.test(unquoted) ||
-    /\bi(?:['’]ll| will)\s+(?:keep|continue)\s+(?:watching|waiting|polling|checking)\b/i.test(
-      unquoted,
-    ) ||
-    /\bi(?:['’]ll| will)\s+come back when\b/i.test(unquoted)
-  );
-}
-
 /** Host-queued keep-alive — not something the human typed. */
 export function isJobContinuePrompt(text: string): boolean {
   if (typeof text !== 'string') return false;
@@ -230,10 +215,18 @@ export function planJobContinue(opts: {
   agent?: string | null;
   watchedJob?: boolean;
 }): JobContinueDecision {
-  if (opts.isOrchestrator) return { action: 'none' };
   if (opts.agent === 'brightsy') return { action: 'none' };
   if (opts.queueLength > 0) return { action: 'none' };
   if (opts.continueCount >= MAX_JOB_CONTINUES) return { action: 'none' };
+
+  // The orchestrator cwd is synthetic — detached jobs live in child worktrees.
+  // A farewell still has to continue, or Slack/desktop never hears the outcome.
+  if (opts.isOrchestrator) {
+    if (orchestratorPromisedLaterReport(opts.chatText) && !opts.alreadyNudged) {
+      return { action: 'nudge', prompt: formatOrchestratorDeferredContinuePrompt() };
+    }
+    return { action: 'none' };
+  }
 
   const farewell = looksLikeDeferredDonePromise(opts.chatText);
   if (opts.runningJobIds.length > 0 && (farewell || opts.watchedJob)) {

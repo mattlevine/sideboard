@@ -139,6 +139,7 @@ describe('coordinator-prompt', () => {
     });
     expect(prompt).toContain('Slack DM or @mention');
     expect(prompt).toContain('Do not prefix that name yourself');
+    expect(prompt).toContain('Do not say you will get back to them later');
     expect(prompt).toContain('Slack mrkdwn');
     expect(prompt).toContain('**bold**');
     expect(prompt).toContain('*text*');
@@ -172,6 +173,7 @@ describe('coordinator-prompt', () => {
     expect(text).toContain('list_chats');
     expect(text).toContain('sideboard://chat/');
     expect(text).toContain('Merge only if the user asked');
+    expect(text).toContain('If children are idle, read get_turn_result and reply now');
     expect(text).not.toContain('Typical flow (existing)');
     expect(text).not.toContain('force_stop: true');
     expect(text).not.toContain('add_project');

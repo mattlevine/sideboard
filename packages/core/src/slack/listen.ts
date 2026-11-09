@@ -4,16 +4,19 @@ import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import {
   enrichWorkspacesWithGithub,
 } from '../orchestrator/coordinator-prompt.js';
-import {
-  outboundReplyFromTurn,
-  type OutboundTurnSnapshot,
-} from '../orchestrator/outbound-turn-reply.js';
 import { ensureSlackDeviceIdentity } from '../store/device-identity.js';
 import { resolveOrchestratorDefaults } from '../store/app-settings.js';
 import {
   ensureSlackCoordinator,
   findSlackCoordinator,
 } from '../store/global-workspace.js';
+import { isJobContinuePrompt } from '../mcp/wait-for-job.js';
+import {
+  awaitDeferredOrchestratorReply,
+  formatSlackTurnReply,
+  SLACK_LISTEN_STOPPED_REPLY,
+  SLACK_LISTEN_TIMEOUT_REPLY,
+} from './deferred-reply.js';
 import { readTurnLive } from '../store/turn-live.js';
 import { readThread } from '../store/thread-store.js';
 import { SlackApiError, slackApi } from './api.js';
@@ -40,36 +43,15 @@ export {
   stripSlackMentions,
 } from './socket-mode.js';
 export type { SlackInboundMessage } from './socket-mode.js';
+export {
+  awaitDeferredOrchestratorReply,
+  formatSlackTurnReply,
+  slackShouldHoldDeferredReply,
+  SLACK_LISTEN_INPUT_REQUIRED_REPLY,
+  SLACK_LISTEN_STOPPED_REPLY,
+  SLACK_LISTEN_TIMEOUT_REPLY,
+} from './deferred-reply.js';
 
-export const SLACK_LISTEN_STOPPED_REPLY =
-  'Sideboard stopped the in-progress turn. Send another message when you want to continue.';
-
-export const SLACK_LISTEN_TIMEOUT_REPLY = [
-  'Sideboard timed out waiting for the local agent turn to finish.',
-  'Send another message to interrupt and retry, or send "stop".',
-].join(' ');
-
-/**
- * Coordinator ended on ask_user. The picker is on this Mac — posting that
- * prompt as the Slack answer looks like the turn finished.
- */
-export const SLACK_LISTEN_INPUT_REQUIRED_REPLY = [
-  'Sideboard is waiting for an answer on the Mac (the coordinator called ask_user).',
-  'The picker is in the Sideboard app — not in Slack.',
-  'Reply here after you answer it on the Mac, or send "stop".',
-].join(' ');
-
-export function formatSlackTurnReply(result: OutboundTurnSnapshot): string {
-  return outboundReplyFromTurn(result, {
-    inputRequired: SLACK_LISTEN_INPUT_REQUIRED_REPLY,
-    canceled: SLACK_LISTEN_STOPPED_REPLY,
-    completedEmpty: () => '',
-    failed: (detail) =>
-      detail
-        ? `Sideboard coordinator failed: ${detail}`
-        : 'Sideboard coordinator failed before producing a result.',
-  });
-}
 
 /** Serialize send+wait so two replacement turns do not overlap. Interrupt happens before this queue. */
 let handleChain: Promise<void> = Promise.resolve();
@@ -523,7 +505,12 @@ async function relayCoordinatorReplyToSlack(
   const lastUser = thread
     ? [...thread.messages].reverse().find((m) => m.role === 'user')
     : undefined;
-  if (lastUser && isSlackInboundUserPrompt(lastUser.text)) return;
+  // Inbound turns post from handleSlackInbound. A host continue (the
+  // "you promised to report later" nudge) is still that same Slack reply —
+  // posting here too would send the outcome twice.
+  if (lastUser && (isSlackInboundUserPrompt(lastUser.text) || isJobContinuePrompt(lastUser.text))) {
+    return;
+  }
   const result = getOrchestrator().getTurnResult(threadId);
   const text = formatSlackTurnReply(result);
   if (!text) return;
@@ -659,6 +646,18 @@ export async function handleSlackInbound(
       }
     }
     reply = formatSlackTurnReply(orch.getTurnResult(fresh.id));
+    const held = await awaitDeferredOrchestratorReply(
+      orch,
+      fresh.id,
+      reply,
+      14 * 60 * 1000,
+      () => slackInboundSuperseded(opts),
+    );
+    if (held.interrupted) {
+      await dropProgress(`turn finished ${msg.ts} (deferred reply interrupted)`);
+      return;
+    }
+    reply = held.reply;
   } catch (err) {
     if (slackInboundSuperseded(opts)) {
       await dropProgress(`turn error ${msg.ts} (superseded)`);
