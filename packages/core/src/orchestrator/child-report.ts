@@ -82,3 +82,17 @@ export function notifyParentOfChildReport(
   });
   return true;
 }
+
+/** After a successful turn: clear a delivered report, or wake the parent if a child finished. */
+export function settleChildReportAfterTurn(
+  thread: Thread | null | undefined,
+  chatText: string,
+  send: (threadId: string, prompt: string) => Promise<unknown>,
+): void {
+  if (!thread) return;
+  if (isOrchestratorThread(thread)) {
+    if (!orchestratorPromisedLaterReport(chatText)) clearParentReportWake(thread.id);
+    return;
+  }
+  notifyParentOfChildReport(thread, send);
+}
