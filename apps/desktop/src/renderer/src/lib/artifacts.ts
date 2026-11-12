@@ -555,8 +555,16 @@ function extractJobLogArtifact(
   });
 }
 
+export type ArtifactExtractOptions = {
+  /** Orchestration chats show the plan in the sidebar, so skip that diagram. */
+  omitPlanWaterfall?: boolean;
+};
+
 /** Extract artifacts from present_artifact / Brightsy create|update_artifact tool parts. */
-export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArtifact[] {
+export function extractToolArtifacts(
+  parts: MessagePart[] | undefined,
+  options?: ArtifactExtractOptions,
+): ChatArtifact[] {
   if (!parts?.length) return [];
   const out: ChatArtifact[] = [];
   for (const part of parts) {
@@ -568,6 +576,9 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
     const jobLog = extractJobLogArtifact(shortName, part, input, result);
     if (jobLog) {
       out.push(jobLog);
+      continue;
+    }
+    if (options?.omitPlanWaterfall && matchesPresentTool(shortName, 'show_waterfall')) {
       continue;
     }
     if (
@@ -632,8 +643,9 @@ export function extractArtifacts(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): ChatArtifact[] {
-  const fromTools = extractToolArtifacts(parts);
+  const fromTools = extractToolArtifacts(parts, options);
   const textSource =
     parts
       ?.filter((p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text')
@@ -711,7 +723,8 @@ export function latestArtifact(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): ChatArtifact | null {
-  const list = extractArtifacts(text, parts, idPrefix);
+  const list = extractArtifacts(text, parts, idPrefix, options);
   return list.length ? list[list.length - 1]! : null;
 }

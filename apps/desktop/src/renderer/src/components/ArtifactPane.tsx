@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { wrapReactArtifactHtml, type ChatArtifact } from '../lib/artifacts';
+import { refreshLiveWaterfall } from '../lib/live-waterfall';
 import { useDetachedJobLog } from '../lib/job-log-follow';
 import {
   artifactPreviewUrlsMatch,
@@ -75,6 +76,38 @@ export function ArtifactPane({
   artifact: source,
 }: Props) {
   const artifact = useDetachedJobLog(source, worktreeThreadId);
+  const liveWaterfall = artifact.id === 'tool-waterfall' && artifact.kind === 'html';
+  const [liveHtml, setLiveHtml] = useState<string | null>(null);
+  useEffect(() => {
+    if (!liveWaterfall) {
+      setLiveHtml(null);
+      return;
+    }
+    let cancelled = false;
+    let timer: number | null = null;
+    const load = () => {
+      if (timer != null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        timer = null;
+        void refreshLiveWaterfall(worktreeThreadId)
+          .then((html) => {
+            if (cancelled || !html) return;
+            setLiveHtml((prev) => (prev === html ? prev : html));
+          })
+          .catch(() => {});
+      }, 200);
+    };
+    load();
+    const offOrder = window.sideboard.onOrderChanged(load);
+    const offThreads = window.sideboard.onThreadsChanged(load);
+    return () => {
+      cancelled = true;
+      if (timer != null) window.clearTimeout(timer);
+      offOrder();
+      offThreads();
+    };
+  }, [liveWaterfall, worktreeThreadId]);
+  const shown = liveHtml ? { ...artifact, content: liveHtml } : artifact;
   const canPreview =
     artifact.kind === 'html' ||
     artifact.kind === 'svg' ||
@@ -164,7 +197,7 @@ export function ArtifactPane({
   }, []);
 
   function copyContent() {
-    void navigator.clipboard?.writeText(artifact.content).then(() => {
+    void navigator.clipboard?.writeText(shown.content).then(() => {
       setCopied(true);
       if (copiedTimerRef.current != null) {
         window.clearTimeout(copiedTimerRef.current);
@@ -184,10 +217,10 @@ export function ArtifactPane({
       }
     }
     if (artifact.kind === 'react') {
-      return wrapReactArtifactHtml(artifact.content);
+      return wrapReactArtifactHtml(shown.content);
     }
-    return artifact.content;
-  }, [artifact.content, artifact.kind]);
+    return shown.content;
+  }, [shown.content, artifact.kind]);
 
   // Debounce so streaming HTML doesn't constantly remount JS.
   const debouncedHtml = useDebounced(previewSrcDoc, 280);
@@ -277,7 +310,7 @@ export function ArtifactPane({
       className="artifact-pane-codeview code-view"
       path={codePath}
       language={codeLanguage}
-      value={artifact.content}
+      value={shown.content}
       readOnly
       modelNonce={`artifact-${artifact.id}`}
       height="100%"

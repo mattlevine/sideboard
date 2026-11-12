@@ -7,6 +7,7 @@ import {
   settleLogStatusAfterStream,
   toolShortName,
   unwrapToolResultPayload,
+  type ArtifactExtractOptions,
   type ChatArtifact,
 } from './artifacts';
 
@@ -98,6 +99,26 @@ export function isSchemaPane(content: RightPaneContent | null | undefined): cont
 
 export function isFilesPane(content: RightPaneContent | null | undefined): content is FilesPaneContent {
   return Boolean(content && (content as FilesPaneContent).kind === 'files');
+}
+
+const PLAN_WATERFALL_PANE_ID = 'tool-waterfall';
+
+export function isPlanWaterfallPane(content: RightPaneContent | null | undefined): boolean {
+  return Boolean(isDocumentPane(content) && content.id === PLAN_WATERFALL_PANE_ID);
+}
+
+/** Drop a remembered planner diagram so an orchestration chat keeps the sidebar plan. */
+export function withoutPlanWaterfallSession(
+  session: RightPaneSession | null,
+): RightPaneSession | null {
+  if (!session) return session;
+  const tabs = session.tabs.filter((tab) => !isPlanWaterfallPane(tab));
+  if (tabs.length === session.tabs.length) return session;
+  if (tabs.length === 0) return null;
+  const activeId = tabs.some((tab) => tab.id === session.activeId)
+    ? session.activeId
+    : tabs[tabs.length - 1]!.id;
+  return { tabs, activeId };
 }
 
 export function isDocumentPane(
@@ -434,6 +455,7 @@ export function extractRightPaneContents(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): RightPaneContent[] {
   const toolPanes: RightPaneContent[] = [];
   for (const part of parts ?? []) {
@@ -450,7 +472,7 @@ export function extractRightPaneContents(
       idPrefix.replace('fence', 'schema-fence'),
     ),
   ];
-  const docs = extractArtifacts(text, parts, idPrefix);
+  const docs = extractArtifacts(text, parts, idPrefix, options);
   return [...schemas, ...docs];
 }
 
@@ -459,6 +481,7 @@ export function latestRightPaneContent(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): RightPaneContent | null {
   const toolPanes: RightPaneContent[] = [];
   for (const part of parts ?? []) {
@@ -476,7 +499,7 @@ export function latestRightPaneContent(
     ),
   ];
   if (panes.length) return panes[panes.length - 1]!;
-  return latestArtifact(text, parts, idPrefix);
+  return latestArtifact(text, parts, idPrefix, options);
 }
 
 /** Chat stream ended — flip a leftover `working` log pill unless the job is still running. */

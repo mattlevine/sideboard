@@ -1,7 +1,7 @@
 /**
  * Fleet order of operations. A step waits until an earlier PR, issue, or
  * workspace reaches a gate (in main, or in production) before it can start
- * or merge. The sidebar Orchestration item draws the map of these plans.
+ * or merge. The sidebar Orchestration item opens that chat.
  * Pure: no filesystem. The store in `order.ts` persists the edges.
  */
 
@@ -13,6 +13,8 @@ export interface OrderPlan {
   ownerThreadId: string;
   title: string;
   summary: string;
+  /** Outcome the steps are trying to reach. */
+  goal: string;
   /** Draft is for discussion. Active means the user agreed to run it. */
   status: OrderPlanStatus;
   updatedAt: string;
@@ -38,6 +40,8 @@ export interface OrderEdge {
   gate: OrderGate;
   subject: OrderTarget;
   hold: OrderHold;
+  /** True when this step returns to an earlier one. It does not block the first pass. */
+  loop?: boolean;
   note: string;
   createdByThreadId: string | null;
   createdAt: string;
@@ -73,6 +77,8 @@ export interface OrderRow {
   gate: OrderGate;
   hold: OrderHold;
   note: string;
+  /** Return to an earlier step. It does not block the first pass. */
+  loop?: boolean;
   /** Subject depth. Roots that nothing waits on are 1 for the first dependent. */
   depth: number;
   met: boolean;
@@ -93,6 +99,8 @@ export interface WaterfallIncoming {
   hold: OrderHold;
   met: boolean;
   marked: boolean;
+  /** Return to an earlier step. It does not block the first pass. */
+  loop?: boolean;
   detail: string;
   fromLabel: string;
   note: string;
@@ -109,6 +117,8 @@ export interface WaterfallNode {
   /** Live chat for this step, when one is on the board. */
   chatId?: string;
   chatTitle?: string;
+  /** A chat for this step is running or queued. */
+  working?: boolean;
 }
 
 export interface WaterfallChain {
@@ -445,6 +455,7 @@ export function resolveOrderRows(
         gate: edge.gate,
         hold: edge.hold,
         note: edge.note,
+        loop: edge.loop === true,
         depth: depths.get(targetKey(edge.subject)) ?? 1,
         met: status.met,
         marked: status.marked,
@@ -490,8 +501,8 @@ export function formatOrderPlace(rows: OrderRow[], you: OrderThreadSnapshot): st
 
 export function executionSlice(rows: OrderRow[]): { ready: OrderRow[]; waiting: OrderRow[] } {
   return {
-    ready: rows.filter((row) => row.met),
-    waiting: rows.filter((row) => !row.met),
+    ready: rows.filter((row) => row.met || row.loop),
+    waiting: rows.filter((row) => !row.met && !row.loop),
   };
 }
 
@@ -501,20 +512,22 @@ export function orderEdgeTouches(edge: Pick<OrderEdge, 'waitsOn' | 'subject'>, y
 
 export function formatOrderText(rows: OrderRow[], plan?: OrderPlan | null): string {
   if (rows.length === 0) {
-    return 'No orchestration plan yet. set_dependency records an order — for example PR 1 in prod before PR 2 can merge, or PR 3 in main before issue 4 can start. The Orchestration row in the sidebar shows this map.';
+    return 'No orchestration plan yet. set_dependency records an order — for example PR 1 in prod before PR 2 can merge, or PR 3 in main before issue 4 can start. The Orchestration row in the sidebar opens that chat.';
   }
   const lines = [
     plan
-      ? `Plan “${plan.title}” is ${plan.status}. ${plan.summary}`.trim()
-      : 'Orchestration. Earlier steps sit above later ones. in-main clears when that PR is merged. in-prod stays waiting until satisfy_dependency.',
+      ? `Plan “${plan.title}” is ${plan.status}. ${plan.goal ? `Goal: ${plan.goal}. ` : ''}${plan.summary}`.trim()
+      : 'Orchestration. Steps can wait on a gate or loop back to an earlier step. in-main clears when that PR is merged. in-prod stays waiting until satisfy_dependency.',
     '',
   ];
   rows.forEach((row, index) => {
     const gate = row.gate === 'in-prod' ? 'in prod' : 'in main';
     const hold = row.hold === 'merge' ? 'merge' : 'start';
-    const state = row.met ? 'clear' : 'waiting';
+    const state = row.loop ? 'loop' : row.met ? 'clear' : 'waiting';
     lines.push(
-      `${index + 1}. ${state}  ${row.waitsOnLabel} must be ${gate} before ${row.subjectLabel} can ${hold}`,
+      row.loop
+        ? `${index + 1}. ${state}  ${row.subjectLabel} returns to ${row.waitsOnLabel} once it is ${gate}`
+        : `${index + 1}. ${state}  ${row.waitsOnLabel} must be ${gate} before ${row.subjectLabel} can ${hold}`,
     );
     lines.push(`   ${row.detail}`);
     if (row.note) lines.push(`   ${row.note}`);
@@ -537,6 +550,32 @@ const WATERFALL_KIND: Record<OrderTargetKind, string> = {
   workspace: 'Workspace',
   orchestration: 'Orchestration',
 };
+
+/** Flag steps whose chat is running or queued so the diagram can mark them. */
+export function markWorkingChains(
+  chains: WaterfallChain[],
+  threads: OrderThreadSnapshot[],
+): WaterfallChain[] {
+  const active = threads.filter(
+    (thread) => thread.status === 'running' || thread.status === 'queued',
+  );
+  if (active.length === 0) return chains;
+  return chains.map((chain) => ({
+    nodes: chain.nodes.map((node) => {
+      const working = active.some((thread) =>
+        orderTargetMatches(
+          {
+            kind: node.kind,
+            ref: node.ref,
+            ...(node.repoPath ? { repoPath: node.repoPath } : {}),
+          },
+          thread,
+        ),
+      );
+      return working ? { ...node, working: true } : node;
+    }),
+  }));
+}
 
 function nodeIsYou(node: WaterfallNode, you: OrderThreadSnapshot | null | undefined): boolean {
   if (!you) return false;
@@ -573,7 +612,8 @@ export function formatWaterfallHtml(
                 const waiting = node.incoming.some((edge) => !edge.met);
                 const clear = node.incoming.length > 0 && !waiting;
                 const yours = nodeIsYou(node, you);
-                const state = `${waiting ? ' waiting' : clear ? ' clear' : ''}${yours ? ' you' : ''}`;
+                const working = node.working === true;
+                const state = `${waiting ? ' waiting' : clear ? ' clear' : ''}${yours ? ' you' : ''}${working ? ' current' : ''}`;
                 const drops = node.incoming
                   .map((edge) => {
                     const tone = edge.met ? 'clear' : 'waiting';
@@ -581,7 +621,7 @@ export function formatWaterfallHtml(
                     return `<div class="drop"><span>After ${escapeHtml(edge.fromLabel)} is ${escapeHtml(gatePhrase(edge.gate))}, this ${escapeHtml(holdPhrase(edge.hold))}</span><span class="${tone}">${escapeHtml(edge.detail)}</span>${note}</div>`;
                   })
                   .join('');
-                const kicker = `${WATERFALL_KIND[node.kind]}${yours ? ' · You' : ''}`;
+                const kicker = `${WATERFALL_KIND[node.kind]}${working ? ' · Working' : ''}${yours ? ' · You' : ''}`;
                 return `<li class="node" style="margin-left:${node.depth * 28}px">${drops}<div class="bar${state}"><span class="kicker">${kicker}</span><strong>${escapeHtml(node.label)}</strong></div></li>`;
               })
               .join('');
@@ -609,6 +649,8 @@ h1 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
 .bar.waiting { border-color: #6a5420; background: #221c10; }
 .bar.clear { border-color: #2d5a32; background: #142016; }
 .bar.you { outline: 1px solid #8ab4ff; }
+.bar.current { border-color: #8ab4ff; box-shadow: inset 3px 0 0 #8ab4ff; }
+.bar.current .kicker { color: #ececec; }
 .kicker { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #9a9a9a; }
 </style>
 </head>
@@ -661,6 +703,7 @@ export function buildWaterfall(rows: OrderRow[]): WaterfallChain[] {
       detail: row.detail,
       fromLabel: row.waitsOnLabel,
       note: row.note,
+      loop: row.loop === true,
     });
     links.push({ from: targetKey(row.waitsOn), to: targetKey(row.subject) });
   }
@@ -709,6 +752,7 @@ function blankPlan(partial?: Partial<OrderPlan> | null): OrderPlan {
     ownerThreadId: partial?.ownerThreadId ?? '',
     title: partial?.title?.trim() || 'Planner',
     summary: partial?.summary ?? '',
+    goal: partial?.goal ?? '',
     status: partial?.status === 'active' ? 'active' : 'draft',
     updatedAt: partial?.updatedAt ?? '',
   };
@@ -748,7 +792,7 @@ function incomingEdges(chains: WaterfallChain[]): WaterfallIncoming[] {
 /** Waiting, ready, or the gate this step is holding for others. */
 export function waterfallNodeState(node: WaterfallNode, chains: WaterfallChain[]): string {
   if (node.incoming.length > 0) {
-    const blocked = node.incoming.filter((edge) => !edge.met);
+    const blocked = node.incoming.filter((edge) => !edge.met && !edge.loop);
     if (blocked.length > 0) {
       return blocked.every((edge) => edge.hold === 'merge') ? 'Waiting to merge' : 'Waiting to start';
     }

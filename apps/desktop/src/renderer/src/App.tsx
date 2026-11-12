@@ -47,14 +47,12 @@ import { CreateProcessingOverlay } from './components/CreateProcessingOverlay';
 import { ConnectedOrchestratorBar, OrchestratorPanel } from './components/OrchestratorPanel';
 import { GlobalBoard } from './components/GlobalBoard';
 import { AutomationsView } from './components/AutomationsView';
-import { OrchestrationView } from './components/PlanMap';
-import { PlanSidebar } from './components/BoardWaterfall';
 import { RightSidebar } from './components/RightSidebar';
 import { SidebarToggle } from './components/SidebarToggle';
 import { SettingsModal, type SettingsNavId } from './components/SettingsModal';
 import { PanelResizeHandle } from './components/PanelResizeHandle';
 import { TeamToastStack, type TeamToastItem } from './components/TeamToast';
-import { GLOBAL_WORKSPACE_ID, isGlobalThread, isOrchestratorThread } from './lib/global-workspace';
+import { GLOBAL_WORKSPACE_ID, isGlobalThread } from './lib/global-workspace';
 import { normalizePreviewUrl } from './lib/preview-url';
 import {
   readRightSidebarOpen,
@@ -830,9 +828,7 @@ export function App() {
   }, [threads, archived, paneProgress]);
 
   const rightSidebarWorktreeKey = useMemo(() => {
-    if (!selected) return null;
-    if (isOrchestratorThread(selected)) return `plan:${selected.id}`;
-    if (isGlobalThread(selected)) return null;
+    if (!selected || isGlobalThread(selected)) return null;
     return selected.worktreePath?.trim() || null;
   }, [selected]);
 
@@ -903,6 +899,20 @@ export function App() {
       : unreadWorktreeKey(selected);
     if (key) writeLastWorktreeChatId(key, selected.id);
   }, [selected?.id, selected?.worktreePath, selected?.repoPath]);
+
+  useEffect(() => {
+    if (view !== 'orchestration') return;
+    const first = threads.find(
+      (thread) => thread.status !== 'archived' && thread.repoPath === GLOBAL_WORKSPACE_ID,
+    );
+    if (!first) {
+      setView('board');
+      return;
+    }
+    setSelectedId(first.id);
+    setMultiSelected(new Set([first.id]));
+    setView('thread');
+  }, [view, threads]);
 
   const knownWorkspaces = useMemo(() => {
     const byPath = new Map<string, Workspace>();
@@ -1151,11 +1161,6 @@ export function App() {
     setSelectedId(null);
   }
 
-  function showOrchestration() {
-    setView('orchestration');
-    setSelectedId(null);
-  }
-
   function openThreadByRef(threadRef: string) {
     const ref = threadRef.trim();
     if (!ref) return;
@@ -1193,9 +1198,8 @@ export function App() {
     setCreateState({ repoPath: repo, mode, ...extras });
   }
 
-  /** Worktree chats keep Changes/Files/Terminal. An orchestration chat shows its plan. */
-  const showPlanSidebar = Boolean(selected && isOrchestratorThread(selected));
-  const showRightSidebar = Boolean(selected && (showPlanSidebar || !isGlobalThread(selected)));
+  /** Orchestration chats have no worktree — Changes/Files/Terminal sidebar is N/A. */
+  const showRightSidebar = Boolean(selected && !isGlobalThread(selected));
   const rightSidebarVisible = showRightSidebar && rightSidebarOpen;
 
   const appClass = [
@@ -1226,7 +1230,6 @@ export function App() {
             repoPath={repoPath}
             workspaces={workspaces}
             onShowBoard={showBoard}
-            onShowOrchestration={showOrchestration}
             onShowAutomations={() => { setView('automations'); setSelectedId(null); }}
             onSelect={onSelect}
             onNew={(path, mode) => openCreate(path, mode ?? 'quick')}
@@ -1303,6 +1306,7 @@ export function App() {
           onAddToBoard={() =>
             openCreate(repoPath || undefined, 'quick', { stayOnBoard: true })
           }
+          onNewOrchestration={() => openCreate(undefined, 'orchestration')}
           onArchive={(ids, meta) => archiveThreadsAndRefresh(ids, meta)}
           archivingIds={archivingIds}
           leftSidebarToggle={
@@ -1310,20 +1314,6 @@ export function App() {
               <SidebarToggle side="left" open={false} onClick={toggleLeftSidebar} />
             ) : undefined
           }
-        />
-      )}
-      {view === 'orchestration' && (
-        <OrchestrationView
-          threads={threads}
-          leftSidebarOpen={leftSidebarOpen}
-          onToggleLeftSidebar={toggleLeftSidebar}
-          onNewOrchestration={() => openCreate(undefined, 'orchestration')}
-          onOpenThread={(id) => {
-            setSelectedId(id);
-            setView('thread');
-            setMultiSelected(new Set([id]));
-            void refreshThread(id);
-          }}
         />
       )}
       {view === 'automations' && <AutomationsView leftSidebarOpen={leftSidebarOpen} onToggleLeftSidebar={toggleLeftSidebar} />}
@@ -1451,13 +1441,6 @@ export function App() {
                 onChange={setRightSidebarWidth}
                 onChangeEnd={persistRightSidebarWidth}
               />
-              {showPlanSidebar ? (
-                <PlanSidebar
-                  threadId={selected.id}
-                  threads={threads}
-                  onOpenThread={openThreadByRef}
-                />
-              ) : (
               <RightSidebar
                 key={selected.worktreePath.replace(/\/$/, '') || selected.id}
                 thread={selected}
@@ -1496,7 +1479,6 @@ export function App() {
                 }}
                 onOpenPr={openPrPage}
               />
-              )}
             </div>
           )}
         </div>

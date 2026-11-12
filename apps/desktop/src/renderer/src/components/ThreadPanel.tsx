@@ -1848,7 +1848,8 @@ export function ThreadPanel({
   useLayoutEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
     setFilePicker(null);
-    const remembered = getRememberedRightPaneSession(thread.id);
+    const stored = getRememberedRightPaneSession(thread.id);
+    const remembered = stored;
     if (remembered !== undefined) {
       const nextCount = remembered?.tabs.length ?? 0;
       prevRightTabCount.current = nextCount;

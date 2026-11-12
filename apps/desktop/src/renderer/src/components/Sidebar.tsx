@@ -40,7 +40,6 @@ interface Props {
   /** Registered workspaces (show even with zero threads). */
   workspaces?: Array<{ path: string; name: string }>;
   onShowBoard: () => void;
-  onShowOrchestration: () => void;
   onShowAutomations: () => void;
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
@@ -91,7 +90,6 @@ export function Sidebar({
   repoPath,
   workspaces = [],
   onShowBoard,
-  onShowOrchestration,
   onShowAutomations,
   onSelect,
   onNew,
@@ -234,14 +232,12 @@ export function Sidebar({
     selectedId,
     GLOBAL_WORKSPACE_ID,
   );
-  const orchBoard = view === 'orchestration';
-  const orchThreadOpen =
+  const orchActive =
     view === 'thread' && globalThreads.some((t) => t.id === selectedId);
-  const orchActive = orchBoard || orchThreadOpen;
   const orchSelected = globalThreads.some((t) => multiSelected.has(t.id));
   const orchArchiving = globalThreads.some((t) => archivingIds.has(t.id));
   const orchUnread = isGroupUnread(globalThreads, {
-    activeChatId: orchThreadOpen ? selectedId : null,
+    activeChatId: orchActive ? selectedId : null,
   });
 
   return (
@@ -304,9 +300,9 @@ export function Sidebar({
                 <div className="workspace-header">
                   <button
                     type="button"
-                    className={`workspace-name-btn${orchBoard ? ' active' : ''}`}
-                    title="Orchestration"
-                    onClick={onShowOrchestration}
+                    className="workspace-name-btn"
+                    title="Add agent"
+                    onClick={() => onNew(undefined, 'orchestration')}
                   >
                     <span className="workspace-glyph" aria-hidden />
                     <span className="workspace-name">Orchestration</span>
@@ -339,7 +335,6 @@ export function Sidebar({
                   archiving={orchArchiving}
                   unread={orchUnread}
                   onSelect={onSelect}
-                  onParentClick={onShowOrchestration}
                   onMarkUnread={onMarkUnread}
                   onRenameChat={onRenameChat}
                   onCloseChat={onCloseChat}

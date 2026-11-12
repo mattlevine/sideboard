@@ -51,7 +51,7 @@ describe('order of operations', () => {
     return import('./order.js');
   }
 
-  it('records a gate, dedupes it, and rejects a loop', async () => {
+  it('records a gate, dedupes it, keeps a loop, and rejects a step that waits on itself', async () => {
     const { setOrderDependency, listOrderEdges } = await store();
     const first = setOrderDependency({
       waitsOn: { kind: 'pr', ref: '#1', label: 'Ship auth' },
@@ -72,15 +72,15 @@ describe('order of operations', () => {
     expect(again.created).toBe(false);
     expect(again.edge.id).toBe(first.edge.id);
     expect(listOrderEdges()).toHaveLength(1);
-    expect(() =>
-      setOrderDependency({
-        waitsOn: { kind: 'pr', ref: '2' },
-        gate: 'in-main',
-        subject: { kind: 'pr', ref: '1' },
-        hold: 'start',
-      }),
-    ).toThrow(/loops/);
-    expect(listOrderEdges()).toHaveLength(1);
+    const loop = setOrderDependency({
+      waitsOn: { kind: 'pr', ref: '2' },
+      gate: 'in-main',
+      subject: { kind: 'pr', ref: '1' },
+      hold: 'start',
+    });
+    expect(loop.created).toBe(true);
+    expect(loop.edge.loop).toBe(true);
+    expect(listOrderEdges()).toHaveLength(2);
     expect(() =>
       setOrderDependency({
         waitsOn: { kind: 'issue', ref: 'ENG-4' },
@@ -205,6 +205,23 @@ describe('order of operations', () => {
     ]);
     expect(escaped).toContain('PR #1 · &lt;Auth&gt;');
     expect(escaped).not.toContain('<Auth>');
+    const working = formatWaterfallHtml([
+      {
+        nodes: [
+          {
+            key: 'pr::9',
+            label: 'PR #9',
+            kind: 'pr',
+            ref: '9',
+            depth: 0,
+            incoming: [],
+            working: true,
+          },
+        ],
+      },
+    ]);
+    expect(working).toContain('Working');
+    expect(working).toContain('bar current');
   });
 
   it('defaults a worktree subject to its PR or ticket and refuses another checkout', () => {
@@ -231,8 +248,13 @@ describe('order of operations', () => {
   it('stays a draft until execute, then splits ready and waiting', async () => {
     const { setOrderPlan, setOrderDependency, satisfyOrderDependency, executeOrderPlan, getOrderPlan } =
       await store();
-    const plan = setOrderPlan({ title: 'Billing rollout', summary: 'Auth, then billing.' });
+    const plan = setOrderPlan({
+      title: 'Billing rollout',
+      summary: 'Auth, then billing.',
+      goal: 'Billing is in production',
+    });
     expect(plan.status).toBe('draft');
+    expect(plan.goal).toBe('Billing is in production');
     const edge = setOrderDependency({
       waitsOn: { kind: 'pr', ref: '1', label: 'Auth' },
       gate: 'in-prod',
@@ -364,6 +386,7 @@ describe('order of operations', () => {
       ownerThreadId: 'orch-a',
       title: 'Fleet',
       summary: '',
+      goal: '',
       status: 'active' as const,
       updatedAt: '',
     };
@@ -372,6 +395,7 @@ describe('order of operations', () => {
       ownerThreadId: 'orch-b',
       title: 'Reporting',
       summary: '',
+      goal: 'Reporting is in production',
       status: 'draft' as const,
       updatedAt: '',
     };

@@ -6,6 +6,7 @@ import { writePrivateFile } from '../store/private-file.js';
 import { listThreads } from '../store/thread-store.js';
 import {
   buildWaterfall,
+  markWorkingChains,
   cycleDependencyMessage,
   dependencyIdentity,
   dependencyWouldCycle,
@@ -106,18 +107,26 @@ function asPlan(value: unknown, fallbackId: string): OrderPlan | null {
   const title = typeof row.title === 'string' ? row.title.trim().slice(0, 120) : '';
   if (!title) return null;
   const summary = typeof row.summary === 'string' ? row.summary.trim().slice(0, 600) : '';
+  const goal = typeof row.goal === 'string' ? row.goal.trim().slice(0, 400) : '';
   const status = row.status === 'active' ? 'active' : 'draft';
   const updatedAt =
     typeof row.updatedAt === 'string' && row.updatedAt ? row.updatedAt : new Date().toISOString();
   const id = typeof row.id === 'string' && row.id.trim() ? row.id.trim() : fallbackId;
   const ownerThreadId = typeof row.ownerThreadId === 'string' ? row.ownerThreadId.trim() : '';
-  return { id, ownerThreadId, title, summary, status, updatedAt };
+  return { id, ownerThreadId, title, summary, goal, status, updatedAt };
 }
 
 function asTarget(value: unknown): OrderTarget | null {
   if (!value || typeof value !== 'object') return null;
   const row = value as OrderTarget;
-  if (row.kind !== 'pr' && row.kind !== 'issue' && row.kind !== 'workspace') return null;
+  if (
+    row.kind !== 'pr' &&
+    row.kind !== 'issue' &&
+    row.kind !== 'workspace' &&
+    row.kind !== 'orchestration'
+  ) {
+    return null;
+  }
   if (typeof row.ref !== 'string' || !row.ref.trim()) return null;
   try {
     return normalizeOrderTarget(row);
@@ -141,6 +150,7 @@ function asEdge(value: unknown): OrderEdge | null {
     gate: row.gate,
     subject,
     hold: row.hold,
+    ...(row.loop === true ? { loop: true } : {}),
     note: typeof row.note === 'string' ? row.note.slice(0, 400) : '',
     createdByThreadId: row.createdByThreadId?.trim() || null,
     createdAt: typeof row.createdAt === 'string' ? row.createdAt : new Date().toISOString(),
@@ -181,6 +191,7 @@ function readFile(): OrderFile {
           ownerThreadId: '',
           title: 'Planner',
           summary: '',
+          goal: '',
           status: 'draft',
           updatedAt: new Date().toISOString(),
         },
@@ -230,6 +241,7 @@ export function listOrderPlans(): OrderPlan[] {
 export function setOrderPlan(input: {
   title: string;
   summary?: string | null;
+  goal?: string | null;
   ownerThreadId?: string | null;
 }): OrderPlan {
   const title = input.title.trim().slice(0, 120);
@@ -242,6 +254,10 @@ export function setOrderPlan(input: {
     ownerThreadId: owner,
     title,
     summary: input.summary?.trim().slice(0, 600) ?? existing?.summary ?? '',
+    goal:
+      input.goal === undefined
+        ? (existing?.goal ?? '')
+        : (input.goal?.trim().slice(0, 400) ?? ''),
     status: existing?.status === 'active' ? 'active' : 'draft',
     updatedAt: new Date().toISOString(),
   };
@@ -302,7 +318,7 @@ export function listOrderRows(planId?: string): OrderRow[] {
 }
 
 export function listWaterfall(planId?: string): WaterfallChain[] {
-  return buildWaterfall(listOrderRows(planId));
+  return markWorkingChains(buildWaterfall(listOrderRows(planId)), threadSnapshots());
 }
 
 export function listOrderBoard(): OrderBoard {
@@ -311,10 +327,13 @@ export function listOrderBoard(): OrderBoard {
   const rows = resolveOrchestrationGates(file.plans, file.edges, threads, file.marks);
   const plans: OrderPlanBoard[] = file.plans.map((plan) => ({
     plan,
-    chains: buildWaterfall(rows.filter((row) => {
-      const edge = file.edges.find((item) => item.id === row.id);
-      return edge?.planId === plan.id;
-    })),
+    chains: markWorkingChains(
+      buildWaterfall(rows.filter((row) => {
+        const edge = file.edges.find((item) => item.id === row.id);
+        return edge?.planId === plan.id;
+      })),
+      threads,
+    ),
   }));
   plans.sort((a, b) => a.plan.title.localeCompare(b.plan.title));
   return { plans };
@@ -343,6 +362,7 @@ function selectPlan(
       ownerThreadId: '',
       title: 'Planner',
       summary: '',
+      goal: '',
       status: 'draft',
       updatedAt: new Date().toISOString(),
     };
@@ -374,9 +394,10 @@ export function setOrderDependency(
   const draft = { waitsOn, subject, gate, hold };
   const existing = scoped.find((edge) => dependencyIdentity(edge) === dependencyIdentity(draft));
   if (existing) return { edge: existing, created: false };
-  if (dependencyWouldCycle(scoped, draft)) {
+  if (targetKey(subject) === targetKey(waitsOn)) {
     throw new Error(cycleDependencyMessage(draft));
   }
+  const loop = dependencyWouldCycle(scoped, draft);
   const edge: OrderEdge = {
     id: randomUUID(),
     planId: plan.id,
@@ -384,6 +405,7 @@ export function setOrderDependency(
     gate,
     subject,
     hold,
+    ...(loop ? { loop: true } : {}),
     note: input.note?.trim().slice(0, 400) ?? '',
     createdByThreadId: input.createdByThreadId?.trim() || null,
     createdAt: new Date().toISOString(),

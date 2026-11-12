@@ -78,7 +78,7 @@ export function registerOrderTools(server: McpServer): void {
     'list_order',
     worktree
       ? 'Read where this checkout sits in its orchestrator\'s plan: what you are waiting on, what is clear, and what you are blocking. Call show_waterfall when the user should see it. Change your step with set_dependency or clear_dependency.'
-      : 'Read this chat\'s plan. It shows in the right sidebar. Draft with set_plan and set_dependency, show_waterfall for the user, revise from their feedback, then execute_plan only after they agree. Do not start planned work while the plan is draft.',
+      : 'Read this chat\'s plan. Call show_waterfall when the user should see it. Draft with set_plan and set_dependency, revise from their feedback, then execute_plan only after they agree. Do not start planned work while the plan is draft.',
     {},
     async () => {
       try {
@@ -88,7 +88,7 @@ export function registerOrderTools(server: McpServer): void {
         if (!plan) {
           const text = worktree
             ? 'This checkout\'s orchestrator has no plan yet.'
-            : 'This chat has no plan. set_plan drafts one. It shows in the right sidebar.';
+            : 'This chat has no plan. set_plan drafts one. Then show_waterfall so the user sees it.';
           return { content: [{ type: 'text' as const, text }] };
         }
         const rows = listOrderRows(plan.id);
@@ -107,7 +107,7 @@ export function registerOrderTools(server: McpServer): void {
     'set_dependency',
     worktree
       ? 'Change what this checkout waits on. Omit subject to mean this workspace (hold=merge uses this PR; hold=start on a ticket uses this issue). gate=in-main (met when that PR is merged) or in-prod (stays waiting until satisfy_dependency). hold=start means do not begin; hold=merge means do not merge. You cannot set a dependency for a different checkout. show_waterfall so the user sees the change.'
-      : 'Record a step on this orchestration plan. waitsOn must reach gate before subject can hold. gate=in-main is met when that PR is merged; gate=in-prod stays waiting until satisfy_dependency. hold=start blocks starting the subject; hold=merge blocks merging it. Example: PR 1 in prod before PR 2 can merge; PR 3 in main before issue 4 can start. Pass repoPath when the same PR number exists in more than one project. Worktree agents set their own checkout and can omit subject.',
+      : 'Record a step on this orchestration plan. waitsOn must reach gate before subject can hold. gate=in-main is met when that PR is merged; gate=in-prod stays waiting until satisfy_dependency. hold=start blocks starting the subject; hold=merge blocks merging it. Example: PR 1 in prod before PR 2 can merge; PR 3 in main before issue 4 can start. Pass repoPath when the same PR number exists in more than one project. Worktree agents set their own checkout and can omit subject. Then show_waterfall so the user sees it.',
     {
       waitsOnKind: kindSchema.describe('What must happen first: pr, issue, workspace, or orchestration'),
       waitsOnRef: z
@@ -193,16 +193,18 @@ export function registerOrderTools(server: McpServer): void {
   if (!worktree) {
     server.tool(
       'set_plan',
-      'Draft or retitle this chat\'s plan. It shows in the right sidebar and stays draft until execute_plan. Then set_dependency for each gate and show_waterfall so the user can discuss it. Do not start workspaces while it is draft.',
+      'Draft or retitle this chat\'s plan. It stays draft until execute_plan. Pass goal for the outcome the steps are trying to reach. Then set_dependency for each gate. A step may loop back to an earlier one. Call show_waterfall so the user sees it. Do not paste the diagram in chat. Do not start workspaces while it is draft.',
       {
         title: z.string().describe('Short name for the plan'),
         summary: z.string().optional().describe('What this order is for, in a sentence or two'),
+        goal: z.string().optional().describe('Outcome the steps are trying to reach'),
       },
-      async ({ title, summary }) => {
+      async ({ title, summary, goal }) => {
         try {
           const plan = setOrderPlan({
             title,
             summary,
+            goal,
             ownerThreadId: orchestrationOwnerId(false),
           });
           return mcpJson({ ok: true, ...plan });
@@ -251,7 +253,7 @@ export function registerOrderTools(server: McpServer): void {
     'show_waterfall',
     worktree
       ? 'Open the planner in the side column with this checkout marked, so the user sees where you are and what you wait on or block. Change your step with set_dependency or clear_dependency, then show it again. Do not paste the diagram in chat.'
-      : 'Open the planner in the side column so the user can discuss it. Draft with set_plan and set_dependency, show this, revise from their feedback, then execute_plan only after they agree. Do not paste the diagram in chat.',
+      : 'Open this chat\'s plan in the side column. Call it after set_plan or set_dependency so the user sees the plan. Do not paste the diagram in chat.',
     {},
     async () => {
       try {
@@ -260,7 +262,7 @@ export function registerOrderTools(server: McpServer): void {
         const plan = getOrderPlan(owner);
         const html = formatWaterfallHtml(plan ? listWaterfall(plan.id) : [], {
           plan,
-          you: worktree && caller ? orderSnapshotFromThread(caller) : null,
+          you: caller ? orderSnapshotFromThread(caller) : null,
         });
         return mcpJson({
           ok: true,
@@ -270,7 +272,7 @@ export function registerOrderTools(server: McpServer): void {
           content: html,
           message: worktree
             ? 'Opened the planner in the side column, with this checkout marked.'
-            : 'Opened the planner in the side column.',
+            : 'Opened the plan in the side column.',
         });
       } catch (err) {
         return mcpJson({ error: err instanceof Error ? err.message : String(err) }, true);
@@ -282,7 +284,7 @@ export function registerOrderTools(server: McpServer): void {
     'clear_dependency',
     worktree
       ? 'Remove a planner step this checkout is part of. Pass id from list_order. Then show_waterfall so the user sees it.'
-      : 'Remove one planner step. Pass id from list_order. show_waterfall again if the user is looking at the plan.',
+      : 'Remove one planner step. Pass id from list_order. Then show_waterfall so the user sees it.',
     { id: z.string().describe('Step id from list_order') },
     async ({ id }) => {
       try {

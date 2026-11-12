@@ -11303,7 +11303,9 @@ body:has(.update-banner) .team-toast-stack {
   background: var(--bg);
 }
 
-.board-body.is-empty {
+.board-body.is-empty,
+.board-body:has(> .chat-empty),
+.board-body:has(> .board-waterfall.is-empty) {
   justify-content: center;
   overflow: hidden;
   padding: 0;
@@ -11532,73 +11534,88 @@ body:has(.update-banner) .team-toast-stack {
   overflow: auto;
   padding: 16px 14px 24px;
   background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-sizing: border-box;
 }
 
-.plan-map {
+.plan-sidebar:has(.board-waterfall.is-empty) {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-height: 0;
-}
-
-.plan-map-canvas {
-  position: relative;
-  min-height: 140px;
-}
-
-.plan-map-lines {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.plan-map-lines line {
-  stroke: var(--border);
-  stroke-width: 1.5;
-}
-
-.plan-map-lines text {
-  fill: var(--muted);
-  font-size: 11px;
-  text-anchor: middle;
-}
-
-.plan-map-card {
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 12px 14px;
-  text-align: left;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg) 86%, var(--accent));
-  color: var(--text);
+  overflow: hidden;
+  padding: 12px;
 }
 
-.plan-map-card strong {
-  font-size: 14px;
+.plan-sidebar .chat-empty {
+  margin: 0;
+  padding: 8px 4px 16px;
 }
 
-.plan-map-card span:last-child {
-  color: var(--muted);
-  font-size: 12px;
+.plan-sidebar .chat-empty h3 {
+  font-size: 16px;
 }
 
-.plan-map-card.is-openable {
-  cursor: pointer;
-}
-
-.plan-map-card:disabled {
-  opacity: 1;
+.board-waterfall.is-empty {
+  max-width: none;
+  gap: 0;
+  padding: 0;
 }
 
 .board-waterfall.is-compact {
   max-width: none;
   gap: 16px;
+}
+
+.board-waterfall-stack {
+  display: contents;
+}
+
+.board-waterfall.is-columns {
+  max-width: none;
+  gap: 0;
+  padding-bottom: 0;
+}
+
+.board-waterfall-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.board-waterfall-steps {
+  display: contents;
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block {
+  height: 340px;
+  overflow: hidden;
+  box-sizing: border-box;
+  gap: 12px;
+  padding: 14px 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg)) 72%, transparent);
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block.is-openable {
+  cursor: pointer;
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block.is-openable:hover {
+  border-color: color-mix(in srgb, var(--border) 35%, var(--text));
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block.is-openable:focus-visible {
+  outline: 2px solid var(--accent, var(--text));
+  outline-offset: 2px;
+}
+
+.board-waterfall.is-columns .board-waterfall-plan,
+.board-waterfall.is-columns .board-waterfall-plan p,
+.board-waterfall.is-columns .board-waterfall-lead {
+  max-width: none;
 }
 
 .board-waterfall-plan-block {
@@ -11622,6 +11639,12 @@ body:has(.update-banner) .team-toast-stack {
 .board-waterfall-plan h3 {
   margin: 0;
   font-size: 16px;
+}
+
+.board-waterfall-goal {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
 }
 
 .board-waterfall-plan p,
@@ -11682,12 +11705,6 @@ body:has(.update-banner) .team-toast-stack {
   color: var(--warn);
 }
 
-.board-waterfall-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .board-waterfall-bar {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -11714,49 +11731,21 @@ body:has(.update-banner) .team-toast-stack {
   cursor: pointer;
 }
 
+.board-waterfall-bar.is-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--bg) 82%, var(--accent));
+}
+
+.board-waterfall-bar.is-current .board-waterfall-kicker {
+  color: var(--text);
+}
+
 .board-waterfall-kicker {
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
-}
-
-.board-waterfall-add {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.board-waterfall-form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(140px, 1fr));
-  gap: 8px;
-  width: min(640px, 100%);
-}
-
-.board-waterfall-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.board-waterfall-form input,
-.board-waterfall-form select {
-  font: inherit;
-  font-size: 13px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.board-waterfall-note,
-.board-waterfall-submit {
-  grid-column: 1 / -1;
 }
 
 .board-body.board-kanban-wrap {
