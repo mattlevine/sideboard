@@ -171,6 +171,117 @@ ${'// padding so the fence minimum does not reject this\n'.repeat(6)}`;
     expect(arts[0]!.kind).toBe('html');
   });
 
+  it('opens the waterfall diagram from show_plan', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Waterfall</h1></body></html>';
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't-wf',
+        name: 'mcp__sideboard__show_plan',
+        status: 'done',
+        input: {},
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                title: 'Waterfall',
+                type: 'html',
+                artifact_id: 'plan',
+                content: html,
+              }),
+            },
+          ],
+        },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.id).toBe('tool-plan');
+    expect(arts[0]!.kind).toBe('html');
+    expect(arts[0]!.title).toBe('Waterfall');
+    expect(arts[0]!.content).toContain('<h1>Waterfall</h1>');
+  });
+
+  it('opens the checkout implementation plan beside the diagram', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Fleet</h1></body></html>';
+    const markdown = '# Ship the relay\n\nWait for the API pull request to merge before starting the phone client.\n';
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't-both',
+        name: 'mcp__sideboard__show_plan',
+        status: 'done',
+        input: {},
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                title: 'Fleet',
+                type: 'html',
+                artifact_id: 'plan',
+                content: html,
+                artifacts: [
+                  {
+                    title: 'Ship the relay',
+                    type: 'markdown',
+                    artifact_id: 'checkout-plan',
+                    content: markdown,
+                  },
+                  {
+                    title: 'Fleet',
+                    type: 'html',
+                    artifact_id: 'plan',
+                    content: html,
+                  },
+                ],
+              }),
+            },
+          ],
+        },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts.map((art) => art.id)).toEqual(['tool-checkout-plan', 'tool-plan']);
+    expect(arts[0]!.kind).toBe('markdown');
+    expect(arts[0]!.title).toBe('Ship the relay');
+    expect(arts[1]!.kind).toBe('html');
+    expect(extractToolArtifacts(parts, { omitPlanWaterfall: true }).map((art) => art.id)).toEqual([
+      'tool-checkout-plan',
+    ]);
+  });
+
+  it('leaves the planner diagram out of an orchestration chat', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Waterfall</h1></body></html>';
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't-wf',
+        name: 'mcp__sideboard__show_plan',
+        status: 'done',
+        input: {},
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                title: 'Waterfall',
+                type: 'html',
+                artifact_id: 'plan',
+                content: html,
+              }),
+            },
+          ],
+        },
+      },
+    ];
+    expect(extractToolArtifacts(parts, { omitPlanWaterfall: true })).toEqual([]);
+  });
+
   it('reads present_artifact content from input when the tool result is compact', () => {
     const html = '<!DOCTYPE html><html><body><h1>Compact</h1></body></html>';
     const parts: MessagePart[] = [

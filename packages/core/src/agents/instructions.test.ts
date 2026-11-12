@@ -365,6 +365,9 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/gh pr create --draft --assignee @me -R/i);
     expect(text).toMatch(/run_dev_script/);
     expect(text).toMatch(/set_workspace_tags/);
+    expect(text).toMatch(/set_dependency/);
+    expect(text).toMatch(/list_order/);
+    expect(text).toMatch(/show_plan/);
     expect(text).toMatch(/create_schedule/);
     expect(text).toMatch(/chatId=self/);
     expect(text).toMatch(/SIDEBOARD_PORT/);

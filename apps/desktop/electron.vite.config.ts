@@ -112,6 +112,10 @@ export default defineConfig({
           __dirname,
           '../../packages/core/src/board/home-board.ts',
         ),
+        '@sideboard/order-view': resolve(
+          __dirname,
+          '../../packages/core/src/order/order-view.ts',
+        ),
         '@sideboard/implied-first-prompt': resolve(
           __dirname,
           '../../packages/core/src/threads/implied-first-prompt.ts',

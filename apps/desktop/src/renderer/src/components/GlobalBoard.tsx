@@ -40,6 +40,7 @@ import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { IssueBlockedLine, WorktreePrBadges } from './WorktreePrBadges';
 import { WorkspaceTags } from './WorkspaceTags';
+
 interface Props {
   threads: Thread[];
   workspaces?: Workspace[];

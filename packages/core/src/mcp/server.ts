@@ -74,6 +74,7 @@ import {
 } from '../store/app-settings.js';
 import { registerArchiveTools } from './archive-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
+import { registerOrderTools } from './order-tools.js';
 import { presentArtifactResult } from '../agent-rpc/handlers.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
 import { formatGhLandError } from '../git/gh-errors.js';
@@ -232,7 +233,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'list_board',
-    'Home Kanban of workspaces (New, Draft, Review, Approved, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → approved → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not columns. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
+    'Home Kanban of workspaces (New, Draft, Review, Approved, Merged) — one card per checkout; sibling chats on that card are separate agents. Same cards as desktop Home. Path to merge: no PR → draft PR → open PR → approved → merged. Archive removes the card to Settings → History (list_archive to browse, restore_workspace to bring it back). Queued/running are activity on the card, not stages. Orchestration chats are not on the board. Filters: query, repoPath, kind (ticket/PR/branch source), ownership (mine = your PRs / WIP; reviewing = someone else\'s PR), column, limit (default 40). create_workspace adds a workspace (and a Home card), or returns the live checkout if that ticket/PR/named branch is already checked out. That reuse is one checkout, not one agent — fork_chat to add another.',
     {
       query: z
         .string()
@@ -813,6 +814,7 @@ export async function startMcpServer(): Promise<void> {
   }
 
   registerScheduleTools(server);
+  registerOrderTools(server);
 
   server.tool(
     'set_workspace_tags',

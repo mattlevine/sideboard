@@ -78,6 +78,7 @@ export const ChatTranscript = memo(function ChatTranscript({
   activeArtifactId,
   canForkWorkspace,
   liveHasPresentPlan,
+  omitPlanWaterfall = false,
   handlersRef,
 }: {
   messages: Thread['messages'];
@@ -107,6 +108,7 @@ export const ChatTranscript = memo(function ChatTranscript({
   activeArtifactId?: string;
   canForkWorkspace: boolean;
   liveHasPresentPlan: boolean;
+  omitPlanWaterfall?: boolean;
   handlersRef: { current: ChatTranscriptHandlers };
 }) {
   const h = handlersRef.current;
@@ -120,7 +122,14 @@ export const ChatTranscript = memo(function ChatTranscript({
       role: string,
     ) => {
       if (role !== 'agent' && role !== 'summary') return;
-      panes.push(...extractRightPaneContents(text, parts, prefix));
+      panes.push(
+        ...extractRightPaneContents(
+          text,
+          parts,
+          prefix,
+          omitPlanWaterfall ? { omitPlanWaterfall: true } : undefined,
+        ),
+      );
     };
     (compactedMessages ?? []).forEach((m, i) => {
       if (m.origin === 'continue') return;
@@ -253,6 +262,7 @@ export const ChatTranscript = memo(function ChatTranscript({
                   onOpenArtifact={h.openRightPane}
                   activeArtifactId={activeArtifactId}
                   artifactIdPrefix={`msg-${i}`}
+                  omitPlanWaterfall={omitPlanWaterfall}
                   onFork={() => void h.forkToTab(i)}
                   onForkWorkspace={
                     canForkWorkspace ? () => h.requestForkWorkspace(i) : undefined
@@ -281,6 +291,7 @@ export const ChatTranscript = memo(function ChatTranscript({
                 onOpenArtifact={h.openRightPane}
                 activeArtifactId={activeArtifactId}
                 artifactIdPrefix={`msg-${i}`}
+                omitPlanWaterfall={omitPlanWaterfall}
                 hideAnswer
                 toolsOnly
               />
@@ -363,6 +374,7 @@ export const ChatTranscript = memo(function ChatTranscript({
               onOpenArtifact={h.openRightPane}
               activeArtifactId={activeArtifactId}
               artifactIdPrefix="live"
+              omitPlanWaterfall={omitPlanWaterfall}
               hideAnswer={showPlanCard && liveHasPresentPlan}
               onFork={() =>
                 void h.forkToTab(Math.max(0, messages.length - 1))

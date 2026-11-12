@@ -231,6 +231,11 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('restore_workspace');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('workspace-live');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('set_workspace_tags');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('list_order');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('show_plan');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('The Orchestration row in the sidebar');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('set_plan');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('execute_plan');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('same tags');
   });
 

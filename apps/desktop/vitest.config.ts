@@ -29,6 +29,7 @@ export default defineConfig({
       '@sideboard/review-request-template': core('review/review-request-template.ts'),
       '@sideboard/issue-source-labels': core('store/issue-source-labels.ts'),
       '@sideboard/home-board': core('board/home-board.ts'),
+      '@sideboard/order-view': core('order/order-view.ts'),
       '@sideboard/implied-first-prompt': core('threads/implied-first-prompt.ts'),
       '@sideboard/history-retention': core('store/history-retention.ts'),
       '@sideboard/phone-artifact': core('remote/phone-artifact.ts'),

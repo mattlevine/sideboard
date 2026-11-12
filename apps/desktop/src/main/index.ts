@@ -170,6 +170,12 @@ import {
   invalidateThreadRecord,
   slimThreadForUiList,
   schedulesPath,
+  orderPath,
+  listOrderBoard,
+  setOrderDependency,
+  clearOrderDependency,
+  satisfyOrderDependency,
+  type SetOrderDependencyInput,
   listSchedules,
   createSchedule,
   updateSchedule,
@@ -778,6 +784,24 @@ function setupSchedulesWatcher(): void {
   watcher.on('unlink', notify);
   app.on('will-quit', () => {
     if (armTimer) clearTimeout(armTimer);
+    void watcher.close();
+  });
+}
+
+function setupOrderWatcher(): void {
+  const file = orderPath();
+  const dir = dirname(file);
+  const name = basename(file);
+  mkdirSync(dir, { recursive: true });
+  const watcher = watch(dir, { ignoreInitial: true, depth: 0 });
+  const notify = (changed: string) => {
+    if (basename(changed) !== name) return;
+    mainWindow?.webContents.send('order:changed');
+  };
+  watcher.on('add', notify);
+  watcher.on('change', notify);
+  watcher.on('unlink', notify);
+  app.on('will-quit', () => {
     void watcher.close();
   });
 }
@@ -1425,6 +1449,16 @@ function registerIpc(): void {
     ) => startOrchestration(opts),
   );
   ipcMain.handle('listSchedules', () => listSchedules());
+  ipcMain.handle('listOrder', () => listOrderBoard());
+  ipcMain.handle('setOrderDependency', (_e, input: SetOrderDependencyInput) =>
+    setOrderDependency(input),
+  );
+  ipcMain.handle('clearOrderDependency', (_e, id: string) => {
+    clearOrderDependency(id);
+  });
+  ipcMain.handle('satisfyOrderDependency', (_e, id: string, satisfied?: boolean) =>
+    satisfyOrderDependency(id, satisfied !== false),
+  );
   ipcMain.handle(
     'createSchedule',
     (_e, input: Omit<CreateScheduledTaskInput, 'createdBy'>) => {
@@ -1875,6 +1909,7 @@ app.whenReady().then(async () => {
   setupNotifications();
   setupStoreWatcher();
   setupSchedulesWatcher();
+  setupOrderWatcher();
   setupCaffeinateHoldWatcher();
   setupUpdater();
   // Slack reply watches are off. The phone remote is the away-from-desk session.

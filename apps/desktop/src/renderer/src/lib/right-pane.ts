@@ -1,15 +1,23 @@
 import type { MessagePart } from '@sideboard-ai/core';
 import {
+  asRecord,
+  extractSchemaPanes,
+  str,
+} from './schema-panes';
+import {
   extractArtifacts,
+  extractToolArtifacts,
   flattenToolInput,
   latestArtifact,
   mergeAppendableArtifact,
   settleLogStatusAfterStream,
   toolShortName,
   unwrapToolResultPayload,
+  type ArtifactExtractOptions,
   type ChatArtifact,
 } from './artifacts';
 
+export { extractSchemaPanes };
 export type { ChatArtifact };
 
 /**
@@ -98,6 +106,26 @@ export function isSchemaPane(content: RightPaneContent | null | undefined): cont
 
 export function isFilesPane(content: RightPaneContent | null | undefined): content is FilesPaneContent {
   return Boolean(content && (content as FilesPaneContent).kind === 'files');
+}
+
+const PLAN_WATERFALL_PANE_ID = 'tool-plan';
+
+export function isPlanWaterfallPane(content: RightPaneContent | null | undefined): boolean {
+  return Boolean(isDocumentPane(content) && content.id === PLAN_WATERFALL_PANE_ID);
+}
+
+/** Drop a remembered planner diagram so an orchestration chat keeps the sidebar plan. */
+export function withoutPlanWaterfallSession(
+  session: RightPaneSession | null,
+): RightPaneSession | null {
+  if (!session) return session;
+  const tabs = session.tabs.filter((tab) => !isPlanWaterfallPane(tab));
+  if (tabs.length === session.tabs.length) return session;
+  if (tabs.length === 0) return null;
+  const activeId = tabs.some((tab) => tab.id === session.activeId)
+    ? session.activeId
+    : tabs[tabs.length - 1]!.id;
+  return { tabs, activeId };
 }
 
 export function isDocumentPane(
@@ -208,159 +236,6 @@ export function upsertRightPaneTab(
   return { tabs: cleaned, activeId: merged.id };
 }
 
-function asRecord(input: unknown): Record<string, unknown> | undefined {
-  if (input && typeof input === 'object' && !Array.isArray(input)) {
-    return input as Record<string, unknown>;
-  }
-  return undefined;
-}
-
-function str(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim() ? v : undefined;
-}
-
-function parseMaybeJson(input: unknown): unknown {
-  if (typeof input !== 'string') return input;
-  try {
-    return JSON.parse(input);
-  } catch {
-    return input;
-  }
-}
-
-function parseContentStates(raw: unknown): SchemaContentState[] | undefined {
-  const list = Array.isArray(raw) ? raw : undefined;
-  if (!list?.length) return undefined;
-  const states = list
-    .map((s) => String(s).toLowerCase())
-    .filter((s): s is SchemaContentState => s === 'draft' || s === 'published');
-  return states.length ? states : undefined;
-}
-
-function parseSchemaResource(raw: unknown, fallbackId: string, fallbackTitle: string): SchemaResource | undefined {
-  const rec = asRecord(raw);
-  if (!rec) return undefined;
-  const schema = asRecord(rec.schema) ?? asRecord(rec.json_schema);
-  if (!schema) return undefined;
-  const schemaUi =
-    asRecord(rec.schemaUi) ??
-    asRecord(rec.schema_ui) ??
-    asRecord(schema.schema_ui) ??
-    asRecord(schema.schemaUi);
-  const contentStates =
-    parseContentStates(rec.contentStates) ??
-    parseContentStates(rec.content_states) ??
-    parseContentStates(schemaUi?.['ui:contentStates']);
-  return {
-    id: str(rec.id) ?? str(rec.resource_id) ?? fallbackId,
-    title: str(rec.title) ?? str(rec.name) ?? fallbackTitle,
-    slug: str(rec.slug) ?? str(rec.name),
-    schema,
-    schemaUi,
-    contentStates,
-  };
-}
-
-function parseSchemaRecord(raw: unknown, fallbackId?: string): SchemaRecord | undefined {
-  const rec = asRecord(raw);
-  if (!rec) return undefined;
-  const id = str(rec.id) ?? str(rec.record_id) ?? fallbackId;
-  if (!id) return undefined;
-  const data =
-    asRecord(rec.data) ??
-    asRecord(rec.fields) ??
-    (asRecord(rec.content) ? (rec.content as Record<string, unknown>) : undefined) ??
-    // Treat remaining keys as data if nested data missing
-    Object.fromEntries(
-      Object.entries(rec).filter(
-        ([k]) =>
-          !['id', 'record_id', 'published_at', 'publishedAt', 'updated_at', 'updatedAt', 'created_at', 'createdAt'].includes(
-            k,
-          ),
-      ),
-    );
-  return {
-    id,
-    data: data ?? {},
-    publishedAt: (str(rec.published_at) ?? str(rec.publishedAt) ?? null) as string | null,
-    updatedAt: str(rec.updated_at) ?? str(rec.updatedAt) ?? null,
-    createdAt: str(rec.created_at) ?? str(rec.createdAt) ?? null,
-  };
-}
-
-/** Extract schema pane payloads from present_schema tool parts. */
-export function extractSchemaPanes(parts: MessagePart[] | undefined): SchemaPaneContent[] {
-  if (!parts?.length) return [];
-  const out: SchemaPaneContent[] = [];
-  for (const part of parts) {
-    if (part.type !== 'tool') continue;
-    const rawInput = asRecord(part.input);
-    const shortName = toolShortName(part.name, rawInput);
-    if (!/present_schema$/i.test(shortName)) continue;
-
-    const input = flattenToolInput(rawInput);
-    const result = asRecord(unwrapToolResultPayload(part.result));
-    const wrapped = asRecord(result?.data) ?? result ?? input;
-    if (!wrapped && !input) continue;
-
-    const merged = { ...asRecord(wrapped), ...asRecord(input) } as Record<string, unknown>;
-    const paneId =
-      str(merged.pane_id) ??
-      str(merged.schema_id) ??
-      str(merged.id) ??
-      part.id;
-    const title = str(merged.title) ?? 'Schema';
-    const modeRaw = str(merged.mode)?.toLowerCase();
-    const mode: SchemaPaneMode = modeRaw === 'form' ? 'form' : 'table';
-    const datasource: SchemaDatasourceKind =
-      str(merged.datasource)?.toLowerCase() === 'inline' ? 'inline' : 'brightsy';
-
-    const resource =
-      parseSchemaResource(merged.resource, paneId, title) ??
-      (asRecord(merged.schema)
-        ? parseSchemaResource(
-            {
-              id: str(merged.resource_id) ?? paneId,
-              title,
-              schema: merged.schema,
-              schemaUi: merged.schemaUi ?? merged.schema_ui,
-              slug: merged.slug,
-            },
-            paneId,
-            title,
-          )
-        : undefined);
-
-    const resourceId = str(merged.resource_id) ?? resource?.id;
-    const recordId = str(merged.record_id) ?? null;
-    const record = parseSchemaRecord(merged.record, recordId ?? undefined);
-    let records: SchemaRecord[] | undefined;
-    if (Array.isArray(merged.records)) {
-      records = merged.records
-        .map((r) => parseSchemaRecord(r))
-        .filter((r): r is SchemaRecord => Boolean(r));
-    }
-
-    // Brightsy mode needs resource_id; inline needs embedded resource.
-    if (datasource === 'brightsy' && !resourceId && !resource) continue;
-    if (datasource === 'inline' && !resource) continue;
-
-    out.push({
-      kind: 'schema',
-      id: `schema-${paneId}`,
-      title,
-      mode: record || recordId ? 'form' : mode,
-      datasource,
-      resourceId: resourceId ?? resource?.id,
-      recordId: record?.id ?? recordId,
-      resource,
-      records,
-      record,
-      source: 'tool',
-    });
-  }
-  return out;
-}
 
 /** Extract Files column payloads from present_files tool parts. */
 export function extractFilesPanes(parts: MessagePart[] | undefined): FilesPaneContent[] {
@@ -434,6 +309,7 @@ export function extractRightPaneContents(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): RightPaneContent[] {
   const toolPanes: RightPaneContent[] = [];
   for (const part of parts ?? []) {
@@ -450,8 +326,68 @@ export function extractRightPaneContents(
       idPrefix.replace('fence', 'schema-fence'),
     ),
   ];
-  const docs = extractArtifacts(text, parts, idPrefix);
+  const docs = extractArtifacts(text, parts, idPrefix, options);
   return [...schemas, ...docs];
+}
+
+/** Documents from the latest `show_plan` call: checkout plan, then the diagram. */
+export function showPlanPanes(
+  parts: MessagePart[] | undefined,
+  options?: ArtifactExtractOptions,
+): ChatArtifact[] {
+  const calls = (parts ?? []).filter(
+    (part) => part.type === 'tool' && /show_plan$/i.test(part.name ?? ''),
+  );
+  const latest = calls[calls.length - 1];
+  if (!latest) return [];
+  return extractToolArtifacts([latest], options);
+}
+
+/** Stable across a settled tool result so a closed tab is not put back. */
+export function showPlanOpenSignature(parts: MessagePart[] | undefined): string {
+  const panes = showPlanPanes(parts);
+  if (!panes.length) return '';
+  return panes
+    .map((pane) => `${pane.id}:${pane.content.length}:${pane.content.slice(-32)}`)
+    .join('|');
+}
+
+/** Plan documents first, then a newer pane from the same turn when it is not one of them. */
+export function panesForSession(
+  planPanes: RightPaneContent[],
+  latest: RightPaneContent | null,
+): RightPaneContent[] {
+  const out = [...planPanes];
+  if (latest && !out.some((pane) => pane.id === latest.id || sameRightPane(pane, latest))) {
+    out.push(latest);
+  }
+  return out;
+}
+
+/**
+ * `insert` adds every pane (a new show_plan). `update` refreshes panes still
+ * open and leaves a tab the user closed where they closed it.
+ */
+export function applyShownPanes(
+  session: RightPaneSession | null,
+  panes: RightPaneContent[],
+  mode: 'insert' | 'update',
+): RightPaneSession | null {
+  const list =
+    mode === 'insert'
+      ? panes
+      : panes.filter((pane) =>
+          session?.tabs.some((tab) => tab.id === pane.id || sameRightPane(tab, pane)),
+        );
+  if (!list.length) return session;
+  let next = session;
+  for (const pane of list) {
+    next = upsertRightPaneTab(next?.tabs ?? [], pane, {
+      activate: false,
+      activeId: next?.activeId ?? null,
+    });
+  }
+  return next;
 }
 
 /** Newest right-pane payload (files/schema tools beat document artifacts). */
@@ -459,6 +395,7 @@ export function latestRightPaneContent(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): RightPaneContent | null {
   const toolPanes: RightPaneContent[] = [];
   for (const part of parts ?? []) {
@@ -476,7 +413,7 @@ export function latestRightPaneContent(
     ),
   ];
   if (panes.length) return panes[panes.length - 1]!;
-  return latestArtifact(text, parts, idPrefix);
+  return latestArtifact(text, parts, idPrefix, options);
 }
 
 /** Chat stream ended — flip a leftover `working` log pill unless the job is still running. */

@@ -1,8 +1,19 @@
 import type { MessagePart } from '@sideboard-ai/core';
 import { resolveCodeLanguage } from './language';
+import {
+  asRecord,
+  inferJobLogStatus,
+  parseLogStatus,
+  str,
+  unwrapToolResultPayload,
+  type ArtifactLogStatus,
+} from './artifact-record';
+import { extractJobLogArtifact, lastCompletedJobPayload } from './artifact-jobs';
+
+export type { ArtifactLogStatus };
+export { inferJobLogStatus, parseLogStatus, unwrapToolResultPayload };
 
 export type ArtifactKind = 'html' | 'markdown' | 'svg' | 'react' | 'code' | 'log';
-export type ArtifactLogStatus = 'running' | 'ok' | 'failed' | 'idle';
 
 export interface ChatArtifact {
   id: string;
@@ -49,25 +60,6 @@ const SKIP_LANGS = new Set([
 const MIN_FENCE_CHARS = 40;
 const MIN_MD_CHARS = 120;
 
-function asRecord(input: unknown): Record<string, unknown> | undefined {
-  if (input && typeof input === 'object' && !Array.isArray(input)) {
-    return input as Record<string, unknown>;
-  }
-  return undefined;
-}
-
-function str(v: unknown): string | undefined {
-  return typeof v === 'string' && v.trim() ? v : undefined;
-}
-
-function parseMaybeJson(input: unknown): unknown {
-  if (typeof input !== 'string') return input;
-  try {
-    return JSON.parse(input);
-  } catch {
-    return input;
-  }
-}
 
 function looksLikeHtmlDocument(content: string): boolean {
   const t = content.trim().slice(0, 200).toLowerCase();
@@ -124,27 +116,6 @@ function languageLabel(kind: ArtifactKind, language: string): string {
   return 'code';
 }
 
-export function parseLogStatus(value: unknown): ArtifactLogStatus | undefined {
-  const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
-  if (s === 'running' || s === 'working') return 'running';
-  if (s === 'ok' || s === 'done') return 'ok';
-  if (s === 'failed' || s === 'error') return 'failed';
-  if (s === 'idle') return 'idle';
-  return undefined;
-}
-
-/** Prefer stillRunning / ok / failed over a stale `status: running` field. */
-export function inferJobLogStatus(payload: Record<string, unknown> | undefined): ArtifactLogStatus | undefined {
-  if (!payload) return undefined;
-  if (payload.stillRunning === true) return 'running';
-  if (payload.ok === true) return 'ok';
-  if (payload.failed === true || payload.stopped === true) return 'failed';
-  const explicit = parseLogStatus(payload.status);
-  if (explicit) return explicit;
-  if (payload.started === true || payload.reason === 'already-running') return 'running';
-  if (payload.stillRunning === false) return 'idle';
-  return undefined;
-}
 
 /** Leftover working pill stays only while the last wait still says the job is running. */
 export function settleLogStatusAfterStream(
@@ -365,41 +336,6 @@ export function flattenToolInput(
   return input;
 }
 
-/** Unwrap Cursor MCP `{ value: { content: [{ text: { text } }] } }` result envelopes. */
-export function unwrapToolResultPayload(result: unknown): unknown {
-  const parsed = parseMaybeJson(result);
-  const rec = asRecord(parsed);
-  if (!rec) return parsed;
-
-  const collectTexts = (items: unknown[]): string[] => {
-    const texts: string[] = [];
-    for (const item of items) {
-      const row = asRecord(item);
-      if (!row) continue;
-      if (typeof row.text === 'string') {
-        texts.push(row.text);
-        continue;
-      }
-      const nested = asRecord(row.text);
-      if (typeof nested?.text === 'string') texts.push(nested.text);
-    }
-    return texts;
-  };
-
-  const value = asRecord(rec.value);
-  if (value && Array.isArray(value.content)) {
-    const texts = collectTexts(value.content);
-    if (texts.length === 1) return parseMaybeJson(texts[0]);
-    if (texts.length > 1) return texts.map((t) => parseMaybeJson(t));
-  }
-  if (Array.isArray(rec.content) && rec.content.every((c) => asRecord(c)?.text != null)) {
-    const texts = collectTexts(rec.content);
-    if (texts.length === 1) return parseMaybeJson(texts[0]);
-    if (texts.length > 1) return texts.map((t) => parseMaybeJson(t));
-  }
-  return parsed;
-}
-
 export function toolShortName(name: string, input?: Record<string, unknown>): string {
   const fromName = name.replace(/^mcp__[^_]+__/, '').replace(/^mcp__/, '');
   if (fromName && fromName !== 'mcp' && fromName !== 'tool') return fromName;
@@ -411,152 +347,32 @@ function matchesPresentTool(shortName: string, suffix: string): boolean {
   return new RegExp(`${suffix}$`, 'i').test(shortName);
 }
 
-function isJobWaitTool(shortName: string): boolean {
-  return /^(wait_for_job|stop_job)$/i.test(shortName);
-}
 
-function isShellTool(shortName: string): boolean {
-  return /^(bash|shell|zsh)$/i.test(shortName);
-}
+export type ArtifactExtractOptions = {
+  /** Orchestration chats show the plan in the sidebar, so skip that diagram. */
+  omitPlanWaterfall?: boolean;
+};
 
-function jobIdFromCommand(blob: string): string | undefined {
-  const fromArg =
-    /detached-job\.(?:js|cjs)["']?\s+(?:start|wait|stop|status|ui)\s+([A-Za-z0-9._-]{1,64})/i.exec(
-      blob,
-    );
-  const token = fromArg?.[1];
-  // `wait --pid-file` / `ui --title` are flags, not kebab job ids.
-  if (token && !token.startsWith('-')) return token;
-  const fromPath = /detached-jobs[/\\]([A-Za-z0-9._-]{1,64})(?:[/\\]|$)/i.exec(blob);
-  return fromPath?.[1];
-}
-
-function looksLikeJobPayload(rec: Record<string, unknown>): boolean {
-  if (typeof rec.stillRunning === 'boolean' && (parseLogStatus(rec.status) || str(rec.id) || typeof rec.ok === 'boolean')) {
-    return true;
-  }
-  if (typeof rec.delta === 'string' && (parseLogStatus(rec.status) || str(rec.id))) return true;
-  if (rec.started === true || rec.reason === 'already-running') return true;
-  if (typeof rec.stopped === 'boolean' && (str(rec.id) || parseLogStatus(rec.status))) {
-    return true;
-  }
-  return false;
-}
-
-function lastCompletedJobPayload(
-  parts: MessagePart[] | undefined,
-): Record<string, unknown> | undefined {
-  if (!parts?.length) return undefined;
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const part = parts[i];
-    if (!part || part.type !== 'tool') continue;
-    if (part.status === 'running') continue;
-    const payload = jobPayloadFromResult(part.result);
-    if (payload) return payload;
-  }
-  return undefined;
-}
-
-function jobPayloadFromResult(result: unknown): Record<string, unknown> | undefined {
-  const unwrapped = unwrapToolResultPayload(result);
-  const rec = asRecord(unwrapped);
-  if (rec && looksLikeJobPayload(rec)) return rec;
-  const text =
-    typeof unwrapped === 'string'
-      ? unwrapped
-      : (str(rec?.stdout) ?? str(rec?.output) ?? str(rec?.text));
-  if (!text?.trim()) return undefined;
-  const trimmed = text.trim();
-  const parsed = asRecord(parseMaybeJson(trimmed));
-  if (parsed && looksLikeJobPayload(parsed)) return parsed;
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start >= 0 && end > start) {
-    const sliced = asRecord(parseMaybeJson(trimmed.slice(start, end + 1)));
-    if (sliced && looksLikeJobPayload(sliced)) return sliced;
-  }
-  return undefined;
-}
-
-function jobLogArtifact(opts: {
-  id: string;
-  title: string;
-  content: string;
-  status: ArtifactLogStatus;
-  phase?: string;
-}): ChatArtifact {
-  return {
-    id: `tool-${opts.id}`,
-    title: opts.title,
-    kind: 'log',
-    language: 'log',
-    content: opts.content,
-    source: 'tool',
-    status: opts.status,
-    phase: opts.phase,
-    mode: 'append',
-  };
-}
-
-/** wait_for_job / stop_job / shell detached-job JSON → append-only log pane. */
-function extractJobLogArtifact(
+/** `show_plan` can return both the diagram and the checkout plan. */
+function artifactRecords(
   shortName: string,
-  part: Extract<MessagePart, { type: 'tool' }>,
-  input: Record<string, unknown> | undefined,
-  result: unknown,
-): ChatArtifact | undefined {
-  const blob = [
-    part.detail,
-    part.description,
-    str(input?.command),
-    str(input?.cmd),
-    input ? JSON.stringify(input) : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const waitStop = isJobWaitTool(shortName);
-  const fromShell = isShellTool(shortName) && /detached-job\.(?:js|cjs)\b/i.test(blob);
-  if (!waitStop && !fromShell) return undefined;
-
-  const payload = jobPayloadFromResult(result);
-  const id =
-    str(payload?.id) ??
-    str(payload?.artifact_id) ??
-    str(input?.id) ??
-    jobIdFromCommand(blob);
-  if (!id) return undefined;
-
-  const stopCmd = /^stop_job$/i.test(shortName) || /\bstop\s+[A-Za-z0-9._-]{1,64}\b/i.test(blob);
-  const startCmd = fromShell && /\bstart\b/i.test(blob);
-  const status =
-    inferJobLogStatus(payload) ??
-    (stopCmd && (payload || part.status === 'done' || part.status === 'error')
-      ? 'failed'
-      : startCmd || part.status === 'running'
-        ? 'running'
-        : part.status === 'error'
-          ? 'failed'
-          : 'ok');
-  const delta =
-    typeof payload?.delta === 'string'
-      ? payload.delta
-      : typeof payload?.content === 'string'
-        ? payload.content
-        : '';
-  const progress = str(payload?.progress);
-  const content = delta || (progress && progress !== '(no log yet)' ? progress : '');
-
-  return jobLogArtifact({
-    id,
-    title: str(payload?.title) ?? str(input?.title) ?? id,
-    content,
-    status,
-    phase: str(payload?.phase),
-  });
+  resultRec: Record<string, unknown> | undefined,
+  wrapped: Record<string, unknown> | undefined,
+): Record<string, unknown>[] {
+  if (matchesPresentTool(shortName, 'show_plan') && Array.isArray(resultRec?.artifacts)) {
+    const list = resultRec.artifacts
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    if (list.length) return list;
+  }
+  return wrapped ? [wrapped] : [];
 }
 
 /** Extract artifacts from present_artifact / Brightsy create|update_artifact tool parts. */
-export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArtifact[] {
+export function extractToolArtifacts(
+  parts: MessagePart[] | undefined,
+  options?: ArtifactExtractOptions,
+): ChatArtifact[] {
   if (!parts?.length) return [];
   const out: ChatArtifact[] = [];
   for (const part of parts) {
@@ -572,7 +388,8 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
     }
     if (
       !/^(create|update)_artifact$/i.test(shortName) &&
-      !matchesPresentTool(shortName, 'present_artifact')
+      !matchesPresentTool(shortName, 'present_artifact') &&
+      !matchesPresentTool(shortName, 'show_plan')
     ) {
       continue;
     }
@@ -583,43 +400,53 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
       asRecord(resultRec?.artifact) ??
       asRecord(resultRec?.plan) ??
       resultRec;
+    const records = artifactRecords(shortName, resultRec, wrapped);
+    const list = records.length > 0 ? records : input ? [input] : [];
+    for (const record of list) {
+      if (
+        options?.omitPlanWaterfall &&
+        matchesPresentTool(shortName, 'show_plan') &&
+        str(record.artifact_id) === 'plan'
+      ) {
+        continue;
+      }
+      const type = str(record.type) ?? str(input?.type);
+      const rawContent =
+        contentFromUnknown(record.content) ??
+        contentFromUnknown(input?.content) ??
+        contentFromUnknown(record) ??
+        contentFromUnknown(input);
+      const kind = kindFromArtifactType(type, rawContent ?? '');
+      const content = rawContent ?? '';
+      if (kind !== 'log' && (!content || content.trim().length < MIN_FENCE_CHARS)) continue;
 
-    const type = str(wrapped?.type) ?? str(input?.type);
-    const rawContent =
-      contentFromUnknown(wrapped?.content) ??
-      contentFromUnknown(input?.content) ??
-      contentFromUnknown(wrapped) ??
-      contentFromUnknown(input);
-    const kind = kindFromArtifactType(type, rawContent ?? '');
-    const content = rawContent ?? '';
-    if (kind !== 'log' && (!content || content.trim().length < MIN_FENCE_CHARS)) continue;
+      const artifactId =
+        str(record.artifact_id) ??
+        str(input?.artifact_id) ??
+        str(record.id) ??
+        part.id;
+      const title =
+        str(record.title) ??
+        str(input?.title) ??
+        titleFromContent(kind, content, kind === 'log' ? 'Log' : 'Artifact');
+      const modeRaw = str(record.mode) ?? str(input?.mode);
+      const mode = modeRaw === 'replace' ? 'replace' : modeRaw === 'append' ? 'append' : undefined;
 
-    const artifactId =
-      str(wrapped?.artifact_id) ??
-      str(input?.artifact_id) ??
-      str(wrapped?.id) ??
-      part.id;
-    const title =
-      str(wrapped?.title) ??
-      str(input?.title) ??
-      titleFromContent(kind, content, kind === 'log' ? 'Log' : 'Artifact');
-    const modeRaw = str(wrapped?.mode) ?? str(input?.mode);
-    const mode = modeRaw === 'replace' ? 'replace' : modeRaw === 'append' ? 'append' : undefined;
-
-    out.push({
-      id: `tool-${artifactId}`,
-      title,
-      kind,
-      language:
-        kind === 'code'
-          ? resolveCodeLanguage(languageLabel(kind, type ?? ''), content)
-          : languageLabel(kind, type ?? ''),
-      content,
-      source: 'tool',
-      status: parseLogStatus(wrapped?.status) ?? parseLogStatus(input?.status),
-      phase: str(wrapped?.phase) ?? str(input?.phase),
-      mode,
-    });
+      out.push({
+        id: `tool-${artifactId}`,
+        title,
+        kind,
+        language:
+          kind === 'code'
+            ? resolveCodeLanguage(languageLabel(kind, type ?? ''), content)
+            : languageLabel(kind, type ?? ''),
+        content,
+        source: 'tool',
+        status: parseLogStatus(record.status) ?? parseLogStatus(input?.status),
+        phase: str(record.phase) ?? str(input?.phase),
+        mode,
+      });
+    }
   }
   const streaming = parts.some((p) => p.type === 'tool' && p.status === 'running');
   if (streaming) return out;
@@ -631,8 +458,9 @@ export function extractArtifacts(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): ChatArtifact[] {
-  const fromTools = extractToolArtifacts(parts);
+  const fromTools = extractToolArtifacts(parts, options);
   const textSource =
     parts
       ?.filter((p): p is Extract<MessagePart, { type: 'text' }> => p.type === 'text')
@@ -710,7 +538,8 @@ export function latestArtifact(
   text: string,
   parts?: MessagePart[],
   idPrefix = 'fence',
+  options?: ArtifactExtractOptions,
 ): ChatArtifact | null {
-  const list = extractArtifacts(text, parts, idPrefix);
+  const list = extractArtifacts(text, parts, idPrefix, options);
   return list.length ? list[list.length - 1]! : null;
 }

@@ -34,7 +34,7 @@ import { WorktreeSidebarRow } from './WorktreeSidebarRow';
 interface Props {
   threads: Thread[];
   selectedId: string | null;
-  view: 'board' | 'thread' | 'automations';
+  view: 'board' | 'thread' | 'automations' | 'orchestration';
   multiSelected: Set<string>;
   repoPath: string;
   /** Registered workspaces (show even with zero threads). */

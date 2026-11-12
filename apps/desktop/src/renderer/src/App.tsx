@@ -145,7 +145,7 @@ export function App() {
   /** Full transcripts for the open chat (list IPC is preview-only). */
   const fullByIdRef = useRef(new Map<string, Thread>());
   const [selectedRev, setSelectedRev] = useState(0);
-  const [view, setView] = useState<'board' | 'thread' | 'automations'>('board');
+  const [view, setView] = useState<'board' | 'thread' | 'automations' | 'orchestration'>('board');
   const [worktreeSort, setWorktreeSort] = useState<WorktreeSortMode>(readWorktreeSort);
   const [worktreeOwnership, setWorktreeOwnership] =
     useState<BoardOwnershipFilter>(readWorktreeOwnership);

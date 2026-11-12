@@ -62,6 +62,7 @@ interface Props {
   activeArtifactId?: string | null;
   /** Prefix for extracted fence/tool ids (must match auto-open logic). */
   artifactIdPrefix?: string;
+  omitPlanWaterfall?: boolean;
   /** Fork chat history into a new tab in the same worktree. */
   onFork?: () => void;
   /** Fork into a new git worktree (Conductor-style new workspace). */
@@ -322,6 +323,7 @@ export function AgentMessage({
   onOpenArtifact,
   activeArtifactId = null,
   artifactIdPrefix,
+  omitPlanWaterfall = false,
   onFork,
   onForkWorkspace,
   hideAnswer = false,
@@ -401,8 +403,8 @@ export function AgentMessage({
   const activityLine = useMemo(() => toolActivityLine(safeParts), [safeParts]);
   const idPrefix = artifactIdPrefix ?? (streaming ? 'live' : 'msg');
   const paneContents = useMemo(
-    () => extractRightPaneContents(answer || text, safeParts, idPrefix),
-    [answer, text, safeParts, idPrefix],
+    () => extractRightPaneContents(answer || text, safeParts, idPrefix, omitPlanWaterfall ? { omitPlanWaterfall: true } : undefined),
+    [answer, text, safeParts, idPrefix, omitPlanWaterfall],
   );
   const durationLabel = useLiveDuration(startedAt, durationMs, Boolean(streaming));
   const lastThinking = [...safeParts].reverse().find((p) => p.type === 'thinking');

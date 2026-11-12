@@ -151,13 +151,18 @@ textarea {
 }
 
 .sidebar-slot > .sidebar,
-.right-sidebar-slot > .right-sidebar {
+.right-sidebar-slot > .right-sidebar,
+.right-sidebar-slot > .plan-sidebar {
   flex: 1;
   min-height: 0;
   min-width: 0;
   width: 100%;
   max-width: 100%;
   overflow: hidden;
+}
+
+.right-sidebar-slot > .plan-sidebar {
+  overflow: auto;
 }
 
 .panel-resize-handle {
@@ -11298,7 +11303,9 @@ body:has(.update-banner) .team-toast-stack {
   background: var(--bg);
 }
 
-.board-body.is-empty {
+.board-body.is-empty,
+.board-body:has(> .chat-empty),
+.board-body:has(> .board-waterfall.is-empty) {
   justify-content: center;
   overflow: hidden;
   padding: 0;
@@ -11496,6 +11503,249 @@ body:has(.update-banner) .team-toast-stack {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.board > .panel-header h2 {
+  flex: 0 0 auto;
+}
+
+.board > .panel-header .thread-meta {
+  margin-right: auto;
+}
+
+.board > .panel-header .actions {
+  flex-wrap: nowrap;
+}
+
+.board-view-toggle {
+  flex: 0 0 auto;
+  -webkit-app-region: no-drag;
+}
+
+.board-waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 920px;
+  padding-bottom: 12px;
+}
+
+.plan-sidebar {
+  overflow: auto;
+  padding: 16px 14px 24px;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.plan-sidebar:has(.board-waterfall.is-empty) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.plan-sidebar .chat-empty {
+  margin: 0;
+  padding: 8px 4px 16px;
+}
+
+.plan-sidebar .chat-empty h3 {
+  font-size: 16px;
+}
+
+.board-waterfall.is-empty {
+  max-width: none;
+  gap: 0;
+  padding: 0;
+}
+
+.board-waterfall.is-compact {
+  max-width: none;
+  gap: 16px;
+}
+
+.board-waterfall-stack {
+  display: contents;
+}
+
+.board-waterfall.is-columns {
+  max-width: none;
+  gap: 0;
+  padding-bottom: 0;
+}
+
+.board-waterfall-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+.board-waterfall-steps {
+  display: contents;
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block {
+  height: 340px;
+  overflow: hidden;
+  box-sizing: border-box;
+  gap: 12px;
+  padding: 14px 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-elevated, var(--bg)) 72%, transparent);
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block.is-openable {
+  cursor: pointer;
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block.is-openable:hover {
+  border-color: color-mix(in srgb, var(--border) 35%, var(--text));
+}
+
+.board-waterfall.is-columns .board-waterfall-plan-block.is-openable:focus-visible {
+  outline: 2px solid var(--accent, var(--text));
+  outline-offset: 2px;
+}
+
+.board-waterfall.is-columns .board-waterfall-plan,
+.board-waterfall.is-columns .board-waterfall-plan p,
+.board-waterfall.is-columns .board-waterfall-lead {
+  max-width: none;
+}
+
+.board-waterfall-plan-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board-waterfall-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 62ch;
+}
+
+.board-waterfall-plan button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.board-waterfall-plan h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.board-waterfall-goal {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.board-waterfall-plan p,
+.board-waterfall-lead,
+.board-waterfall-empty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 62ch;
+}
+
+.board-waterfall-status {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.board-waterfall-empty h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.board-waterfall-error {
+  margin: 0;
+  color: var(--err);
+  font-size: 13px;
+}
+
+.board-waterfall-chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-waterfall-node {
+  max-width: 440px;
+}
+
+.board-waterfall-drop {
+  margin: 0 0 0 22px;
+  padding: 10px 0 10px 14px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.board-waterfall-drop .is-clear {
+  color: var(--ok);
+}
+
+.board-waterfall-drop .is-waiting {
+  color: var(--warn);
+}
+
+.board-waterfall-bar {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--bg) 86%, var(--accent));
+}
+
+.board-waterfall-bar.is-waiting {
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--border));
+  background: color-mix(in srgb, var(--bg) 90%, var(--warn));
+}
+
+.board-waterfall-bar.is-clear {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--bg) 90%, var(--ok));
+}
+
+.board-waterfall-bar.is-openable {
+  cursor: pointer;
+}
+
+.board-waterfall-bar.is-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--bg) 82%, var(--accent));
+}
+
+.board-waterfall-bar.is-current .board-waterfall-kicker {
+  color: var(--text);
+}
+
+.board-waterfall-kicker {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .board-body.board-kanban-wrap {
@@ -11779,6 +12029,10 @@ body:has(.update-banner) .team-toast-stack {
 
 .workspace-name-btn:hover {
   background: var(--bg-hover);
+}
+
+.workspace-name-btn.active {
+  background: var(--accent-soft);
 }
 
 .workspace-name {

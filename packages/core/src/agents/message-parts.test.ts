@@ -709,7 +709,7 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('set_workspace_tags', {})).toBe('Set workspace tags');
     expect(toolDescription('create_schedule', { name: 'Standup' })).toBe('Automation Standup');
     expect(toolDescription('list_schedules', {})).toBe('List automations');
-    expect([toolDescription('list_env', {}), toolDescription('set_env', {}), toolDescription('delete_env', {})]).toEqual(['List env vars', 'Set env var', 'Delete env var']);
+    expect([toolDescription('list_order', {}), toolDescription('show_plan', {}), toolDescription('set_plan', {}), toolDescription('execute_plan', {}), toolDescription('set_dependency', {}), toolDescription('list_env', {}), toolDescription('set_env', {}), toolDescription('delete_env', {})]).toEqual(['List planner', 'Show plan', 'Draft plan', 'Run plan', 'Set dependency', 'List env vars', 'Set env var', 'Delete env var']);
     expect(toolDescription('Skill', { skill: 'long-running' })).toBe('Using /long-running');
     expect(toolDescription('SlashCommand', { command: '/commit' })).toBe('Using /commit');
     expect(toolDescription('Skill')).toBe('Using skill');
