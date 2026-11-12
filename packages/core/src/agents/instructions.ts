@@ -200,7 +200,7 @@ export function formatWorktreeDirective(
     '`set_workspace_tags` labels this checkout (omit ref; replace, add, or remove). Not another checkout.',
   );
   lines.push(
-    'Orchestration: `show_waterfall` shows your place. `list_order` / `set_dependency`',
+    'Orchestration: `show_plan` opens the diagram and plan.md. `list_order` / `set_dependency`',
   );
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));

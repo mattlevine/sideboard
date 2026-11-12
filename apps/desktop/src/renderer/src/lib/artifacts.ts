@@ -560,6 +560,21 @@ export type ArtifactExtractOptions = {
   omitPlanWaterfall?: boolean;
 };
 
+/** `show_plan` can return both the diagram and the checkout plan. */
+function artifactRecords(
+  shortName: string,
+  resultRec: Record<string, unknown> | undefined,
+  wrapped: Record<string, unknown> | undefined,
+): Record<string, unknown>[] {
+  if (matchesPresentTool(shortName, 'show_plan') && Array.isArray(resultRec?.artifacts)) {
+    const list = resultRec.artifacts
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    if (list.length) return list;
+  }
+  return wrapped ? [wrapped] : [];
+}
+
 /** Extract artifacts from present_artifact / Brightsy create|update_artifact tool parts. */
 export function extractToolArtifacts(
   parts: MessagePart[] | undefined,
@@ -578,13 +593,10 @@ export function extractToolArtifacts(
       out.push(jobLog);
       continue;
     }
-    if (options?.omitPlanWaterfall && matchesPresentTool(shortName, 'show_waterfall')) {
-      continue;
-    }
     if (
       !/^(create|update)_artifact$/i.test(shortName) &&
       !matchesPresentTool(shortName, 'present_artifact') &&
-      !matchesPresentTool(shortName, 'show_waterfall')
+      !matchesPresentTool(shortName, 'show_plan')
     ) {
       continue;
     }
@@ -595,43 +607,53 @@ export function extractToolArtifacts(
       asRecord(resultRec?.artifact) ??
       asRecord(resultRec?.plan) ??
       resultRec;
+    const records = artifactRecords(shortName, resultRec, wrapped);
+    const list = records.length > 0 ? records : input ? [input] : [];
+    for (const record of list) {
+      if (
+        options?.omitPlanWaterfall &&
+        matchesPresentTool(shortName, 'show_plan') &&
+        str(record.artifact_id) === 'plan'
+      ) {
+        continue;
+      }
+      const type = str(record.type) ?? str(input?.type);
+      const rawContent =
+        contentFromUnknown(record.content) ??
+        contentFromUnknown(input?.content) ??
+        contentFromUnknown(record) ??
+        contentFromUnknown(input);
+      const kind = kindFromArtifactType(type, rawContent ?? '');
+      const content = rawContent ?? '';
+      if (kind !== 'log' && (!content || content.trim().length < MIN_FENCE_CHARS)) continue;
 
-    const type = str(wrapped?.type) ?? str(input?.type);
-    const rawContent =
-      contentFromUnknown(wrapped?.content) ??
-      contentFromUnknown(input?.content) ??
-      contentFromUnknown(wrapped) ??
-      contentFromUnknown(input);
-    const kind = kindFromArtifactType(type, rawContent ?? '');
-    const content = rawContent ?? '';
-    if (kind !== 'log' && (!content || content.trim().length < MIN_FENCE_CHARS)) continue;
+      const artifactId =
+        str(record.artifact_id) ??
+        str(input?.artifact_id) ??
+        str(record.id) ??
+        part.id;
+      const title =
+        str(record.title) ??
+        str(input?.title) ??
+        titleFromContent(kind, content, kind === 'log' ? 'Log' : 'Artifact');
+      const modeRaw = str(record.mode) ?? str(input?.mode);
+      const mode = modeRaw === 'replace' ? 'replace' : modeRaw === 'append' ? 'append' : undefined;
 
-    const artifactId =
-      str(wrapped?.artifact_id) ??
-      str(input?.artifact_id) ??
-      str(wrapped?.id) ??
-      part.id;
-    const title =
-      str(wrapped?.title) ??
-      str(input?.title) ??
-      titleFromContent(kind, content, kind === 'log' ? 'Log' : 'Artifact');
-    const modeRaw = str(wrapped?.mode) ?? str(input?.mode);
-    const mode = modeRaw === 'replace' ? 'replace' : modeRaw === 'append' ? 'append' : undefined;
-
-    out.push({
-      id: `tool-${artifactId}`,
-      title,
-      kind,
-      language:
-        kind === 'code'
-          ? resolveCodeLanguage(languageLabel(kind, type ?? ''), content)
-          : languageLabel(kind, type ?? ''),
-      content,
-      source: 'tool',
-      status: parseLogStatus(wrapped?.status) ?? parseLogStatus(input?.status),
-      phase: str(wrapped?.phase) ?? str(input?.phase),
-      mode,
-    });
+      out.push({
+        id: `tool-${artifactId}`,
+        title,
+        kind,
+        language:
+          kind === 'code'
+            ? resolveCodeLanguage(languageLabel(kind, type ?? ''), content)
+            : languageLabel(kind, type ?? ''),
+        content,
+        source: 'tool',
+        status: parseLogStatus(record.status) ?? parseLogStatus(input?.status),
+        phase: str(record.phase) ?? str(input?.phase),
+        mode,
+      });
+    }
   }
   const streaming = parts.some((p) => p.type === 'tool' && p.status === 'running');
   if (streaming) return out;

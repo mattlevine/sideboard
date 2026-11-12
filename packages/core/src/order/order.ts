@@ -54,6 +54,8 @@ export {
   formatOrderPlace,
   formatOrderText,
   formatWaterfallHtml,
+  showPlanDocuments,
+  showPlanMessage,
   gatePhrase,
   holdPhrase,
   orderEdgeTouches,

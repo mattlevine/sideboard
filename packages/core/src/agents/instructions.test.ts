@@ -367,7 +367,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/set_workspace_tags/);
     expect(text).toMatch(/set_dependency/);
     expect(text).toMatch(/list_order/);
-    expect(text).toMatch(/show_waterfall/);
+    expect(text).toMatch(/show_plan/);
     expect(text).toMatch(/create_schedule/);
     expect(text).toMatch(/chatId=self/);
     expect(text).toMatch(/SIDEBOARD_PORT/);

@@ -95,7 +95,7 @@ export const WORKTREE_MCP_TOOLS = [
   'delete_schedule',
   'run_schedule',
   'list_order',
-  'show_waterfall',
+  'show_plan',
   'set_dependency',
   'clear_dependency',
   'satisfy_dependency',

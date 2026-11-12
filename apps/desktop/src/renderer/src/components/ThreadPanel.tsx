@@ -29,12 +29,16 @@ import {
 } from './schema/RightColumnPane';
 import type { FilePickerRequest } from './schema/FileManagerColumn';
 import {
+  applyShownPanes,
   finalizeRightPaneAfterStream,
   findLiveTabReplaceIndex,
   isFilesPane,
   isSchemaPane,
   latestRightPaneContent,
+  panesForSession,
   sameRightPane,
+  showPlanOpenSignature,
+  showPlanPanes,
   upsertRightPaneTab,
   type FilesPaneContent,
   type RightPaneContent,
@@ -431,6 +435,8 @@ export function ThreadPanel({
   const [filePicker, setFilePicker] = useState<RightColumnFilePicker | null>(null);
   /** After the user closes the pane, skip auto-open until a different artifact. */
   const suppressArtifactAutoOpen = useRef(isRightPaneSuppressed(thread.id));
+  /** Last show_plan result already opened, so a refresh does not restore a closed tab. */
+  const showPlanSigRef = useRef('');
 
   const rightPane =
     rightSession?.tabs.find((t) => t.id === rightSession.activeId) ??
@@ -1848,6 +1854,15 @@ export function ThreadPanel({
   useLayoutEffect(() => {
     suppressArtifactAutoOpen.current = isRightPaneSuppressed(thread.id);
     setFilePicker(null);
+    let seenPlan = '';
+    for (let i = thread.messages.length - 1; i >= 0; i--) {
+      const sig = showPlanOpenSignature(thread.messages[i]?.parts);
+      if (sig) {
+        seenPlan = sig;
+        break;
+      }
+    }
+    showPlanSigRef.current = seenPlan;
     const stored = getRememberedRightPaneSession(thread.id);
     const remembered = stored;
     if (remembered !== undefined) {
@@ -1862,20 +1877,23 @@ export function ThreadPanel({
       setRightSession(null);
       return;
     }
-    let fromHistory: RightPaneContent | null = null;
+    let opening: RightPaneContent[] = [];
     for (let i = thread.messages.length - 1; i >= 0; i--) {
       const m = thread.messages[i];
       if (m?.role !== 'agent') continue;
-      fromHistory = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
-      if (fromHistory) {
-        fromHistory = finalizeRightPaneAfterStream(fromHistory, m.parts);
-        break;
-      }
+      const planPanes = showPlanPanes(m.parts);
+      const latest = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
+      const settled = latest ? finalizeRightPaneAfterStream(latest, m.parts) : null;
+      opening = panesForSession(planPanes, settled);
+      if (opening.length) break;
     }
-    if (fromHistory) {
-      const session = { tabs: [fromHistory], activeId: fromHistory.id };
-      prevRightTabCount.current = 1;
-      applyFirstOpenSplit();
+    if (opening.length) {
+      let session: RightPaneSession | null = null;
+      for (const pane of opening) {
+        session = upsertRightPaneTab(session?.tabs ?? [], pane);
+      }
+      prevRightTabCount.current = session?.tabs.length ?? 0;
+      if (session && session.tabs.length > 0) applyFirstOpenSplit();
       setRightSession(session);
       rememberRightPaneSession(thread.id, session);
     } else {
@@ -1899,44 +1917,87 @@ export function ThreadPanel({
     if (!chatViewOpen) return;
 
     if (showStreaming) {
+      const planPanes = showPlanPanes(liveParts);
       const candidate = latestRightPaneContent(liveOutput, liveParts, 'live');
-      if (!candidate) return;
-      if (suppressArtifactAutoOpen.current) {
+      const sig = showPlanOpenSignature(liveParts);
+      const fresh = sig !== '' && sig !== showPlanSigRef.current;
+      const focus = candidate ?? (fresh ? planPanes[planPanes.length - 1] : null);
+      if (!focus && planPanes.length === 0) return;
+      if (focus && suppressArtifactAutoOpen.current) {
         const closed = getClosedRightPane(thread.id);
-        if (closed && sameRightPane(closed, candidate)) return;
+        if (closed && sameRightPane(closed, focus)) return;
         suppressArtifactAutoOpen.current = false;
         setRightPaneSuppressed(thread.id, false);
       }
+      if (fresh) showPlanSigRef.current = sig;
       setRightSession((prev) => {
-        const session = upsertRightPaneTab(prev?.tabs ?? [], candidate, {
-          activate: false,
-          activeId: prev?.activeId,
-        });
-        rememberRightPaneSession(thread.id, session);
-        return session;
+        let next = applyShownPanes(prev, planPanes, fresh ? 'insert' : 'update');
+        if (candidate) {
+          next = upsertRightPaneTab(next?.tabs ?? [], candidate, {
+            activate: false,
+            activeId: next?.activeId,
+          });
+        }
+        if (!next) return prev;
+        rememberRightPaneSession(thread.id, next);
+        return next;
       });
       return;
     }
 
+    let freshOpening: RightPaneContent[] | null = null;
+    let freshSig = '';
+    if (!suppressArtifactAutoOpen.current) {
+      for (let i = thread.messages.length - 1; i >= 0; i--) {
+        const m = thread.messages[i];
+        if (m?.role !== 'agent') continue;
+        const sig = showPlanOpenSignature(m.parts);
+        if (sig && sig !== showPlanSigRef.current) {
+          const planPanes = showPlanPanes(m.parts);
+          const latest = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
+          const settled = latest ? finalizeRightPaneAfterStream(latest, m.parts) : null;
+          freshOpening = panesForSession(planPanes, settled);
+          freshSig = sig;
+        }
+        break;
+      }
+    }
+
     setRightSession((prev) => {
-      if (!prev?.tabs.length) return prev;
+      let next = prev;
+      if (freshOpening?.length) {
+        const missing = freshOpening.some(
+          (pane) => !next?.tabs.some((tab) => tab.id === pane.id || sameRightPane(tab, pane)),
+        );
+        if (missing || !next?.tabs.length) {
+          showPlanSigRef.current = freshSig;
+          next = applyShownPanes(next, freshOpening, 'insert');
+        }
+      }
+      if (!next || next.tabs.length === 0) return next;
       for (let i = thread.messages.length - 1; i >= 0; i--) {
         const m = thread.messages[i];
         if (m?.role !== 'agent') continue;
         const candidate = latestRightPaneContent(m.text, m.parts, `msg-${i}`);
-        if (!candidate) return prev;
+        if (!candidate) {
+          if (next !== prev && next) rememberRightPaneSession(thread.id, next);
+          return next;
+        }
         const settled = finalizeRightPaneAfterStream(candidate, m.parts);
-        const liveIdx = findLiveTabReplaceIndex(prev.tabs, settled);
-        if (liveIdx < 0) return prev;
-        const session = upsertRightPaneTab(prev.tabs, settled, {
+        const liveIdx = findLiveTabReplaceIndex(next.tabs, settled);
+        if (liveIdx < 0) {
+          if (next !== prev && next) rememberRightPaneSession(thread.id, next);
+          return next;
+        }
+        const session = upsertRightPaneTab(next.tabs, settled, {
           activate: false,
-          activeId: prev.activeId,
-          replaceId: prev.tabs[liveIdx]!.id,
+          activeId: next.activeId,
+          replaceId: next.tabs[liveIdx]!.id,
         });
         rememberRightPaneSession(thread.id, session);
         return session;
       }
-      return prev;
+      return next;
     });
   }, [
     chatViewOpen,

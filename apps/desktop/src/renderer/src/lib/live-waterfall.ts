@@ -32,7 +32,7 @@ async function planForChat(board: OrderBoard, threadId: string | undefined): Pro
 
 /**
  * Fresh planner HTML. Gates and the Working mark come from the live board,
- * so the side column can replace the snapshot `show_waterfall` first returned.
+ * so the side column can replace the snapshot `show_plan` first returned.
  */
 export async function refreshLiveWaterfall(threadId: string | undefined): Promise<string | null> {
   const board = coerceOrderBoard(await window.sideboard.listOrder());

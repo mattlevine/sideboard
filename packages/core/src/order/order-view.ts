@@ -589,7 +589,7 @@ function nodeIsYou(node: WaterfallNode, you: OrderThreadSnapshot | null | undefi
   );
 }
 
-/** Side-column document. `show_waterfall` returns this so the desktop opens it. */
+/** Side-column document. `show_plan` returns this so the desktop opens it. */
 export function formatWaterfallHtml(
   chains: WaterfallChain[],
   opts?: { plan?: OrderPlan | null; you?: OrderThreadSnapshot | null },
@@ -661,6 +661,63 @@ ${summary}
 ${body}
 </body>
 </html>`;
+}
+
+export interface ShowPlanDocument {
+  title: string;
+  type: 'html' | 'markdown';
+  artifact_id: 'plan' | 'checkout-plan';
+  content: string;
+}
+
+/** First heading in a checkout implementation plan, or a plain fallback. */
+export function checkoutPlanTitle(markdown: string): string {
+  const match = /^#{1,6}[ \t]+(.+?)[ \t]*$/m.exec(markdown);
+  const title = match?.[1]?.replace(/\s+#+\s*$/, '').trim() ?? '';
+  return title.slice(0, 80) || 'Implementation plan';
+}
+
+/**
+ * Documents `show_plan` opens. The checkout implementation plan comes first.
+ * The orchestration diagram is last so it is the active tab when both exist.
+ */
+export function showPlanDocuments(input: {
+  diagramTitle?: string | null;
+  diagramHtml?: string | null;
+  checkoutMarkdown?: string | null;
+}): ShowPlanDocument[] {
+  const docs: ShowPlanDocument[] = [];
+  const markdown = input.checkoutMarkdown ?? '';
+  if (markdown.trim()) {
+    docs.push({
+      title: checkoutPlanTitle(markdown),
+      type: 'markdown',
+      artifact_id: 'checkout-plan',
+      content: markdown,
+    });
+  }
+  const html = input.diagramHtml ?? '';
+  if (html.trim()) {
+    docs.push({
+      title: input.diagramTitle?.trim() || 'Planner',
+      type: 'html',
+      artifact_id: 'plan',
+      content: html,
+    });
+  }
+  return docs;
+}
+
+export function showPlanMessage(docs: ShowPlanDocument[], worktree: boolean): string {
+  const diagram = docs.some((doc) => doc.artifact_id === 'plan');
+  const checkout = docs.some((doc) => doc.artifact_id === 'checkout-plan');
+  if (diagram && checkout) {
+    return "Opened the orchestration plan and this checkout's implementation plan.";
+  }
+  if (checkout) return "Opened this checkout's implementation plan.";
+  return worktree
+    ? 'Opened the orchestration plan in the side column, with this checkout marked.'
+    : 'Opened the plan in the side column.';
 }
 
 export function buildWaterfall(rows: OrderRow[]): WaterfallChain[] {

@@ -9,6 +9,8 @@ import {
   formatOrderPlace,
   formatOrderText,
   formatWaterfallHtml,
+  showPlanDocuments,
+  showPlanMessage,
   buildPlanMap,
   planWatchCopy,
   resolveOrchestrationGates,
@@ -459,5 +461,34 @@ describe('order of operations', () => {
     expect(map.nodes.find((node) => node.id === 'p2')!.depth).toBeGreaterThan(
       map.nodes.find((node) => node.id === 'p1')!.depth,
     );
+  });
+});
+
+describe('showPlanDocuments', () => {
+  const html = '<!DOCTYPE html><html><body><h1>Fleet</h1></body></html>';
+  const markdown = '# Ship the relay\n\nWait for the API pull request, then start the phone client.\n';
+
+  it('opens the checkout plan and then the diagram', () => {
+    const docs = showPlanDocuments({
+      diagramTitle: 'Fleet',
+      diagramHtml: html,
+      checkoutMarkdown: markdown,
+    });
+    expect(docs.map((doc) => doc.artifact_id)).toEqual(['checkout-plan', 'plan']);
+    expect(docs[0]?.title).toBe('Ship the relay');
+    expect(docs[0]?.type).toBe('markdown');
+    expect(docs[1]?.type).toBe('html');
+    expect(showPlanMessage(docs, true)).toMatch(/implementation plan/);
+  });
+
+  it('opens only the document that exists', () => {
+    expect(showPlanDocuments({ checkoutMarkdown: markdown }).map((doc) => doc.artifact_id)).toEqual([
+      'checkout-plan',
+    ]);
+    expect(showPlanDocuments({ diagramTitle: 'Fleet', diagramHtml: html })).toEqual([
+      { title: 'Fleet', type: 'html', artifact_id: 'plan', content: html },
+    ]);
+    expect(showPlanDocuments({})).toEqual([]);
+    expect(showPlanMessage([], false)).toMatch(/Opened the plan/);
   });
 });

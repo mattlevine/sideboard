@@ -710,7 +710,7 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('create_schedule', { name: 'Standup' })).toBe('Automation Standup');
     expect(toolDescription('list_schedules', {})).toBe('List automations');
     expect(toolDescription('list_order', {})).toBe('List planner');
-    expect(toolDescription('show_waterfall', {})).toBe('Show planner');
+    expect(toolDescription('show_plan', {})).toBe('Show plan');
     expect(toolDescription('set_plan', {})).toBe('Draft plan');
     expect(toolDescription('execute_plan', {})).toBe('Run plan');
     expect(toolDescription('set_dependency', {})).toBe('Set dependency');

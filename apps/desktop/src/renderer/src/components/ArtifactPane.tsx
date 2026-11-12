@@ -76,7 +76,7 @@ export function ArtifactPane({
   artifact: source,
 }: Props) {
   const artifact = useDetachedJobLog(source, worktreeThreadId);
-  const liveWaterfall = artifact.id === 'tool-waterfall' && artifact.kind === 'html';
+  const liveWaterfall = artifact.id === 'tool-plan' && artifact.kind === 'html';
   const [liveHtml, setLiveHtml] = useState<string | null>(null);
   useEffect(() => {
     if (!liveWaterfall) {

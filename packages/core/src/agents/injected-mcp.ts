@@ -70,7 +70,7 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__delete_schedule',
   'mcp__sideboard__run_schedule',
   'mcp__sideboard__list_order',
-  'mcp__sideboard__show_waterfall',
+  'mcp__sideboard__show_plan',
   'mcp__sideboard__set_dependency',
   'mcp__sideboard__clear_dependency',
   'mcp__sideboard__satisfy_dependency',

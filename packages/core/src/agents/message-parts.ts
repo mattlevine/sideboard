@@ -296,7 +296,7 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/delete_schedule$/i.test(name)) return 'Delete automation';
   if (/run_schedule$/i.test(name)) return 'Run automation';
   if (/list_order$/i.test(name)) return 'List planner';
-  if (/show_waterfall$/i.test(name)) return 'Show planner';
+  if (/show_plan$/i.test(name)) return 'Show plan';
   if (/set_plan$/i.test(name)) return 'Draft plan';
   if (/execute_plan$/i.test(name)) return 'Run plan';
   if (/set_dependency$/i.test(name)) return 'Set dependency';

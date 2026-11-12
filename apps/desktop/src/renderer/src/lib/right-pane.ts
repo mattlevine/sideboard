@@ -1,6 +1,7 @@
 import type { MessagePart } from '@sideboard-ai/core';
 import {
   extractArtifacts,
+  extractToolArtifacts,
   flattenToolInput,
   latestArtifact,
   mergeAppendableArtifact,
@@ -101,7 +102,7 @@ export function isFilesPane(content: RightPaneContent | null | undefined): conte
   return Boolean(content && (content as FilesPaneContent).kind === 'files');
 }
 
-const PLAN_WATERFALL_PANE_ID = 'tool-waterfall';
+const PLAN_WATERFALL_PANE_ID = 'tool-plan';
 
 export function isPlanWaterfallPane(content: RightPaneContent | null | undefined): boolean {
   return Boolean(isDocumentPane(content) && content.id === PLAN_WATERFALL_PANE_ID);
@@ -474,6 +475,66 @@ export function extractRightPaneContents(
   ];
   const docs = extractArtifacts(text, parts, idPrefix, options);
   return [...schemas, ...docs];
+}
+
+/** Documents from the latest `show_plan` call: checkout plan, then the diagram. */
+export function showPlanPanes(
+  parts: MessagePart[] | undefined,
+  options?: ArtifactExtractOptions,
+): ChatArtifact[] {
+  const calls = (parts ?? []).filter(
+    (part) => part.type === 'tool' && /show_plan$/i.test(part.name ?? ''),
+  );
+  const latest = calls[calls.length - 1];
+  if (!latest) return [];
+  return extractToolArtifacts([latest], options);
+}
+
+/** Stable across a settled tool result so a closed tab is not put back. */
+export function showPlanOpenSignature(parts: MessagePart[] | undefined): string {
+  const panes = showPlanPanes(parts);
+  if (!panes.length) return '';
+  return panes
+    .map((pane) => `${pane.id}:${pane.content.length}:${pane.content.slice(-32)}`)
+    .join('|');
+}
+
+/** Plan documents first, then a newer pane from the same turn when it is not one of them. */
+export function panesForSession(
+  planPanes: RightPaneContent[],
+  latest: RightPaneContent | null,
+): RightPaneContent[] {
+  const out = [...planPanes];
+  if (latest && !out.some((pane) => pane.id === latest.id || sameRightPane(pane, latest))) {
+    out.push(latest);
+  }
+  return out;
+}
+
+/**
+ * `insert` adds every pane (a new show_plan). `update` refreshes panes still
+ * open and leaves a tab the user closed where they closed it.
+ */
+export function applyShownPanes(
+  session: RightPaneSession | null,
+  panes: RightPaneContent[],
+  mode: 'insert' | 'update',
+): RightPaneSession | null {
+  const list =
+    mode === 'insert'
+      ? panes
+      : panes.filter((pane) =>
+          session?.tabs.some((tab) => tab.id === pane.id || sameRightPane(tab, pane)),
+        );
+  if (!list.length) return session;
+  let next = session;
+  for (const pane of list) {
+    next = upsertRightPaneTab(next?.tabs ?? [], pane, {
+      activate: false,
+      activeId: next?.activeId ?? null,
+    });
+  }
+  return next;
 }
 
 /** Newest right-pane payload (files/schema tools beat document artifacts). */
