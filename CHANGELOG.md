@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.339] - 2026-11-12
+
+### Added
+
+- Each orchestration chat has one plan. `show_plan` opens the diagram beside the chat, and it stays current as gates clear and steps start. A worktree on that plan also opens its `plan.md` when the file exists.
+
 ## [0.1.338] - 2026-11-08
 
 ### Fixed
