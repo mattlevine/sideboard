@@ -572,7 +572,8 @@ export function extractToolArtifacts(parts: MessagePart[] | undefined): ChatArti
     }
     if (
       !/^(create|update)_artifact$/i.test(shortName) &&
-      !matchesPresentTool(shortName, 'present_artifact')
+      !matchesPresentTool(shortName, 'present_artifact') &&
+      !matchesPresentTool(shortName, 'show_waterfall')
     ) {
       continue;
     }

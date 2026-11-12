@@ -171,6 +171,39 @@ ${'// padding so the fence minimum does not reject this\n'.repeat(6)}`;
     expect(arts[0]!.kind).toBe('html');
   });
 
+  it('opens the waterfall diagram from show_waterfall', () => {
+    const html = '<!DOCTYPE html><html><body><h1>Waterfall</h1></body></html>';
+    const parts: MessagePart[] = [
+      {
+        type: 'tool',
+        id: 't-wf',
+        name: 'mcp__sideboard__show_waterfall',
+        status: 'done',
+        input: {},
+        result: {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                ok: true,
+                title: 'Waterfall',
+                type: 'html',
+                artifact_id: 'waterfall',
+                content: html,
+              }),
+            },
+          ],
+        },
+      },
+    ];
+    const arts = extractToolArtifacts(parts);
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.id).toBe('tool-waterfall');
+    expect(arts[0]!.kind).toBe('html');
+    expect(arts[0]!.title).toBe('Waterfall');
+    expect(arts[0]!.content).toContain('<h1>Waterfall</h1>');
+  });
+
   it('reads present_artifact content from input when the tool result is compact', () => {
     const html = '<!DOCTYPE html><html><body><h1>Compact</h1></body></html>';
     const parts: MessagePart[] = [

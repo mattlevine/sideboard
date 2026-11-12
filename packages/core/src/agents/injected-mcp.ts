@@ -68,7 +68,13 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__create_schedule',
   'mcp__sideboard__update_schedule',
   'mcp__sideboard__delete_schedule',
-  'mcp__sideboard__run_schedule', 'mcp__sideboard__posthog_api',
+  'mcp__sideboard__run_schedule',
+  'mcp__sideboard__list_order',
+  'mcp__sideboard__show_waterfall',
+  'mcp__sideboard__set_dependency',
+  'mcp__sideboard__clear_dependency',
+  'mcp__sideboard__satisfy_dependency',
+  'mcp__sideboard__posthog_api',
 ] as const;
 
 /** Account issue tools on the worktree MCP profile. */

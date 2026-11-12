@@ -34,12 +34,13 @@ import { WorktreeSidebarRow } from './WorktreeSidebarRow';
 interface Props {
   threads: Thread[];
   selectedId: string | null;
-  view: 'board' | 'thread' | 'automations';
+  view: 'board' | 'thread' | 'automations' | 'orchestration';
   multiSelected: Set<string>;
   repoPath: string;
   /** Registered workspaces (show even with zero threads). */
   workspaces?: Array<{ path: string; name: string }>;
   onShowBoard: () => void;
+  onShowOrchestration: () => void;
   onShowAutomations: () => void;
   onSelect: (id: string, multi: boolean) => void;
   onNew: (repoPath?: string, mode?: 'quick' | 'orchestration') => void;
@@ -90,6 +91,7 @@ export function Sidebar({
   repoPath,
   workspaces = [],
   onShowBoard,
+  onShowOrchestration,
   onShowAutomations,
   onSelect,
   onNew,
@@ -232,12 +234,14 @@ export function Sidebar({
     selectedId,
     GLOBAL_WORKSPACE_ID,
   );
-  const orchActive =
+  const orchBoard = view === 'orchestration';
+  const orchThreadOpen =
     view === 'thread' && globalThreads.some((t) => t.id === selectedId);
+  const orchActive = orchBoard || orchThreadOpen;
   const orchSelected = globalThreads.some((t) => multiSelected.has(t.id));
   const orchArchiving = globalThreads.some((t) => archivingIds.has(t.id));
   const orchUnread = isGroupUnread(globalThreads, {
-    activeChatId: orchActive ? selectedId : null,
+    activeChatId: orchThreadOpen ? selectedId : null,
   });
 
   return (
@@ -300,9 +304,9 @@ export function Sidebar({
                 <div className="workspace-header">
                   <button
                     type="button"
-                    className="workspace-name-btn"
-                    title="Add agent"
-                    onClick={() => onNew(undefined, 'orchestration')}
+                    className={`workspace-name-btn${orchBoard ? ' active' : ''}`}
+                    title="Orchestration"
+                    onClick={onShowOrchestration}
                   >
                     <span className="workspace-glyph" aria-hidden />
                     <span className="workspace-name">Orchestration</span>
@@ -335,6 +339,7 @@ export function Sidebar({
                   archiving={orchArchiving}
                   unread={orchUnread}
                   onSelect={onSelect}
+                  onParentClick={onShowOrchestration}
                   onMarkUnread={onMarkUnread}
                   onRenameChat={onRenameChat}
                   onCloseChat={onCloseChat}

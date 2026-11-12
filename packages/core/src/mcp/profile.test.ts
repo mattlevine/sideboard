@@ -105,6 +105,11 @@ describe('sideboardMcpProfile', () => {
       'update_schedule',
       'delete_schedule',
       'run_schedule',
+      'list_order',
+      'show_waterfall',
+      'set_dependency',
+      'clear_dependency',
+      'satisfy_dependency',
     ]);
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_chats');
     expect(WORKTREE_MCP_TOOLS).not.toContain('list_board');

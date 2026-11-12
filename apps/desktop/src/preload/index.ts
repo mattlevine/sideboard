@@ -150,6 +150,18 @@ const api: IpcApi = {
   fanOut: (threadRefs, prompt) => ipcRenderer.invoke('fanOut', threadRefs, prompt),
   startOrchestration: (opts) => ipcRenderer.invoke('startOrchestration', opts),
   listSchedules: () => ipcRenderer.invoke('listSchedules'),
+  listOrder: () => ipcRenderer.invoke('listOrder'),
+  setOrderDependency: (input) => ipcRenderer.invoke('setOrderDependency', input),
+  clearOrderDependency: (id) => ipcRenderer.invoke('clearOrderDependency', id),
+  satisfyOrderDependency: (id, satisfied) =>
+    ipcRenderer.invoke('satisfyOrderDependency', id, satisfied),
+  onOrderChanged: (listener) => {
+    const handler = () => listener();
+    ipcRenderer.on('order:changed', handler);
+    return () => {
+      ipcRenderer.removeListener('order:changed', handler);
+    };
+  },
   createSchedule: (input) => ipcRenderer.invoke('createSchedule', input),
   updateSchedule: (id, patch) => ipcRenderer.invoke('updateSchedule', id, patch),
   deleteSchedule: (id) => ipcRenderer.invoke('deleteSchedule', id),

@@ -32,6 +32,7 @@
       "@sideboard/review-request-template": ["../../packages/core/src/review/review-request-template.ts"],
       "@sideboard/issue-source-labels": ["../../packages/core/src/store/issue-source-labels.ts"],
       "@sideboard/home-board": ["../../packages/core/src/board/home-board.ts"],
+      "@sideboard/order-view": ["../../packages/core/src/order/order-view.ts"],
       "@sideboard/implied-first-prompt": ["../../packages/core/src/threads/implied-first-prompt.ts"],
       "@sideboard/history-retention": ["../../packages/core/src/store/history-retention.ts"],
       "@sideboard/phone-artifact": ["../../packages/core/src/remote/phone-artifact.ts"],

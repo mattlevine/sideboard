@@ -194,10 +194,13 @@ export function formatWorktreeDirective(
   lines.push(formatDevAccessHint(opts?.activeRuns));
   lines.push('');
   lines.push(
-    'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. A future job turns on Settings → Advanced → Caffeinate while automations are enabled.',
+    'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. Future jobs turn on Caffeinate.',
   );
   lines.push(
     '`set_workspace_tags` labels this checkout (omit ref; replace, add, or remove). Not another checkout.',
+  );
+  lines.push(
+    'Orchestration: `show_waterfall` shows your place. `list_order` / `set_dependency`',
   );
   lines.push('');
   lines.push(formatProcessGuideDirective({ worktreePath: thread.worktreePath }));

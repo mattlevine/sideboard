@@ -94,6 +94,11 @@ export const WORKTREE_MCP_TOOLS = [
   'update_schedule',
   'delete_schedule',
   'run_schedule',
+  'list_order',
+  'show_waterfall',
+  'set_dependency',
+  'clear_dependency',
+  'satisfy_dependency',
 ] as const;
 
 /** GitHub Issues via Account `gh` — always registered on worktree + orchestration. */

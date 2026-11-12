@@ -295,6 +295,13 @@ export function toolDescription(name: string, input?: Record<string, unknown>): 
   if (/update_schedule$/i.test(name)) return 'Update automation';
   if (/delete_schedule$/i.test(name)) return 'Delete automation';
   if (/run_schedule$/i.test(name)) return 'Run automation';
+  if (/list_order$/i.test(name)) return 'List planner';
+  if (/show_waterfall$/i.test(name)) return 'Show planner';
+  if (/set_plan$/i.test(name)) return 'Draft plan';
+  if (/execute_plan$/i.test(name)) return 'Run plan';
+  if (/set_dependency$/i.test(name)) return 'Set dependency';
+  if (/clear_dependency$/i.test(name)) return 'Clear dependency';
+  if (/satisfy_dependency$/i.test(name)) return 'Mark dependency clear';
   if (isSkillToolName(name)) {
     const cmd = skillCommandFromInput(input);
     return cmd ? `Using /${cmd}` : 'Using skill';

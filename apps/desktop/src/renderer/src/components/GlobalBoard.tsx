@@ -25,7 +25,6 @@ import {
   type BoardOwnershipFilter,
   type WorktreeSortMode,
 } from '../lib/home-board';
-import { WorktreeOwnershipFilter } from './WorktreeOwnershipFilter';
 import { WorktreeSortSelect } from './WorktreeSortSelect';
 import {
   isWorktreeUnread,
@@ -40,6 +39,7 @@ import { MarkdownMessage } from './MarkdownMessage';
 import { ThreadStatusIcon } from './ThreadStatusIcon';
 import { IssueBlockedLine, WorktreePrBadges } from './WorktreePrBadges';
 import { WorkspaceTags } from './WorkspaceTags';
+
 interface Props {
   threads: Thread[];
   workspaces?: Workspace[];
@@ -48,7 +48,6 @@ interface Props {
   selectedId?: string | null;
   onOpenThread: (id: string) => void;
   onAddToBoard: () => void;
-  onNewOrchestration: () => void;
   onRefresh: () => void;
   onArchive: (ids: string[], meta?: { title?: string; removesWorktree?: boolean }) => void | Promise<void>;
   archivingIds?: Set<string>;
@@ -104,14 +103,12 @@ export function GlobalBoard({
   selectedId = null,
   onOpenThread,
   onAddToBoard,
-  onNewOrchestration,
   onRefresh,
   onArchive,
   archivingIds = new Set(),
   worktreeSort = DEFAULT_WORKTREE_SORT,
   onWorktreeSortChange,
   ownership = 'all',
-  onOwnershipChange,
   githubLogin = null,
   projectReviewLabels = {},
   leftSidebarToggle,
@@ -197,30 +194,15 @@ export function GlobalBoard({
             : '…'}
         </span>
         <div className="actions">
-          {onOwnershipChange ? (
-            <WorktreeOwnershipFilter
-              value={ownership}
-              onChange={onOwnershipChange}
-              githubLogin={githubLogin}
-              className="worktree-ownership board-ownership"
-            />
-          ) : null}
           {onWorktreeSortChange ? (
             <WorktreeSortSelect
               value={worktreeSort}
               onChange={onWorktreeSortChange}
-              className="worktree-sort board-sort"
+              variant="icon"
             />
           ) : null}
           <button type="button" onClick={onRefresh}>
             Refresh
-          </button>
-          <button
-            type="button"
-            onClick={onNewOrchestration}
-            title="Start a new orchestration agent"
-          >
-            New orchestration
           </button>
           <button
             type="button"

@@ -151,13 +151,18 @@ textarea {
 }
 
 .sidebar-slot > .sidebar,
-.right-sidebar-slot > .right-sidebar {
+.right-sidebar-slot > .right-sidebar,
+.right-sidebar-slot > .plan-sidebar {
   flex: 1;
   min-height: 0;
   min-width: 0;
   width: 100%;
   max-width: 100%;
   overflow: hidden;
+}
+
+.right-sidebar-slot > .plan-sidebar {
+  overflow: auto;
 }
 
 .panel-resize-handle {
@@ -11498,6 +11503,262 @@ body:has(.update-banner) .team-toast-stack {
   gap: 6px;
 }
 
+.board > .panel-header h2 {
+  flex: 0 0 auto;
+}
+
+.board > .panel-header .thread-meta {
+  margin-right: auto;
+}
+
+.board > .panel-header .actions {
+  flex-wrap: nowrap;
+}
+
+.board-view-toggle {
+  flex: 0 0 auto;
+  -webkit-app-region: no-drag;
+}
+
+.board-waterfall {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 920px;
+  padding-bottom: 12px;
+}
+
+.plan-sidebar {
+  overflow: auto;
+  padding: 16px 14px 24px;
+  background: var(--bg);
+}
+
+.plan-map {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.plan-map-canvas {
+  position: relative;
+  min-height: 140px;
+}
+
+.plan-map-lines {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.plan-map-lines line {
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+.plan-map-lines text {
+  fill: var(--muted);
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.plan-map-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 86%, var(--accent));
+  color: var(--text);
+}
+
+.plan-map-card strong {
+  font-size: 14px;
+}
+
+.plan-map-card span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plan-map-card.is-openable {
+  cursor: pointer;
+}
+
+.plan-map-card:disabled {
+  opacity: 1;
+}
+
+.board-waterfall.is-compact {
+  max-width: none;
+  gap: 16px;
+}
+
+.board-waterfall-plan-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.board-waterfall-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 62ch;
+}
+
+.board-waterfall-plan button {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.board-waterfall-plan h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.board-waterfall-plan p,
+.board-waterfall-lead,
+.board-waterfall-empty p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 62ch;
+}
+
+.board-waterfall-status {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.board-waterfall-empty h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.board-waterfall-error {
+  margin: 0;
+  color: var(--err);
+  font-size: 13px;
+}
+
+.board-waterfall-chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-waterfall-node {
+  max-width: 440px;
+}
+
+.board-waterfall-drop {
+  margin: 0 0 0 22px;
+  padding: 10px 0 10px 14px;
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.board-waterfall-drop .is-clear {
+  color: var(--ok);
+}
+
+.board-waterfall-drop .is-waiting {
+  color: var(--warn);
+}
+
+.board-waterfall-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.board-waterfall-bar {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--bg) 86%, var(--accent));
+}
+
+.board-waterfall-bar.is-waiting {
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--border));
+  background: color-mix(in srgb, var(--bg) 90%, var(--warn));
+}
+
+.board-waterfall-bar.is-clear {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--bg) 90%, var(--ok));
+}
+
+.board-waterfall-bar.is-openable {
+  cursor: pointer;
+}
+
+.board-waterfall-kicker {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.board-waterfall-add {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.board-waterfall-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(140px, 1fr));
+  gap: 8px;
+  width: min(640px, 100%);
+}
+
+.board-waterfall-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.board-waterfall-form input,
+.board-waterfall-form select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.board-waterfall-note,
+.board-waterfall-submit {
+  grid-column: 1 / -1;
+}
+
 .board-body.board-kanban-wrap {
   min-height: 0;
   min-width: 0;
@@ -11779,6 +12040,10 @@ body:has(.update-banner) .team-toast-stack {
 
 .workspace-name-btn:hover {
   background: var(--bg-hover);
+}
+
+.workspace-name-btn.active {
+  background: var(--accent-soft);
 }
 
 .workspace-name {

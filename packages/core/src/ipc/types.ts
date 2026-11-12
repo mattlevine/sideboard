@@ -61,6 +61,11 @@ import type {
   ScheduledTask,
   UpdateScheduledTaskPatch,
 } from '../store/schedules.js';
+import type {
+  OrderBoard,
+  OrderEdge,
+  SetOrderDependencyInput,
+} from '../order/order.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesOptions, ListIssuesResult } from '../integrations/issues.js';
 import type { RelayAccountProvider } from '../relay/account-oauth.js';
@@ -361,6 +366,14 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc {
     attachments?: ThreadAttachment[];
   }): Promise<Thread>;
   listSchedules(): Promise<ScheduledTask[]>;
+  /** Orchestration map: each chat plan plus its chains. */
+  listOrder(): Promise<OrderBoard>;
+  setOrderDependency(
+    input: SetOrderDependencyInput,
+  ): Promise<{ edge: OrderEdge; created: boolean }>;
+  clearOrderDependency(id: string): Promise<void>;
+  satisfyOrderDependency(id: string, satisfied?: boolean): Promise<OrderEdge>;
+  onOrderChanged(listener: () => void): () => void;
   createSchedule(input: Omit<CreateScheduledTaskInput, 'createdBy'>): Promise<ScheduledTask>;
   updateSchedule(id: string, patch: UpdateScheduledTaskPatch): Promise<ScheduledTask>;
   deleteSchedule(id: string): Promise<void>;
