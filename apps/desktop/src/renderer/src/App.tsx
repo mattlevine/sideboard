@@ -900,20 +900,6 @@ export function App() {
     if (key) writeLastWorktreeChatId(key, selected.id);
   }, [selected?.id, selected?.worktreePath, selected?.repoPath]);
 
-  useEffect(() => {
-    if (view !== 'orchestration') return;
-    const first = threads.find(
-      (thread) => thread.status !== 'archived' && thread.repoPath === GLOBAL_WORKSPACE_ID,
-    );
-    if (!first) {
-      setView('board');
-      return;
-    }
-    setSelectedId(first.id);
-    setMultiSelected(new Set([first.id]));
-    setView('thread');
-  }, [view, threads]);
-
   const knownWorkspaces = useMemo(() => {
     const byPath = new Map<string, Workspace>();
     for (const ws of workspaces) {

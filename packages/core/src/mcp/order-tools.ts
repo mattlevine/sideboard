@@ -245,6 +245,7 @@ export function registerOrderTools(server: McpServer): void {
             waitsOn: row.waitsOnLabel,
             subject: row.subjectLabel,
             detail: row.detail,
+            ...(row.loop ? { loop: true } : {}),
           });
           return mcpJson({
             ok: true,

@@ -226,6 +226,78 @@ describe('order of operations', () => {
     expect(working).toContain('bar current');
   });
 
+  it('keeps a drafted plan visible before it has steps', () => {
+    const text = formatOrderText([], {
+      id: 'plan-1',
+      ownerThreadId: 'orch',
+      title: 'Ship billing',
+      summary: 'Gate the rollout.',
+      goal: 'Billing is in production.',
+      status: 'draft',
+      updatedAt: '2026-11-12T00:00:00.000Z',
+    });
+    expect(text).toContain('Ship billing');
+    expect(text).toContain('draft');
+    expect(text).toContain('No steps yet');
+    expect(text).not.toContain('No orchestration plan yet');
+  });
+
+  it('does not treat a loop as a block on the first pass', () => {
+    const you = thread({
+      id: 'chat-1',
+      sourceType: 'pr',
+      sourceRef: '8',
+      prUrl: 'https://github.com/mattlevine/sideboard/pull/8',
+    });
+    const row = {
+      id: 'loop-edge-1',
+      waitsOn: { kind: 'pr' as const, ref: '1' },
+      subject: { kind: 'pr' as const, ref: '8' },
+      gate: 'in-main' as const,
+      hold: 'merge' as const,
+      note: '',
+      loop: true,
+      depth: 1,
+      met: false,
+      marked: false,
+      detail: 'loops back',
+      waitsOnLabel: 'PR #1',
+      subjectLabel: 'PR #8',
+    };
+    const place = formatOrderPlace([row], you);
+    expect(place).toMatch(/Loop:/);
+    expect(place).not.toMatch(/Waiting:/);
+    const html = formatWaterfallHtml([
+      {
+        nodes: [
+          {
+            key: 'pr::8',
+            label: 'PR #8',
+            kind: 'pr',
+            ref: '8',
+            depth: 1,
+            incoming: [
+              {
+                edgeId: row.id,
+                fromKey: 'pr::1',
+                gate: 'in-main',
+                hold: 'merge',
+                met: false,
+                marked: false,
+                loop: true,
+                detail: 'loops back',
+                fromLabel: 'PR #1',
+                note: '',
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(html).not.toContain('bar waiting');
+    expect(html).toContain('class="loop"');
+  });
+
   it('defaults a worktree subject to its PR or ticket and refuses another checkout', () => {
     const ticket = thread({
       id: 'chat-1',
@@ -272,6 +344,26 @@ describe('order of operations', () => {
     const ready = executeOrderPlan();
     expect(ready.ready.map((row) => row.subject.ref)).toEqual(['2']);
     expect(ready.waiting).toHaveLength(0);
+  });
+
+  it('puts a loop in ready and leaves the first-pass gate waiting', async () => {
+    const { setOrderPlan, setOrderDependency, executeOrderPlan } = await store();
+    setOrderPlan({ title: 'Loop', summary: 'Back to the start.' });
+    setOrderDependency({
+      waitsOn: { kind: 'pr', ref: '1' },
+      gate: 'in-main',
+      subject: { kind: 'pr', ref: '2' },
+      hold: 'merge',
+    });
+    setOrderDependency({
+      waitsOn: { kind: 'pr', ref: '2' },
+      gate: 'in-main',
+      subject: { kind: 'pr', ref: '1' },
+      hold: 'start',
+    });
+    const ran = executeOrderPlan();
+    expect(ran.ready.some((row) => row.loop)).toBe(true);
+    expect(ran.waiting.every((row) => !row.loop)).toBe(true);
   });
 
   it('tells a checkout where it sits and refuses edits to other steps', async () => {
