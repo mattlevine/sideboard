@@ -3,6 +3,10 @@ import type { ScheduledTask, ScheduleWhen, Thread } from '@sideboard-ai/core';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AutomationEditor } from './AutomationEditor';
 import { emptyForm, formFromTask, whenFromForm, type FormState } from './automation-form';
+import {
+  AUTOMATION_NESTED_ESCAPE_SELECTOR,
+  automationEditorShouldCloseOnEscape,
+} from '../lib/automation-escape';
 import { loadOrchestratorDefaults, type ThreadDefaults } from '../lib/thread-defaults';
 
 function formatWhen(when: ScheduleWhen): string {
@@ -83,15 +87,15 @@ export function SchedulesSettings() {
 
   function closeForm() {
     setShowForm(false);
+    setEditingId(null);
     setError(null);
   }
 
   useEffect(() => {
     if (!showForm) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || busy || event.defaultPrevented) return;
-      const target = event.target;
-      if (target instanceof Element && target.closest('.composer-picker-backdrop, .composer-ac')) return;
+      const nestedOverlayOpen = document.querySelector(AUTOMATION_NESTED_ESCAPE_SELECTOR) != null;
+      if (!automationEditorShouldCloseOnEscape(event, { busy, nestedOverlayOpen })) return;
       closeForm();
     };
     window.addEventListener('keydown', onKey);
@@ -146,7 +150,7 @@ export function SchedulesSettings() {
       };
       if (editingId) await window.sideboard.updateSchedule(editingId, payload);
       else await window.sideboard.createSchedule(payload);
-      setShowForm(false);
+      closeForm();
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -187,7 +191,7 @@ export function SchedulesSettings() {
     setError(null);
     try {
       await window.sideboard.deleteSchedule(id);
-      if (editingId === id) setShowForm(false);
+      if (editingId === id) closeForm();
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

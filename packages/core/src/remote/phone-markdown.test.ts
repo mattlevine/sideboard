@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
+import { phoneListMarker, phoneListParent } from '../../../../apps/mobile/markdown-list-marker.ts';
 import { preparePhoneMarkdown } from '../../../../apps/mobile/prepare-markdown.ts';
 import { tableColumnWidths } from '../../../../apps/mobile/markdown-table.ts';
 import { taskListPlugin } from '../../../../apps/mobile/task-lists.ts';
@@ -197,5 +198,18 @@ describe('phone markdown', () => {
     const bubble = readFileSync(new URL('../../../../apps/mobile/markdown.tsx', import.meta.url), 'utf8');
     expect(bubble).toContain('preparePhoneMarkdown');
     expect(bubble).toContain('markdownBlockRules');
+  });
+});
+
+describe('phone list markers', () => {
+  it('follows the immediate list, not an ordered ancestor', () => {
+    const ordered = { type: 'ordered_list', attributes: { start: 1 } };
+    const bullet = { type: 'bullet_list' };
+    const item = { type: 'list_item' };
+    const parent = phoneListParent([bullet, item, ordered]);
+    expect(parent).toBe(bullet);
+    expect(phoneListMarker({ index: 0 }, parent, '\u00B7')).toBe('\u00B7');
+    expect(phoneListMarker({ index: 1, markup: '.' }, ordered, '\u00B7')).toBe('2.');
+    expect(phoneListMarker({ index: 0, attributes: { task: 'checked' } }, bullet, '\u00B7')).toBe('\u2611');
   });
 });
