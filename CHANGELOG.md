@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.340] - 2026-11-12
+
+### Fixed
+
+- Phone chat bullets nested under a numbered list stay bullets. The marker follows that list, not an ancestor.
+- Escape in the automation editor closes an open menu, image, or confirm dialog before it closes the editor. Closing or saving the editor clears the row highlight.
+- The CLA check ignores the signing sentence on an ordinary issue.
+
 ## [0.1.339] - 2026-11-12
 
 ### Added
