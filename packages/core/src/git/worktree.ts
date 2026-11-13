@@ -398,7 +398,7 @@ export function entireUsesTrails(): Error {
 
 export async function listPrs(
   repoPath: string,
-  opts?: ListPrsOptions,
+  opts?: ListPrsOptions & { strict?: boolean },
 ): Promise<PrInfo[]> {
   const origin = await resolveOriginRemote(repoPath);
   if (origin?.forge === 'entire') return [];
@@ -426,7 +426,11 @@ export async function listPrs(
     limit: fetchLimit,
   });
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
-  if (exitCode !== 0 || !stdout.trim()) return [];
+  if (exitCode !== 0) {
+    if (opts?.strict) throw new Error(`gh pr list failed (${exitCode})`);
+    return [];
+  }
+  if (!stdout.trim()) return [];
   return applyPrListResponse(stdout, { ...resolved, limit, viewerTeams });
 }
 

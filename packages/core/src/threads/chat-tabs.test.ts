@@ -131,6 +131,13 @@ describe('createChatTab', () => {
     expect(written?.branchName).toBe(source.branchName);
   });
 
+  it('keeps wake-on-CI on a new tab of an opted-in checkout', async () => {
+    listed = [{ ...source, wakeOnGithubEdges: true }];
+    const { createChatTab } = await import('./chat-tabs.js');
+    const tab = createChatTab({ fromThreadId: source.id, title: 'Second' });
+    expect(tab.wakeOnGithubEdges).toBe(true);
+  });
+
   it('inherits the worktree Run pane from a sibling tab', async () => {
     listed = [
       {

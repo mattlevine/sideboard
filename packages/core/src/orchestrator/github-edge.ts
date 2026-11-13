@@ -40,6 +40,8 @@ export interface GithubEdgeSnapshot {
   lastFiredAt: Record<string, number>;
   /** Repos whose review queue has already been recorded. */
   reviewReposSeen?: string[];
+  /** PR urls whose CI was read while that checkout was watched. */
+  ciSeen?: string[];
 }
 
 export interface GithubEdgeWake {
@@ -148,6 +150,16 @@ export function coerceGithubEdgeSnapshot(raw: unknown): GithubEdgeSnapshot {
       reviewRequested.push({ prUrl, repoPath });
     }
   }
+  const ciSeen: string[] = [];
+  const seenCiUrls = new Set<string>();
+  if (Array.isArray(row.ciSeen)) {
+    for (const item of row.ciSeen) {
+      const prUrl = normalizePrUrl(typeof item === 'string' ? item : '');
+      if (!prUrl || seenCiUrls.has(prUrl)) continue;
+      seenCiUrls.add(prUrl);
+      ciSeen.push(prUrl);
+    }
+  }
   const reviewReposSeen: string[] = [];
   const seenRepos = new Set<string>();
   if (Array.isArray(row.reviewReposSeen)) {
@@ -172,6 +184,7 @@ export function coerceGithubEdgeSnapshot(raw: unknown): GithubEdgeSnapshot {
     reviewRequested,
     lastFiredAt,
     ...(reviewReposSeen.length ? { reviewReposSeen } : {}),
+    ...(ciSeen.length ? { ciSeen } : {}),
   };
 }
 
@@ -370,5 +383,6 @@ export function githubEdgeSnapshotKey(snapshot: GithubEdgeSnapshot): string {
       .sort((a, b) => a.prUrl.localeCompare(b.prUrl) || a.repoPath.localeCompare(b.repoPath)),
     lastFiredAt,
     reviewReposSeen: [...(snapshot.reviewReposSeen ?? [])].sort(),
+    ciSeen: [...(snapshot.ciSeen ?? [])].sort(),
   });
 }

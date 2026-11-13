@@ -251,6 +251,7 @@ export function createEmptyThread(
     prIsInMergeQueue: Boolean(partial.prIsInMergeQueue),
     prLabels: partial.prLabels ?? [],
     prChecksFailed: partial.prChecksFailed,
+    ...(partial.wakeOnGithubEdges === true ? { wakeOnGithubEdges: true } : {}),
     skipAutoArchiveOnMerge: partial.skipAutoArchiveOnMerge ?? false,
     cowboy: Boolean(partial.cowboy),
     stackId: partial.stackId ?? null,

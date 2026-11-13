@@ -7,7 +7,7 @@ vi.mock('./run.js', () => ({
 }));
 
 import { gh, git } from './run.js';
-import { getPrChecks, getPrCiChecks, getPrForHeadBranch, getPrMeta } from './worktree.js';
+import { getPrChecks, getPrCiChecks, getPrForHeadBranch, getPrMeta, listPrs } from './worktree.js';
 
 const ghMock = vi.mocked(gh);
 const gitMock = vi.mocked(git);
@@ -78,6 +78,24 @@ describe('getPrCiChecks', () => {
     expect(ghMock.mock.calls[0]?.[0]?.slice(0, 2)).toEqual(['pr', 'checks']);
     expect(gitMock.mock.calls.some((call) => call[0]?.[0] === 'fetch')).toBe(false);
     expect(gitMock.mock.calls.some((call) => call[0]?.[0] === 'merge-tree')).toBe(false);
+  });
+});
+
+describe('listPrs strict', () => {
+  beforeEach(() => {
+    ghMock.mockReset();
+    gitMock.mockReset();
+    gitMock.mockResolvedValue({
+      stdout: 'git@github.com:acme/widgets.git',
+      stderr: '',
+      exitCode: 0,
+    });
+  });
+
+  it('throws on a non-zero gh exit so a blip is not an empty inbox', async () => {
+    ghMock.mockResolvedValue({ stdout: '', stderr: 'timeout', exitCode: 1 });
+    await expect(listPrs('/tmp/wt', { queue: 'mine', strict: true })).rejects.toThrow(/gh pr list failed/);
+    await expect(listPrs('/tmp/wt', { queue: 'mine' })).resolves.toEqual([]);
   });
 });
 

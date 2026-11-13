@@ -158,6 +158,7 @@ export async function pollGithubEdges(
   const cards = indexCiCards(deps.listCiCards(), (threadId) => deps.parentIdForThread(threadId));
   const failing: string[] = [];
   const unknown: string[] = [];
+  const observed: string[] = [];
   const failingSubjects = new Map<string, GithubEdgeSubject>();
   for (const card of cards.values()) {
     const prUrl = normalizePrUrl(card.prUrl);
@@ -171,6 +172,7 @@ export async function pollGithubEdges(
       unknown.push(prUrl);
       continue;
     }
+    observed.push(prUrl);
     if (!failed) continue;
     failing.push(prUrl);
     failingSubjects.set(prUrl, subjectFromCard(card, prUrl));
@@ -232,12 +234,33 @@ export async function pollGithubEdges(
         },
     );
   const baseline = reviewLatch.filter((row) => freshRepos.has(row.repoPath));
-  const edges = diffGithubEdges({ prev, ciFailed, reviewRequested, now });
+  const seenCi = new Set((prev.ciSeen ?? []).map((url) => normalizePrUrl(url)).filter(Boolean));
+  const freshCi = new Set(prev.primed ? observed.filter((url) => !seenCi.has(url)) : []);
+  const ciForDiff = ciFailed.filter((subject) => !freshCi.has(subject.prUrl));
+  const edges = diffGithubEdges({ prev, ciFailed: ciForDiff, reviewRequested, now });
   const delivered = prev.primed && edges.length ? await deliverGithubEdges(edges, deps) : [];
+  const freshFailing = [...freshCi].filter((url) => failing.includes(url));
+  const prevForCommit =
+    freshFailing.length || baseline.length
+      ? {
+          ...prev,
+          ...(freshFailing.length
+            ? {
+                ciFailed: [
+                  ...new Set([
+                    ...prev.ciFailed.map((url) => normalizePrUrl(url)).filter(Boolean),
+                    ...freshFailing,
+                  ]),
+                ],
+              }
+            : {}),
+          ...(baseline.length
+            ? { reviewRequested: mergeReviewLatch(prev.reviewRequested, baseline, [...freshRepos]) }
+            : {}),
+        }
+      : prev;
   const committed = commitGithubEdgeSnapshot({
-    prev: baseline.length
-      ? { ...prev, reviewRequested: mergeReviewLatch(prev.reviewRequested, baseline, [...freshRepos]) }
-      : prev,
+    prev: prevForCommit,
     ciFailed,
     reviewRequested: reviewLatch,
     delivered,
@@ -250,7 +273,18 @@ export async function pollGithubEdges(
       ...successfulRepos,
     ]),
   ].sort();
-  const next = reviewReposSeen.length ? { ...committed, reviewReposSeen } : committed;
+  const cardUrls = new Set(cards.keys());
+  const ciSeen = [
+    ...new Set([
+      ...(prev.ciSeen ?? []).map((url) => normalizePrUrl(url)).filter((url) => url && cardUrls.has(url)),
+      ...observed,
+    ]),
+  ].sort();
+  const next = {
+    ...committed,
+    ...(reviewReposSeen.length ? { reviewReposSeen } : {}),
+    ...(ciSeen.length ? { ciSeen } : {}),
+  };
   if (githubEdgeSnapshotKey(prev) !== githubEdgeSnapshotKey(next)) deps.save(next);
   return { fired: delivered.length, primed: next.primed };
 }
@@ -373,6 +407,7 @@ async function listMineFromGh(repoPath: string): Promise<GithubEdgeReviewRow[] |
     const rows = await listPrs(repoPath, {
       queue: 'mine',
       limit: 30,
+      strict: true,
       ...(reviewLabel ? { reviewLabel } : {}),
     });
     return rows.map((row) => ({

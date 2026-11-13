@@ -199,11 +199,12 @@ describe('github edge watch', () => {
     env.failed.set(PR, true);
     env.cards.push(card(PR));
     env.reviews.set('/repo', [{ prUrl: OTHER, title: 'Please review', state: 'OPEN' }]);
-    expect((await pollGithubEdges(env.deps)).fired).toBe(2);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(1);
     expect(env.sends).toEqual([]);
     expect(env.created).toHaveLength(1);
-    expect(env.created[0]).toContain('CI failed on Add watcher');
+    expect(env.created[0]).not.toContain('CI failed on Add watcher');
     expect(env.created[0]).toContain('Review requested: Please review');
+    expect(env.snapshot().ciFailed).toEqual([PR]);
   });
 
   it('records current failures on a fresh baseline instead of replaying them', async () => {
@@ -243,6 +244,20 @@ describe('github edge watch', () => {
     ]);
     expect((await pollGithubEdges(env.deps)).fired).toBe(1);
     expect(env.sends[0]?.prompt).toContain('Review requested: New ask');
+  });
+
+  it('records an already-red check when a checkout is opted in, then wakes on the next failure', async () => {
+    const env = harness();
+    await pollGithubEdges(env.deps);
+    env.cards.push(card(PR));
+    env.failed.set(PR, true);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(0);
+    expect(env.snapshot().ciFailed).toEqual([PR]);
+    env.failed.set(PR, false);
+    await pollGithubEdges(env.deps);
+    env.failed.set(PR, true);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(1);
+    expect(env.sends[0]?.prompt).toContain('CI failed on Add watcher');
   });
 
   it('latches a check the baseline could not read, then stays quiet while it is still red', async () => {
