@@ -83,6 +83,24 @@ Helpers: `packages/core/src/orchestrator/notify-orchestrator.ts`.
 1. **`list_peers` / `send_to_peer`** on the worktree MCP profile (≤3 terse tools). Information-only, when a sibling actually needs it — not automatic on every merge.
 2. **A2A Agent Card** for the fleet (localhost or the relay) only if an external orchestrator needs to delegate onto this Mac.
 
+## Capacity (shipped)
+
+One orchestration chat can create at most **Settings → Advanced → Max orchestration threads** child workspaces (1–32, default 5). `create_workspace` reads that saved cap and counts distinct child workspaces. `fork_chat` on an existing checkout, and orchestration-tab forks, do not use a slot. This is separate from Settings → max concurrent agents.
+
+Helpers: `packages/core/src/mcp/create-orch-child.ts`, `maxOrchThreads` in `packages/core/src/store/app-settings.ts`.
+
+## Plans (shipped)
+
+Each orchestration chat has one plan. `set_plan` drafts it. `show_plan` opens the diagram in the side column and keeps it current as gates clear and steps start. A worktree on that plan also opens `.context/attachments/plan.md` when the file exists. A draft does not create workspaces or `send_to_chat` for that work. `execute_plan` with `agreed: true` runs only after the user says to. It marks the plan active and returns ready versus waiting steps.
+
+Code: `packages/core/src/order/`, `packages/core/src/plan/`.
+
+## Deferred report (shipped)
+
+A short farewell that promises a later update is not the finished Slack answer. Listen holds that post until the continue finishes. Successful child turns do not otherwise wake the orchestrator. When a child finishes and the parent is idle after that promise, Sideboard queues one information-only wake so the coordinator can post the outcome. The wake is capped so a looping farewell cannot spin.
+
+Helpers: `packages/core/src/slack/deferred-reply.ts`, `packages/core/src/orchestrator/child-report.ts`, `packages/core/src/orchestrator/deferred-report.ts`.
+
 ## Where to change what
 
 | Concern | File |
@@ -94,3 +112,6 @@ Helpers: `packages/core/src/orchestrator/notify-orchestrator.ts`.
 | MCP wait hints | `packages/core/src/mcp/wait-for-turn.ts` |
 | Injected Slack replies | `packages/core/src/threads/injected-notices.ts` |
 | Coordinator playbook | `packages/core/src/orchestrator/coordinator-prompt.ts` |
+| Orchestration thread cap | `packages/core/src/mcp/create-orch-child.ts` |
+| Plan diagram | `packages/core/src/order/`, `packages/core/src/plan/` |
+| Deferred Slack report | `packages/core/src/slack/deferred-reply.ts`, `packages/core/src/orchestrator/child-report.ts` |

@@ -7,7 +7,7 @@ Canonical instructions for agents working **on this repository** (not for Sidebo
 | [glossary.md](glossary.md) | Project, workspace, chat, agent (Conductor/Orca-aligned names) |
 | [architecture.md](architecture.md) | Layout, packages, how the phone remote, MCP, and desktop fit, process skills |
 | [agent-rpc.md](agent-rpc.md) | Agent WebSocket JSON-RPC (replacing MCP for harness hooks) |
-| [agent-orchestration.md](agent-orchestration.md) | `taskState`, `notify_orchestrator`, why not A2A HTTP / Claude Agent Teams |
+| [agent-orchestration.md](agent-orchestration.md) | `taskState`, `notify_orchestrator`, orchestration cap, plans, deferred Slack reports, why not A2A HTTP / Claude Agent Teams |
 | [conventions.md](conventions.md) | Build, test, docs, release |
 | [safety.md](safety.md) | Human-only land/purge, user-gated merge, secrets, remote control |
 | [deploy.md](deploy.md) | Marketing site + relay on Fly |
