@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 interface Props {
   title: string;
   message: string;
@@ -21,6 +23,17 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || busy) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCancel();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [busy, onCancel]);
+
   return (
     <div
       className="modal-backdrop"

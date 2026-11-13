@@ -1,6 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { Platform, ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { hasParents, type ASTNode, type RenderRules } from 'react-native-markdown-display';
+import { type ASTNode, type RenderRules } from 'react-native-markdown-display';
+import { phoneListMarker, phoneListParent } from './markdown-list-marker';
 import { tableColumnWidths } from './markdown-table';
 
 const TableWidths = createContext<number[] | null>(null);
@@ -31,23 +32,15 @@ function TableCell({
 }
 
 function listIcon(node: ASTNode, parent: ASTNode[]): string {
-  const task = node.attributes?.task;
-  if (task === 'checked') return '\u2611';
-  if (task === 'open') return '\u2610';
-  if (hasParents(parent, 'ordered_list')) {
-    const ordered = parent.find((entry) => entry.type === 'ordered_list');
-    const start = Number(ordered?.attributes?.start);
-    const number = Number.isFinite(start) && start > 0 ? start + node.index : node.index + 1;
-    return `${number}${node.markup || '.'}`;
-  }
-  return Platform.OS === 'android' ? '\u2022' : '\u00B7';
+  const bullet = Platform.OS === 'android' ? '\u2022' : '\u00B7';
+  return phoneListMarker(node, phoneListParent(parent), bullet);
 }
 
 /** Task rows, and table cells that share a column width. */
 export function markdownBlockRules(): RenderRules {
   return {
     list_item: (node, children, parent, styles, inheritedStyles = {}) => {
-      const ordered = hasParents(parent, 'ordered_list');
+      const ordered = phoneListParent(parent)?.type === 'ordered_list';
       const iconStyle = ordered ? styles.ordered_list_icon : styles.bullet_list_icon;
       const contentStyle = ordered
         ? styles._VIEW_SAFE_ordered_list_content

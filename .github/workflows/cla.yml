@@ -28,8 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: CLA Assistant
-        # The comment body must match CLA.md and custom-pr-sign-comment (the action default).
-        if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') || github.event_name == 'pull_request_target'
+        # issue_comment also fires on issues. Only a pull request comment should
+        # sign or recheck. pull_request_target has no comment body.
+        if: github.event_name == 'pull_request_target' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'))
         uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -38,6 +39,8 @@ jobs:
           path-to-document: https://github.com/mattlevine/sideboard/blob/main/CLA.md
           branch: main
           # GitHub Apps that open pull requests (dependabot[bot], renovate[bot], …).
+          # The pinned assistant escapes this pattern and only expands `*`,
+          # so `*[bot]` matches a login containing `[bot]`, not a glob class.
           allowlist: '*[bot]'
           # The signature record is the JSON file. Leave merged pull requests open for discussion.
           lock-pullrequest-aftermerge: false
