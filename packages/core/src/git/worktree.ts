@@ -21,6 +21,7 @@ import { gh, git } from './run.js';
 import { formatRemoteTag, parseRemoteRepo, type RemoteRepo } from './remote-forge.js';
 import {
   cursorPrChecks,
+  cursorPrCiChecks,
   cursorViewToPrMeta,
   fetchCursorPrHead,
   listCursorPrs,
@@ -397,7 +398,7 @@ export function entireUsesTrails(): Error {
 
 export async function listPrs(
   repoPath: string,
-  opts?: ListPrsOptions,
+  opts?: ListPrsOptions & { strict?: boolean },
 ): Promise<PrInfo[]> {
   const origin = await resolveOriginRemote(repoPath);
   if (origin?.forge === 'entire') return [];
@@ -425,7 +426,11 @@ export async function listPrs(
     limit: fetchLimit,
   });
   const { stdout, exitCode } = await gh(args, repoPath, { reject: false });
-  if (exitCode !== 0 || !stdout.trim()) return [];
+  if (exitCode !== 0) {
+    if (opts?.strict) throw new Error(`gh pr list failed (${exitCode})`);
+    return [];
+  }
+  if (!stdout.trim()) return [];
   return applyPrListResponse(stdout, { ...resolved, limit, viewerTeams });
 }
 
@@ -795,6 +800,64 @@ async function probeLocalMergeGate(
   return { gate, files: [] };
 }
 
+/** `gh pr checks` rows only. Null when no PR exists. Throws on auth or network errors. */
+async function readGhPrChecks(
+  cwd: string,
+  selector: string,
+  slug: string | null,
+): Promise<PrCheckRun[] | null> {
+  const args = [
+    'pr',
+    'checks',
+    selector,
+    '--json',
+    'name,state,bucket,startedAt,completedAt,link,description,workflow',
+  ];
+  if (slug) args.push('--repo', slug);
+  const { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
+  const errText = stderr.trim();
+  // gh exits 1 on failing checks and 8 while pending — still parse JSON when present.
+  if (!stdout.trim()) {
+    if (/no pull requests found/i.test(errText)) return null;
+    if (/auth|login|HTTP\s*401|credentials|token/i.test(errText)) {
+      throw new Error(errText);
+    }
+    if (exitCode === 0 || exitCode === 1 || exitCode === 8) {
+      // Empty check list for an existing PR (or pending with nothing reported yet).
+      // Exit 1 + "no pull requests" already handled above.
+      if (exitCode === 1 && errText && !/fail|check/i.test(errText)) {
+        // Unexpected gh error (auth, network, etc.) — don't pretend checks are empty.
+        throw new Error(errText);
+      }
+      return [];
+    }
+    throw new Error(errText || `gh pr checks failed (${exitCode})`);
+  }
+  try {
+    const parsed = JSON.parse(stdout) as Array<Record<string, unknown>>;
+    return parsed.map(normalizeCheck);
+  } catch {
+    throw new Error(errText || 'gh pr checks returned invalid JSON');
+  }
+}
+
+/**
+ * CI rows only. Host polls use this so they do not `git fetch` the base or
+ * merge-tree inside the worktree. Returns `null` when no PR exists.
+ */
+export async function getPrCiChecks(
+  cwd: string,
+  selector: string,
+): Promise<PrCheckRun[] | null> {
+  const origin = await resolveOriginRemote(cwd);
+  if (origin?.forge === 'entire') return null;
+  if (origin?.forge === 'cursor' && origin.slug) {
+    return cursorPrCiChecks(cwd, origin.slug, selector);
+  }
+  const slug = await resolveGithubRepoSlug(cwd);
+  return readGhPrChecks(cwd, selector, slug);
+}
+
 /** CI checks for a PR (`gh pr checks <selector> --json …`), plus synthetic
  * mergeability / review rows (conflicts are not reported by `gh pr checks`).
  * Returns `null` when no PR exists for the selector (so UI can show “link a PR”
@@ -808,42 +871,8 @@ export async function getPrChecks(
   const cursorSlug = origin?.forge === 'cursor' ? origin.slug : null;
   if (cursorSlug) return cursorPrChecks(cwd, cursorSlug, selector);
   const slug = await resolveGithubRepoSlug(cwd);
-  const args = [
-    'pr',
-    'checks',
-    selector,
-    '--json',
-    'name,state,bucket,startedAt,completedAt,link,description,workflow',
-  ];
-  if (slug) args.push('--repo', slug);
-  const { stdout, exitCode, stderr } = await gh(args, cwd, { reject: false });
-  const errText = stderr.trim();
-  // gh exits 1 on failing checks and 8 while pending — still parse JSON when present.
-  let ciChecks: PrCheckRun[] | null;
-  if (!stdout.trim()) {
-    if (/no pull requests found/i.test(errText)) return null;
-    if (/auth|login|HTTP\s*401|credentials|token/i.test(errText)) {
-      throw new Error(errText);
-    }
-    if (exitCode === 0 || exitCode === 1 || exitCode === 8) {
-      // Empty check list for an existing PR (or pending with nothing reported yet).
-      // Exit 1 + "no pull requests" already handled above.
-      if (exitCode === 1 && errText && !/fail|check/i.test(errText)) {
-        // Unexpected gh error (auth, network, etc.) — don't pretend checks are empty.
-        throw new Error(errText);
-      }
-      ciChecks = [];
-    } else {
-      throw new Error(errText || `gh pr checks failed (${exitCode})`);
-    }
-  } else {
-    try {
-      const parsed = JSON.parse(stdout) as Array<Record<string, unknown>>;
-      ciChecks = parsed.map(normalizeCheck);
-    } catch {
-      throw new Error(errText || 'gh pr checks returned invalid JSON');
-    }
-  }
+  const ciChecks = await readGhPrChecks(cwd, selector, slug);
+  if (!ciChecks) return null;
 
   let gate = await fetchPrMergeGate(cwd, selector, slug);
   const probed = await probeLocalMergeGate(cwd, gate);

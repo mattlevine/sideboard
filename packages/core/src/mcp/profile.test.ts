@@ -95,6 +95,7 @@ describe('sideboardMcpProfile', () => {
       'get_orchestrator',
       'notify_orchestrator',
       'set_workspace_tags',
+      'set_wake_on_github_edges',
       'get_viewer_context',
       'update_viewer_context',
       'list_env',

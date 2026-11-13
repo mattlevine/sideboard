@@ -26,6 +26,7 @@ import { resolveRunScriptThreadRef } from './run-script-ref.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
 import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { applyWorkspaceTags, workspaceTagTargetRef } from '../threads/workspace-tags.js';
+import { applyWakeOnGithubEdges, wakeOnGithubEdgesTargetRef } from '../threads/wake-on-github-edges.js';
 import { createOrchChildThread } from './create-orch-child.js';
 import { agentBlockFields, chatBlockedSuffix, stampAskUserBlock, stampNotifyBlock, stampPlanBlock } from '../orchestrator/agent-block.js';
 import { notifyOrchestrator, resolveNotifyCallerThread } from '../orchestrator/notify-orchestrator.js';
@@ -850,6 +851,44 @@ export async function startMcpServer(): Promise<void> {
           worktreePath: thread.worktreePath,
           tags: thread.tags ?? [],
           chats: workspaceAgentChatSummaries(thread.worktreePath),
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return mcpJson({ ok: false, message }, true);
+      }
+    },
+  );
+
+  server.tool(
+    'set_wake_on_github_edges',
+    worktreeProfile
+      ? 'Opt this checkout into orchestrator wakes when CI starts failing or GitHub requests a review. Omit ref. Only works after Settings → Advanced → Wake orchestrator on CI / review-requested is on. Do not change that Advanced switch.'
+      : 'Opt a project workspace into CI and review-request wakes. Pass any chat id on that checkout. Only works after Settings → Advanced → Wake orchestrator on CI / review-requested is already on. Do not change that Advanced switch. Not for orchestration chats.',
+    {
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          worktreeProfile
+            ? 'Omit for this chat. Another chat id only if it is on this same checkout.'
+            : 'Chat id on the workspace.',
+        ),
+      enabled: z.boolean().describe('True opts the checkout in. False turns it off.'),
+    },
+    async ({ ref, enabled }) => {
+      try {
+        const callerId = process.env[SIDEBOARD_THREAD_ID_ENV]?.trim() || '';
+        const target = wakeOnGithubEdgesTargetRef({
+          ownWorktreeOnly: worktreeProfile,
+          caller: callerId ? orch.getThread(callerId) : null,
+          requestedRef: ref,
+          find: (id) => orch.getThread(id),
+        });
+        const thread = applyWakeOnGithubEdges(target, enabled);
+        return mcpJson({
+          id: thread.id,
+          worktreePath: thread.worktreePath,
+          wakeOnGithubEdges: thread.wakeOnGithubEdges === true,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

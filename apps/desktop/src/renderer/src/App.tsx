@@ -359,7 +359,7 @@ export function App() {
   /** Settings → Agents → Follow-up behavior (default steer). */
   const [followUpBehavior, setFollowUpBehavior] = useState<FollowUpBehavior>('steer');
   /** Settings → Advanced → Agent done sound (default off; prefer goal when enabling). */
-  const [agentDoneSound, setAgentDoneSound] = useState<AgentDoneSound>('none');
+  const [agentDoneSound, setAgentDoneSound] = useState<AgentDoneSound>('none'); const [wakeOnGithubEdgesAllowed, setWakeOnGithubEdgesAllowed] = useState(false);
   const agentDoneSoundRef = useRef<AgentDoneSound>('none');
   agentDoneSoundRef.current = agentDoneSound;
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(() =>
@@ -542,7 +542,7 @@ export function App() {
       setAgentDoneSound(
         isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
       );
-      setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
+      setWakeOnGithubEdgesAllowed(Boolean(s.advanced?.wakeOrchestratorOnGithubEdges)); setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
     });
   }, []);
 
@@ -1463,7 +1463,7 @@ export function App() {
                     void refresh();
                   })();
                 }}
-                onOpenPr={openPrPage}
+                onOpenPr={openPrPage} wakeOnGithubEdgesAllowed={wakeOnGithubEdgesAllowed}
               />
             </div>
           )}
@@ -1647,7 +1647,7 @@ export function App() {
             setAgentDoneSound(
               isAgentDoneSound(s.advanced?.agentDoneSound) ? s.advanced.agentDoneSound : 'none',
             );
-            readAloud.applyFromSettings(s);
+            setWakeOnGithubEdgesAllowed(Boolean(s.advanced?.wakeOrchestratorOnGithubEdges)); readAloud.applyFromSettings(s);
             setProjectReviewLabels(projectReviewLabelsFromSettings(s.projects));
           }}
           onClose={() => {

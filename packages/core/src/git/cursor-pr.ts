@@ -223,7 +223,7 @@ function listedHasLabels(pr: PrInfo, labels: string[]): boolean {
 export async function listCursorPrs(
   repoPath: string,
   slug: string,
-  opts?: ListPrsOptions,
+  opts?: ListPrsOptions & { strict?: boolean },
   head?: string,
 ): Promise<PrInfo[]> {
   const resolved = resolveListPrsOptions(opts);
@@ -252,11 +252,16 @@ export async function listCursorPrs(
     }
   }
   const { stdout, exitCode } = await originCli(args, repoPath, { reject: false, timeoutMs: 20_000 });
-  if (exitCode !== 0 || !stdout.trim()) return [];
+  if (exitCode !== 0) {
+    if (opts?.strict) throw new Error(`origin pr list failed (${exitCode})`);
+    return [];
+  }
+  if (!stdout.trim()) return [];
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch {
+    if (opts?.strict) throw new Error('origin pr list returned invalid JSON');
     return [];
   }
   if (!Array.isArray(parsed)) return [];
@@ -390,7 +395,8 @@ export async function fetchCursorPrHead(
   }
 }
 
-export async function cursorPrChecks(
+/** CI rows only. Does not load mergeability. */
+export async function cursorPrCiChecks(
   repoPath: string,
   slug: string,
   selector: string,
@@ -401,14 +407,21 @@ export async function cursorPrChecks(
     { reject: false, timeoutMs: 20_000 },
   );
   const err = stderr.trim();
-  let ci: PrCheckRun[];
   if (!stdout.trim()) {
     if (/no pull request|not found|no change/i.test(err)) return null;
     if (exitCode !== 0 && err) throw new Error(err);
-    ci = [];
-  } else {
-    ci = originChecksToRuns(stdout);
+    return [];
   }
+  return originChecksToRuns(stdout);
+}
+
+export async function cursorPrChecks(
+  repoPath: string,
+  slug: string,
+  selector: string,
+): Promise<PrCheckRun[] | null> {
+  const ci = await cursorPrCiChecks(repoPath, slug, selector);
+  if (!ci) return null;
   const view = await viewCursorPr(
     repoPath,
     slug,

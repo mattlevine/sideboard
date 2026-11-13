@@ -409,6 +409,12 @@ export interface AdvancedAppSettings {
    */
   cowboyMode?: boolean;
   /**
+   * Queue an information-only note on the parent orchestrator when CI on a
+   * live workspace PR starts failing, or GitHub requests the viewer's review.
+   * Default off. The desktop host must be running (same as automations).
+   */
+  wakeOrchestratorOnGithubEdges?: boolean;
+  /**
    * Show provider-reported USD cost on message chips, thread Σ, and sidebar
    * hover spend. Default off — turn on in Settings → Advanced.
    */
@@ -1027,6 +1033,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.cowboyMode === 'boolean') {
     out.cowboyMode = source.cowboyMode;
+  }
+  if (typeof source.wakeOrchestratorOnGithubEdges === 'boolean') {
+    out.wakeOrchestratorOnGithubEdges = source.wakeOrchestratorOnGithubEdges;
   }
   if (typeof source.showCost === 'boolean') {
     out.showCost = source.showCost;
@@ -2226,6 +2235,9 @@ export function updateAdvancedSettings(
   if (typeof patch.cowboyMode === 'boolean') {
     advanced.cowboyMode = patch.cowboyMode;
   }
+  if (typeof patch.wakeOrchestratorOnGithubEdges === 'boolean') {
+    advanced.wakeOrchestratorOnGithubEdges = patch.wakeOrchestratorOnGithubEdges;
+  }
   if (typeof patch.showCost === 'boolean') {
     advanced.showCost = patch.showCost;
   }
@@ -2374,6 +2386,13 @@ export function cowboyModeEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.cowboyMode);
+}
+
+/** Default off. Host poller no-ops until this is turned on. */
+export function wakeOrchestratorOnGithubEdgesEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.wakeOrchestratorOnGithubEdges);
 }
 
 /** Settings → Advanced → Show cost (when available) (default off). */

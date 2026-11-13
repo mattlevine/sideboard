@@ -310,6 +310,7 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
   renameThread(threadRef: string, title: string): Promise<Thread>;
   dismissAskUser(threadRef: string, signature: string): Promise<Thread>;
   setWorkspaceTags(threadRef: string, tags: string[]): Promise<Thread>;
+  setWakeOnGithubEdges(threadRef: string, enabled: boolean): Promise<Thread>;
   setAttachments(threadRef: string, attachments: ThreadAttachment[]): Promise<Thread>;
   /**
    * Stage dropped/picked files into composer attachments. External files are

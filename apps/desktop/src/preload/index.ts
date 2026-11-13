@@ -124,6 +124,8 @@ const api: IpcApi = {
   dismissAskUser: (threadRef, signature) =>
     ipcRenderer.invoke('dismissAskUser', threadRef, signature),
   setWorkspaceTags: (threadRef, tags) => ipcRenderer.invoke('setWorkspaceTags', threadRef, tags),
+  setWakeOnGithubEdges: (threadRef, enabled) =>
+    ipcRenderer.invoke('setWakeOnGithubEdges', threadRef, enabled),
   setAttachments: (threadRef, attachments) =>
     ipcRenderer.invoke('setAttachments', threadRef, attachments),
   attachComposerFiles: (threadRef, opts) =>

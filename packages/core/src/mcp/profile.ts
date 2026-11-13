@@ -84,6 +84,7 @@ export const WORKTREE_MCP_TOOLS = [
   'get_orchestrator',
   'notify_orchestrator',
   'set_workspace_tags',
+  'set_wake_on_github_edges',
   'get_viewer_context',
   'update_viewer_context',
   'list_env',

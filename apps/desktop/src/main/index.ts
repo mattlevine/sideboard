@@ -182,6 +182,8 @@ import {
   deleteSchedule,
   fireSchedule,
   armSchedules,
+  armGithubEdgeWatch,
+  applyWakeOnGithubEdges,
   answerToolPermission,
   hasEnabledSchedules,
   updateAdvancedSettings,
@@ -1011,6 +1013,9 @@ function registerIpc(): void {
     ) {
       syncCaffeinate();
     }
+    if ('wakeOrchestratorOnGithubEdges' in patch) {
+      armGithubEdgeWatch();
+    }
     return toPublicAppSettings(saved);
   });
   ipcMain.handle('importAgentDoneSound', async () => {
@@ -1384,6 +1389,9 @@ function registerIpc(): void {
   ipcMain.handle('renameThread', (_e, ref: string, title: string) => orch.renameThread(ref, title));
   ipcMain.handle('dismissAskUser', (_e, ref: string, signature: string) => orch.dismissAskUser(ref, signature));
   ipcMain.handle('setWorkspaceTags', (_e, ref: string, tags: string[]) => orch.setWorkspaceTags(ref, tags));
+  ipcMain.handle('setWakeOnGithubEdges', (_e, ref: string, enabled: boolean) =>
+    applyWakeOnGithubEdges(ref, enabled === true),
+  );
   ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
     orch.setAttachments(ref, attachments),
   );
@@ -1921,6 +1929,11 @@ app.whenReady().then(async () => {
     } catch {
       // Next tick retries.
     }
+    try {
+      armGithubEdgeWatch();
+    } catch {
+      // Next tick retries.
+    }
   }, 8_000);
   setupApplicationMenu(() => mainWindow);
   try {
@@ -1945,6 +1958,7 @@ app.whenReady().then(async () => {
     // Best-effort; UI can still open.
   }
   armSchedules();
+  armGithubEdgeWatch();
   syncCaffeinate();
   orch.listWorkspaces();
   createWindow();

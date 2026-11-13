@@ -80,6 +80,7 @@ function worktreeBindingFrom(from: Thread): Pick<
   | 'prIsInMergeQueue'
   | 'prLabels'
   | 'prChecksFailed'
+  | 'wakeOnGithubEdges'
   | 'issueBlockedBy'
   | 'skipAutoArchiveOnMerge'
   | 'stackId'
@@ -113,6 +114,7 @@ function worktreeBindingFrom(from: Thread): Pick<
     prIsInMergeQueue: from.prIsInMergeQueue,
     prLabels: from.prLabels,
     prChecksFailed: from.prChecksFailed,
+    wakeOnGithubEdges: from.wakeOnGithubEdges,
     issueBlockedBy: from.issueBlockedBy,
     skipAutoArchiveOnMerge: from.skipAutoArchiveOnMerge,
     stackId: from.stackId,

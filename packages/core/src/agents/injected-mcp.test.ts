@@ -46,6 +46,7 @@ describe('injected-mcp', () => {
       'mcp__sideboard__get_orchestrator',
       'mcp__sideboard__notify_orchestrator',
       'mcp__sideboard__set_workspace_tags',
+      'mcp__sideboard__set_wake_on_github_edges',
       'mcp__sideboard__get_viewer_context',
       'mcp__sideboard__update_viewer_context',
       'mcp__sideboard__list_env',

@@ -82,6 +82,8 @@ interface Props {
   onAddReference?: (attachment: ThreadAttachment) => void;
   /** Open the native PR page (GitHub API), not github.com in a webview. */
   onOpenPr?: () => void;
+  /** Settings → Advanced master switch. Updates while Checks stays open. */
+  wakeOnGithubEdgesAllowed?: boolean;
 }
 
 type UpperTab = 'changes' | 'files' | 'checks';
@@ -232,6 +234,7 @@ export function RightSidebar({
   onFileChanges,
   onAddReference,
   onOpenPr,
+  wakeOnGithubEdgesAllowed = false,
 }: Props) {
   const [upper, setUpper] = useState<UpperTab>('files');
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -284,6 +287,10 @@ export function RightSidebar({
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
   const [prChecksError, setPrChecksError] = useState<string | null>(null);
   const [prChecksLoading, setPrChecksLoading] = useState(false);
+  const [wakeOn, setWakeOn] = useState(false);
+  useEffect(() => {
+    setWakeOn(thread.wakeOnGithubEdges === true);
+  }, [thread.id, thread.wakeOnGithubEdges]);
   /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED + review). */
   const [prMeta, setPrMeta] = useState<{
     number: number;
@@ -1668,14 +1675,38 @@ export function RightSidebar({
           )}
 
           {upper === 'checks' && (
-            <PrChecksPanel
-              checks={prChecks}
-              error={prChecksError}
-              prUrl={prUrl}
-              loading={prChecksLoading}
-              onRefresh={() => void loadPrChecks()}
-              onFixWithAgent={(check) => void fixCheckWithAgent(check)}
-            />
+            <>
+              {wakeOnGithubEdgesAllowed && thread.sourceType !== 'orchestration' && (
+                <div className="pr-wake-row">
+                  <span>Wake on CI / review</span>
+                  <button
+                    type="button"
+                    className={`settings-switch${wakeOn ? ' on' : ''}`}
+                    role="switch"
+                    aria-checked={wakeOn}
+                    aria-label="Wake orchestrator on CI and review requests for this workspace"
+                    onClick={() => {
+                      const next = !wakeOn;
+                      setWakeOn(next);
+                      void window.sideboard
+                        .setWakeOnGithubEdges(thread.id, next)
+                        .then(() => onRefresh())
+                        .catch(() => setWakeOn(!next));
+                    }}
+                  >
+                    <span className="settings-switch-knob" />
+                  </button>
+                </div>
+              )}
+              <PrChecksPanel
+                checks={prChecks}
+                error={prChecksError}
+                prUrl={prUrl}
+                loading={prChecksLoading}
+                onRefresh={() => void loadPrChecks()}
+                onFixWithAgent={(check) => void fixCheckWithAgent(check)}
+              />
+            </>
           )}
 
           {pathRefMenu && onAddReference && (

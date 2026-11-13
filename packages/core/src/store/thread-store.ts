@@ -114,8 +114,8 @@ export function normalizeThread(raw: Thread): Thread {
     prMergeStateStatus: raw.prMergeStateStatus ?? null,
     prIsInMergeQueue: Boolean(raw.prIsInMergeQueue),
     prLabels: Array.isArray(raw.prLabels) ? raw.prLabels : [],
-    prChecksFailed:
-      typeof raw.prChecksFailed === 'boolean' ? raw.prChecksFailed : undefined,
+    prChecksFailed: typeof raw.prChecksFailed === 'boolean' ? raw.prChecksFailed : undefined,
+    wakeOnGithubEdges: raw.wakeOnGithubEdges === true ? true : undefined,
     issueBlockedBy: sanitizeIssueBlockedBy(raw.issueBlockedBy),
     skipAutoArchiveOnMerge: Boolean(raw.skipAutoArchiveOnMerge),
     cowboy: Boolean(raw.cowboy),
@@ -251,6 +251,7 @@ export function createEmptyThread(
     prIsInMergeQueue: Boolean(partial.prIsInMergeQueue),
     prLabels: partial.prLabels ?? [],
     prChecksFailed: partial.prChecksFailed,
+    ...(partial.wakeOnGithubEdges === true ? { wakeOnGithubEdges: true } : {}),
     skipAutoArchiveOnMerge: partial.skipAutoArchiveOnMerge ?? false,
     cowboy: Boolean(partial.cowboy),
     stackId: partial.stackId ?? null,
