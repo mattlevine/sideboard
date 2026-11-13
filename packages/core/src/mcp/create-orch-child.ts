@@ -1,14 +1,13 @@
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
 import { normalizeWorkspaceTags } from '../git/worktree-labels.js';
+import { maxOrchThreads } from '../store/app-settings.js';
 import type { AgentKind, ThreadAttachment } from '../types/thread.js';
 import {
   orchCreateThreadAgentNote,
   resolveOrchCreateThreadOptions,
   type ResolveNewThreadOptions,
 } from './create-thread-agent.js';
-
-const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_workspace cannot pin the MCP stdio server forever. */
 const CREATE_THREAD_TIMEOUT_MS = 90_000;
 
@@ -70,10 +69,11 @@ export async function createOrchChildThread(
   }
   if (parentId) {
     const children = orch.getThreads(false).filter((t) => t.parentThreadId === parentId);
-    if (children.length >= MAX_ORCH_THREADS) {
+    const cap = maxOrchThreads();
+    if (children.length >= cap) {
       return {
         ok: false,
-        text: `Thread-creation cap (${MAX_ORCH_THREADS}) reached for this orchestration session`,
+        text: `Thread-creation cap (${cap}) reached for this orchestration session. Raise it in Settings → Advanced.`,
       };
     }
   }

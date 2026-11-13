@@ -442,6 +442,11 @@ export interface AdvancedAppSettings {
   /** Max concurrent agent turns across the orchestrator (default 5). */
   maxConcurrent?: number;
   /**
+   * Max child workspaces one orchestration chat can create via
+   * `create_workspace` (default {@link MAX_ORCH_THREADS_DEFAULT}).
+   */
+  maxOrchThreads?: number;
+  /**
    * Max Sideboard worktrees kept machine-wide before orphan cleanup
    * (Cursor: cursor.worktreeMaxCount, default 25).
    */
@@ -1054,6 +1059,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.maxConcurrent === 'number' && Number.isFinite(source.maxConcurrent)) {
     out.maxConcurrent = Math.max(1, Math.min(32, Math.floor(source.maxConcurrent)));
+  }
+  if (typeof source.maxOrchThreads === 'number' && Number.isFinite(source.maxOrchThreads)) {
+    out.maxOrchThreads = clampMaxOrchThreads(source.maxOrchThreads);
   }
   if (typeof source.worktreeMaxCount === 'number' && Number.isFinite(source.worktreeMaxCount)) {
     out.worktreeMaxCount = Math.max(1, Math.min(500, Math.floor(source.worktreeMaxCount)));
@@ -2261,6 +2269,9 @@ export function updateAdvancedSettings(
   if (typeof patch.maxConcurrent === 'number' && Number.isFinite(patch.maxConcurrent)) {
     advanced.maxConcurrent = Math.max(1, Math.min(32, Math.floor(patch.maxConcurrent)));
   }
+  if (typeof patch.maxOrchThreads === 'number' && Number.isFinite(patch.maxOrchThreads)) {
+    advanced.maxOrchThreads = clampMaxOrchThreads(patch.maxOrchThreads);
+  }
   if (typeof patch.worktreeMaxCount === 'number' && Number.isFinite(patch.worktreeMaxCount)) {
     advanced.worktreeMaxCount = Math.max(1, Math.min(500, Math.floor(patch.worktreeMaxCount)));
   }
@@ -2500,6 +2511,23 @@ export function maxConcurrentAgents(
     return Math.max(1, Math.min(32, Math.floor(n)));
   }
   return 5;
+}
+
+/** Default child-workspace cap for one orchestration chat. */
+export const MAX_ORCH_THREADS_DEFAULT = 5;
+/** Inclusive bounds for {@link AdvancedAppSettings.maxOrchThreads}. */
+export const MAX_ORCH_THREADS_MIN = 1;
+export const MAX_ORCH_THREADS_MAX = 32;
+
+function clampMaxOrchThreads(n: number): number {
+  return Math.max(MAX_ORCH_THREADS_MIN, Math.min(MAX_ORCH_THREADS_MAX, Math.floor(n)));
+}
+
+/** Child workspaces one orchestration chat may create (Settings → Advanced). */
+export function maxOrchThreads(settings: AppSettings = loadAppSettings()): number {
+  const n = settings.advanced.maxOrchThreads;
+  if (typeof n === 'number' && Number.isFinite(n)) return clampMaxOrchThreads(n);
+  return MAX_ORCH_THREADS_DEFAULT;
 }
 
 /** Binary name or absolute path used to spawn Claude Code. */

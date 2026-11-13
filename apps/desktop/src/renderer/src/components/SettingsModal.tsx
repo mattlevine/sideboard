@@ -343,6 +343,7 @@ export function SettingsModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [maxConcurrentDraft, setMaxConcurrentDraft] = useState('5');
+  const [maxOrchThreadsDraft, setMaxOrchThreadsDraft] = useState('5');
   const [historyMaxCountDraft, setHistoryMaxCountDraft] = useState(String(HISTORY_MAX_COUNT_DEFAULT));
   const [historyMaxDaysDraft, setHistoryMaxDaysDraft] = useState('0');
   const [clearOlderDaysDraft, setClearOlderDaysDraft] = useState('365');
@@ -378,6 +379,7 @@ export function SettingsModal({
     const next = normalizeSettings(s);
     setSettings(next);
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 5));
+    setMaxOrchThreadsDraft(String(s.advanced?.maxOrchThreads ?? 5));
     setStatuses(agents);
     setBrightsySession(session);
     setWorkspaces(listed);
@@ -602,6 +604,7 @@ export function SettingsModal({
     const normalized = normalizeSettings(next);
     setSettings(normalized);
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 5));
+    setMaxOrchThreadsDraft(String(next.advanced?.maxOrchThreads ?? 5));
     setHistoryMaxCountDraft(String(next.advanced?.historyMaxCount ?? HISTORY_MAX_COUNT_DEFAULT));
     setHistoryMaxDaysDraft(String(next.advanced?.historyMaxDays ?? 0));
     if (!accountNotesFocused.current) {
@@ -2102,6 +2105,46 @@ export function SettingsModal({
                           return;
                         }
                         void saveAdvancedPatch({ maxConcurrent: n });
+                      }}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <label className="settings-section-title" htmlFor="max-orch-threads">
+                    Max orchestration threads
+                  </label>
+                  <p className="settings-hint">
+                    Cap how many child workspaces one orchestration chat can create. Default 5.
+                  </p>
+                  <div className="settings-key-row" style={{ marginTop: '0.5rem' }}>
+                    <input
+                      id="max-orch-threads"
+                      type="number"
+                      min={1}
+                      max={32}
+                      step={1}
+                      value={maxOrchThreadsDraft}
+                      disabled={busy}
+                      onChange={(e) => setMaxOrchThreadsDraft(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={
+                        busy ||
+                        !maxOrchThreadsDraft.trim() ||
+                        Number(maxOrchThreadsDraft) === (advanced.maxOrchThreads ?? 5)
+                      }
+                      onClick={() => {
+                        const n = Number(maxOrchThreadsDraft);
+                        if (!Number.isFinite(n)) {
+                          setError('Max orchestration threads must be a number');
+                          return;
+                        }
+                        void saveAdvancedPatch({ maxOrchThreads: n });
                       }}
                     >
                       Save
