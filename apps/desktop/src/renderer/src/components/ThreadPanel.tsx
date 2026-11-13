@@ -168,6 +168,14 @@ import {
 import { runComposerSend, submitPlanAnswer } from '../lib/composer-send';
 import { visibleComposerAttachments } from '../lib/composer-attachments';
 import { getComposerDraft, rememberComposerDraft } from '../lib/composer-draft';
+import {
+  SCHEDULE_THIS_EVERY,
+  scheduleThisPrompt,
+  scheduleThisThreadId,
+  suggestedScheduleTime,
+  transcriptSelectionText,
+  type ScheduleThisPrefill,
+} from '../lib/schedule-this';
 import { useSpeechDictation } from '../lib/use-speech-dictation';
 import { ChatJumpBottomButton, useChatStickToBottom } from './ChatJumpBottom';
 
@@ -261,6 +269,8 @@ interface Props {
   rightSidebarToggle?: ReactNode;
   /** Rendered under the tab strip (orchestrator child-thread chips). */
   belowTabs?: ReactNode;
+  /** Open Automations with this prompt filled in. Shown after a turn settles. */
+  onScheduleThis?: (prefill: ScheduleThisPrefill) => void;
 }
 
 const queuedIconStroke = {
@@ -343,6 +353,7 @@ export function ThreadPanel({
   leftSidebarToggle,
   rightSidebarToggle,
   belowTabs,
+  onScheduleThis,
 }: Props) {
   const live = useLiveThread(thread.id);
   const liveOutput = live.output;
@@ -690,6 +701,30 @@ export function ThreadPanel({
   }, [thread.id]);
 
   const agentActive = thread.status === 'running' || thread.status === 'queued';
+  const canScheduleThis =
+    Boolean(onScheduleThis) &&
+    !agentActive &&
+    scheduleThisPrompt({ messages: thread.messages }) != null;
+  function openScheduleThis() {
+    if (!onScheduleThis) return;
+    const promptText = scheduleThisPrompt({
+      selectedText: transcriptSelectionText(chatRef.current),
+      messages: thread.messages,
+    });
+    if (!promptText) return;
+    onScheduleThis({
+      prompt: promptText,
+      threadId: scheduleThisThreadId(thread),
+      every: SCHEDULE_THIS_EVERY,
+      time: suggestedScheduleTime(),
+      agent: thread.agent,
+      model: thread.model,
+      effort: thread.effort,
+      fast: thread.fast,
+      planMode: thread.planMode,
+      autonomy: thread.autonomy,
+    });
+  }
   const wasAgentActiveRef = useRef(agentActive);
   useEffect(() => {
     const wasActive = wasAgentActiveRef.current;
@@ -2427,6 +2462,22 @@ export function ThreadPanel({
           showQueueDock ? ' has-queue' : ''
         }`}
       >
+        {canScheduleThis && (
+          <div className="schedule-this-row">
+            <button
+              type="button"
+              className="schedule-this-btn"
+              title="Schedule the selected text, or the last prompt. Opens Automations with a daily repeat you can change."
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => {
+                event.stopPropagation();
+                openScheduleThis();
+              }}
+            >
+              Schedule this
+            </button>
+          </div>
+        )}
         {showQueueDock && (
           <div
             ref={queuedDockRef}

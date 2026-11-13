@@ -41,6 +41,16 @@ export {
 
 export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 
+/** Newest runs kept on the automation itself. */
+export const SCHEDULE_RUN_HISTORY_LIMIT = 10;
+
+/** One fire. `error` is set when that fire failed. A sleeping Mac does not write a row. */
+export interface ScheduleRunRecord {
+  at: string;
+  threadId: string | null;
+  error?: string;
+}
+
 export interface ScheduledTask {
   id: string;
   name: string;
@@ -71,6 +81,8 @@ export interface ScheduledTask {
   lastRunAt: string | null;
   lastThreadId: string | null;
   lastError: string | null;
+  /** Newest first. Capped at {@link SCHEDULE_RUN_HISTORY_LIMIT}. */
+  runs: ScheduleRunRecord[];
   createdBy: ScheduleCreatedBy;
   createdAt: string;
   updatedAt: string;
@@ -190,6 +202,47 @@ function normalizeAttachments(raw: unknown): ThreadAttachment[] {
   return out;
 }
 
+function normalizeRunList(raw: unknown): ScheduleRunRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ScheduleRunRecord[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as { at?: unknown; threadId?: unknown; error?: unknown };
+    if (typeof row.at !== 'string' || !row.at.trim()) continue;
+    const next: ScheduleRunRecord = {
+      at: row.at,
+      threadId:
+        typeof row.threadId === 'string' && row.threadId.trim() ? row.threadId.trim() : null,
+    };
+    if (typeof row.error === 'string' && row.error.trim()) next.error = row.error;
+    out.push(next);
+    if (out.length >= SCHEDULE_RUN_HISTORY_LIMIT) break;
+  }
+  return out;
+}
+
+/**
+ * Prefer the stored log. Older files only have lastRunAt / lastThreadId /
+ * lastError, so that single fire becomes the first run until the next write.
+ */
+function runsFromStored(raw: {
+  runs?: unknown;
+  lastRunAt?: string | null;
+  lastThreadId?: string | null;
+  lastError?: string | null;
+}): ScheduleRunRecord[] {
+  if (Array.isArray(raw.runs)) return normalizeRunList(raw.runs);
+  if (typeof raw.lastRunAt === 'string' && raw.lastRunAt.trim()) {
+    const one: ScheduleRunRecord = {
+      at: raw.lastRunAt,
+      threadId: raw.lastThreadId?.trim() || null,
+    };
+    if (typeof raw.lastError === 'string' && raw.lastError.trim()) one.error = raw.lastError;
+    return [one];
+  }
+  return [];
+}
+
 function normalizeTask(raw: ScheduledTask): ScheduledTask {
   const when = normalizeWhen(raw.when);
   const agent =
@@ -215,6 +268,7 @@ function normalizeTask(raw: ScheduledTask): ScheduledTask {
     lastRunAt: raw.lastRunAt ?? null,
     lastThreadId: raw.lastThreadId ?? null,
     lastError: raw.lastError ?? null,
+    runs: runsFromStored(raw),
     createdBy:
       raw.createdBy === 'mcp' || raw.createdBy === 'cli' || raw.createdBy === 'ui'
         ? raw.createdBy
@@ -276,6 +330,7 @@ function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
     lastRunAt: null,
     lastThreadId: null,
     lastError: null,
+    runs: [],
     createdBy: input.createdBy,
     createdAt: ts,
     updatedAt: ts,
@@ -418,6 +473,11 @@ export function recordScheduleRun(
   if (idx < 0) throw new Error(`Automation not found: ${id}`);
   const prev = rows[idx];
   const firedAt = result.firedAt ?? new Date();
+  const at = nowIso(firedAt);
+  const threadId =
+    result.lastThreadId !== undefined ? result.lastThreadId?.trim() || null : null;
+  const entry: ScheduleRunRecord = { at, threadId };
+  if (result.lastError?.trim()) entry.error = result.lastError;
   const next: ScheduledTask = {
     ...prev,
     enabled: prev.when.kind === 'once' ? false : prev.enabled,
@@ -425,11 +485,12 @@ export function recordScheduleRun(
       prev.when.kind === 'once'
         ? prev.nextRunAt
         : computeNextRunAt(prev.when, firedAt).toISOString(),
-    lastRunAt: nowIso(firedAt),
+    lastRunAt: at,
     lastThreadId:
       result.lastThreadId !== undefined ? result.lastThreadId : prev.lastThreadId,
     lastError: result.lastError ?? null,
-    updatedAt: nowIso(firedAt),
+    runs: [entry, ...prev.runs].slice(0, SCHEDULE_RUN_HISTORY_LIMIT),
+    updatedAt: at,
   };
   rows[idx] = next;
   writeAll(rows);

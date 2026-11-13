@@ -1,13 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ScheduledTask, ScheduleWhen, Thread } from '@sideboard-ai/core';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import { AutomationEditor } from './AutomationEditor';
-import { emptyForm, formFromTask, whenFromForm, type FormState } from './automation-form';
+import {
+  emptyForm,
+  formFromScheduleThis,
+  formFromTask,
+  whenFromForm,
+  type FormState,
+} from './automation-form';
 import {
   AUTOMATION_NESTED_ESCAPE_SELECTOR,
   automationEditorShouldCloseOnEscape,
 } from '../lib/automation-escape';
+import type { ScheduleThisPrefill } from '../lib/schedule-this';
 import { loadOrchestratorDefaults, type ThreadDefaults } from '../lib/thread-defaults';
+
+export interface ScheduleThisRequest {
+  nonce: number;
+  prefill: ScheduleThisPrefill;
+}
 
 function formatWhen(when: ScheduleWhen): string {
   if (when.kind === 'once') {
@@ -47,7 +59,15 @@ const FALLBACK_DEFAULTS: ThreadDefaults = {
   autonomy: 'full',
 };
 
-export function SchedulesSettings() {
+export function SchedulesSettings({
+  scheduleRequest = null,
+  onScheduleRequestConsumed,
+  onOpenThread,
+}: {
+  scheduleRequest?: ScheduleThisRequest | null;
+  onScheduleRequestConsumed?: () => void;
+  onOpenThread?: (threadId: string) => Promise<void> | void;
+}) {
   const [rows, setRows] = useState<ScheduledTask[]>([]);
   const [targetThreads, setTargetThreads] = useState<Thread[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -56,6 +76,8 @@ export function SchedulesSettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const defaultsRef = useRef(defaults);
+  defaultsRef.current = defaults;
 
   const reload = useCallback(async () => {
     const [schedules, threads] = await Promise.all([
@@ -84,6 +106,25 @@ export function SchedulesSettings() {
     });
     return off;
   }, [reload]);
+
+  useEffect(() => {
+    if (!scheduleRequest) return;
+    const request = scheduleRequest;
+    let cancelled = false;
+    void (async () => {
+      const next = await loadOrchestratorDefaults().catch(() => defaultsRef.current);
+      if (cancelled) return;
+      setDefaults(next);
+      setEditingId(null);
+      setForm(formFromScheduleThis(request.prefill, next));
+      setShowForm(true);
+      setError(null);
+      onScheduleRequestConsumed?.();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scheduleRequest, onScheduleRequestConsumed]);
 
   function closeForm() {
     setShowForm(false);
@@ -186,6 +227,19 @@ export function SchedulesSettings() {
     }
   }
 
+  async function openRun(threadId: string) {
+    if (!onOpenThread) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onOpenThread(threadId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function remove(id: string) {
     setBusy(true);
     setError(null);
@@ -225,6 +279,10 @@ export function SchedulesSettings() {
             New
           </button>
         </div>
+        <p className="automation-runs-note">
+          Each automation keeps its last 10 runs. History still keeps the last 5 archived chats. A
+          sleeping Mac waits until wake, so a quiet stretch is not a failed run.
+        </p>
         <div className="settings-history-list" role="list">
           {rows.map((row) => (
               <div
@@ -246,7 +304,7 @@ export function SchedulesSettings() {
                     {formatWhen(row.when)} · {threadLabel(row.threadId)}
                     {!row.threadId && row.archiveChat === false ? ' · stays open' : ''} · next{' '}
                     {formatNext(row.nextRunAt)}
-                    {row.lastError ? ` · ${row.lastError}` : ''}
+                    {row.runs.length === 0 && row.lastError ? ` · ${row.lastError}` : ''}
                   </span>
                 </button>
                 <button type="button" className="settings-history-restore" disabled={busy} onClick={() => void toggleEnabled(row)}>
@@ -258,6 +316,31 @@ export function SchedulesSettings() {
                 <button type="button" className="settings-history-restore" disabled={busy} onClick={() => void remove(row.id)}>
                   Delete
                 </button>
+                {row.runs.length > 0 && (
+                  <ol className="automation-runs">
+                    {row.runs.map((run, index) => (
+                      <li key={`${run.at}-${index}`} className="automation-run">
+                        <span className="automation-run-when">{formatNext(run.at)}</span>
+                        <span className={run.error ? 'automation-run-bad' : 'automation-run-ok'}>
+                          {run.error ? 'Error' : 'Ran'}
+                        </span>
+                        {run.threadId ? (
+                          <button
+                            type="button"
+                            className="automation-run-open"
+                            disabled={busy}
+                            onClick={() => void openRun(run.threadId!)}
+                          >
+                            Open chat
+                          </button>
+                        ) : (
+                          <span>No chat</span>
+                        )}
+                        {run.error ? <span className="automation-run-error">{run.error}</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                )}
               </div>
             ))}
         </div>

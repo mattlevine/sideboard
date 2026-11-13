@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Each automation keeps its last 10 runs (when it fired, success or error, and a link to the chat). History still keeps the last 5 archived chats. A sleeping Mac waits until wake.
+- **Schedule this** on a finished chat opens a new automation with that prompt (selected text, or the last prompt), a daily repeat, and a suggested clock time.
+
 ## [0.1.340] - 2026-11-12
 
 ### Fixed

@@ -441,7 +441,7 @@ sideboard schedule add --prompt "Start my day" --time 07:30 --days weekdays --no
 sideboard schedule run <id>
 ```
 
-Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs open a new chat each run and archive it when that run finishes; History keeps the last 5 runs). `--time 07:30 --days weekdays` (or `daily`, `weekends`, `mon,wed,fri`) fires at that clock time. `--no-archive` leaves that chat in the sidebar so you can keep talking. Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. If the target chat is missing or archived when the job fires, Sideboard starts a new Global chat (recurring jobs then continue that chat).
+Omit `--thread` to open a new orchestration chat when the job fires (recurring jobs open a new chat each run and archive it when that run finishes; History keeps the last 5 archived chats). Each automation also keeps its last 10 runs (when it fired, success or error, and the chat id). `sideboard schedule ls` prints the latest. A sleeping Mac waits until wake, so a quiet stretch is not a failed run. `--time 07:30 --days weekdays` (or `daily`, `weekends`, `mon,wed,fri`) fires at that clock time. `--no-archive` leaves that chat in the sidebar so you can keep talking. Pass `--thread self` from an agent turn (or `threadId=self` in MCP) to continue that chat. On the desktop, **Schedule this** on a finished chat opens the editor with that prompt (selected text, or the last prompt), a daily repeat, and a suggested clock time. Agents use `create_schedule` the same way. If the target chat is missing or archived when the job fires, that automation is removed.
 
 ## Also: Brightsy
 
