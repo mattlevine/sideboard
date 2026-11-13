@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Settings → Advanced → Wake orchestrator on CI / review-requested (off by default). While Sideboard is running, a failing check on an open pull request or a new review request queues an information-only note on that workspace’s orchestrator. It does not merge or start a fix.
+- Settings → Advanced → Wake orchestrator on CI / review-requested (off by default) is the master switch. Each workspace then opts in from Checks, or an agent calls `set_wake_on_github_edges`. A failing check or a new review request queues an information-only note. It does not merge or start a fix.
 
 ## [0.1.340] - 2026-11-12
 

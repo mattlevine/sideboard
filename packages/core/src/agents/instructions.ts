@@ -188,7 +188,7 @@ export function formatWorktreeDirective(
     );
   }
   lines.push(
-    '- Sideboard git buttons send short phrases ("Commit and push.", "Ready for review.", "Merge PR.", …) with their meaning attached — act on them without asking for clarification. If the user gives a goal (Greptile 5/5, CI green, until checks pass), you get the watch-fix-push playbook with that request.',
+    '- Sideboard git buttons send short phrases ("Commit and push.", "Ready for review.", "Merge PR.", …) with their meaning attached — act on them without asking. A named goal includes the watch-fix-push playbook.',
   );
   lines.push('');
   lines.push(formatDevAccessHint(opts?.activeRuns));
@@ -197,7 +197,7 @@ export function formatWorktreeDirective(
     'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. Future jobs turn on Caffeinate.',
   );
   lines.push(
-    '`set_workspace_tags` labels this checkout (omit ref; replace, add, or remove). Not another checkout.',
+    '`set_workspace_tags` labels this checkout (omit ref). `set_wake_on_github_edges` opts this checkout in when Advanced is already on (omit ref).',
   );
   lines.push(
     'Orchestration: `show_plan` opens the diagram and plan.md. `list_order` / `set_dependency`',

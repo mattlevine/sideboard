@@ -228,4 +228,20 @@ describe('github edge watch', () => {
     expect(env.snapshot().ciFailed).toEqual([PR]);
     expect(env.sends).toEqual([]);
   });
+
+  it('records a newly watched repo before waking on a later review', async () => {
+    const env = harness();
+    await pollGithubEdges(env.deps);
+    env.reviews.set('/other', [
+      { prUrl: OTHER, title: 'Already waiting', draft: false, state: 'OPEN' },
+    ]);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(0);
+    expect(env.sends).toEqual([]);
+    env.reviews.set('/other', [
+      { prUrl: OTHER, title: 'Already waiting', draft: false, state: 'OPEN' },
+      { prUrl: PR, title: 'New ask', draft: false, state: 'OPEN' },
+    ]);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(1);
+    expect(env.sends[0]?.prompt).toContain('Review requested: New ask');
+  });
 });

@@ -177,11 +177,10 @@ export interface Thread {
    * Used for sidebar / board list badges.
    */
   prLabels?: string[];
-  /**
-   * True when `gh pr checks` reported a failing CI run. Undefined until
-   * checks (or a merge-state heuristic) have landed.
-   */
+  /** True when `gh pr checks` reported a failing CI run. */
   prChecksFailed?: boolean;
+  /** This checkout opts in to CI / review-request wakes. Off until set. */
+  wakeOnGithubEdges?: boolean;
   /** Source-ticket blockers. Empty if none; absent until looked up. Not an agent block. */
   issueBlockedBy?: string[];
   /**

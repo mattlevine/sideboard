@@ -183,6 +183,7 @@ import {
   fireSchedule,
   armSchedules,
   armGithubEdgeWatch,
+  applyWakeOnGithubEdges,
   answerToolPermission,
   hasEnabledSchedules,
   updateAdvancedSettings,
@@ -1388,6 +1389,9 @@ function registerIpc(): void {
   ipcMain.handle('renameThread', (_e, ref: string, title: string) => orch.renameThread(ref, title));
   ipcMain.handle('dismissAskUser', (_e, ref: string, signature: string) => orch.dismissAskUser(ref, signature));
   ipcMain.handle('setWorkspaceTags', (_e, ref: string, tags: string[]) => orch.setWorkspaceTags(ref, tags));
+  ipcMain.handle('setWakeOnGithubEdges', (_e, ref: string, enabled: boolean) =>
+    applyWakeOnGithubEdges(ref, enabled === true),
+  );
   ipcMain.handle('setAttachments', (_e, ref: string, attachments) =>
     orch.setAttachments(ref, attachments),
   );

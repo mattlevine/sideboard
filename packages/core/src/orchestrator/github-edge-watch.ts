@@ -208,27 +208,43 @@ export async function pollGithubEdges(
       });
     }
   }
+  const seenRepos = new Set(prev.reviewReposSeen ?? []);
+  const freshRepos = new Set(
+    prev.primed ? successfulRepos.filter((repo) => !seenRepos.has(repo)) : [],
+  );
   const reviewLatch = repos.length
     ? mergeReviewLatch(prev.reviewRequested, fetchedReviews, successfulRepos)
-    : [];
-  const reviewRequested = reviewLatch.map(
-    (row) =>
-      reviewSubjects.get(row.prUrl) ?? {
-        prUrl: row.prUrl,
-        title: row.prUrl,
-        repoPath: row.repoPath,
-      },
-  );
-
+    : prev.reviewRequested;
+  const reviewRequested = reviewLatch
+    .filter((row) => !freshRepos.has(row.repoPath))
+    .map(
+      (row) =>
+        reviewSubjects.get(row.prUrl) ?? {
+          prUrl: row.prUrl,
+          title: row.prUrl,
+          repoPath: row.repoPath,
+        },
+    );
+  const baseline = reviewLatch.filter((row) => freshRepos.has(row.repoPath));
   const edges = diffGithubEdges({ prev, ciFailed, reviewRequested, now });
   const delivered = prev.primed && edges.length ? await deliverGithubEdges(edges, deps) : [];
-  const next = commitGithubEdgeSnapshot({
-    prev,
+  const committed = commitGithubEdgeSnapshot({
+    prev: baseline.length
+      ? { ...prev, reviewRequested: mergeReviewLatch(prev.reviewRequested, baseline, [...freshRepos]) }
+      : prev,
     ciFailed,
     reviewRequested: reviewLatch,
     delivered,
     now,
   });
+  const watched = new Set(repos);
+  const reviewReposSeen = [
+    ...new Set([
+      ...(prev.reviewReposSeen ?? []).filter((repo) => watched.has(repo)),
+      ...successfulRepos,
+    ]),
+  ].sort();
+  const next = reviewReposSeen.length ? { ...committed, reviewReposSeen } : committed;
   if (githubEdgeSnapshotKey(prev) !== githubEdgeSnapshotKey(next)) deps.save(next);
   return { fired: delivered.length, primed: next.primed };
 }
@@ -289,6 +305,7 @@ function liveWorktreeThreads(): Thread[] {
     (thread) =>
       !isGlobalThread(thread) &&
       !isOrchestratorThread(thread) &&
+      thread.wakeOnGithubEdges === true &&
       Boolean(thread.worktreePath?.trim()) &&
       Boolean(thread.repoPath?.trim()),
   );

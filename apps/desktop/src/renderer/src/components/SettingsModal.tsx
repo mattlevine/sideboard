@@ -1798,11 +1798,11 @@ export function SettingsModal({
                         Wake orchestrator on CI / review-requested
                       </div>
                       <p className="settings-hint">
-                        Queue a note on the workspace’s orchestrator when an open pull request’s
-                        checks start failing, or when GitHub requests your review. Information
-                        only — it does not merge or start a fix. The Mac must be awake and
-                        Sideboard must be running. The first check after you turn this on only
-                        records the current state.
+                        Master switch. Each workspace then opts in from Checks, or an agent
+                        calls set_wake_on_github_edges. A failing check or a new review request
+                        queues a note. It does not merge or start a fix. The Mac must be awake
+                        and Sideboard must be running. The first check after you turn this on
+                        only records the current state.
                       </p>
                     </div>
                     <button

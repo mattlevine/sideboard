@@ -38,6 +38,7 @@ export * from './store/schedules.js';
 export * from './order/order.js';
 export { armSchedules, fireSchedule, formatScheduledPrompt } from './orchestrator/schedule-runner.js';
 export { armGithubEdgeWatch } from './orchestrator/github-edge-watch.js';
+export { applyWakeOnGithubEdges } from './threads/wake-on-github-edges.js';
 export { hostKeepsMacAwake } from './host/awake.js';
 export { headlessHostBlockedReason, lanRelayUrls, startHeadlessHost } from './host/serve.js';
 export {

@@ -38,6 +38,8 @@ export interface GithubEdgeSnapshot {
   reviewRequested: GithubEdgeReviewLatch[];
   /** Epoch ms, keyed by `ci-failed:url` or `review-requested:url`. */
   lastFiredAt: Record<string, number>;
+  /** Repos whose review queue has already been recorded. */
+  reviewReposSeen?: string[];
 }
 
 export interface GithubEdgeWake {
@@ -146,6 +148,16 @@ export function coerceGithubEdgeSnapshot(raw: unknown): GithubEdgeSnapshot {
       reviewRequested.push({ prUrl, repoPath });
     }
   }
+  const reviewReposSeen: string[] = [];
+  const seenRepos = new Set<string>();
+  if (Array.isArray(row.reviewReposSeen)) {
+    for (const item of row.reviewReposSeen) {
+      const repo = typeof item === 'string' ? item.trim() : '';
+      if (!repo || seenRepos.has(repo)) continue;
+      seenRepos.add(repo);
+      reviewReposSeen.push(repo);
+    }
+  }
   const lastFiredAt: Record<string, number> = {};
   if (row.lastFiredAt && typeof row.lastFiredAt === 'object') {
     for (const [key, value] of Object.entries(row.lastFiredAt as Record<string, unknown>)) {
@@ -159,6 +171,7 @@ export function coerceGithubEdgeSnapshot(raw: unknown): GithubEdgeSnapshot {
     ciFailed,
     reviewRequested,
     lastFiredAt,
+    ...(reviewReposSeen.length ? { reviewReposSeen } : {}),
   };
 }
 
@@ -356,5 +369,6 @@ export function githubEdgeSnapshotKey(snapshot: GithubEdgeSnapshot): string {
       .map((row) => ({ prUrl: row.prUrl, repoPath: row.repoPath }))
       .sort((a, b) => a.prUrl.localeCompare(b.prUrl) || a.repoPath.localeCompare(b.repoPath)),
     lastFiredAt,
+    reviewReposSeen: [...(snapshot.reviewReposSeen ?? [])].sort(),
   });
 }

@@ -706,7 +706,7 @@ describe('visibleToolRowDetail', () => {
     expect(toolDescription('get_run_log', {})).toBe('Read Dev log');
     expect(toolDescription('get_run_log', { name: 'dev' })).toBe('Read dev log');
     expect(toolDescription('get_orchestrator', {})).toBe('Get orchestrator'); expect(toolDescription('notify_orchestrator', {})).toBe('Notify orchestrator');
-    expect(toolDescription('set_workspace_tags', {})).toBe('Set workspace tags');
+    expect(toolDescription('set_workspace_tags', {})).toBe('Set workspace tags'); expect(toolDescription('set_wake_on_github_edges', {})).toBe('Wake on CI / review');
     expect(toolDescription('create_schedule', { name: 'Standup' })).toBe('Automation Standup');
     expect(toolDescription('list_schedules', {})).toBe('List automations');
     expect([toolDescription('list_order', {}), toolDescription('show_plan', {}), toolDescription('set_plan', {}), toolDescription('execute_plan', {}), toolDescription('set_dependency', {}), toolDescription('list_env', {}), toolDescription('set_env', {}), toolDescription('delete_env', {})]).toEqual(['List planner', 'Show plan', 'Draft plan', 'Run plan', 'Set dependency', 'List env vars', 'Set env var', 'Delete env var']);

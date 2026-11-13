@@ -60,7 +60,7 @@ export const SIDEBOARD_ARTIFACT_MCP_ALLOWED_TOOLS = [
   'mcp__sideboard__run_dev_script',
   'mcp__sideboard__stop_dev_script',
   'mcp__sideboard__get_run_log',
-  'mcp__sideboard__get_orchestrator', 'mcp__sideboard__notify_orchestrator', 'mcp__sideboard__set_workspace_tags',
+  'mcp__sideboard__get_orchestrator', 'mcp__sideboard__notify_orchestrator', 'mcp__sideboard__set_workspace_tags', 'mcp__sideboard__set_wake_on_github_edges',
   'mcp__sideboard__get_viewer_context',
   'mcp__sideboard__update_viewer_context',
   'mcp__sideboard__list_env', 'mcp__sideboard__set_env', 'mcp__sideboard__delete_env',
