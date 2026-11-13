@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Settings → Advanced → Wake orchestrator on CI / review-requested (off by default). While Sideboard is running, a failing check on an open pull request or a new review request queues an information-only note on that workspace’s orchestrator. It does not merge or start a fix.
+
 ## [0.1.340] - 2026-11-12
 
 ### Fixed

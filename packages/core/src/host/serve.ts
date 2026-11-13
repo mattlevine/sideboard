@@ -11,6 +11,7 @@ import {
 } from '../store/desktop-host.js';
 import { ensureRemoteHostCredentials, saveRemotePhoneToken } from '../store/device-identity.js';
 import { hasEnabledSchedules } from '../store/schedules.js';
+import { armGithubEdgeWatch } from '../orchestrator/github-edge-watch.js';
 import { armSchedules } from '../orchestrator/schedule-runner.js';
 import { runRemoteHost } from '../remote/client.js';
 import { remoteRelayUrl } from '../remote/protocol.js';
@@ -56,6 +57,7 @@ export async function startHeadlessHost(opts?: {
   // NODE_EXTRA_CA_CERTS set after process start unless we dump them first.
   bootstrapSystemCa();
   armSchedules();
+  armGithubEdgeWatch();
 
   const ac = new AbortController();
   let stopped = false;
@@ -144,6 +146,7 @@ export async function startHeadlessHost(opts?: {
       return;
     }
     armSchedules();
+    armGithubEdgeWatch();
     void refreshRunning().then(() => refreshAwake());
   }, REARM_MS);
   timer.unref?.();

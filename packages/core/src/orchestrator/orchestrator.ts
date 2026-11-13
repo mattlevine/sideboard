@@ -290,6 +290,7 @@ import {
   orchestratorSessionPoisonedByBuiltins,
 } from '../store/global-workspace.js';
 import { releaseCaffeinateHoldForThread } from '../store/caffeinate-hold.js';
+import { armGithubEdgeWatch } from './github-edge-watch.js';
 import { armSchedules } from './schedule-runner.js';
 import {
   coordinatorSystemPrompt,
@@ -592,6 +593,7 @@ export class Orchestrator {
     // Re-arm session-quota wait timers (and fire any that are already due).
     this.schedulePendingQuotaResumes();
     armSchedules();
+    armGithubEdgeWatch();
   }
 
   /** Surface (and, when enabled, clean up) worktrees git knows about but no thread owns. */

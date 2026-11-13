@@ -1794,6 +1794,37 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
+                      <div className="settings-section-title">
+                        Wake orchestrator on CI / review-requested
+                      </div>
+                      <p className="settings-hint">
+                        Queue a note on the workspace’s orchestrator when an open pull request’s
+                        checks start failing, or when GitHub requests your review. Information
+                        only — it does not merge or start a fix. The Mac must be awake and
+                        Sideboard must be running. The first check after you turn this on only
+                        records the current state.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.wakeOrchestratorOnGithubEdges ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.wakeOrchestratorOnGithubEdges)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          wakeOrchestratorOnGithubEdges: !advanced.wakeOrchestratorOnGithubEdges,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
                       <div className="settings-section-title">Delete branch on purge</div>
                       <p className="settings-hint">
                         When purging a thread, also delete its git branch (Conductor{' '}

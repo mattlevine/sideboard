@@ -182,6 +182,7 @@ import {
   deleteSchedule,
   fireSchedule,
   armSchedules,
+  armGithubEdgeWatch,
   answerToolPermission,
   hasEnabledSchedules,
   updateAdvancedSettings,
@@ -1010,6 +1011,9 @@ function registerIpc(): void {
       'caffeinateWhileSchedules' in patch
     ) {
       syncCaffeinate();
+    }
+    if ('wakeOrchestratorOnGithubEdges' in patch) {
+      armGithubEdgeWatch();
     }
     return toPublicAppSettings(saved);
   });
@@ -1921,6 +1925,11 @@ app.whenReady().then(async () => {
     } catch {
       // Next tick retries.
     }
+    try {
+      armGithubEdgeWatch();
+    } catch {
+      // Next tick retries.
+    }
   }, 8_000);
   setupApplicationMenu(() => mainWindow);
   try {
@@ -1945,6 +1954,7 @@ app.whenReady().then(async () => {
     // Best-effort; UI can still open.
   }
   armSchedules();
+  armGithubEdgeWatch();
   syncCaffeinate();
   orch.listWorkspaces();
   createWindow();

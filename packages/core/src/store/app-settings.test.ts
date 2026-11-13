@@ -609,6 +609,7 @@ describe('app settings', () => {
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(false);
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.cowboyModeEnabled()).toBe(false);
+    expect(mod.wakeOrchestratorOnGithubEdgesEnabled()).toBe(false);
     expect(mod.showCostEnabled()).toBe(false);
     expect(mod.chatTextScale()).toBe(1.2);
     expect(mod.usageOnLimit()).toBe('keep_going');
@@ -629,6 +630,7 @@ describe('app settings', () => {
       caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       cowboyMode: true,
+      wakeOrchestratorOnGithubEdges: true,
       showCost: true,
       chatTextScale: 1.4,
       usageOnLimit: 'confirm',
@@ -645,6 +647,7 @@ describe('app settings', () => {
       caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       cowboyMode: true,
+      wakeOrchestratorOnGithubEdges: true,
       showCost: true,
       chatTextScale: 1.4,
       usageOnLimit: 'confirm',
@@ -701,6 +704,7 @@ describe('app settings', () => {
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(true);
     expect(mod.autoArchiveOnMergeEnabled()).toBe(true);
     expect(mod.cowboyModeEnabled()).toBe(true);
+    expect(mod.wakeOrchestratorOnGithubEdgesEnabled()).toBe(true);
     expect(mod.showCostEnabled()).toBe(true);
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(true);
     expect(mod.usageOnLimit()).toBe('confirm');
