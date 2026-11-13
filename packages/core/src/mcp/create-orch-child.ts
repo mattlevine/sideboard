@@ -1,16 +1,40 @@
 import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
-import { normalizeWorkspaceTags } from '../git/worktree-labels.js';
-import type { AgentKind, ThreadAttachment } from '../types/thread.js';
+import { normalizeWorktreePath, normalizeWorkspaceTags } from '../git/worktree-labels.js';
+import { maxOrchThreads } from '../store/app-settings.js';
+import { isOrchestratorThread } from '../store/global-workspace.js';
+import type { AgentKind, Thread, ThreadAttachment } from '../types/thread.js';
 import {
   orchCreateThreadAgentNote,
   resolveOrchCreateThreadOptions,
   type ResolveNewThreadOptions,
 } from './create-thread-agent.js';
 
-const MAX_ORCH_THREADS = 5;
 /** Hard ceiling so a stuck create_workspace cannot pin the MCP stdio server forever. */
 const CREATE_THREAD_TIMEOUT_MS = 90_000;
+
+type OrchChildSlot = Pick<Thread, 'parentThreadId' | 'worktreePath' | 'sourceType' | 'repoPath'>;
+
+/**
+ * Child workspaces this orchestration chat already created.
+ * Chats that share a checkout (`fork_chat`) count once. Orchestration-tab
+ * forks are not workspaces.
+ */
+export function orchChildWorkspaceCount(threads: readonly OrchChildSlot[], parentId: string): number {
+  const seen = new Set<string>();
+  let unpathed = 0;
+  for (const thread of threads) {
+    if (thread.parentThreadId !== parentId) continue;
+    if (isOrchestratorThread(thread)) continue;
+    const raw = thread.worktreePath?.trim();
+    if (!raw) {
+      unpathed += 1;
+      continue;
+    }
+    seen.add(normalizeWorktreePath(raw));
+  }
+  return seen.size + unpathed;
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -69,11 +93,12 @@ export async function createOrchChildThread(
     parent = null;
   }
   if (parentId) {
-    const children = orch.getThreads(false).filter((t) => t.parentThreadId === parentId);
-    if (children.length >= MAX_ORCH_THREADS) {
+    const cap = maxOrchThreads();
+    const used = orchChildWorkspaceCount(orch.getThreads(false), parentId);
+    if (used >= cap) {
       return {
         ok: false,
-        text: `Thread-creation cap (${MAX_ORCH_THREADS}) reached for this orchestration session`,
+        text: `Workspace cap (${cap}) reached for this orchestration session. Raise it in Settings → Advanced → Max orchestration threads.`,
       };
     }
   }

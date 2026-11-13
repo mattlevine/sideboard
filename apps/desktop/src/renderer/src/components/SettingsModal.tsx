@@ -41,6 +41,7 @@ import { GitSettingsNav } from './GitSettingsNav';
 import { IssuesSettings } from './IssuesSettings';
 import { ManagedAccountsPanel } from './ManagedAccountsPanel';
 import { CollaborationSettings } from './CollaborationSettings';
+import { SettingsNumberField } from './SettingsNumberField';
 import { RemoteSettings } from './RemoteSettings';
 import { AgentOptionsPicker } from './AgentOptionsPicker';
 import { parseThinkingEffort, thinkingEffortLabel } from './ThinkingEffortChip';
@@ -343,6 +344,7 @@ export function SettingsModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [maxConcurrentDraft, setMaxConcurrentDraft] = useState('5');
+  const [maxOrchThreadsDraft, setMaxOrchThreadsDraft] = useState('5');
   const [historyMaxCountDraft, setHistoryMaxCountDraft] = useState(String(HISTORY_MAX_COUNT_DEFAULT));
   const [historyMaxDaysDraft, setHistoryMaxDaysDraft] = useState('0');
   const [clearOlderDaysDraft, setClearOlderDaysDraft] = useState('365');
@@ -378,6 +380,7 @@ export function SettingsModal({
     const next = normalizeSettings(s);
     setSettings(next);
     setMaxConcurrentDraft(String(s.advanced?.maxConcurrent ?? 5));
+    setMaxOrchThreadsDraft(String(s.advanced?.maxOrchThreads ?? 5));
     setStatuses(agents);
     setBrightsySession(session);
     setWorkspaces(listed);
@@ -602,6 +605,7 @@ export function SettingsModal({
     const normalized = normalizeSettings(next);
     setSettings(normalized);
     setMaxConcurrentDraft(String(next.advanced?.maxConcurrent ?? 5));
+    setMaxOrchThreadsDraft(String(next.advanced?.maxOrchThreads ?? 5));
     setHistoryMaxCountDraft(String(next.advanced?.historyMaxCount ?? HISTORY_MAX_COUNT_DEFAULT));
     setHistoryMaxDaysDraft(String(next.advanced?.historyMaxDays ?? 0));
     if (!accountNotesFocused.current) {
@@ -2069,45 +2073,30 @@ export function SettingsModal({
                   )}
                 </div>
 
-                <div className="settings-section">
-                  <label className="settings-section-title" htmlFor="max-concurrent-agents">
-                    Max concurrent agents
-                  </label>
-                  <p className="settings-hint">
-                    Cap how many agent turns can run at once across the global orchestrator.
-                  </p>
-                  <div className="settings-key-row" style={{ marginTop: '0.5rem' }}>
-                    <input
-                      id="max-concurrent-agents"
-                      type="number"
-                      min={1}
-                      max={32}
-                      step={1}
-                      value={maxConcurrentDraft}
-                      disabled={busy}
-                      onChange={(e) => setMaxConcurrentDraft(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="primary"
-                      disabled={
-                        busy ||
-                        !maxConcurrentDraft.trim() ||
-                        Number(maxConcurrentDraft) === (advanced.maxConcurrent ?? 5)
-                      }
-                      onClick={() => {
-                        const n = Number(maxConcurrentDraft);
-                        if (!Number.isFinite(n)) {
-                          setError('Max concurrent must be a number');
-                          return;
-                        }
-                        void saveAdvancedPatch({ maxConcurrent: n });
-                      }}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
+                <SettingsNumberField
+                  id="max-concurrent-agents"
+                  title="Max concurrent agents"
+                  hint="Cap how many agent turns can run at once across the global orchestrator."
+                  value={maxConcurrentDraft}
+                  saved={advanced.maxConcurrent ?? 5}
+                  busy={busy}
+                  onChange={setMaxConcurrentDraft}
+                  onError={setError}
+                  invalidMessage="Max concurrent must be a number"
+                  onSave={(n) => void saveAdvancedPatch({ maxConcurrent: n })}
+                />
+                <SettingsNumberField
+                  id="max-orch-threads"
+                  title="Max orchestration threads"
+                  hint="Cap how many child workspaces one orchestration chat can create. Chats forked onto an existing checkout do not count. Default 5."
+                  value={maxOrchThreadsDraft}
+                  saved={advanced.maxOrchThreads ?? 5}
+                  busy={busy}
+                  onChange={setMaxOrchThreadsDraft}
+                  onError={setError}
+                  invalidMessage="Max orchestration threads must be a number"
+                  onSave={(n) => void saveAdvancedPatch({ maxOrchThreads: n })}
+                />
               </div>
             )}
 

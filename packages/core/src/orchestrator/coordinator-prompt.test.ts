@@ -213,6 +213,10 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
       'To put another agent on that checkout, fork_chat',
     );
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Max orchestration threads');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'fork_chat on an existing checkout does not use a slot',
+    );
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('never pass your own agent or agent=cursor');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('CURSOR_API_KEY');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('find me work and start it');
