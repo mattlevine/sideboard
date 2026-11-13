@@ -2117,7 +2117,7 @@ export function SettingsModal({
                     Max orchestration threads
                   </label>
                   <p className="settings-hint">
-                    Cap how many child workspaces one orchestration chat can create. Default 5.
+                    Cap how many child workspaces one orchestration chat can create. Chats forked onto an existing checkout do not count. Default 5.
                   </p>
                   <div className="settings-key-row" style={{ marginTop: '0.5rem' }}>
                     <input
