@@ -82,6 +82,8 @@ interface Props {
   onAddReference?: (attachment: ThreadAttachment) => void;
   /** Open the native PR page (GitHub API), not github.com in a webview. */
   onOpenPr?: () => void;
+  /** Settings → Advanced master switch. Updates while Checks stays open. */
+  wakeOnGithubEdgesAllowed?: boolean;
 }
 
 type UpperTab = 'changes' | 'files' | 'checks';
@@ -232,6 +234,7 @@ export function RightSidebar({
   onFileChanges,
   onAddReference,
   onOpenPr,
+  wakeOnGithubEdgesAllowed = false,
 }: Props) {
   const [upper, setUpper] = useState<UpperTab>('files');
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -284,21 +287,10 @@ export function RightSidebar({
   const [prChecks, setPrChecks] = useState<PrCheckRun[] | null>(null);
   const [prChecksError, setPrChecksError] = useState<string | null>(null);
   const [prChecksLoading, setPrChecksLoading] = useState(false);
-  const [wakeAllowed, setWakeAllowed] = useState(false);
   const [wakeOn, setWakeOn] = useState(false);
   useEffect(() => {
     setWakeOn(thread.wakeOnGithubEdges === true);
   }, [thread.id, thread.wakeOnGithubEdges]);
-  useEffect(() => {
-    if (upper !== 'checks') return;
-    let cancelled = false;
-    void window.sideboard.getAppSettings().then((settings) => {
-      if (!cancelled) setWakeAllowed(Boolean(settings.advanced.wakeOrchestratorOnGithubEdges));
-    }).catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [upper, thread.id]);
   /** Live GitHub PR state for the action bar (OPEN / MERGED / CLOSED + review). */
   const [prMeta, setPrMeta] = useState<{
     number: number;
@@ -1684,7 +1676,7 @@ export function RightSidebar({
 
           {upper === 'checks' && (
             <>
-              {wakeAllowed && thread.sourceType !== 'orchestration' && (
+              {wakeOnGithubEdgesAllowed && thread.sourceType !== 'orchestration' && (
                 <div className="pr-wake-row">
                   <span>Wake on CI / review</span>
                   <button
@@ -1701,7 +1693,9 @@ export function RightSidebar({
                         .then(() => onRefresh())
                         .catch(() => setWakeOn(!next));
                     }}
-                  />
+                  >
+                    <span className="settings-switch-knob" />
+                  </button>
                 </div>
               )}
               <PrChecksPanel

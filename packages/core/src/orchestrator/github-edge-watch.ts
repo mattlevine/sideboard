@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ciChecksFailed } from '../git/pr-gates.js';
 import { threadPrChecksFailedPatch } from '../git/pr-merge-archive.js';
-import { getPrChecks, listPrs } from '../git/worktree.js';
+import { getPrCiChecks, listPrs } from '../git/worktree.js';
 import { isThisProcessDesktopHost } from '../store/desktop-host.js';
 import {
   loadAppSettings,
@@ -175,7 +175,13 @@ export async function pollGithubEdges(
     failing.push(prUrl);
     failingSubjects.set(prUrl, subjectFromCard(card, prUrl));
   }
-  const ciUrls = mergeCiLatch(prev.ciFailed, failing, unknown);
+  // A baseline read that failed still counts as "already red" so the next
+  // success does not wake. A later green read drops that latch.
+  const ciUrls = mergeCiLatch(
+    prev.ciFailed,
+    prev.primed ? failing : [...failing, ...unknown],
+    unknown,
+  );
   const ciFailed = ciUrls.map(
     (prUrl) => failingSubjects.get(prUrl) ?? { prUrl, title: prUrl },
   );
@@ -336,7 +342,7 @@ function listLiveRepoPaths(): string[] {
 
 async function fetchCiFailedFromGh(card: GithubEdgeCiCard): Promise<boolean | null> {
   try {
-    const checks = await getPrChecks(card.worktreePath, card.prUrl);
+    const checks = await getPrCiChecks(card.worktreePath, card.prUrl);
     if (!checks) return null;
     const failed = ciChecksFailed(checks);
     persistChecksFailed(card, failed);

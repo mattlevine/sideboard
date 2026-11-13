@@ -244,4 +244,20 @@ describe('github edge watch', () => {
     expect((await pollGithubEdges(env.deps)).fired).toBe(1);
     expect(env.sends[0]?.prompt).toContain('Review requested: New ask');
   });
+
+  it('latches a check the baseline could not read, then stays quiet while it is still red', async () => {
+    const env = harness();
+    env.cards.push(card(PR));
+    env.failed.set(PR, null);
+    expect((await pollGithubEdges(env.deps, { baseline: true })).fired).toBe(0);
+    expect(env.sends).toEqual([]);
+    expect(env.snapshot().ciFailed).toEqual([PR]);
+    env.failed.set(PR, true);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(0);
+    env.failed.set(PR, false);
+    await pollGithubEdges(env.deps);
+    expect(env.snapshot().ciFailed).toEqual([]);
+    env.failed.set(PR, true);
+    expect((await pollGithubEdges(env.deps)).fired).toBe(1);
+  });
 });

@@ -390,7 +390,8 @@ export async function fetchCursorPrHead(
   }
 }
 
-export async function cursorPrChecks(
+/** CI rows only. Does not load mergeability. */
+export async function cursorPrCiChecks(
   repoPath: string,
   slug: string,
   selector: string,
@@ -401,14 +402,21 @@ export async function cursorPrChecks(
     { reject: false, timeoutMs: 20_000 },
   );
   const err = stderr.trim();
-  let ci: PrCheckRun[];
   if (!stdout.trim()) {
     if (/no pull request|not found|no change/i.test(err)) return null;
     if (exitCode !== 0 && err) throw new Error(err);
-    ci = [];
-  } else {
-    ci = originChecksToRuns(stdout);
+    return [];
   }
+  return originChecksToRuns(stdout);
+}
+
+export async function cursorPrChecks(
+  repoPath: string,
+  slug: string,
+  selector: string,
+): Promise<PrCheckRun[] | null> {
+  const ci = await cursorPrCiChecks(repoPath, slug, selector);
+  if (!ci) return null;
   const view = await viewCursorPr(
     repoPath,
     slug,
