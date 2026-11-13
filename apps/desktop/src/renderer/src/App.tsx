@@ -86,9 +86,7 @@ const LEFT_SIDEBAR_MIN = 180;
 const LEFT_SIDEBAR_MAX = 480;
 const RIGHT_SIDEBAR_MIN = 240;
 const RIGHT_SIDEBAR_MAX = 560;
-function sameWorktreePath(a: string, b: string): boolean {
-  return a.replace(/\/$/, '') === b.replace(/\/$/, '');
-}
+function sameWorktreePath(a: string, b: string): boolean { return a.replace(/\/$/, '') === b.replace(/\/$/, ''); }
 
 function readSidebarPref(key: string, fallback: boolean): boolean {
   try {
@@ -976,7 +974,6 @@ export function App() {
   }
 
   const scheduleThis = useScheduleThis({ setView, setSelectedId, threadsRef, archivedRef, refresh, onSelect });
-
   function markArchiving(ids: string[], add: boolean): number {
     const next = new Set(archivingIdsRef.current);
     for (const id of ids) {
@@ -1344,8 +1341,7 @@ export function App() {
               onFindChatConsumed: () => setFindChatCmd(null),
               leftSidebarToggle: leftToggle,
               rightSidebarToggle: rightToggle,
-              onOpenThreadLink: openThreadByRef,
-              onScheduleThis: scheduleThis.openScheduleThis,
+              onOpenThreadLink: openThreadByRef, onScheduleThis: scheduleThis.openScheduleThis,
             };
             const urlPreviewProps = {
               openUrls,
@@ -1393,8 +1389,7 @@ export function App() {
               onFindChatConsumed={() => setFindChatCmd(null)}
               leftSidebarToggle={leftToggle}
               rightSidebarToggle={rightToggle}
-              onOpenThreadLink={openThreadByRef}
-              onScheduleThis={scheduleThis.openScheduleThis}
+              onOpenThreadLink={openThreadByRef} onScheduleThis={scheduleThis.openScheduleThis}
               {...urlPreviewProps}
             />
           ) : (
