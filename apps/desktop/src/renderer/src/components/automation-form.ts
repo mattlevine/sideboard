@@ -6,9 +6,10 @@ import type {
   ThreadAttachment,
 } from '@sideboard-ai/core';
 import { ORCHESTRATOR_AGENT_KINDS } from '@sideboard/orchestrator-capable';
+import type { ScheduleThisPrefill } from '../lib/schedule-this';
+import type { ThreadDefaults } from '../lib/thread-defaults';
 
 type OrchestratorAgent = (typeof ORCHESTRATOR_AGENT_KINDS)[number];
-import type { ThreadDefaults } from '../lib/thread-defaults';
 
 export type CadenceKind = ScheduleWhen['kind'];
 
@@ -98,6 +99,29 @@ export function emptyForm(defaults: ThreadDefaults = FALLBACK_DEFAULTS): FormSta
     archiveChat: true,
     enabled: true,
     ...composerFrom(defaults),
+  };
+}
+
+/** Daily interval, with the clock time filled in if they switch to weekly. */
+export function formFromScheduleThis(
+  prefill: ScheduleThisPrefill,
+  defaults: ThreadDefaults = FALLBACK_DEFAULTS,
+): FormState {
+  const base = emptyForm(defaults);
+  return {
+    ...base,
+    prompt: prefill.prompt,
+    kind: 'every',
+    every: prefill.every,
+    time: prefill.time,
+    threadId: prefill.threadId,
+    agent: orchestratorAgent(prefill.agent),
+    model: prefill.model,
+    effort: prefill.effort,
+    fast: prefill.fast,
+    planMode: prefill.planMode,
+    autonomy: prefill.autonomy,
+    archiveChat: true,
   };
 }
 

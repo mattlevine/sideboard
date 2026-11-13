@@ -2267,6 +2267,82 @@ body.resizing-panels webview {
   margin-bottom: 10px;
 }
 
+.automation-runs-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.automations-panel .settings-history-row {
+  flex-wrap: wrap;
+}
+
+.automation-runs {
+  flex: 1 0 100%;
+  list-style: none;
+  margin: 0;
+  padding: 2px 8px 6px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.automation-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.automation-run-bad,
+.automation-run-error {
+  color: var(--danger, #c45c5c);
+}
+
+.automation-run-error {
+  flex: 1 0 100%;
+}
+
+.automation-run-open {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.automation-run-open:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.schedule-this-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 4px;
+}
+
+.schedule-this-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.schedule-this-btn:hover,
+.schedule-this-btn:focus-visible {
+  color: var(--text);
+}
+
 .automations-panel .settings-history-list {
   flex: 1 1 auto;
   min-height: 0;
