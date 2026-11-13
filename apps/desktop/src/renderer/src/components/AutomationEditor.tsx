@@ -260,7 +260,7 @@ export function AutomationEditor({
       {!form.threadId && (
         <p className="settings-hint">
           {form.archiveChat
-            ? 'History keeps the last 5 runs of this automation. Leave this off when you want the chat to stay in the sidebar, such as a morning start-my-day run you will continue at your desk.'
+            ? 'History keeps the last 5 archived chats from this automation, and the automation keeps its last 10 runs. Leave this off when you want the chat to stay in the sidebar, such as a morning start-my-day run you will continue at your desk.'
             : 'The chat stays in the sidebar after the run so you can keep talking. The next run opens a new chat.'}
         </p>
       )}

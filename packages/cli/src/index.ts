@@ -739,7 +739,17 @@ async function main(): Promise<void> {
         console.log(
           `${row.id.slice(0, 8)}  ${on}  ${formatScheduleWhen(row.when)}  next ${row.nextRunAt}  ${target}  ${row.name}`,
         );
-        if (row.lastError) console.log(chalk.red(`         ${row.lastError}`));
+        const latest = row.runs[0];
+        if (latest) {
+          const detail = latest.error ? chalk.red(latest.error) : chalk.green('ok');
+          const chat = latest.threadId ? chalk.dim(`  ${latest.threadId.slice(0, 8)}`) : '';
+          console.log(`${chalk.dim(`         last ${latest.at}  `)}${detail}${chat}`);
+          if (row.runs.length > 1) {
+            console.log(chalk.dim(`         ${row.runs.length} runs kept`));
+          }
+        } else if (row.lastError) {
+          console.log(chalk.red(`         ${row.lastError}`));
+        }
       }
     });
 

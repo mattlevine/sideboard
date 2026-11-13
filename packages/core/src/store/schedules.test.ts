@@ -115,6 +115,7 @@ describe('schedules store', () => {
     expect(created.enabled).toBe(true);
     expect(created.threadId).toBeNull();
     expect(created.archiveChat).toBe(true);
+    expect(created.runs).toEqual([]);
     expect(listSchedules()).toHaveLength(1);
     expect(getSchedule(created.id.slice(0, 8))?.id).toBe(created.id);
 
@@ -139,6 +140,9 @@ describe('schedules store', () => {
     });
     expect(afterOnce.enabled).toBe(false);
     expect(afterOnce.lastThreadId).toBe('t1');
+    expect(afterOnce.runs).toEqual([
+      { at: '2026-08-21T12:00:00.000Z', threadId: 't1' },
+    ]);
 
     const every = createSchedule({
       prompt: 'Hourly',
@@ -152,6 +156,93 @@ describe('schedules store', () => {
     expect(afterEvery.enabled).toBe(true);
     expect(afterEvery.lastError).toBe('Thread not found');
     expect(afterEvery.nextRunAt).toBe('2026-08-21T13:00:00.000Z');
+    expect(afterEvery.runs).toEqual([
+      {
+        at: '2026-08-21T12:00:00.000Z',
+        threadId: null,
+        error: 'Thread not found',
+      },
+    ]);
+  });
+
+  it('keeps the last 10 runs and lifts a legacy last run', async () => {
+    const {
+      SCHEDULE_RUN_HISTORY_LIMIT,
+      createSchedule,
+      getSchedule,
+      recordScheduleRun,
+      schedulesPath,
+      updateSchedule,
+    } = await load();
+    const row = createSchedule({
+      prompt: 'Hourly',
+      when: { kind: 'every', every: '1h' },
+      createdBy: 'ui',
+    });
+    let current = row;
+    for (let i = 0; i < 12; i++) {
+      current = recordScheduleRun(row.id, {
+        lastThreadId: `t${i}`,
+        lastError: i % 2 === 0 ? null : 'boom',
+        firedAt: new Date(Date.UTC(2026, 7, 21, 12, i, 0)),
+      });
+    }
+    expect(current.runs).toHaveLength(SCHEDULE_RUN_HISTORY_LIMIT);
+    expect(current.runs[0]).toEqual({
+      at: '2026-08-21T12:11:00.000Z',
+      threadId: 't11',
+      error: 'boom',
+    });
+    expect(current.runs.at(-1)?.threadId).toBe('t2');
+    expect(updateSchedule(row.id, { name: 'Still hourly' }).runs).toHaveLength(
+      SCHEDULE_RUN_HISTORY_LIMIT,
+    );
+
+    writeFileSync(
+      schedulesPath(),
+      `${JSON.stringify([
+        {
+          id: 'legacy-run',
+          name: 'Legacy',
+          prompt: 'Old',
+          enabled: true,
+          when: { kind: 'every', every: '1d' },
+          nextRunAt: '2099-01-01T00:00:00.000Z',
+          lastRunAt: '2026-08-20T15:00:00.000Z',
+          lastThreadId: 'old-chat',
+          lastError: 'disk full',
+          createdBy: 'ui',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ])}\n`,
+    );
+    expect(getSchedule('legacy-run')?.runs).toEqual([
+      {
+        at: '2026-08-20T15:00:00.000Z',
+        threadId: 'old-chat',
+        error: 'disk full',
+      },
+    ]);
+    const next = recordScheduleRun('legacy-run', {
+      lastThreadId: 'new-chat',
+      firedAt: new Date('2026-08-21T15:00:00.000Z'),
+    });
+    expect(next.runs[0]).toEqual({
+      at: '2026-08-21T15:00:00.000Z',
+      threadId: 'new-chat',
+    });
+    expect(next.runs[1]?.threadId).toBe('old-chat');
+    const failed = recordScheduleRun('legacy-run', {
+      lastError: 'nope',
+      firedAt: new Date('2026-08-22T15:00:00.000Z'),
+    });
+    expect(failed.lastThreadId).toBe('new-chat');
+    expect(failed.runs[0]).toEqual({
+      at: '2026-08-22T15:00:00.000Z',
+      threadId: null,
+      error: 'nope',
+    });
   });
 
   it('reports whether any schedule is enabled', async () => {

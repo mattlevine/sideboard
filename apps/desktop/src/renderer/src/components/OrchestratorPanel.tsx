@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Thread } from '@sideboard-ai/core';
 import { connectedOrchestrator } from '../lib/connected-orchestrator';
 import { isGlobalThread, isOrchestratorThread } from '../lib/global-workspace';
+import type { ScheduleThisPrefill } from '../lib/schedule-this';
 import { ThreadPanel } from './ThreadPanel';
 
 interface Props {
@@ -31,6 +32,7 @@ interface Props {
   prPageOpen?: boolean;
   onSelectPrPage?: () => void;
   onClosePrPage?: () => void;
+  onScheduleThis?: (prefill: ScheduleThisPrefill) => void;
 }
 
 /**
@@ -136,6 +138,7 @@ export function OrchestratorPanel({
   prPageOpen,
   onSelectPrPage,
   onClosePrPage,
+  onScheduleThis,
 }: Props) {
   const global = isGlobalThread(thread);
   const childSummary = useMemo(() => {
@@ -216,6 +219,7 @@ export function OrchestratorPanel({
           prPageOpen={prPageOpen}
           onSelectPrPage={onSelectPrPage}
           onClosePrPage={onClosePrPage}
+          onScheduleThis={onScheduleThis}
           belowTabs={childList}
         />
       </div>
