@@ -126,7 +126,15 @@ function beginPendingSend(input: ComposerSendInput, text: string, attachments: T
         (message.role === 'user' && message.origin !== 'continue' && message.text === text ? 1 : 0),
       0,
     );
-    input.setPendingFollowUps((prev) => [...prev, { id: crypto.randomUUID(), text, seen }]);
+    input.setPendingFollowUps((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        text,
+        seen,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      },
+    ]);
     return;
   }
   input.setPendingUser(text);

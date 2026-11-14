@@ -28,6 +28,32 @@ export function takePendingTurnAttachments(thread: {
   return [...(thread.pendingTurnAttachments ?? [])];
 }
 
+/** Append files the turn did not already have. Same id is kept once, earlier copy wins. */
+export function mergeTurnAttachments(
+  base: ThreadAttachment[] | undefined,
+  extra: ThreadAttachment[] | undefined,
+): ThreadAttachment[] {
+  const next: ThreadAttachment[] = [];
+  const seen = new Set<string>();
+  for (const att of [...(base ?? []), ...(extra ?? [])]) {
+    if (seen.has(att.id)) continue;
+    seen.add(att.id);
+    next.push(att);
+  }
+  return next;
+}
+
+/** Order-sensitive id compare for “did this follow-up add a file?” */
+export function sameTurnAttachments(
+  a: ThreadAttachment[] | undefined,
+  b: ThreadAttachment[] | undefined,
+): boolean {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) return false;
+  return left.every((att, i) => att.id === right[i]?.id);
+}
+
 /** Keep `queueAttachments` the same length as `queue`. Missing slots are empty. */
 export function alignQueueAttachments(
   queueLength: number,

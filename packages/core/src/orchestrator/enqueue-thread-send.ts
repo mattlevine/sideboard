@@ -11,6 +11,8 @@ import {
   alignQueueAttachments,
   appendQueuedItem,
   consumeComposerAttachments,
+  mergeTurnAttachments,
+  sameTurnAttachments,
 } from '../composer/consume-attachments.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
 import { readThread, updateThread, withThreadLock } from '../store/thread-store.js';
@@ -37,7 +39,70 @@ export function resolveSendFollowUp(
   return isOrchestratorThread(thread) ? followUpBehavior() : 'queue';
 }
 
-export type OpenSteerDraft = { text: string; spawned: boolean };
+export function beginOpenSteerDraft(text: string): OpenSteerDraft {
+  return { text, spawned: false, attachments: [] };
+}
+
+/** Park this turn's files on the draft, then return the list the user bubble should show. */
+export function seedOpenSteerAttachments(
+  draft: OpenSteerDraft | undefined,
+  sent: ThreadAttachment[] | undefined,
+): ThreadAttachment[] {
+  if (!draft) return [...(sent ?? [])];
+  draft.attachments = mergeTurnAttachments(sent, draft.attachments);
+  return draft.attachments ?? [];
+}
+
+/** Files to expand into the agent prompt. Continue turns never resend images. */
+export function openSteerTurnAttachments(
+  draft: OpenSteerDraft | undefined,
+  fallback: ThreadAttachment[],
+  autoContinue: boolean,
+): ThreadAttachment[] {
+  if (autoContinue) return [];
+  return [...(draft?.attachments ?? fallback)];
+}
+
+/** Mark the draft spawned and rebuild the prompt if a follow-up image arrived late. */
+export function promptAfterJoinedSteer(input: {
+  draft: OpenSteerDraft | undefined;
+  autoContinue: boolean;
+  expandedAttachments: ThreadAttachment[];
+  threadId: string;
+  promptText: string;
+  agentPrompt: string;
+  expandedPrompt: string;
+  worktreePath: string;
+  gitForge?: GitForge | null;
+}): string {
+  if (input.draft) input.draft.spawned = true;
+  return promptForJoinedSteer({
+    threadId: input.threadId,
+    promptText: input.promptText,
+    latestPrompt: input.draft?.text ?? input.promptText,
+    agentPrompt: input.agentPrompt,
+    expandedPrompt: input.expandedPrompt,
+    worktreePath: input.worktreePath,
+    attachments: input.expandedAttachments,
+    latestAttachments: openSteerTurnAttachments(
+      input.draft,
+      input.expandedAttachments,
+      input.autoContinue,
+    ),
+    gitForge: input.gitForge,
+  });
+}
+
+export type OpenSteerDraft = {
+  text: string;
+  spawned: boolean;
+  /**
+   * Files this unanswered turn should send. Steer follow-ups that arrive
+   * before the process starts append here — the text join alone used to drop
+   * images, so the agent was spawned without them.
+   */
+  attachments?: ThreadAttachment[];
+};
 
 /** Maps and callbacks `send` needs without pulling the orchestrator class along. */
 export type EnqueueSendHost = {
@@ -56,10 +121,15 @@ export type EnqueueSendHost = {
 };
 
 /** Replace the unanswered user bubble when a steer follow-up is joined onto it. */
-export function rewriteTrailingUserPrompt(threadId: string, from: string, to: string): void {
+export function rewriteTrailingUserPrompt(
+  threadId: string,
+  from: string,
+  to: string,
+  attachments?: ThreadAttachment[],
+): void {
   const thread = readThread(threadId);
   if (!thread) return;
-  const messages = messagesWithRewrittenUserPrompt(thread.messages, from, to);
+  const messages = messagesWithRewrittenUserPrompt(thread.messages, from, to, attachments);
   if (!messages) return;
   updateThread(threadId, { messages });
 }
@@ -94,15 +164,24 @@ export function promptForJoinedSteer(input: {
   agentPrompt: string;
   expandedPrompt: string;
   worktreePath: string;
+  /** Files already baked into `expandedPrompt`. */
   attachments: ThreadAttachment[];
+  /** Files the turn should send now, including a follow-up image. */
+  latestAttachments?: ThreadAttachment[];
   gitForge?: GitForge | null;
 }): string {
-  if (input.latestPrompt === input.promptText) return input.agentPrompt;
-  rewriteTrailingUserPrompt(input.threadId, input.promptText, input.latestPrompt);
+  const latestAttachments = input.latestAttachments ?? input.attachments;
+  const textSame = input.latestPrompt === input.promptText;
+  if (textSame && sameTurnAttachments(input.attachments, latestAttachments)) {
+    return input.agentPrompt;
+  }
+  if (!textSame) {
+    rewriteTrailingUserPrompt(input.threadId, input.promptText, input.latestPrompt);
+  }
   const { agentPrompt: expandedLatest } = expandComposerPrompt(
     input.worktreePath,
     expandCanonicalGitRequest(input.latestPrompt, { forge: input.gitForge }),
-    { attachments: input.attachments },
+    { attachments: latestAttachments },
   );
   return input.expandedPrompt && input.agentPrompt.endsWith(input.expandedPrompt)
     ? input.agentPrompt.slice(0, -input.expandedPrompt.length) + expandedLatest
@@ -166,7 +245,15 @@ export async function enqueueThreadSend(
       const combined = joinSteerPrompt(unanswered, prompt);
       if (draft && !draft.spawned) {
         draft.text = combined;
-        rewriteTrailingUserPrompt(current.id, unanswered, combined);
+        if (consumed.consumed.length > 0) {
+          draft.attachments = mergeTurnAttachments(draft.attachments, consumed.consumed);
+        }
+        rewriteTrailingUserPrompt(current.id, unanswered, combined, consumed.consumed);
+        // The process has not been spawned, so this image never reaches a queue
+        // slot. Clear the composer or the chip sits in the box after send.
+        if (explicit === undefined && consumed.consumed.length > 0) {
+          updateThread(current.id, { attachments: consumed.attachments });
+        }
       } else {
         const queue = current.queue.slice();
         queue[0] = combined;
@@ -188,8 +275,13 @@ export async function enqueueThreadSend(
     }
     const promptToQueue = unanswered != null ? joinSteerPrompt(unanswered, prompt) : prompt;
     if (unanswered != null) {
-      if (draft) draft.text = promptToQueue;
-      rewriteTrailingUserPrompt(current.id, unanswered, promptToQueue);
+      if (draft) {
+        draft.text = promptToQueue;
+        if (consumed.consumed.length > 0) {
+          draft.attachments = mergeTurnAttachments(draft.attachments, consumed.consumed);
+        }
+      }
+      rewriteTrailingUserPrompt(current.id, unanswered, promptToQueue, consumed.consumed);
       host.reusedUserPrompt.add(current.id);
     }
     const queued = appendQueuedItem(

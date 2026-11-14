@@ -1,4 +1,4 @@
-import type { Thread } from '@sideboard-ai/core';
+import type { Thread, ThreadAttachment } from '@sideboard-ai/core';
 
 /**
  * `thread.queue` is the inbox for both follow-ups and the prompt that will
@@ -23,6 +23,8 @@ export type PendingFollowUp = {
   seen?: number;
   /** This chip was matched to a saved queue row and is waiting to be sent or removed. */
   queued?: boolean;
+  /** Files staged with this follow-up, shown until the saved queue row replaces the chip. */
+  attachments?: ThreadAttachment[];
 };
 
 /**
@@ -310,6 +312,29 @@ export function pendingTranscriptTexts(input: {
     texts.push(input.pendingUser);
   }
   return texts;
+}
+
+/**
+ * Files for one pending transcript bubble. A queued follow-up owns its chips.
+ * The in-flight steer snapshot is only for a bubble that is not a queued row.
+ */
+export function attachmentsOnPendingBubble(input: {
+  text: string;
+  isLast: boolean;
+  pendingAttachments: ThreadAttachment[];
+  followUps: PendingFollowUp[];
+  queue: string[];
+  queueAttachments?: ThreadAttachment[][];
+}): ThreadAttachment[] {
+  for (let i = input.followUps.length - 1; i >= 0; i--) {
+    const item = input.followUps[i];
+    if (item?.text === input.text) return item.attachments ?? [];
+  }
+  for (let i = input.queue.length - 1; i >= 0; i--) {
+    if (input.queue[i] !== input.text) continue;
+    return input.queueAttachments?.[i] ?? [];
+  }
+  return input.isLast ? input.pendingAttachments : [];
 }
 
 /**
