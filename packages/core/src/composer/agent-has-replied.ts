@@ -40,6 +40,36 @@ export function messagesWithRewrittenUserPrompt(
   return null;
 }
 
+/**
+ * True when `promptText` is already on screen: the latest unanswered user
+ * message, or the separate user messages that were joined into that prompt.
+ * A later agent reply with text or parts ends the run. A partial reply that
+ * only sits under those user messages does not hide them.
+ */
+export function userMessagesCoverPrompt(messages: ThreadMessage[], promptText: string): boolean {
+  if (!promptText) return false;
+  const parts: string[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
+    if (message.role === 'agent') {
+      const text = (message.text ?? '').trim();
+      const hasContent = Boolean(text) || (message.parts?.length ?? 0) > 0;
+      if (hasContent && parts.length > 0) break;
+      continue;
+    }
+    if (message.role !== 'user') continue;
+    const text = message.text ?? '';
+    if (text === promptText) return true;
+    parts.unshift(text);
+    let acc = parts[0] ?? '';
+    for (let j = 1; j < parts.length; j++) acc = joinSteerPrompt(acc, parts[j] ?? '');
+    if (acc === promptText) return true;
+    if (acc.length > promptText.length) return false;
+  }
+  return false;
+}
+
 /** Latest user prompt when no agent reply has been stored after it. */
 export function trailingUnansweredUserText(messages: ThreadMessage[]): string | null {
   for (let i = messages.length - 1; i >= 0; i--) {

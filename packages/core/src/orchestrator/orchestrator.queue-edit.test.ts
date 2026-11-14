@@ -617,7 +617,10 @@ describe('Orchestrator queued-message editing', () => {
     expect(kill).toHaveBeenCalledOnce();
     expect(updated.queue[0]).toBe('Work on issue A\nAnd B');
     expect(updated.queue).toContain('later');
-    expect(readThread(thread.id)?.messages.at(-1)?.text).toBe('Work on issue A\nAnd B');
+    expect(readThread(thread.id)?.messages.map((message) => message.text)).toEqual([
+      'Work on issue A',
+      'And B',
+    ]);
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 

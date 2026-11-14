@@ -69,7 +69,10 @@ describe('follow-up images while the agent has not replied', () => {
     expect(internal.openSteerPrompt.get(thread.id)?.attachments).toEqual([
       expect.objectContaining({ id: 'img-1' }),
     ]);
-    expect(updated.messages.at(-1)?.text).toBe('Work on issue A\nAnd the screenshot');
+    expect(updated.messages.map((message) => message.text)).toEqual([
+      'Work on issue A',
+      'And the screenshot',
+    ]);
     expect(updated.messages.at(-1)?.attachments?.[0]?.previewDataUrl).toBe('data:image/png;base64,xx');
   });
 

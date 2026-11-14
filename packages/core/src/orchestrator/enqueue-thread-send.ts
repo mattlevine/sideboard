@@ -3,8 +3,8 @@ import type { GitForge } from '../git/remote-forge.js';
 import {
   joinSteerPrompt,
   livePartsShowAgentReply,
-  messagesWithRewrittenUserPrompt,
   trailingUnansweredUserText,
+  userMessagesCoverPrompt,
 } from '../composer/agent-has-replied.js';
 import { expandComposerPrompt } from '../composer/expand.js';
 import {
@@ -15,7 +15,7 @@ import {
   sameTurnAttachments,
 } from '../composer/consume-attachments.js';
 import { thisProcessShouldDrainAgentQueues } from '../store/desktop-host.js';
-import { readThread, updateThread, withThreadLock } from '../store/thread-store.js';
+import { appendMessage, readThread, updateThread, withThreadLock } from '../store/thread-store.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import { followUpBehavior, type FollowUpBehavior } from '../store/app-settings.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
@@ -120,40 +120,59 @@ export type EnqueueSendHost = {
   pidAlive(pid: number): boolean;
 };
 
-/** Replace the unanswered user bubble when a steer follow-up is joined onto it. */
-export function rewriteTrailingUserPrompt(
+/** The new line when `combined` is `joinSteerPrompt(base, addition)`. */
+function steerAddition(base: string, combined: string): string | null {
+  if (!combined || combined === base) return null;
+  const prefix = base.replace(/\s+$/, '');
+  const head = prefix ? `${prefix}\n` : '';
+  if (!head || !combined.startsWith(head)) return null;
+  const addition = combined.slice(head.length).trim();
+  return addition || null;
+}
+
+/**
+ * A follow-up that arrives before the agent replies is still one prompt for
+ * the model. Once the earlier line is already its own transcript bubble,
+ * keep that bubble and store the new line under it. Rewriting the earlier
+ * bubble made the two sends look like one message.
+ */
+function recordSeparateSteerFollowUp(
   threadId: string,
-  from: string,
-  to: string,
+  base: string,
+  combined: string,
   attachments?: ThreadAttachment[],
 ): void {
   const thread = readThread(threadId);
   if (!thread) return;
-  const messages = messagesWithRewrittenUserPrompt(thread.messages, from, to, attachments);
-  if (!messages) return;
-  updateThread(threadId, { messages });
+  if (userMessagesCoverPrompt(thread.messages, combined)) return;
+  if (!userMessagesCoverPrompt(thread.messages, base)) return;
+  const addition = steerAddition(base, combined);
+  if (!addition) return;
+  const extra = attachments ?? [];
+  appendMessage(threadId, {
+    role: 'user',
+    text: addition,
+    ts: new Date().toISOString(),
+    ...(extra.length > 0 ? { attachments: extra } : {}),
+  });
 }
 
 /**
- * Keep the user bubble already rewritten when steer joined onto a prompt the
- * process was spawned with. Returns true when `appendMessage` should be skipped.
+ * Skip appending the joined prompt when the transcript already shows it,
+ * either as one bubble or as the separate sends joined for the agent.
+ * Returns true when `appendMessage` should be skipped.
  */
 export function reuseJoinedUserBubble(
   reused: { delete(id: string): boolean },
-  threadId: string,
+  _threadId: string,
   messages: ThreadMessage[],
   promptText: string,
 ): boolean {
-  if (!reused.delete(threadId)) return false;
-  // The rewritten user row can sit above a partial agent reply. Matching only
-  // the last message appends a second copy of the combined prompt.
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
-    if (message.role !== 'user') continue;
-    return message.text === promptText;
-  }
-  return false;
+  if (!reused.delete(_threadId)) return false;
+  // Separate bubbles (`A` then `B`) already show the joined prompt `A\nB`.
+  // A rewritten row can also sit above a partial agent reply — appending
+  // again would duplicate that prompt.
+  return userMessagesCoverPrompt(messages, promptText);
 }
 
 /** Swap the expanded prompt when steer joined more text after expansion. */
@@ -176,7 +195,7 @@ export function promptForJoinedSteer(input: {
     return input.agentPrompt;
   }
   if (!textSame) {
-    rewriteTrailingUserPrompt(input.threadId, input.promptText, input.latestPrompt);
+    recordSeparateSteerFollowUp(input.threadId, input.promptText, input.latestPrompt);
   }
   const { agentPrompt: expandedLatest } = expandComposerPrompt(
     input.worktreePath,
@@ -198,6 +217,8 @@ function clearSendBookkeeping(host: EnqueueSendHost, threadId: string): void {
 /**
  * Queue a prompt. A steer that arrives before the agent has replied is joined
  * onto the open prompt (`Work on issue A` + `And B`) instead of replacing it.
+ * If that earlier line is already its own transcript bubble, the new line is
+ * stored under it rather than rewritten into the same bubble.
  * Returns whether the caller should still interrupt via send-now.
  */
 export async function enqueueThreadSend(
@@ -248,7 +269,7 @@ export async function enqueueThreadSend(
         if (consumed.consumed.length > 0) {
           draft.attachments = mergeTurnAttachments(draft.attachments, consumed.consumed);
         }
-        rewriteTrailingUserPrompt(current.id, unanswered, combined, consumed.consumed);
+        recordSeparateSteerFollowUp(current.id, unanswered, combined, consumed.consumed);
         // The process has not been spawned, so this image never reaches a queue
         // slot. Clear the composer or the chip sits in the box after send.
         if (explicit === undefined && consumed.consumed.length > 0) {
@@ -281,7 +302,7 @@ export async function enqueueThreadSend(
           draft.attachments = mergeTurnAttachments(draft.attachments, consumed.consumed);
         }
       }
-      rewriteTrailingUserPrompt(current.id, unanswered, promptToQueue, consumed.consumed);
+      recordSeparateSteerFollowUp(current.id, unanswered, promptToQueue, consumed.consumed);
       host.reusedUserPrompt.add(current.id);
     }
     const queued = appendQueuedItem(

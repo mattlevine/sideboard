@@ -31,6 +31,22 @@ export type PendingFollowUp = {
  * Optimistic follow-ups that have not landed in `thread.queue` yet.
  * Consumes matching persisted texts so the same prompt is not shown twice.
  */
+/**
+ * Glue a follow-up onto the open composer bubble only while that prompt is
+ * not already a transcript row. Once the earlier send is on screen, the next
+ * one stays its own bubble — joining them showed both texts in one message
+ * while the agent was still thinking.
+ */
+export function steerBubbleJoinsOntoOpenPrompt(input: {
+  followUp: 'steer' | 'queue';
+  agentReplying: boolean;
+  openPrompt: string | null;
+  messages: TranscriptMessage[];
+}): boolean {
+  if (input.followUp !== 'steer' || input.agentReplying || input.openPrompt == null) return false;
+  return !openPromptAlreadyOnScreen(input.messages, input.openPrompt);
+}
+
 /** Join a follow-up onto the prompt the agent has not answered yet. */
 export function joinSteerPrompt(base: string, addition: string): string {
   const next = addition.trim();
@@ -51,7 +67,40 @@ export type OptimisticUserSend = {
   seenJoins?: number;
 };
 
-type TranscriptMessage = { role: string; text?: string; origin?: string };
+type TranscriptMessage = {
+  role: string;
+  text?: string;
+  origin?: string;
+  parts?: unknown[];
+};
+
+/**
+ * The open prompt is already visible when one user row equals it, or when
+ * consecutive stored rows join to it. A later follow-up must not be folded
+ * back into one optimistic bubble.
+ */
+function openPromptAlreadyOnScreen(messages: TranscriptMessage[], openPrompt: string): boolean {
+  const lines: string[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
+    if (message.role === 'agent') {
+      const text = (message.text ?? '').trim();
+      const hasContent = Boolean(text) || (message.parts?.length ?? 0) > 0;
+      if (hasContent && lines.length > 0) break;
+      continue;
+    }
+    if (message.role !== 'user') continue;
+    const text = message.text ?? '';
+    if (text === openPrompt) return true;
+    lines.unshift(text);
+    let acc = lines[0] ?? '';
+    for (let j = 1; j < lines.length; j++) acc = joinSteerPrompt(acc, lines[j] ?? '');
+    if (acc === openPrompt) return true;
+    if (acc.length > openPrompt.length) return false;
+  }
+  return false;
+}
 
 /**
  * How many times `text` is the join of one unanswered user run
