@@ -55,6 +55,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <li><strong>Same miss twice</strong> → edit the skill (or <code>.claude/skills/review/SKILL.md</code> when that review skill exists, else <code>.context/review.md</code>) and rerun. Do not patch three threads and leave the process unchanged.</li>
 <li>After merge to the default branch, <strong>new worktrees inherit</strong> the file. Existing siblings need an update from that branch.</li>
 </ul>
+<p>When the repo commits <code>.claude/skills/skill-improver/SKILL.md</code> (<code>/skill-improver</code>), that file replaces the “same miss twice” line. A miss counts when the agent made it twice or a person stated the rule. The agent who heard it writes one sentence into the skill that owns the process, in the same change, before the turn ends. Sideboard does not bundle this skill. This repository ships one; copy the file into another repo and the same instruction appears there.</p>
 <p><code>/long-running</code> is a <strong>Sideboard product skill</strong> — every worktree agent gets the detach-and-wait playbook (and the helper ships with the app). A committed <code>.claude/skills/long-running</code> in a repo still wins if you want to customize it.</p>
 <p>Merge-readiness notes go in <code>.claude/skills/review/SKILL.md</code> when that skill already exists. Sideboard does not create a review skill.</p>
 </article>

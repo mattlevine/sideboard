@@ -435,7 +435,9 @@ export function formatProcessGuideDirective(opts?: { worktreePath?: string | nul
     hasReviewSkill
       ? '- Merge-readiness notes go in `.claude/skills/review/SKILL.md` (edit it; do not create another review skill).'
       : '- Merge-readiness notes go in `.context/review.md` (copied from `.sideboard/review.md` when that file exists). Do not create a review skill.',
-    '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
+    !!worktree && existsSync(join(worktree, '.claude/skills/skill-improver/SKILL.md'))
+      ? '- Skip a guide for a one-off. If a matching skill exists, follow it. A miss that will recur (you made it twice, or a person told you the rule) → follow `.claude/skills/skill-improver/SKILL.md` (`/skill-improver`): one sentence in the skill that owns it, in this change. Do not patch around it.'
+      : '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
   ]
     .filter(Boolean)
     .join('\n');

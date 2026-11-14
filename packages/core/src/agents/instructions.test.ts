@@ -168,6 +168,7 @@ describe('formatProcessGuideDirective', () => {
     // Skill-specific lines only when the worktree has those skills.
     expect(text).not.toMatch(/graph-engineering/);
     expect(text).not.toMatch(/worktree-install/);
+    expect(text).not.toMatch(/skill-improver/);
     expect(text).not.toMatch(/\.claude\/skills\/review\/SKILL\.md/);
   });
 
@@ -183,7 +184,36 @@ describe('formatProcessGuideDirective', () => {
     expect(text).toMatch(/\/graph-engineering/);
     expect(text).toMatch(/\/worktree-install/);
     expect(text).toMatch(/\.claude\/skills\/review\/SKILL\.md/);
+    expect(text).not.toMatch(/skill-improver/);
     expect(text).not.toMatch(/\.context\/review\.md/);
+  });
+
+  it('routes a recurring miss through skill-improver with one bar, not two', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sb-guide-improver-'));
+    mkdirSync(join(root, '.claude/skills/review'), { recursive: true });
+    writeFileSync(join(root, '.claude/skills/review/SKILL.md'), '# r');
+    const before = formatProcessGuideDirective({ worktreePath: root });
+    mkdirSync(join(root, '.claude/skills/skill-improver'), { recursive: true });
+    writeFileSync(join(root, '.claude/skills/skill-improver/SKILL.md'), '# s');
+    const text = formatProcessGuideDirective({ worktreePath: root });
+    expect(text).toMatch(/\/skill-improver/);
+    expect(text).toMatch(/you made it twice, or a person told you the rule/);
+    expect(text).toMatch(/in this change/);
+    expect(text).toMatch(/Skip a guide for a one-off/);
+    expect(text).toMatch(/edit it; do not create another review skill/);
+    // The improver line replaces the "twice" rule. Two bars side by side
+    // (once vs twice) is what this guards against.
+    expect(text).not.toMatch(/Same miss twice → edit the skill/);
+    expect(text.split('\n')).toHaveLength(before.split('\n').length);
+    // Budget guard: this rides in the cached fresh-session prefix.
+    expect(text.length - before.length).toBeLessThan(200);
+
+    const withoutReview = mkdtempSync(join(tmpdir(), 'sb-guide-improver-only-'));
+    mkdirSync(join(withoutReview, '.claude/skills/skill-improver'), { recursive: true });
+    writeFileSync(join(withoutReview, '.claude/skills/skill-improver/SKILL.md'), '# s');
+    const scratch = formatProcessGuideDirective({ worktreePath: withoutReview });
+    expect(scratch).toMatch(/\/skill-improver/);
+    expect(scratch).toMatch(/Merge-readiness notes go in `\.context\/review\.md`/);
   });
 });
 
