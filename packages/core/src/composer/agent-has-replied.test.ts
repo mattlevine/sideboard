@@ -4,6 +4,7 @@ import {
   livePartsShowAgentReply,
   messagesWithRewrittenUserPrompt,
   trailingUnansweredUserText,
+  userMessagesCoverPrompt,
 } from './agent-has-replied.js';
 
 describe('joinSteerPrompt', () => {
@@ -28,6 +29,45 @@ describe('trailingUnansweredUserText', () => {
         { role: 'agent', text: 'On it', ts: '2026-01-01T00:00:01.000Z' },
       ]),
     ).toBeNull();
+  });
+});
+
+describe('userMessagesCoverPrompt', () => {
+  it('matches one stored message or the separate lines that were joined', () => {
+    const separate = [
+      { role: 'user' as const, text: 'Work on issue A', ts: '1' },
+      { role: 'user' as const, text: 'And B', ts: '2' },
+    ];
+    expect(userMessagesCoverPrompt(separate, 'Work on issue A\nAnd B')).toBe(true);
+    expect(userMessagesCoverPrompt(separate, 'Work on issue A')).toBe(true);
+    expect(
+      userMessagesCoverPrompt(
+        [{ role: 'user', text: 'Work on issue A\nAnd B', ts: '1' }],
+        'Work on issue A\nAnd B',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not join across an agent reply or invent a missing line', () => {
+    expect(
+      userMessagesCoverPrompt(
+        [
+          { role: 'user', text: 'Work on issue A', ts: '1' },
+          { role: 'agent', text: 'done', ts: '2' },
+          { role: 'user', text: 'And B', ts: '3' },
+        ],
+        'Work on issue A\nAnd B',
+      ),
+    ).toBe(false);
+    expect(
+      userMessagesCoverPrompt(
+        [
+          { role: 'user', text: 'Work on issue A', ts: '1' },
+          { role: 'agent', text: 'partial', ts: '2' },
+        ],
+        'Work on issue A\nAnd B',
+      ),
+    ).toBe(false);
   });
 });
 

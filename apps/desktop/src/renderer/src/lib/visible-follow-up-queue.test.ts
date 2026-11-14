@@ -5,6 +5,7 @@ import {
   extraPendingFollowUps,
   joinSteerPrompt,
   pendingSnapshotChanged,
+  steerBubbleJoinsOntoOpenPrompt,
   pendingTranscriptTexts,
   shouldDropStalePendingUser,
   shouldShowStreamingTurn,
@@ -52,6 +53,38 @@ describe('splitTurnQueue', () => {
 describe('joinSteerPrompt', () => {
   it('appends the next line onto the unanswered prompt', () => {
     expect(joinSteerPrompt('Work on issue A', 'And B')).toBe('Work on issue A\nAnd B');
+  });
+});
+
+describe('steerBubbleJoinsOntoOpenPrompt', () => {
+  it('keeps a follow-up on its own bubble once the earlier send is in the transcript', () => {
+    expect(
+      steerBubbleJoinsOntoOpenPrompt({
+        followUp: 'steer',
+        agentReplying: false,
+        openPrompt: 'Work on issue A',
+        messages: [{ role: 'user', text: 'Work on issue A' }],
+      }),
+    ).toBe(false);
+  });
+
+  it('still joins while the open prompt has not been stored', () => {
+    expect(
+      steerBubbleJoinsOntoOpenPrompt({
+        followUp: 'steer',
+        agentReplying: false,
+        openPrompt: 'Work on issue A',
+        messages: [],
+      }),
+    ).toBe(true);
+    expect(
+      steerBubbleJoinsOntoOpenPrompt({
+        followUp: 'steer',
+        agentReplying: true,
+        openPrompt: 'Work on issue A',
+        messages: [],
+      }),
+    ).toBe(false);
   });
 });
 

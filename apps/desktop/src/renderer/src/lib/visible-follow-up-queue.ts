@@ -31,6 +31,25 @@ export type PendingFollowUp = {
  * Optimistic follow-ups that have not landed in `thread.queue` yet.
  * Consumes matching persisted texts so the same prompt is not shown twice.
  */
+/**
+ * Glue a follow-up onto the open composer bubble only while that prompt is
+ * not already a transcript row. Once the earlier send is on screen, the next
+ * one stays its own bubble — joining them showed both texts in one message
+ * while the agent was still thinking.
+ */
+export function steerBubbleJoinsOntoOpenPrompt(input: {
+  followUp: 'steer' | 'queue';
+  agentReplying: boolean;
+  openPrompt: string | null;
+  messages: TranscriptMessage[];
+}): boolean {
+  if (input.followUp !== 'steer' || input.agentReplying || input.openPrompt == null) return false;
+  return !input.messages.some(
+    (message) =>
+      message.role === 'user' && message.origin !== 'continue' && message.text === input.openPrompt,
+  );
+}
+
 /** Join a follow-up onto the prompt the agent has not answered yet. */
 export function joinSteerPrompt(base: string, addition: string): string {
   const next = addition.trim();

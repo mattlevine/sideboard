@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ThreadAttachment } from '@sideboard-ai/core';
 import {
   joinSteerPrompt,
+  steerBubbleJoinsOntoOpenPrompt,
   userSendSeen,
   type OptimisticUserSend,
   type PendingFollowUp,
@@ -47,8 +48,15 @@ export type ComposerSendInput = {
 };
 
 function rememberOptimistic(input: ComposerSendInput, text: string) {
-  if (input.followUpBehavior === 'steer' && !input.agentReplying && input.openPromptRef.current != null) {
-    const combined = joinSteerPrompt(input.openPromptRef.current, text);
+  if (
+    steerBubbleJoinsOntoOpenPrompt({
+      followUp: input.followUpBehavior,
+      agentReplying: input.agentReplying,
+      openPrompt: input.openPromptRef.current,
+      messages: input.messages,
+    })
+  ) {
+    const combined = joinSteerPrompt(input.openPromptRef.current ?? '', text);
     input.openPromptRef.current = combined;
     const baseline = userSendSeen(combined, input.messages);
     input.setOptimisticUsers((prev) => {
@@ -63,7 +71,9 @@ function rememberOptimistic(input: ComposerSendInput, text: string) {
     return;
   }
   const baseline = userSendSeen(text, input.messages);
-  if (input.followUpBehavior === 'steer' && !input.agentReplying) input.openPromptRef.current = text;
+  if (input.followUpBehavior === 'steer' && !input.agentReplying && input.openPromptRef.current == null) {
+    input.openPromptRef.current = text;
+  }
   input.setOptimisticUsers((prev) => [...prev, { text, ...baseline }]);
 }
 
