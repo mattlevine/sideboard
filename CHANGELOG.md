@@ -5,11 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.344] - 2026-11-14
 
 ### Added
 
-- A repo with `.claude/skills/skill-improver/SKILL.md` has its agents follow that skill when a miss will recur (they made it twice, or a person told them the rule), in place of the plain "same miss twice" rule. Sideboard's own repo ships one: the agent who heard the correction writes one sentence into the skill that owns it before the turn ends.
+- A repo with `.claude/skills/skill-improver/SKILL.md` has its agents follow that skill when a miss will recur (they made it twice, or a person told them the rule), in place of the plain "same miss twice" rule. Sideboard's own repo ships one: the agent who heard the correction writes one sentence into the skill that owns it before the turn ends. The docs site says the same.
 
 ## [0.1.343] - 2026-11-13
 
