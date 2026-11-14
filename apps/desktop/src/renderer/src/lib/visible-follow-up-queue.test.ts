@@ -66,6 +66,17 @@ describe('steerBubbleJoinsOntoOpenPrompt', () => {
         messages: [{ role: 'user', text: 'Work on issue A' }],
       }),
     ).toBe(false);
+    expect(
+      steerBubbleJoinsOntoOpenPrompt({
+        followUp: 'steer',
+        agentReplying: false,
+        openPrompt: 'Work on issue A\nAnd B',
+        messages: [
+          { role: 'user', text: 'Work on issue A' },
+          { role: 'user', text: 'And B' },
+        ],
+      }),
+    ).toBe(false);
   });
 
   it('still joins while the open prompt has not been stored', () => {
