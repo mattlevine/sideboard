@@ -1,4 +1,5 @@
-import type { MessagePart, ThreadMessage } from '../types/thread.js';
+import { mergeTurnAttachments } from './consume-attachments.js';
+import type { MessagePart, ThreadAttachment, ThreadMessage } from '../types/thread.js';
 
 /** Join a follow-up onto the prompt the agent has not answered yet. */
 export function joinSteerPrompt(base: string, addition: string): string {
@@ -17,15 +18,23 @@ export function messagesWithRewrittenUserPrompt(
   messages: ThreadMessage[],
   from: string,
   to: string,
+  attachments?: ThreadAttachment[],
 ): ThreadMessage[] | null {
-  if (from === to) return null;
+  const extra = attachments ?? [];
+  if (from === to && extra.length === 0) return null;
   const next = messages.slice();
   for (let i = next.length - 1; i >= 0; i--) {
     const message = next[i];
     if (!message || message.origin === 'continue' || message.role === 'summary') continue;
     if (message.role !== 'user') continue;
     if (message.text !== from) return null;
-    next[i] = { ...message, text: to };
+    const merged = mergeTurnAttachments(message.attachments, extra);
+    if (from === to && merged.length === (message.attachments?.length ?? 0)) return null;
+    next[i] = {
+      ...message,
+      text: to,
+      ...(merged.length > 0 ? { attachments: merged } : {}),
+    };
     return next;
   }
   return null;

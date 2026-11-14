@@ -45,6 +45,23 @@ describe('messagesWithRewrittenUserPrompt', () => {
     expect(messages?.[1]?.text).toBe('partial');
   });
 
+  it('keeps a follow-up image on the rewritten user message', () => {
+    const img = {
+      id: 'img-1',
+      name: 'shot.png',
+      kind: 'file' as const,
+      content: 'Image attached: shot.png',
+      previewDataUrl: 'data:image/png;base64,xx',
+    };
+    const messages = messagesWithRewrittenUserPrompt(
+      [{ role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' }],
+      'Work on issue A',
+      'Work on issue A\nAnd B',
+      [img],
+    );
+    expect(messages?.[0]?.attachments).toEqual([img]);
+  });
+
   it('does not rewrite an older user message when a later one does not match', () => {
     expect(
       messagesWithRewrittenUserPrompt(

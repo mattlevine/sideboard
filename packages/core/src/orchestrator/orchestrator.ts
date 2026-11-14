@@ -212,8 +212,10 @@ import {
   enqueueThreadSend,
   promptForJoinedSteer,
   reuseJoinedUserBubble,
+  type OpenSteerDraft,
 } from './enqueue-thread-send.js';
 import {
+  mergeTurnAttachments,
   moveQueuedItemToFront,
   prependQueuedItem,
   removeQueuedItem,
@@ -364,7 +366,7 @@ export class Orchestrator {
    * Prompt for the turn that has not been answered yet. Steer follow-ups before
    * any agent output are joined onto this text instead of starting a second bubble.
    */
-  private readonly openSteerPrompt = new Map<string, { text: string; spawned: boolean }>();
+  private readonly openSteerPrompt = new Map<string, OpenSteerDraft>();
   /** Next runTurn should keep the user bubble already rewritten to this prompt. */
   private readonly reusedUserPrompt = new Set<string>();
   /** Last sync thread-file read for false-stop heal (throttled per thread). */
@@ -1358,6 +1360,7 @@ export class Orchestrator {
     this.openSteerPrompt.set(threadId, {
       text: typeof prompt === 'string' ? prompt : '',
       spawned: false,
+      attachments: [],
     });
     // Pre-spawn work (queue shape, git slug, directives) used to sit outside
     // this try/finally. A throw there left startingTurns set forever, so
@@ -1399,13 +1402,22 @@ export class Orchestrator {
       promptText.startsWith('The previous agent process ended before it finished.');
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
+    const steerDraftEarly = this.openSteerPrompt.get(threadId);
+    if (steerDraftEarly) {
+      // A follow-up image can land during compact, before this snapshot.
+      steerDraftEarly.attachments = mergeTurnAttachments(
+        sentAttachments,
+        steerDraftEarly.attachments,
+      );
+    }
+    const turnAttachments = steerDraftEarly?.attachments ?? sentAttachments ?? [];
     if (!autoContinue) clearAgentBlock(threadId);
     const shown = this.requireThread(threadId).messages;
     if (!reuseJoinedUserBubble(this.reusedUserPrompt, threadId, shown, promptText)) {
       appendMessage(threadId, {
         role: 'user',
         text: promptText,
-        ...(sentAttachments ? { attachments: sentAttachments } : {}),
+        ...(turnAttachments.length > 0 ? { attachments: turnAttachments } : {}),
         ...(autoContinue ? { origin: 'continue' as const } : {}),
         ts: new Date().toISOString(),
       });
@@ -1444,11 +1456,14 @@ export class Orchestrator {
     // both miss exact phrases and false-trigger on skill/file mentions of CI.
     const turnOrigin = thread.worktreePath?.trim() ? await resolveOriginRemote(thread.worktreePath).catch(() => null) : null;
     const gitPrompt = expandCanonicalGitRequest(promptText, { forge: turnOrigin?.forge });
+    const expandedAttachments = autoContinue
+      ? []
+      : [...(this.openSteerPrompt.get(threadId)?.attachments ?? turnAttachments)];
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
       gitPrompt,
       {
-        attachments: autoContinue ? [] : (sentAttachments ?? []),
+        attachments: expandedAttachments,
       },
     );
     // Re-assert on every turn (incl. Claude --resume, which drops cachedPrefix).
@@ -1709,6 +1724,9 @@ export class Orchestrator {
       traceTurn('runTurn.beforeSpawn', { threadId, agent: fresh.agent });
       const steerDraft = this.openSteerPrompt.get(threadId);
       if (steerDraft) steerDraft.spawned = true;
+      const latestAttachments = autoContinue
+        ? []
+        : [...(steerDraft?.attachments ?? expandedAttachments)];
       const promptForAgent = promptForJoinedSteer({
         threadId,
         promptText,
@@ -1716,7 +1734,8 @@ export class Orchestrator {
         agentPrompt,
         expandedPrompt,
         worktreePath: fresh.worktreePath,
-        attachments: autoContinue ? [] : (sentAttachments ?? []),
+        attachments: expandedAttachments,
+        latestAttachments,
         gitForge: turnOrigin?.forge,
       });
       const handle = await spawnAgentTurn(

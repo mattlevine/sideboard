@@ -1,4 +1,4 @@
-import type { Thread } from '@sideboard-ai/core';
+import type { Thread, ThreadAttachment } from '@sideboard-ai/core';
 
 /**
  * `thread.queue` is the inbox for both follow-ups and the prompt that will
@@ -23,6 +23,8 @@ export type PendingFollowUp = {
   seen?: number;
   /** This chip was matched to a saved queue row and is waiting to be sent or removed. */
   queued?: boolean;
+  /** Files staged with this follow-up, shown until the saved queue row replaces the chip. */
+  attachments?: ThreadAttachment[];
 };
 
 /**
