@@ -299,6 +299,7 @@ describe('coordinator-prompt', () => {
       expect(agents).toContain('/long-running');
       expect(agents).toContain('graph-engineering');
       expect(agents).toContain('/graph-engineering');
+      expect(agents).toContain('/skill-improver');
       expect(agents).toMatch(/Do not use `\.sideboard\/skills\//);
       expect(agents).toContain('only if the user explicitly asked');
       expect(agents).not.toContain('when ready) ask_git merge');

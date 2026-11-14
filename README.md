@@ -530,6 +530,8 @@ When the same shape of work will happen again, write a Claude Code project skill
 
 This repo’s method skill is [`.claude/skills/graph-engineering/SKILL.md`](.claude/skills/graph-engineering/SKILL.md) (`/graph-engineering`): judge first, state on disk, grow the rulebook, blind review, fix the process not the instances. A Cursor symlink lives at `.cursor/skills/graph-engineering`. Type `/graph-engineering` in the Sideboard composer to attach it.
 
+This repo also has [`.claude/skills/skill-improver/SKILL.md`](.claude/skills/skill-improver/SKILL.md) (`/skill-improver`). When a miss will recur, the agent who heard the correction writes one sentence into the skill before the turn ends. It runs in the turn, not on a schedule. No Sideboard tool hands a chat’s corrections to a later run.
+
 `/long-running` is a **Sideboard product skill** — every worktree agent gets the detach-and-wait playbook (and the helper ships with the app). A committed `.claude/skills/long-running` in a repo still wins if you want to customize it.
 
 Older threads that already point at a repo-local path keep working; new threads always use the home-dir (or configured) root.
