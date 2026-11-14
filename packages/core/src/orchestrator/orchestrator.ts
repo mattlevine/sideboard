@@ -209,13 +209,14 @@ import { readWorktreeFileTail } from '../diff/read-worktree-tail.js';
 import { discoverSkills, type SkillInfo } from '../skills/discover.js';
 import { expandComposerPrompt } from '../composer/expand.js';
 import {
+  beginOpenSteerDraft,
   enqueueThreadSend,
-  promptForJoinedSteer,
+  openSteerTurnAttachments,
+  promptAfterJoinedSteer,
   reuseJoinedUserBubble,
-  type OpenSteerDraft,
+  seedOpenSteerAttachments,
 } from './enqueue-thread-send.js';
 import {
-  mergeTurnAttachments,
   moveQueuedItemToFront,
   prependQueuedItem,
   removeQueuedItem,
@@ -366,7 +367,7 @@ export class Orchestrator {
    * Prompt for the turn that has not been answered yet. Steer follow-ups before
    * any agent output are joined onto this text instead of starting a second bubble.
    */
-  private readonly openSteerPrompt = new Map<string, OpenSteerDraft>();
+  private readonly openSteerPrompt = new Map<string, ReturnType<typeof beginOpenSteerDraft>>();
   /** Next runTurn should keep the user bubble already rewritten to this prompt. */
   private readonly reusedUserPrompt = new Set<string>();
   /** Last sync thread-file read for false-stop heal (throttled per thread). */
@@ -1357,11 +1358,7 @@ export class Orchestrator {
     this.emit({ type: 'turn_started', threadId, prompt });
 
     try {
-    this.openSteerPrompt.set(threadId, {
-      text: typeof prompt === 'string' ? prompt : '',
-      spawned: false,
-      attachments: [],
-    });
+    this.openSteerPrompt.set(threadId, beginOpenSteerDraft(typeof prompt === 'string' ? prompt : ''));
     // Pre-spawn work (queue shape, git slug, directives) used to sit outside
     // this try/finally. A throw there left startingTurns set forever, so
     // later worktree sends spun in drainQueue and never spawned Claude.
@@ -1402,15 +1399,7 @@ export class Orchestrator {
       promptText.startsWith('The previous agent process ended before it finished.');
     const parked = takePendingTurnAttachments(thread);
     const sentAttachments = !autoContinue && parked.length > 0 ? parked : undefined;
-    const steerDraftEarly = this.openSteerPrompt.get(threadId);
-    if (steerDraftEarly) {
-      // A follow-up image can land during compact, before this snapshot.
-      steerDraftEarly.attachments = mergeTurnAttachments(
-        sentAttachments,
-        steerDraftEarly.attachments,
-      );
-    }
-    const turnAttachments = steerDraftEarly?.attachments ?? sentAttachments ?? [];
+    const turnAttachments = seedOpenSteerAttachments(this.openSteerPrompt.get(threadId), sentAttachments);
     if (!autoContinue) clearAgentBlock(threadId);
     const shown = this.requireThread(threadId).messages;
     if (!reuseJoinedUserBubble(this.reusedUserPrompt, threadId, shown, promptText)) {
@@ -1456,9 +1445,7 @@ export class Orchestrator {
     // both miss exact phrases and false-trigger on skill/file mentions of CI.
     const turnOrigin = thread.worktreePath?.trim() ? await resolveOriginRemote(thread.worktreePath).catch(() => null) : null;
     const gitPrompt = expandCanonicalGitRequest(promptText, { forge: turnOrigin?.forge });
-    const expandedAttachments = autoContinue
-      ? []
-      : [...(this.openSteerPrompt.get(threadId)?.attachments ?? turnAttachments)];
+    const expandedAttachments = openSteerTurnAttachments(this.openSteerPrompt.get(threadId), turnAttachments, autoContinue);
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
       gitPrompt,
@@ -1722,20 +1709,14 @@ export class Orchestrator {
 
       const stderrTail: string[] = [];
       traceTurn('runTurn.beforeSpawn', { threadId, agent: fresh.agent });
-      const steerDraft = this.openSteerPrompt.get(threadId);
-      if (steerDraft) steerDraft.spawned = true;
-      const latestAttachments = autoContinue
-        ? []
-        : [...(steerDraft?.attachments ?? expandedAttachments)];
-      const promptForAgent = promptForJoinedSteer({
+      const promptForAgent = promptAfterJoinedSteer({
+        draft: this.openSteerPrompt.get(threadId),
+        autoContinue, expandedAttachments,
         threadId,
         promptText,
-        latestPrompt: steerDraft?.text ?? promptText,
         agentPrompt,
         expandedPrompt,
         worktreePath: fresh.worktreePath,
-        attachments: expandedAttachments,
-        latestAttachments,
         gitForge: turnOrigin?.forge,
       });
       const handle = await spawnAgentTurn(

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attachmentsOnPendingBubble,
   dropRemovedFollowUp,
   extraPendingFollowUps,
   joinSteerPrompt,
@@ -542,5 +543,34 @@ describe('extraPendingFollowUps', () => {
         { id: 'b', text: 'same' },
       ]),
     ).toEqual([{ id: 'b', text: 'same' }]);
+  });
+});
+
+describe('attachmentsOnPendingBubble', () => {
+  const img = [{ id: 'img-1', name: 'shot.png', kind: 'file' as const, content: 'Image attached: shot.png' }];
+
+  it('uses the queued follow-up image when that text is also a pending bubble', () => {
+    expect(
+      attachmentsOnPendingBubble({
+        text: 'look at this',
+        isLast: true,
+        pendingAttachments: [],
+        followUps: [{ id: 'a', text: 'look at this', attachments: img }],
+        queue: ['look at this'],
+        queueAttachments: [img],
+      }),
+    ).toEqual(img);
+  });
+
+  it('keeps the in-flight steer image when the bubble is not a queued row', () => {
+    expect(
+      attachmentsOnPendingBubble({
+        text: 'Work on issue A\nAnd B',
+        isLast: true,
+        pendingAttachments: img,
+        followUps: [],
+        queue: [],
+      }),
+    ).toEqual(img);
   });
 });

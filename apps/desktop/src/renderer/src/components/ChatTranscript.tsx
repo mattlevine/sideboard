@@ -63,6 +63,7 @@ export const ChatTranscript = memo(function ChatTranscript({
   pendingPlanQuestions,
   pendingTranscripts,
   pendingAttachments,
+  pendingBubbleFiles = [],
   liveOutput,
   liveParts,
   liveUsage,
@@ -93,6 +94,8 @@ export const ChatTranscript = memo(function ChatTranscript({
   pendingPlanQuestions: ReturnType<typeof latestPendingPlanQuestions>;
   pendingTranscripts: string[];
   pendingAttachments: ThreadAttachment[];
+  /** Per pending bubble. When set, a queued follow-up keeps its own image. */
+  pendingBubbleFiles?: ThreadAttachment[][];
   liveOutput: string;
   liveParts: MessagePart[];
   liveUsage: TokenUsage | null;
@@ -326,14 +329,19 @@ export const ChatTranscript = memo(function ChatTranscript({
         looksLikeAutoContinuePrompt(text) ? null : (
           <div className="msg user pending" data-chat-search-key={`pending-${i}`} key={`pending-${i}`}>
             <div className="msg-user-body">
-              {i === pendingTranscripts.length - 1 && pendingAttachments.length > 0 && (
-                <ComposerAttachmentChips
-                  attachments={pendingAttachments}
-                  className="msg-attachments"
-                  expandImages
-                  onOpen={h.onSelectFile}
-                />
-              )}
+              {(() => {
+                const chips =
+                  pendingBubbleFiles[i] ??
+                  (i === pendingTranscripts.length - 1 ? pendingAttachments : []);
+                return chips.length > 0 ? (
+                  <ComposerAttachmentChips
+                    attachments={chips}
+                    className="msg-attachments"
+                    expandImages
+                    onOpen={h.onSelectFile}
+                  />
+                ) : null;
+              })()}
               <UserMessageText
                 text={text}
                 threadId={threadId}

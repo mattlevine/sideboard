@@ -39,6 +39,60 @@ export function resolveSendFollowUp(
   return isOrchestratorThread(thread) ? followUpBehavior() : 'queue';
 }
 
+export function beginOpenSteerDraft(text: string): OpenSteerDraft {
+  return { text, spawned: false, attachments: [] };
+}
+
+/** Park this turn's files on the draft, then return the list the user bubble should show. */
+export function seedOpenSteerAttachments(
+  draft: OpenSteerDraft | undefined,
+  sent: ThreadAttachment[] | undefined,
+): ThreadAttachment[] {
+  if (!draft) return [...(sent ?? [])];
+  draft.attachments = mergeTurnAttachments(sent, draft.attachments);
+  return draft.attachments ?? [];
+}
+
+/** Files to expand into the agent prompt. Continue turns never resend images. */
+export function openSteerTurnAttachments(
+  draft: OpenSteerDraft | undefined,
+  fallback: ThreadAttachment[],
+  autoContinue: boolean,
+): ThreadAttachment[] {
+  if (autoContinue) return [];
+  return [...(draft?.attachments ?? fallback)];
+}
+
+/** Mark the draft spawned and rebuild the prompt if a follow-up image arrived late. */
+export function promptAfterJoinedSteer(input: {
+  draft: OpenSteerDraft | undefined;
+  autoContinue: boolean;
+  expandedAttachments: ThreadAttachment[];
+  threadId: string;
+  promptText: string;
+  agentPrompt: string;
+  expandedPrompt: string;
+  worktreePath: string;
+  gitForge?: GitForge | null;
+}): string {
+  if (input.draft) input.draft.spawned = true;
+  return promptForJoinedSteer({
+    threadId: input.threadId,
+    promptText: input.promptText,
+    latestPrompt: input.draft?.text ?? input.promptText,
+    agentPrompt: input.agentPrompt,
+    expandedPrompt: input.expandedPrompt,
+    worktreePath: input.worktreePath,
+    attachments: input.expandedAttachments,
+    latestAttachments: openSteerTurnAttachments(
+      input.draft,
+      input.expandedAttachments,
+      input.autoContinue,
+    ),
+    gitForge: input.gitForge,
+  });
+}
+
 export type OpenSteerDraft = {
   text: string;
   spawned: boolean;

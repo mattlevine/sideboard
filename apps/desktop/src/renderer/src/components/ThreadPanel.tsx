@@ -156,6 +156,7 @@ import {
   extraPendingFollowUps,
   joinsClaimedBefore,
   pendingSnapshotChanged,
+  attachmentsOnPendingBubble,
   pendingTranscriptTexts,
   shouldDropStalePendingUser,
   shouldShowStreamingTurn,
@@ -1246,6 +1247,26 @@ export function ThreadPanel({
 
   const [pendingAttachments, setPendingAttachments] = useState<ThreadAttachment[]>(
     [],
+  );
+  const pendingBubbleFiles = useMemo(
+    () =>
+      pendingTranscripts.map((text, i) =>
+        attachmentsOnPendingBubble({
+          text,
+          isLast: i === pendingTranscripts.length - 1,
+          pendingAttachments,
+          followUps: pendingFollowUps,
+          queue: thread.queue,
+          queueAttachments: thread.queueAttachments,
+        }),
+      ),
+    [
+      pendingTranscripts,
+      pendingAttachments,
+      pendingFollowUps,
+      thread.queue,
+      thread.queueAttachments,
+    ],
   );
 
   const followUpBusy =
@@ -2418,6 +2439,7 @@ export function ThreadPanel({
             pendingPlanQuestions={pendingPlanQuestions}
             pendingTranscripts={pendingTranscripts}
             pendingAttachments={pendingAttachments}
+            pendingBubbleFiles={pendingBubbleFiles}
             liveOutput={liveOutput}
             liveParts={liveParts}
             liveUsage={liveUsage}

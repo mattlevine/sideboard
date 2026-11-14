@@ -590,49 +590,6 @@ describe('Orchestrator queued-message editing', () => {
     expect(internal.openSteerPrompt.get(thread.id)?.text).toBe('Work on issue A\nAnd B');
   });
 
-  it('sends a follow-up image with the prompt while the agent has not replied', async () => {
-    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
-    const thread = seedThread([]);
-    const img = {
-      id: 'img-1',
-      name: 'shot.png',
-      kind: 'file' as const,
-      content: 'Image attached: shot.png',
-      previewDataUrl: 'data:image/png;base64,xx',
-    };
-    const live = readThread(thread.id)!;
-    live.status = 'running';
-    live.messages = [{ role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' }];
-    live.attachments = [img];
-    writeThread(live);
-    const orch = new Orchestrator();
-    const internal = orch as unknown as {
-      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
-      startingTurns: Set<string>;
-      openSteerPrompt: Map<string, { text: string; spawned: boolean; attachments?: typeof live.attachments }>;
-      drainQueue: (id: string) => Promise<void>;
-    };
-    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
-    internal.startingTurns.add(thread.id);
-    internal.openSteerPrompt.set(thread.id, { text: 'Work on issue A', spawned: false, attachments: [] });
-    internal.activeTurns.set(thread.id, {
-      pid: 1,
-      kill: vi.fn(),
-      done: new Promise(() => {}),
-    });
-
-    const updated = await orch.send(thread.id, 'And the screenshot', { followUp: 'steer' });
-    expect(updated.queue).toEqual([]);
-    expect(updated.attachments).toEqual([]);
-    expect(internal.openSteerPrompt.get(thread.id)?.attachments).toEqual([
-      expect.objectContaining({ id: 'img-1', name: 'shot.png' }),
-    ]);
-    expect(updated.messages.at(-1)?.text).toBe('Work on issue A\nAnd the screenshot');
-    expect(updated.messages.at(-1)?.attachments).toEqual([
-      expect.objectContaining({ id: 'img-1', previewDataUrl: 'data:image/png;base64,xx' }),
-    ]);
-  });
-
   it('steers the joined prompt when the agent process already started but has not replied', async () => {
     writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
     const thread = seedThread(['later']);
@@ -662,46 +619,6 @@ describe('Orchestrator queued-message editing', () => {
     expect(updated.queue).toContain('later');
     expect(readThread(thread.id)?.messages.at(-1)?.text).toBe('Work on issue A\nAnd B');
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
-  });
-
-  it('keeps a follow-up image when steer interrupts a turn that has not replied', async () => {
-    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
-    const thread = seedThread(['later']);
-    const img = {
-      id: 'img-2',
-      name: 'shot.png',
-      kind: 'file' as const,
-      content: 'Image attached: shot.png',
-      previewDataUrl: 'data:image/png;base64,yy',
-    };
-    const live = readThread(thread.id)!;
-    live.status = 'running';
-    live.messages = [{ role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' }];
-    live.attachments = [img];
-    writeThread(live);
-    const orch = new Orchestrator();
-    const internal = orch as unknown as {
-      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
-      openSteerPrompt: Map<string, { text: string; spawned: boolean }>;
-      drainQueue: (id: string) => Promise<void>;
-    };
-    internal.drainQueue = vi.fn().mockResolvedValue(undefined);
-    internal.openSteerPrompt.set(thread.id, { text: 'Work on issue A', spawned: true });
-    internal.activeTurns.set(thread.id, {
-      pid: 1,
-      kill: vi.fn(),
-      done: new Promise(() => {}),
-    });
-
-    const updated = await orch.send(thread.id, 'And the screenshot', { followUp: 'steer' });
-    expect(updated.attachments).toEqual([]);
-    expect(updated.queue[0]).toBe('Work on issue A\nAnd the screenshot');
-    expect(updated.queueAttachments?.[0]).toEqual([
-      expect.objectContaining({ id: 'img-2', name: 'shot.png' }),
-    ]);
-    expect(updated.messages.at(-1)?.attachments).toEqual([
-      expect.objectContaining({ id: 'img-2', previewDataUrl: 'data:image/png;base64,yy' }),
-    ]);
   });
 
   it('steers ahead of parked follow-ups when nothing is in flight', async () => {

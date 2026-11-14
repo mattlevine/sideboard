@@ -315,6 +315,29 @@ export function pendingTranscriptTexts(input: {
 }
 
 /**
+ * Files for one pending transcript bubble. A queued follow-up owns its chips.
+ * The in-flight steer snapshot is only for a bubble that is not a queued row.
+ */
+export function attachmentsOnPendingBubble(input: {
+  text: string;
+  isLast: boolean;
+  pendingAttachments: ThreadAttachment[];
+  followUps: PendingFollowUp[];
+  queue: string[];
+  queueAttachments?: ThreadAttachment[][];
+}): ThreadAttachment[] {
+  for (let i = input.followUps.length - 1; i >= 0; i--) {
+    const item = input.followUps[i];
+    if (item?.text === input.text) return item.attachments ?? [];
+  }
+  for (let i = input.queue.length - 1; i >= 0; i--) {
+    if (input.queue[i] !== input.text) continue;
+    return input.queueAttachments?.[i] ?? [];
+  }
+  return input.isLast ? input.pendingAttachments : [];
+}
+
+/**
  * Optimistic queue chips that are still only local.
  * A chip stays in this list while the saved queue is showing it (`queued`)
  * and after that row leaves the queue, until a new user message lands.
