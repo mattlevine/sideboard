@@ -26,6 +26,7 @@
       ]
     },
     "plugins": [
+      "expo-notifications",
       [
         "expo-audio",
         {

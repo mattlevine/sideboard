@@ -78,6 +78,7 @@ export type RemoteHostMessage =
   | { type: 'e2ee_ready'; v: 1; desktopPublicKey: string; clientNonce: string; desktopNonce: string }
   | { type: 'e2ee'; frame: string }
   | { type: 'e2ee_fail' }
+  | { type: 'push_notify'; chatId: string; kind: 'needs_you' | 'finished' | 'failed' }
   | { type: 'ping' };
 
 export interface RemoteHostSummary {
@@ -96,6 +97,7 @@ export type RemotePhoneMessage =
   | { type: 'stop' }
   | { type: 'e2ee_hello'; v: 1; clientPublicKey: string; clientNonce: string }
   | { type: 'e2ee'; frame: string }
+  | { type: 'push_register'; token: string; sessionTokens: string[] }
   | { type: 'ping' };
 
 export type RemoteClientMessage = RemoteHostMessage | RemotePhoneMessage;
@@ -196,6 +198,24 @@ export function parseRemoteClientMessage(raw: string): RemoteClientMessage | nul
       .map((item) => item.trim())
       .slice(0, 32);
     return { type: 'list_hosts', sessionTokens };
+  }
+  if (msg.type === 'push_register') {
+    const token = str((parsed as { token?: unknown }).token);
+    if (!/^(?:Exponent|Expo)PushToken\[[A-Za-z0-9_-]{8,140}\]$/.test(token)) return null;
+    const raw = (parsed as { sessionTokens?: unknown }).sessionTokens;
+    if (!Array.isArray(raw)) return null;
+    const sessionTokens = raw
+      .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      .map((item) => item.trim())
+      .slice(0, 32);
+    return { type: 'push_register', token, sessionTokens };
+  }
+  if (msg.type === 'push_notify') {
+    const chatId = str((parsed as { chatId?: unknown }).chatId);
+    const kind = (parsed as { kind?: unknown }).kind;
+    if (!/^[A-Za-z0-9_-]{8,80}$/.test(chatId)) return null;
+    if (kind !== 'needs_you' && kind !== 'finished' && kind !== 'failed') return null;
+    return { type: 'push_notify', chatId, kind };
   }
   if (msg.type === 'prompt') {
     const text = str((parsed as { text?: unknown }).text);

@@ -10,6 +10,8 @@ export type SavedDesktop = {
   hostPublicKey: string;
   /** Proved inside the encrypted handshake. Never sent to the relay. */
   phoneToken: string;
+  /** Omitted means alerts are on. `false` stops push for this Mac. */
+  notify?: boolean;
 };
 
 function isSaved(value: unknown): value is SavedDesktop {

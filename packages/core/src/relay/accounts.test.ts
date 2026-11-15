@@ -29,6 +29,29 @@ describe('relay accounts', () => {
     return store;
   }
 
+  it('keeps a phone push token across a reopened file', () => {
+    const first = open();
+    const signed = first.signIn({
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: 'push-1',
+      email: 'push@example.com',
+      emailVerified: true,
+    });
+    first.authorizeHost({
+      accountToken: signed.credential,
+      deviceId: 'mac-1',
+      deviceLabel: 'Work',
+      hostSecret: 'host-secret',
+    });
+    first.replacePushToken('ExponentPushToken[abcdefghijklmnop]', ['mac-1']);
+    first.close();
+    stores.pop();
+    const second = open();
+    expect(second.pushTokensFor('mac-1')).toEqual(['ExponentPushToken[abcdefghijklmnop]']);
+    second.replacePushToken('ExponentPushToken[abcdefghijklmnop]', []);
+    expect(second.pushTokensFor('mac-1')).toEqual([]);
+  });
+
   it('keeps the account, credential, and Mac secret across a reopened file', () => {
     const first = open();
     const signed = first.signIn({

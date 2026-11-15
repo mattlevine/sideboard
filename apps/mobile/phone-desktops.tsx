@@ -10,6 +10,7 @@ type ListedDesktop = {
   sessionToken: string;
   online: boolean | null;
   expired: boolean;
+  notify?: boolean;
 };
 
 export function PhoneDesktopsScreen<T extends ListedDesktop>({
@@ -17,12 +18,14 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
   error,
   onChoose,
   onForget,
+  onToggleNotify,
   onPair,
 }: {
   desktops: T[];
   error: string | null;
   onChoose: (desktop: T) => void;
   onForget: (deviceId: string) => void;
+  onToggleNotify: (deviceId: string) => void;
   onPair: () => void;
 }) {
   function confirmForget(desktop: T) {
@@ -60,6 +63,16 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
                 />
                 <Text style={styles.status}>{desktopStatus(desktop)}</Text>
               </View>
+            </Pressable>
+            <Pressable
+              style={styles.ghost}
+              accessibilityRole="button"
+              accessibilityLabel={
+                desktop.notify === false ? `Alerts off for ${desktop.deviceLabel}` : `Alerts on for ${desktop.deviceLabel}`
+              }
+              onPress={() => onToggleNotify(desktop.deviceId)}
+            >
+              <Text style={styles.ghostText}>{desktop.notify === false ? 'Alerts off' : 'Alerts'}</Text>
             </Pressable>
             <Pressable
               style={styles.ghost}

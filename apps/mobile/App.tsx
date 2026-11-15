@@ -65,6 +65,8 @@ import {
   togglePhoneTagFilter,
 } from './sidebar-filter';
 import { palette, styles } from './styles';
+import { usePhonePush } from './push';
+import { parseServer } from './server-message';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
 import { composerPlaceholder, historyCount, onMac } from './labels';
@@ -138,34 +140,10 @@ type PhoneControl =
 const DEFAULT_URL = 'wss://relay.sideboard.build/remote';
 const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
-type ServerMessage =
-  | { type: 'paired'; deviceId: string; deviceLabel: string; sessionToken: string }
-  | { type: 'assistant'; text: string }
-  | { type: 'ask_user'; text: string; questions: AskQuestion[] }
-  | {
-      type: 'hosts';
-      hosts: Array<{ sessionToken: string; deviceId: string; deviceLabel: string; online: boolean }>;
-    }
-  | { type: 'host_offline' }
-  | { type: 'error'; message: string }
-  | { type: 'pong' };
-
 const EMPTY: Transcript = { bubbles: [], questions: null, working: false };
 
-function parseServer(raw: string): ServerMessage | null {
-  try {
-    const msg = JSON.parse(raw) as ServerMessage;
-    if (!msg || typeof msg !== 'object' || !('type' in msg)) return null;
-    return msg;
-  } catch {
-    return null;
-  }
-}
-
 function persist(desktops: Desktop[]) {
-  void saveDesktops(
-    desktops.map(({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken }) => ({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken })),
-  );
+  void saveDesktops(desktops.map(({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken, notify }) => ({ deviceId, deviceLabel, sessionToken, hostPublicKey, phoneToken, ...(notify === false ? { notify: false as const } : {}) })));
 }
 
 function phoneCommand(payload: object) {
@@ -264,6 +242,7 @@ export default function App() {
   const projectsRef = useRef(projects);
   const accountDefaultsRef = useRef<PhoneAccountDefaults | null>(null);
   const pendingTokenRef = useRef<string | null>(null);
+  const pushQuietUntil = useRef(0);
   const screenRef = useRef(screen);
   const historyQueryRef = useRef('');
   const historyAfterRef = useRef<string | null>(null);
@@ -287,6 +266,7 @@ export default function App() {
   const pairingCodeRef = useRef<string | null>(null);
   const onMessageRef = useRef<(raw: string) => void>(() => undefined);
   const linkRef = useRef<RelayLink | null>(null);
+  const pushHandlers = useRef({ openDesktop: (_deviceId: string) => undefined as void, openChat: (_chatId: string) => undefined as void });
   desktopsRef.current = desktops;
   activeIdRef.current = activeId;
   activeChatIdRef.current = activeChatId;
@@ -318,6 +298,7 @@ export default function App() {
     });
   }
   const link = linkRef.current;
+  const push = usePhonePush({ relayUrl: relay.url, desktops, send: (payload) => link.send(payload), onSent: () => { pushQuietUntil.current = Date.now() + 4000; }, handlers: pushHandlers });
   const panes = usePhonePanes((payload) => link.send(phoneCommand(payload)), () => activeChatIdRef.current);
 
   useEffect(() => {
@@ -474,6 +455,8 @@ export default function App() {
         screenRef.current = 'agents';
         setScreen('agents');
       }
+      const pending = push.consumePending(ids);
+      if (pending) openChat(pending);
       return;
     }
     if (control.op === 'history') {
@@ -810,6 +793,7 @@ export default function App() {
       return;
     }
     if (msg.type === 'error') {
+      if (msg.message === 'invalid message' && Date.now() < pushQuietUntil.current) return;
       const token = pendingTokenRef.current;
       if (token && /pair again/i.test(msg.message)) {
         patchDesktop(token, { online: false, expired: true });
@@ -864,6 +848,12 @@ export default function App() {
     sealMaterialRef.current = null;
     pendingTokenRef.current = desktop.sessionToken;
     link.send({ type: 'resume', sessionToken: desktop.sessionToken });
+  }
+
+  function toggleNotify(deviceId: string) {
+    const next = desktopsRef.current.map((row) => row.deviceId === deviceId ? { ...row, notify: row.notify === false } : row);
+    setDesktops(next);
+    persist(next);
   }
 
   function forget(deviceId: string) {
@@ -989,6 +979,9 @@ export default function App() {
     setScreen('chat');
     link.send(phoneCommand({ op: 'open', chatId }));
   }
+
+  pushHandlers.current.openDesktop = (deviceId) => { const desktop = desktopsRef.current.find((row) => row.deviceId === deviceId); if (desktop) choose(desktop); };
+  pushHandlers.current.openChat = openChat;
 
   function requestSources(repoPath: string, query?: string) {
     if (sourceQueryTimer.current) clearTimeout(sourceQueryTimer.current);
@@ -1339,6 +1332,7 @@ export default function App() {
         error={error && !checkingHostsRef.current ? error : null}
         onChoose={choose}
         onForget={forget}
+        onToggleNotify={toggleNotify}
         onPair={() => {
           setError(null);
           setScreen('pair');
