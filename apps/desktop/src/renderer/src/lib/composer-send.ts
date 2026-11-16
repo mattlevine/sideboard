@@ -46,20 +46,20 @@ export type ComposerSendInput = {
   pendingSendsRef: MutableRefObject<string[]>;
 };
 
+function joiningOpenPrompt(input: ComposerSendInput, text: string): boolean {
+  return (
+    input.followUpBehavior === 'steer' &&
+    !input.agentReplying &&
+    input.openPromptRef.current != null &&
+    input.openPromptRef.current !== text
+  );
+}
+
 function rememberOptimistic(input: ComposerSendInput, text: string) {
-  if (input.followUpBehavior === 'steer' && !input.agentReplying && input.openPromptRef.current != null) {
-    const combined = joinSteerPrompt(input.openPromptRef.current, text);
-    input.openPromptRef.current = combined;
-    const baseline = userSendSeen(combined, input.messages);
-    input.setOptimisticUsers((prev) => {
-      if (prev.length === 0) return [{ text: combined, ...baseline }];
-      const next = prev.slice();
-      const last = next[next.length - 1]!;
-      next[next.length - 1] = { ...last, text: combined, ...baseline };
-      return next;
-    });
-    input.setPendingUser(combined);
-    input.setPendingInTranscript(true);
+  if (joiningOpenPrompt(input, text)) {
+    // The agent still receives one prompt. The addition stays a follow-up
+    // chip so the open user bubble is not replaced by a row at the bottom.
+    input.openPromptRef.current = joinSteerPrompt(input.openPromptRef.current ?? '', text);
     return;
   }
   const baseline = userSendSeen(text, input.messages);
@@ -92,6 +92,12 @@ function forgetOptimistic(input: ComposerSendInput, text: string) {
     input.openPromptRef.current = restored;
     input.setPendingUser(restored);
   }
+  const suffix = `\n${text}`;
+  const open = input.openPromptRef.current;
+  if (open?.endsWith(suffix)) {
+    const rolled = open.slice(0, -suffix.length);
+    input.openPromptRef.current = rolled || null;
+  }
 }
 
 function clearComposerIfUnchanged(input: ComposerSendInput, sent: string) {
@@ -106,12 +112,22 @@ function restoreComposerIfEmpty(input: ComposerSendInput, text: string) {
 
 function beginPendingSend(input: ComposerSendInput, text: string, attachments: ThreadAttachment[] = []) {
   if (input.pendingPlanQuestions) input.setDismissedPlanQuestionsId(input.pendingPlanQuestions.signature);
-  if (
-    input.followUpBehavior === 'steer' &&
-    !input.agentReplying &&
-    input.openPromptRef.current &&
-    input.openPromptRef.current !== text
-  ) {
+  if (joiningOpenPrompt(input, text)) {
+    const seen = input.messages.reduce(
+      (count, message) =>
+        count +
+        (message.role === 'user' && message.origin !== 'continue' && message.text === text ? 1 : 0),
+      0,
+    );
+    input.setPendingFollowUps((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        text,
+        seen,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      },
+    ]);
     if (attachments.length > 0) input.setPendingAttachments(attachments);
     return;
   }
@@ -143,12 +159,13 @@ function beginPendingSend(input: ComposerSendInput, text: string, attachments: T
 }
 
 async function deliverSend(input: ComposerSendInput, text: string): Promise<'ok' | 'cancel' | 'error'> {
+  const joining = joiningOpenPrompt(input, text);
   const preserveInFlight =
     input.pendingInTranscript &&
     input.pendingUser != null &&
     input.pendingUser !== text &&
     !input.agentReplying;
-  const queueing = (input.followUpBusy && !input.steeringFollowUp) || preserveInFlight;
+  const queueing = (input.followUpBusy && !input.steeringFollowUp) || preserveInFlight || joining;
   if (!(await input.confirmSendDespiteClaudeUsage())) {
     forgetOptimistic(input, text);
     restoreComposerIfEmpty(input, text);

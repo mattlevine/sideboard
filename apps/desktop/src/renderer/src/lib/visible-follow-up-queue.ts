@@ -51,7 +51,49 @@ export type OptimisticUserSend = {
   seenJoins?: number;
 };
 
-type TranscriptMessage = { role: string; text?: string; origin?: string };
+type TranscriptMessage = {
+  role: string;
+  text?: string;
+  origin?: string;
+  parts?: readonly unknown[];
+};
+
+function messageHasAgentReply(message: TranscriptMessage): boolean {
+  if ((message.text ?? '').trim()) return true;
+  return (message.parts?.length ?? 0) > 0;
+}
+
+/**
+ * Latest user prompt when no agent reply has been stored after it.
+ * That bubble is where an early steer joins; a later copy must not be painted
+ * under the reply.
+ */
+export function openUserText(messages: TranscriptMessage[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.origin === 'continue' || message.role === 'summary') continue;
+    if (message.role === 'agent') {
+      if (messageHasAgentReply(message)) return null;
+      continue;
+    }
+    if (message.role === 'user') return message.text ?? '';
+  }
+  return null;
+}
+
+/** `Work on issue A` + `And B` → the joined prompt extends the open user bubble. */
+export function extendsOpenUserMessage(text: string, messages: TranscriptMessage[]): boolean {
+  const open = openUserText(messages);
+  if (!open) return false;
+  return text.startsWith(`${open}\n`);
+}
+
+/** The latest user bubble already ends with this follow-up line. */
+export function followUpJoinedOntoOpenUser(text: string, messages: TranscriptMessage[]): boolean {
+  const open = openUserText(messages);
+  if (!open || !text) return false;
+  return open.endsWith(`\n${text}`);
+}
 
 /**
  * How many times `text` is the join of one unanswered user run
@@ -298,20 +340,35 @@ export function pendingTranscriptTexts(input: {
       steerJoinLanded(text, input.messages)
     );
   };
+  const open = openUserText(input.messages);
+  // Same text as the bubble already on screen, unless a later copy is still
+  // waiting (seen count has not moved). A steer join (`A` + `B`) is not a
+  // second transcript row — the follow-up dock shows that addition.
+  const resendWaiting = (text: string) =>
+    input.optimistic.some(
+      (item) => item.text === text && matchingUserCount(input.messages, text) <= item.seen,
+    );
+  const hideFromTranscriptTail = (text: string) =>
+    extendsOpenUserMessage(text, input.messages) || (open === text && !resendWaiting(text));
   // The queue head has not been consumed yet. An older message with the same
   // text is a previous send, not this one.
-  if (input.currentTurnPrompt && !texts.includes(input.currentTurnPrompt)) {
+  if (
+    input.currentTurnPrompt &&
+    !texts.includes(input.currentTurnPrompt) &&
+    !hideFromTranscriptTail(input.currentTurnPrompt)
+  ) {
     texts.unshift(input.currentTurnPrompt);
   }
   if (
     input.pendingInTranscript &&
     input.pendingUser &&
     !texts.includes(input.pendingUser) &&
-    !landed(input.pendingUser)
+    !landed(input.pendingUser) &&
+    !hideFromTranscriptTail(input.pendingUser)
   ) {
     texts.push(input.pendingUser);
   }
-  return texts;
+  return texts.filter((text) => !hideFromTranscriptTail(text));
 }
 
 /**
@@ -361,8 +418,8 @@ export function unlandedFollowUps(
   const out: PendingFollowUp[] = [];
   for (const item of pending) {
     const now = landed.get(item.text) ?? 0;
-    if (now > (item.seen ?? 0)) {
-      landed.set(item.text, now - 1);
+    if (now > (item.seen ?? 0) || followUpJoinedOntoOpenUser(item.text, messages)) {
+      if (now > (item.seen ?? 0)) landed.set(item.text, now - 1);
       continue;
     }
     const inQueue = queued.get(item.text) ?? 0;

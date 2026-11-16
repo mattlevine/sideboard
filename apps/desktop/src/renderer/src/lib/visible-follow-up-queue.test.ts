@@ -10,7 +10,10 @@ import {
   shouldShowStreamingTurn,
   splitTurnQueue,
   unlandedFollowUps,
+  extendsOpenUserMessage,
+  followUpJoinedOntoOpenUser,
   joinsClaimedBefore,
+  openUserText,
   steerJoinLanded,
   unlandedUserTexts,
 } from './visible-follow-up-queue';
@@ -193,7 +196,7 @@ describe('unlandedUserTexts', () => {
         pendingUser: joined,
         pendingInTranscript: true,
       }),
-    ).toEqual([joined]);
+    ).toEqual([]);
   });
 
   it('keeps the later copy after an earlier copy of the same joined text lands', () => {
@@ -422,12 +425,48 @@ describe('pendingTranscriptTexts', () => {
     expect(
       pendingTranscriptTexts({
         optimistic: [],
-        messages: [{ role: 'user', text: 'yes' }],
+        messages: [
+          { role: 'user', text: 'yes' },
+          { role: 'agent', text: 'done' },
+        ],
         currentTurnPrompt: 'yes',
         pendingUser: null,
         pendingInTranscript: false,
       }),
     ).toEqual(['yes']);
+  });
+
+  it('keeps a steer join off the transcript tail so it can sit in the follow-up dock', () => {
+    const messages = [{ role: 'user', text: 'Work on issue A' }];
+    const joined = 'Work on issue A\nAnd B';
+    expect(openUserText(messages)).toBe('Work on issue A');
+    expect(extendsOpenUserMessage(joined, messages)).toBe(true);
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [],
+        messages,
+        currentTurnPrompt: joined,
+        pendingUser: joined,
+        pendingInTranscript: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it('does not paint the open user message again after the join is stored', () => {
+    const messages = [{ role: 'user', text: 'Work on issue A\nAnd B' }];
+    expect(followUpJoinedOntoOpenUser('And B', messages)).toBe(true);
+    expect(
+      pendingTranscriptTexts({
+        optimistic: [],
+        messages,
+        currentTurnPrompt: 'Work on issue A\nAnd B',
+        pendingUser: null,
+        pendingInTranscript: false,
+      }),
+    ).toEqual([]);
+    expect(
+      unlandedFollowUps([{ id: 'b', text: 'And B', seen: 0 }], [], messages),
+    ).toEqual([]);
   });
 });
 
