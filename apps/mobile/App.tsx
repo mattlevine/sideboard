@@ -1235,8 +1235,12 @@ export default function App() {
         return;
       }
       const rows = saved.map((row) => ({ ...row, online: null, expired: false }));
+      desktopsRef.current = rows;
       setDesktops(rows);
-      setScreen('desktops');
+      const wanted = push.takeDesktop();
+      const opened = wanted ? rows.find((row) => row.deviceId === wanted) : undefined;
+      if (opened) choose(opened);
+      else setScreen('desktops');
       checkingHostsRef.current = true;
       link.send({ type: 'list_hosts', sessionTokens: rows.map((row) => row.sessionToken) });
     });

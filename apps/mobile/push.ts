@@ -24,8 +24,9 @@ export function usePhonePush(opts: {
   send: (payload: object) => void;
   onSent?: () => void;
   handlers: { current: { openDesktop: (deviceId: string) => void; openChat: (chatId: string) => void } };
-}): { hasPending: () => boolean; consumePending: (chatIds: Set<string>) => string | null } {
+}): { hasPending: () => boolean; takeDesktop: () => string | null; consumePending: (chatIds: Set<string>) => string | null } {
   const pending = useRef<string | null>(null);
+  const pendingDesktop = useRef<string | null>(null);
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const tokens = sessionTokensForPush(opts.desktops).join('\n');
@@ -76,6 +77,7 @@ export function usePhonePush(opts: {
           const parsed = parsePushData(response.notification.request.content.data);
           if (!parsed) return;
           pending.current = parsed.chatId;
+          pendingDesktop.current = parsed.deviceId;
           optsRef.current.handlers.current.openDesktop(parsed.deviceId);
         };
         const sub = Notifications.addNotificationResponseReceivedListener(openFrom);
@@ -91,6 +93,11 @@ export function usePhonePush(opts: {
 
   return {
     hasPending: () => pending.current != null,
+    takeDesktop() {
+      const id = pendingDesktop.current;
+      pendingDesktop.current = null;
+      return id;
+    },
     consumePending(chatIds: Set<string>) {
       const id = pending.current;
       if (!id || !chatIds.has(id)) return null;
