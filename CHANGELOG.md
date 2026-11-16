@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.345] - 2026-11-15
+
+### Added
+
+- The phone can alert you when a chat needs you, a turn finishes, or a chat fails. The alert names the Mac and carries no message text. Alerts can be turned off per Mac. Push goes through Sideboard's relay only. A custom relay does not send push. The phone build that can receive one is a new signed build of `cloud.sideboard.mobile`.
+
 ## [0.1.344] - 2026-11-14
 
 ### Added
