@@ -1239,8 +1239,8 @@ export default function App() {
       setDesktops(rows);
       const wanted = push.takeDesktop();
       const opened = wanted ? rows.find((row) => row.deviceId === wanted) : undefined;
+      setScreen((screenRef.current = 'desktops'));
       if (opened) choose(opened);
-      else setScreen('desktops');
       checkingHostsRef.current = true;
       link.send({ type: 'list_hosts', sessionTokens: rows.map((row) => row.sessionToken) });
     });
