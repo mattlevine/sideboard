@@ -43,7 +43,7 @@ describe('optional services', () => {
     expect(text).toMatch(/\/api\/projects\/:id\/query\//);
     expect(text).toMatch(/\/api\/environments\/:id\/query\//);
     expect(text).toMatch(/write=true/);
-    expect(text).toMatch(/Do not read the API key from the environment/);
+    expect(text).toMatch(/Do not read the token from the environment/);
     expect(text).not.toMatch(/POSTHOG_PERSONAL_API_KEY/);
     expect(text).toMatch(/Do not add a Vercel MCP/);
     expect(text).toMatch(/needsAuth/);
@@ -67,7 +67,7 @@ describe('optional services', () => {
     const posthogOnly = mod.formatOptionalServicesReminder({ posthogPersonalApiKey: 'p' });
     expect(posthogOnly).toMatch(/`posthog_api`/);
     expect(posthogOnly).not.toMatch(/tokens are already in this process/);
-    expect(posthogOnly).toMatch(/Do not read a PostHog key/);
+    expect(posthogOnly).toMatch(/Do not read a PostHog token/);
   });
 
   it('normalizes service origins', async () => {
@@ -138,47 +138,41 @@ describe('optional services', () => {
     expect(url).toBe('https://api.supabase.com/v1/organizations');
   });
 
-  it('clears PostHog host on disconnect so agent env is not left pointed at the old origin', async () => {
-    const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ email: 'matt@acme' }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
+  it('clears PostHog OAuth on disconnect so agent env is not left pointed at the old origin', async () => {
     const mod = await load();
-    mod.setHttpFetchImpl(fetchImpl as unknown as typeof fetch);
-    const saved = await mod.connectOptionalService({
-      id: 'posthog',
-      token: 'phx_test',
-      host: 'eu.posthog.com',
+    const settings = await import('../store/app-settings.js');
+    const saved = settings.savePosthogOAuth({
+      accessToken: 'pha_test',
+      refreshToken: 'phr_test',
+      expiresIn: 3600,
+      host: 'https://eu.posthog.com',
+      viewerName: 'matt@acme',
     });
+    expect(saved.integrations.posthogAccessToken).toBe('pha_test');
     expect(saved.integrations.posthogHost).toBe('https://eu.posthog.com');
-    expect(saved.integrations.posthogViewerName).toBe('matt@acme');
-    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
-    expect(url).toBe('https://eu.posthog.com/api/users/@me/');
+    expect(saved.integrations.posthogPersonalApiKey).toBeUndefined();
 
     const cleared = mod.disconnectOptionalService('posthog');
-    expect(cleared.integrations.posthogPersonalApiKey).toBeUndefined();
+    expect(cleared.integrations.posthogAccessToken).toBeUndefined();
+    expect(cleared.integrations.posthogRefreshToken).toBeUndefined();
+    expect(cleared.integrations.posthogTokenExpiresAt).toBeUndefined();
     expect(cleared.integrations.posthogViewerName).toBeUndefined();
     expect(cleared.integrations.posthogHost).toBeUndefined();
 
-    const settings = await import('../store/app-settings.js');
     const target: NodeJS.ProcessEnv = {};
     settings.applyAppEnvironment(target);
     expect(target.POSTHOG_PERSONAL_API_KEY).toBeUndefined();
     expect(target.POSTHOG_HOST).toBeUndefined();
   });
 
-  it('rejects a bad PostHog token without persisting', async () => {
+  it('rejects a pasted PostHog API key', async () => {
     const mod = await load();
-    mod.setHttpFetchImpl(
-      vi.fn(async () => new Response(JSON.stringify({ detail: 'Invalid token' }), { status: 401 })) as unknown as typeof fetch,
-    );
     await expect(
       mod.connectOptionalService({ id: 'posthog', token: 'phx_bad' }),
-    ).rejects.toThrow(/PostHog rejected this token/);
+    ).rejects.toThrow(/Sign in/);
     const settings = await import('../store/app-settings.js');
     expect(settings.loadAppSettings().integrations.posthogPersonalApiKey).toBeUndefined();
+    expect(settings.loadAppSettings().integrations.posthogAccessToken).toBeUndefined();
   });
 
   it('connects Sentry with a custom host', async () => {

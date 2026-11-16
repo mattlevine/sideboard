@@ -2,7 +2,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { httpFetch } from '../http/fetch.js';
 import { normalizeServiceOrigin } from '../integrations/optional-services.js';
-import { isPosthogConnected, loadAppSettings } from '../store/app-settings.js';
+import { getPosthogAccessToken } from '../integrations/posthog-oauth.js';
+import { isPosthogConnected } from '../store/app-settings.js';
 import { mcpJson } from './issue-list.js';
 
 const POSTHOG_METHODS = ['GET', 'POST', 'PATCH'] as const;
@@ -89,9 +90,16 @@ export async function runPosthogApi(input: PosthogApiInput) {
     return mcpJson({ ok: false, error: 'GET does not take a body' }, true);
   }
 
-  const integrations = loadAppSettings().integrations;
-  const token = integrations.posthogPersonalApiKey?.trim();
-  if (!token) {
+  let session: { token: string; host: string } | null;
+  try {
+    session = await getPosthogAccessToken();
+  } catch (err) {
+    return mcpJson(
+      { ok: false, error: err instanceof Error ? err.message : String(err) },
+      true,
+    );
+  }
+  if (!session) {
     return mcpJson(
       { ok: false, error: 'PostHog is not connected (Settings → Connectors).' },
       true,
@@ -101,7 +109,7 @@ export async function runPosthogApi(input: PosthogApiInput) {
   let url: string;
   try {
     url = posthogApiUrl(
-      integrations.posthogHost || 'https://us.posthog.com',
+      session.host,
       withPosthogSlash(method, input.path),
       input.query,
     );
@@ -113,7 +121,7 @@ export async function runPosthogApi(input: PosthogApiInput) {
   }
 
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${session.token}`,
     Accept: 'application/json',
   };
   let body: string | undefined;

@@ -21,6 +21,8 @@ export interface SettingsSecretVault {
   vercelToken?: string;
   supabaseAccessToken?: string;
   posthogPersonalApiKey?: string;
+  posthogAccessToken?: string;
+  posthogRefreshToken?: string;
   sentryAuthToken?: string;
   environment?: Record<string, string>;
 }
@@ -88,6 +90,12 @@ function normalizeVault(raw: SettingsSecretVault): SettingsSecretVault {
   }
   if (typeof raw.posthogPersonalApiKey === 'string' && raw.posthogPersonalApiKey.trim()) {
     out.posthogPersonalApiKey = raw.posthogPersonalApiKey.trim();
+  }
+  if (typeof raw.posthogAccessToken === 'string' && raw.posthogAccessToken.trim()) {
+    out.posthogAccessToken = raw.posthogAccessToken.trim();
+  }
+  if (typeof raw.posthogRefreshToken === 'string' && raw.posthogRefreshToken.trim()) {
+    out.posthogRefreshToken = raw.posthogRefreshToken.trim();
   }
   if (typeof raw.sentryAuthToken === 'string' && raw.sentryAuthToken.trim()) {
     out.sentryAuthToken = raw.sentryAuthToken.trim();

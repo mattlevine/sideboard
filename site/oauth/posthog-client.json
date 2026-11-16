@@ -1,0 +1,42 @@
+{
+  "client_id": "https://www.sideboard.build/oauth/posthog-client.json",
+  "client_name": "Sideboard",
+  "client_uri": "https://www.sideboard.build",
+  "redirect_uris": ["http://127.0.0.1/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "com.posthog": {
+    "scopes": [
+      "project:read",
+      "organization:read",
+      "query:read",
+      "insight:read",
+      "feature_flag:read",
+      "experiment:read",
+      "error_tracking:read",
+      "dashboard:read",
+      "event_definition:read",
+      "property_definition:read",
+      "user:read",
+      "person:read"
+    ],
+    "optional_scopes": [
+      "query:write",
+      "insight:write",
+      "feature_flag:write",
+      "experiment:write",
+      "error_tracking:write",
+      "dashboard:write",
+      "person:write",
+      "cohort:read",
+      "cohort:write",
+      "survey:read",
+      "survey:write",
+      "annotation:read",
+      "annotation:write",
+      "session_recording:read",
+      "logs:read"
+    ]
+  }
+}

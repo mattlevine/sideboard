@@ -17,6 +17,10 @@ import {
   mcpAllowToolsFromNames,
 } from './claude-mcp.js';
 import { proxyClaudeUserMcp } from '../mcp-ui/host.js';
+import {
+  CLAUDE_POSTHOG_CONNECTOR_SERVER,
+  claudePosthogConnectorForTurn,
+} from './claude-posthog-connector.js';
 import { looksLikeAgentFailureMessage } from './error-detail.js';
 import {
   looksLikeConversationSummary,
@@ -550,7 +554,7 @@ export const claudeAdapter: AgentAdapter = {
     const effective = dropCachedPrefixOnResume(input, sessionId);
     // Per-turn reminders ride on --append-system-prompt: one cached system block
     // instead of ~400 tokens added to the conversation history every turn.
-    const { promptText, systemPrompt } = splitTurnInputForSystemPrompt(effective);
+    let { promptText, systemPrompt } = splitTurnInputForSystemPrompt(effective);
     const useStdin = promptText.length > CLAUDE_PROMPT_ARG_MAX;
 
     if (process.env.SIDEBOARD_DEBUG_CLAUDE_TURN === '1') {
@@ -584,6 +588,24 @@ export const claudeAdapter: AgentAdapter = {
     // only auto-approve names we actually wrote. Coordinators stay injected-only
     // so HTTP connectors cannot hang the first find-work turn.
     const userMcpEntries = await proxyClaudeUserMcp(isOrchestrator, [thread.repoPath, thread.worktreePath]);
+    // `--strict-mcp-config` does not fetch claude.ai connectors (Claude Code
+    // 2.1.322+). `--allowedTools` only skips the permission prompt, so the
+    // PostHog connector has to be a dynamic `claudeai-proxy` entry or the
+    // agent never sees those tools. One server, not the whole account list.
+    const posthogConnector =
+      !isOrchestrator && !isPosthogConnected() ? await claudePosthogConnectorForTurn() : null;
+    if (
+      posthogConnector &&
+      !Object.prototype.hasOwnProperty.call(userMcpEntries, CLAUDE_POSTHOG_CONNECTOR_SERVER)
+    ) {
+      userMcpEntries[CLAUDE_POSTHOG_CONNECTOR_SERVER] = { ...posthogConnector };
+      const hint =
+        'PostHog: Settings → Connectors is not signed in. This turn loads the claude.ai PostHog connector (`claude.ai PostHog`, tools `mcp__claude_ai_PostHog__*`). Use those tools. Do not say PostHog is unavailable.';
+      systemPrompt = systemPrompt ? `${systemPrompt}\n\n${hint}` : hint;
+    }
+    // The env blocks an explicit claudeai-proxy too. Keep it for orchestrators,
+    // and for local dev only when this turn did not pass the PostHog connector.
+    const isolateClaudeAiMcp = isOrchestrator || (isLocalDevAppDataDir() && !posthogConnector);
     let allowedTools: string[];
     if (isOrchestrator) {
       allowedTools = [
@@ -623,7 +645,7 @@ export const claudeAdapter: AgentAdapter = {
         mcpServers: mcpServersRecord(injectedServers, userMcpEntries),
         allowedTools: withClaudePilotRpcTools(allowedTools),
         agentRpc: rpc,
-        isolateClaudeAiMcp: isOrchestrator || isLocalDevAppDataDir(),
+        isolateClaudeAiMcp,
       });
     }
     // Plain-text `-p` prompt. stream-json input was merged into the API request and
@@ -685,13 +707,12 @@ export const claudeAdapter: AgentAdapter = {
         CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS:
           process.env.CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS ??
           String(CLAUDE_PRINT_BG_WAIT_CEILING_MS),
-        // `--strict-mcp-config` still fetches claude.ai connectors on some CLI
-        // builds (anthropics/claude-code#60252). Coordinators never need them.
-        // Local `pnpm dev` also disables them: those HTTP connectors hang the
-        // first worktree turn when Electron's cwd is this Sideboard repo.
-        ...(isOrchestrator || isLocalDevAppDataDir()
-          ? { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' }
-          : {}),
+        // Current Claude Code does not fetch claude.ai connectors under
+        // `--strict-mcp-config`. The env is the off switch for older builds
+        // that still fetched the whole account list, and it also refuses an
+        // explicit claudeai-proxy. Orchestrators always set it. Local dev sets
+        // it only when this turn is not passing the PostHog connector.
+        ...(isolateClaudeAiMcp ? { ENABLE_CLAUDEAI_MCP_SERVERS: 'false' } : {}),
       },
     };
   },
