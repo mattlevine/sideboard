@@ -24,20 +24,29 @@ export function usePhonePush(opts: {
   send: (payload: object) => void;
   onSent?: () => void;
   handlers: { current: { openDesktop: (deviceId: string) => void; openChat: (chatId: string) => void } };
-}): { consumePending: (chatIds: Set<string>) => string | null } {
+}): { hasPending: () => boolean; consumePending: (chatIds: Set<string>) => string | null } {
   const pending = useRef<string | null>(null);
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const tokens = sessionTokensForPush(opts.desktops).join('\n');
+  const registered = useRef<string | null>(null);
 
   useEffect(() => {
     if (!hostedPushRelay(opts.relayUrl)) return;
     const sessionTokens = tokens.split('\n').filter(Boolean);
-    if (sessionTokens.length === 0) return;
+    if (sessionTokens.length === 0) {
+      const token = registered.current;
+      if (!token) return;
+      registered.current = null;
+      optsRef.current.onSent?.();
+      optsRef.current.send({ type: 'push_register', token, sessionTokens: [] });
+      return;
+    }
     let cancelled = false;
     void loadExpoPushToken()
       .then((token) => {
         if (cancelled || !token) return;
+        registered.current = token;
         optsRef.current.onSent?.();
         optsRef.current.send({ type: 'push_register', token, sessionTokens });
       })
@@ -62,12 +71,15 @@ export function usePhonePush(opts: {
             shouldSetBadge: false,
           }),
         });
-        const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const openFrom = (response: { notification: { request: { content: { data?: unknown } } } } | null) => {
+          if (!response) return;
           const parsed = parsePushData(response.notification.request.content.data);
           if (!parsed) return;
           pending.current = parsed.chatId;
           optsRef.current.handlers.current.openDesktop(parsed.deviceId);
-        });
+        };
+        const sub = Notifications.addNotificationResponseReceivedListener(openFrom);
+        openFrom(Notifications.getLastNotificationResponse());
         remove = () => sub.remove();
       })
       .catch(() => undefined);
@@ -78,6 +90,7 @@ export function usePhonePush(opts: {
   }, []);
 
   return {
+    hasPending: () => pending.current != null,
     consumePending(chatIds: Set<string>) {
       const id = pending.current;
       if (!id || !chatIds.has(id)) return null;
