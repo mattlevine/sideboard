@@ -355,7 +355,7 @@ export default function App() {
   function remember(desktop: Desktop) {
     setDesktops((prev) => {
       const prior = prev.find((row) => row.deviceId === desktop.deviceId);
-      const saved = { ...desktop, hostPublicKey: desktop.hostPublicKey || prior?.hostPublicKey || '', phoneToken: desktop.phoneToken || prior?.phoneToken || '' };
+      const saved = { ...desktop, hostPublicKey: desktop.hostPublicKey || prior?.hostPublicKey || '', phoneToken: desktop.phoneToken || prior?.phoneToken || '', ...(prior?.notify === false ? { notify: false as const } : {}) };
       const next = [
         ...prev.filter((row) => row.deviceId !== desktop.deviceId && row.sessionToken !== desktop.sessionToken),
         saved,
@@ -730,7 +730,7 @@ export default function App() {
       setError(null);
       pairingCodeRef.current = null; setPairing(false);
       if (pending) link.send(pending);
-      if (screenRef.current === 'chat' && activeChatIdRef.current) {
+      if (screenRef.current === 'chat' && activeChatIdRef.current && !push.hasPending()) {
         link.send(phoneCommand({ op: 'open', chatId: activeChatIdRef.current }));
         if (headerOkRef.current) {
           lastPhoneOpRef.current = 'header';
