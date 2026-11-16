@@ -9,9 +9,9 @@ Desktop Settings splits connections by job. The phone app is remote control. Lin
 | **Settings → Issues** | Issue source, Linear, AbleTime |
 | **Settings → Remote** | This Mac’s name, phone relay, phone sign-in, pairing code. Slack uses the Mac name. Slack sign-in and Listen stay on Sideboard’s Slack relay. |
 | **Settings → Collaboration** | Slack. Add via browser once per team so agents can post as @Sideboard and read the reply. |
-| **Settings → Connectors** | Vercel, Supabase, PostHog, Sentry tokens; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
+| **Settings → Connectors** | Vercel, Supabase, and Sentry tokens; PostHog browser sign-in; **Install CLI** when `vercel` / `supabase` / `sentry-cli` is missing |
 
-Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is the `posthog_api` tool (the key is not copied onto the agent). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
+Connections are owned by Sideboard, not per-agent MCP. Vercel, Supabase, and Sentry tokens inject env into worktree agents; prefer official CLIs (`vercel`, `supabase`, `sentry-cli`). PostHog is browser sign-in and the `posthog_api` tool (the token stays in the vault). Write CLI dumps to `.context/cli/` (not `.context/attachments/`) and read a slice. Do not add vendor MCPs.
 
 ## Phone
 
