@@ -128,6 +128,47 @@ describe('posthog oauth', () => {
     expect('posthogAccessToken' in pub).toBe(false);
   });
 
+  it('shares one refresh across overlapping callers', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'sb-posthog-oauth-'));
+    process.env.HOME = home;
+    vi.resetModules();
+    const [oauth, settings, fetchMod] = await Promise.all([
+      import('./posthog-oauth.js'),
+      import('../store/app-settings.js'),
+      import('../http/fetch.js'),
+    ]);
+    settings.savePosthogOAuth({
+      accessToken: 'pha_old',
+      refreshToken: 'phr_old',
+      expiresIn: 0,
+      host: 'https://eu.posthog.com',
+    });
+    let calls = 0;
+    let release: (response: Response) => void = () => {};
+    const gate = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    fetchMod.setHttpFetchImpl(
+      vi.fn(async () => {
+        calls += 1;
+        return gate;
+      }) as unknown as typeof fetch,
+    );
+    const both = Promise.all([oauth.getPosthogAccessToken(), oauth.getPosthogAccessToken()]);
+    await vi.waitFor(() => expect(calls).toBe(1));
+    release(
+      new Response(JSON.stringify({ access_token: 'pha_new', refresh_token: 'phr_new', expires_in: 3600 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    await expect(both).resolves.toEqual([
+      { token: 'pha_new', host: 'https://eu.posthog.com' },
+      { token: 'pha_new', host: 'https://eu.posthog.com' },
+    ]);
+    expect(calls).toBe(1);
+  });
+
   it('keeps a legacy personal API key when OAuth is absent', async () => {
     const home = mkdtempSync(join(tmpdir(), 'sb-posthog-oauth-'));
     process.env.HOME = home;

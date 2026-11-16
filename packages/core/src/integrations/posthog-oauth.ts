@@ -155,8 +155,42 @@ export async function discoverPosthogHost(
   throw new Error(last);
 }
 
+let refreshInFlight: Promise<{ token: string; host: string }> | null = null;
+
+async function refreshPosthogAccessToken(
+  refresh: string,
+  host: string,
+  viewerName: string | undefined,
+  legacy: string,
+): Promise<{ token: string; host: string }> {
+  try {
+    const data = await exchangePosthogToken(
+      new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refresh,
+        client_id: posthogOAuthClientId(),
+      }),
+    );
+    const saved = savePosthogOAuth({
+      accessToken: data.access_token!.trim(),
+      refreshToken: data.refresh_token?.trim() || refresh,
+      expiresIn: data.expires_in,
+      host,
+      viewerName,
+    });
+    return {
+      token: saved.integrations.posthogAccessToken!.trim(),
+      host: saved.integrations.posthogHost?.trim() || host,
+    };
+  } catch (err) {
+    if (legacy) return { token: legacy, host };
+    throw err;
+  }
+}
+
 /**
  * Vaulted OAuth access token, refreshed when it is near expiry.
+ * Parallel callers share one refresh so a rotated grant is not redeemed twice.
  * A previously stored personal API key still works until the user signs in.
  */
 export async function getPosthogAccessToken(): Promise<{ token: string; host: string } | null> {
@@ -169,29 +203,17 @@ export async function getPosthogAccessToken(): Promise<{ token: string; host: st
   const accessFresh = Boolean(access) && (exp == null || exp - Date.now() > REFRESH_SKEW_MS);
   if (accessFresh) return { token: access, host };
   if (refresh) {
-    try {
-      const data = await exchangePosthogToken(
-        new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: refresh,
-          client_id: posthogOAuthClientId(),
-        }),
-      );
-      const saved = savePosthogOAuth({
-        accessToken: data.access_token!.trim(),
-        refreshToken: data.refresh_token?.trim() || refresh,
-        expiresIn: data.expires_in,
+    if (!refreshInFlight) {
+      refreshInFlight = refreshPosthogAccessToken(
+        refresh,
         host,
-        viewerName: integrations.posthogViewerName,
+        integrations.posthogViewerName,
+        legacy,
+      ).finally(() => {
+        refreshInFlight = null;
       });
-      return {
-        token: saved.integrations.posthogAccessToken!.trim(),
-        host: saved.integrations.posthogHost?.trim() || host,
-      };
-    } catch (err) {
-      if (legacy) return { token: legacy, host };
-      throw err;
     }
+    return refreshInFlight;
   }
   if (access) return { token: access, host };
   if (legacy) return { token: legacy, host };
