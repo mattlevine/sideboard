@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.346] - 2026-11-16
+
+### Fixed
+
+- A push tap opens the Mac that sent it when no Mac is selected. The Mac list stays up until that Mac answers.
+- While the desktop window is in front, the Mac banner stays off for the chat on screen and still appears for a different chat. The phone alert is unchanged.
+- An early steer shows as a follow-up instead of a bottom bubble. Sending that steer again keeps the follow-up and its files on the chip.
+
 ## [0.1.345] - 2026-11-15
 
 ### Added
