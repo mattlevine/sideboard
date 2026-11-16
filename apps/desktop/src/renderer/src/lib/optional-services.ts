@@ -25,13 +25,12 @@ export const OPTIONAL_SERVICES: readonly OptionalServiceSpec[] = [
   {
     id: 'posthog',
     label: 'PostHog',
-    hint: 'Product analytics. Agents call `posthog_api` on the Sideboard MCP server.',
+    hint: 'Product analytics. Sign in with your browser. Agents call `posthog_api`.',
     tokenPlaceholder: 'phx_…',
-    tokenDocs: 'https://app.posthog.com/settings/user-api-keys',
+    tokenDocs: 'https://posthog.com/docs/api/oauth',
     envKey: 'POSTHOG_PERSONAL_API_KEY',
     hostEnvKey: 'POSTHOG_HOST',
     defaultHost: 'https://us.posthog.com',
-    hostPlaceholder: 'https://us.posthog.com',
   },
   {
     id: 'sentry',

@@ -282,8 +282,11 @@ export interface IntegrationsSettings {
   supabaseAccessToken?: string;
   /** Display name of the connected Supabase org (non-secret). */
   supabaseViewerName?: string;
-  /** PostHog personal API key (vaulted). `posthog_api` reads this; it is not copied onto the agent. */
+  /** Legacy API key, or vaulted OAuth access/refresh. `posthogTokenExpiresAt` is epoch ms. */
   posthogPersonalApiKey?: string;
+  posthogAccessToken?: string;
+  posthogRefreshToken?: string;
+  posthogTokenExpiresAt?: number;
   /** PostHog API host (default https://us.posthog.com). Not copied onto the agent. */
   posthogHost?: string;
   /** Display name of the connected PostHog user (non-secret). */
@@ -541,6 +544,8 @@ export type PublicIntegrationsSettings = Omit<
   | 'vercelToken'
   | 'supabaseAccessToken'
   | 'posthogPersonalApiKey'
+  | 'posthogAccessToken'
+  | 'posthogRefreshToken'
   | 'sentryAuthToken'
 > & {
   /** True when Linear is connected (OAuth or API key). */
@@ -595,6 +600,8 @@ const INTEGRATION_VAULT_KEYS = [
   'vercelToken',
   'supabaseAccessToken',
   'posthogPersonalApiKey',
+  'posthogAccessToken',
+  'posthogRefreshToken',
   'sentryAuthToken',
 ] as const;
 
@@ -637,7 +644,7 @@ export function toPublicAppSettings(settings: AppSettings): PublicAppSettings {
       hasAbleTimeOAuth: Boolean(settings.integrations.abletimeRefreshToken?.trim()),
       hasVercelToken: Boolean(settings.integrations.vercelToken?.trim()),
       hasSupabaseToken: Boolean(settings.integrations.supabaseAccessToken?.trim()),
-      hasPosthogToken: Boolean(settings.integrations.posthogPersonalApiKey?.trim()),
+      hasPosthogToken: hasPosthogCredentials(settings.integrations),
       hasSentryToken: Boolean(settings.integrations.sentryAuthToken?.trim()),
       hasRemoteAccount: Boolean(settings.integrations.remoteAccountToken?.trim()),
     },
@@ -860,6 +867,12 @@ function normalizeIntegrations(raw: unknown): IntegrationsSettings {
     const key = source.posthogPersonalApiKey.trim();
     if (key) out.posthogPersonalApiKey = key;
   }
+  for (const key of ['posthogAccessToken', 'posthogRefreshToken'] as const) {
+    const token = typeof source[key] === 'string' ? source[key].trim() : '';
+    if (token) out[key] = token;
+  }
+  const posthogExp = Number(source.posthogTokenExpiresAt);
+  if (Number.isFinite(posthogExp)) out.posthogTokenExpiresAt = posthogExp;
   if (typeof source.posthogHost === 'string') {
     const host = source.posthogHost.trim();
     if (host) out.posthogHost = host;
@@ -2025,11 +2038,38 @@ export function disconnectLinearConnection(): AppSettings {
   return saveAppSettings({ ...current, integrations });
 }
 
-/** True when Settings → Connectors has a PostHog personal API key. */
-export function isPosthogConnected(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
-  return Boolean(settings.integrations.posthogPersonalApiKey?.trim());
+function hasPosthogCredentials(integrations: IntegrationsSettings): boolean {
+  return Boolean(
+    integrations.posthogAccessToken?.trim() ||
+      integrations.posthogRefreshToken?.trim() ||
+      integrations.posthogPersonalApiKey?.trim(),
+  );
+}
+
+/** True when Settings → Connectors has PostHog OAuth or a legacy personal API key. */
+export function isPosthogConnected(settings: AppSettings = loadAppSettings()): boolean {
+  return hasPosthogCredentials(settings.integrations);
+}
+
+/** Persist PostHog OAuth tokens after authorize or refresh. Drops a legacy API key. */
+export function savePosthogOAuth(input: {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  host?: string;
+  viewerName?: string;
+}): AppSettings {
+  const current = loadAppSettings();
+  const integrations: IntegrationsSettings = { ...current.integrations };
+  integrations.posthogAccessToken = input.accessToken.trim();
+  if (input.refreshToken?.trim()) integrations.posthogRefreshToken = input.refreshToken.trim();
+  if (typeof input.expiresIn === 'number' && Number.isFinite(input.expiresIn)) {
+    integrations.posthogTokenExpiresAt = Date.now() + Math.max(0, input.expiresIn) * 1000;
+  }
+  if (input.host?.trim()) integrations.posthogHost = input.host.trim();
+  if (input.viewerName?.trim()) integrations.posthogViewerName = input.viewerName.trim().slice(0, 120);
+  delete integrations.posthogPersonalApiKey;
+  return saveAppSettings({ ...current, integrations });
 }
 
 /** True when Sideboard has an AbleTime OAuth token, PAT, or org key stored. */

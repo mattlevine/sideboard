@@ -79,6 +79,7 @@ export * from './integrations/abletime-mcp.js';
 export * from './integrations/abletime-oauth.js';
 export * from './integrations/issues.js';
 export * from './integrations/optional-services.js';
+export * from './integrations/posthog-oauth.js';
 export * from './integrations/optional-cli.js';
 export { setHttpFetchImpl, formatFetchError, httpFetch } from './http/fetch.js';
 export {

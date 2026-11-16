@@ -93,6 +93,20 @@ export function ConnectorsSettings({
     }
   }
 
+  async function connectPosthog() {
+    setOptionalBusy('posthog');
+    setError(null);
+    try {
+      const next = await window.sideboard.startPosthogOAuth();
+      applySettings(next);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/sign-in cancelled/i.test(message)) setError(message);
+    } finally {
+      setOptionalBusy(null);
+    }
+  }
+
   async function disconnectOptional(id: OptionalServiceId) {
     setOptionalBusy(id);
     setError(null);
@@ -179,6 +193,27 @@ export function ConnectorsSettings({
                     >
                       Disconnect
                     </button>
+                  ) : spec.id === 'posthog' ? (
+                    <>
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={busy || checking}
+                        onClick={() => void connectPosthog()}
+                      >
+                        {checking ? 'Waiting for PostHog…' : 'Connect via browser'}
+                      </button>
+                      {checking ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void window.sideboard.cancelPosthogOAuth();
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                    </>
                   ) : (
                     <button
                       type="button"

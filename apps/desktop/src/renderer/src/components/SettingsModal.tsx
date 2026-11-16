@@ -447,6 +447,7 @@ export function SettingsModal({
       // Cancel in-flight OAuth only when Settings closes — not when switching
       // sidebar items, which unmount Issues/Remote while the browser flow is open.
       void window.sideboard.cancelLinearOAuth?.();
+      void window.sideboard.cancelPosthogOAuth?.();
       void window.sideboard.cancelSlackOAuth?.();
     };
   }, []);

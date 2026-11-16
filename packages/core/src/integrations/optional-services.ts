@@ -53,13 +53,12 @@ export const OPTIONAL_SERVICES: readonly OptionalServiceSpec[] = [
   {
     id: 'posthog',
     label: 'PostHog',
-    hint: 'Product analytics. Agents call `posthog_api` on the Sideboard MCP server.',
+    hint: 'Product analytics. Sign in with your browser. Agents call `posthog_api`.',
     tokenPlaceholder: 'phx_…',
-    tokenDocs: 'https://app.posthog.com/settings/user-api-keys',
+    tokenDocs: 'https://posthog.com/docs/api/oauth',
     envKey: 'POSTHOG_PERSONAL_API_KEY',
     hostEnvKey: 'POSTHOG_HOST',
     defaultHost: 'https://us.posthog.com',
-    hostPlaceholder: 'https://us.posthog.com',
   },
   {
     id: 'sentry',
@@ -247,6 +246,9 @@ function clearConnection(integrations: IntegrationsSettings, id: OptionalService
   }
   if (id === 'posthog') {
     delete integrations.posthogPersonalApiKey;
+    delete integrations.posthogAccessToken;
+    delete integrations.posthogRefreshToken;
+    delete integrations.posthogTokenExpiresAt;
     delete integrations.posthogViewerName;
     delete integrations.posthogHost;
     return;
@@ -264,6 +266,9 @@ export async function connectOptionalService(input: {
 }): Promise<AppSettings> {
   if (!isOptionalServiceId(input.id)) {
     throw new Error('Unknown optional service');
+  }
+  if (input.id === 'posthog') {
+    throw new Error('PostHog connects with Sign in, not an API key.');
   }
   const verified = await verifyOptionalService(input);
   const current = loadAppSettings();
@@ -293,7 +298,13 @@ export function optionalServiceConnected(
 ): boolean {
   if (id === 'vercel') return Boolean(integrations.vercelToken?.trim());
   if (id === 'supabase') return Boolean(integrations.supabaseAccessToken?.trim());
-  if (id === 'posthog') return Boolean(integrations.posthogPersonalApiKey?.trim());
+  if (id === 'posthog') {
+    return Boolean(
+      integrations.posthogAccessToken?.trim() ||
+        integrations.posthogRefreshToken?.trim() ||
+        integrations.posthogPersonalApiKey?.trim(),
+    );
+  }
   return Boolean(integrations.sentryAuthToken?.trim());
 }
 
@@ -318,7 +329,7 @@ function connectorDirectiveLine(spec: OptionalServiceSpec, cli?: OptionalCliPres
   if (spec.cli) {
     return `- ${spec.label}: use \`${spec.cli}\` (\`${spec.envKey}\`${extras})${cliPresencePhrase(spec, cli)}. Do not add a ${spec.label} MCP.`;
   }
-  return `- ${spec.label}: call \`posthog_api\`. Path must start with \`/api/\`. GET is the default. POST \`/api/projects/:id/query/\` or \`/api/environments/:id/query/\` is a read and does not need \`write=true\`. Other POST and PATCH require \`write=true\` only when the user asked to change data. Do not read the API key from the environment. Do not add a ${spec.label} MCP.`;
+  return `- ${spec.label}: call \`posthog_api\`. Path must start with \`/api/\`. GET is the default. POST \`/api/projects/:id/query/\` or \`/api/environments/:id/query/\` is a read and does not need \`write=true\`. Other POST and PATCH require \`write=true\` only when the user asked to change data. Do not read the token from the environment. Do not add a ${spec.label} MCP.`;
 }
 
 function connectorAuthCaution(posthog: boolean, cliConnected: boolean): string {
@@ -326,7 +337,7 @@ function connectorAuthCaution(posthog: boolean, cliConnected: boolean): string {
     ? 'If a connector MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP.'
     : 'If a Vercel, Supabase, or Sentry MCP is listed but needsAuth or returns unauthorized, do not sign in to that MCP.';
   const token = cliConnected ? ' CLI tokens are already in this process.' : '';
-  const key = posthog ? ' Do not read a PostHog key from the environment.' : '';
+  const key = posthog ? ' Do not read a PostHog token from the environment.' : '';
   return `${signIn}${token}${key} When this Sideboard connection works, ignore a Claude connector that failed to start. Use the Claude connector only when this connection is not set or the CLI call fails.`;
 }
 
@@ -373,7 +384,7 @@ export function formatOptionalServicesReminder(
     : '';
   const posthog = connected.some((spec) => spec.id === 'posthog');
   const auth = posthog
-    ? 'If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or `posthog_api` while this Sideboard connection works. Use the Claude connector only when it is not set or the call fails. Do not read a PostHog key from the environment.'
+    ? 'If a connector MCP needsAuth or is unauthorized, ignore it and use the CLI or `posthog_api` while this Sideboard connection works. Use the Claude connector only when it is not set or the call fails. Do not read a PostHog token from the environment.'
     : 'If a Vercel, Supabase, or Sentry MCP needsAuth or is unauthorized, ignore it and use the CLI while this Sideboard connection works. Use the Claude connector only when it is not set or the CLI call fails.';
   return `Settings → Connectors: ${tokenBit}${bits}. ${auth} Do not add vendor MCPs. Shell dumps from those CLIs go in \`.context/cli/\` — read a slice.`;
 }

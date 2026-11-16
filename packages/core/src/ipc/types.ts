@@ -234,10 +234,10 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
     token: string;
     host?: string | null;
   }): Promise<PublicAppSettings>;
-  /** Browser OAuth — opens AbleTime, waits for localhost callback. */
   startAbleTimeOAuth(host?: string | null): Promise<PublicAppSettings>;
-  /** Abort an in-progress AbleTime browser sign-in. */
   cancelAbleTimeOAuth(): Promise<void>;
+  startPosthogOAuth(): Promise<PublicAppSettings>;
+  cancelPosthogOAuth(): Promise<void>;
   /** Clear the stored AbleTime token. */
   disconnectAbleTime(): Promise<PublicAppSettings>;
   /** Verify and store a Vercel / Supabase / PostHog / Sentry token. */

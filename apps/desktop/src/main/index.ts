@@ -130,6 +130,8 @@ import {
   isLinearOAuthCancelled,
   startAbleTimeOAuth,
   isAbleTimeOAuthCancelled,
+  startPosthogOAuth,
+  isPosthogOAuthCancelled,
   disconnectLinear,
   disconnectAbleTimeConnection,
   verifyAbleTimeConnection,
@@ -1167,6 +1169,29 @@ function registerIpc(): void {
   });
   ipcMain.handle('cancelAbleTimeOAuth', () => {
     abletimeOauthAbort?.abort();
+  });
+  let posthogOauthAbort: AbortController | null = null;
+  ipcMain.handle('startPosthogOAuth', async () => {
+    posthogOauthAbort?.abort();
+    const ac = new AbortController();
+    posthogOauthAbort = ac;
+    try {
+      const saved = await startPosthogOAuth({
+        openUrl: (url) => shell.openExternal(url),
+        signal: ac.signal,
+      });
+      return toPublicAppSettings(saved);
+    } catch (err) {
+      if (isPosthogOAuthCancelled(err)) {
+        throw new Error('PostHog sign-in cancelled');
+      }
+      throw err;
+    } finally {
+      if (posthogOauthAbort === ac) posthogOauthAbort = null;
+    }
+  });
+  ipcMain.handle('cancelPosthogOAuth', () => {
+    posthogOauthAbort?.abort();
   });
   ipcMain.handle('disconnectAbleTime', () =>
     toPublicAppSettings(disconnectAbleTimeConnection()),
