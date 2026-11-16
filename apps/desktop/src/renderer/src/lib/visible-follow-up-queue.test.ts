@@ -11,6 +11,7 @@ import {
   splitTurnQueue,
   unlandedFollowUps,
   extendsOpenUserMessage,
+  followUpJoinLanded,
   followUpJoinedOntoOpenUser,
   joinsClaimedBefore,
   openUserText,
@@ -464,9 +465,15 @@ describe('pendingTranscriptTexts', () => {
         pendingInTranscript: false,
       }),
     ).toEqual([]);
+    const landed = { id: 'b', text: 'And B', seen: 0, openText: 'Work on issue A' };
+    expect(followUpJoinLanded(landed, messages)).toBe(true);
+    expect(unlandedFollowUps([landed], [], messages)).toEqual([]);
+    const again = { id: 'c', text: 'And B', seen: 0, openText: 'Work on issue A\nAnd B' };
+    expect(followUpJoinLanded(again, messages)).toBe(false);
+    expect(unlandedFollowUps([again], [], messages)).toEqual([again]);
     expect(
-      unlandedFollowUps([{ id: 'b', text: 'And B', seen: 0 }], [], messages),
-    ).toEqual([]);
+      followUpJoinLanded(again, [{ role: 'user', text: 'Work on issue A\nAnd B\nAnd B' }]),
+    ).toBe(true);
   });
 });
 

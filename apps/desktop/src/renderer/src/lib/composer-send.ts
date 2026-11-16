@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ThreadAttachment } from '@sideboard-ai/core';
 import {
   joinSteerPrompt,
+  openUserText,
   userSendSeen,
   type OptimisticUserSend,
   type PendingFollowUp,
@@ -125,10 +126,10 @@ function beginPendingSend(input: ComposerSendInput, text: string, attachments: T
         id: crypto.randomUUID(),
         text,
         seen,
+        openText: openUserText(input.messages) ?? '',
         ...(attachments.length > 0 ? { attachments } : {}),
       },
     ]);
-    if (attachments.length > 0) input.setPendingAttachments(attachments);
     return;
   }
   // A second send before the agent replies must not replace the first bubble.

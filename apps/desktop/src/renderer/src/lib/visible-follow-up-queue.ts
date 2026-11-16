@@ -25,6 +25,11 @@ export type PendingFollowUp = {
   queued?: boolean;
   /** Files staged with this follow-up, shown until the saved queue row replaces the chip. */
   attachments?: ThreadAttachment[];
+  /**
+   * Open user text when this chip was sent. The chip lands only after that
+   * bubble grows to end with `text`. A later copy of the same line stays.
+   */
+  openText?: string;
 };
 
 /**
@@ -93,6 +98,31 @@ export function followUpJoinedOntoOpenUser(text: string, messages: TranscriptMes
   const open = openUserText(messages);
   if (!open || !text) return false;
   return open.endsWith(`\n${text}`);
+}
+
+function followUpLineCount(value: string, line: string): number {
+  const needle = line.trim();
+  if (!needle) return 0;
+  let count = 0;
+  for (const part of value.split('\n')) {
+    if (part.trim() === needle) count += 1;
+  }
+  return count;
+}
+
+/**
+ * The open bubble gained this follow-up line after the chip was sent.
+ * A prompt that already contained the line does not consume a new copy.
+ */
+export function followUpJoinLanded(
+  item: Pick<PendingFollowUp, 'text' | 'openText'>,
+  messages: TranscriptMessage[],
+): boolean {
+  const text = item.text?.trim() ?? '';
+  if (!text || item.openText == null) return false;
+  const open = openUserText(messages);
+  if (open == null) return false;
+  return followUpLineCount(open, text) > followUpLineCount(item.openText, text);
 }
 
 /**
@@ -418,7 +448,7 @@ export function unlandedFollowUps(
   const out: PendingFollowUp[] = [];
   for (const item of pending) {
     const now = landed.get(item.text) ?? 0;
-    if (now > (item.seen ?? 0) || followUpJoinedOntoOpenUser(item.text, messages)) {
+    if (now > (item.seen ?? 0) || followUpJoinLanded(item, messages)) {
       if (now > (item.seen ?? 0)) landed.set(item.text, now - 1);
       continue;
     }
