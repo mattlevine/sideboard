@@ -3,6 +3,8 @@ import { systemCaTlsOptions } from '../http/system-ca.js';
 import { lookupPreferPublicDns } from '../slack/public-dns.js';
 import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
 import { startPhoneBoardSync } from './phone-board-sync.js';
+import { startPhonePushWatch } from './phone-push-watch.js';
+import { hostedPushRelay } from './push.js';
 import { refreshPhoneViewerLogin } from './phone-viewer-login.js';
 import { deliverPhoneTurn, emitControl, getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
 import { setPhonePermissionPush } from './phone-permission.js';
@@ -368,6 +370,14 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
     if (getPhoneOpenChat() !== chatId) return;
     emitControl({ onOutbound: emit }, { op: 'permission', chatId, prompt });
   });
+
+  const stopPush = hostedPushRelay(opts.url)
+    ? startPhonePushWatch({
+        enabled: () => Boolean(socket && socket.readyState === socket.OPEN),
+        send: (note) => send({ type: 'push_notify', chatId: note.chatId, kind: note.kind }),
+      })
+    : null;
+  opts.signal?.addEventListener('abort', () => stopPush?.(), { once: true });
 
   void loop();
 

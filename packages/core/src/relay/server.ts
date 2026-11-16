@@ -20,6 +20,7 @@ import {
 import { SlackRelayHub } from '../slack/relay-hub.js';
 import { CANONICAL_SITE_HOST, serveMarketingSite } from './static.js';
 import { RemoteHub } from '../remote/hub.js';
+import { sendExpoPushes } from '../remote/push.js';
 import { REMOTE_PING_INTERVAL_MS, REMOTE_RELAY_PATH } from '../remote/protocol.js';
 import { assertRelayAccountsDurable, RelayAccountStore } from './accounts.js';
 import { handleRelayAccountHttp, RelayLoginSessions, type RelayOAuthConfig } from './account-oauth.js';
@@ -206,6 +207,17 @@ export async function startRelayServer(
           save: (deviceId, sessionToken) => accountStore.savePhoneSession(deviceId, sessionToken),
         }
       : undefined,
+    pushTokens: accountStore
+      ? {
+          replace: (token, deviceIds) => accountStore.replacePushToken(token, deviceIds),
+          tokens: (deviceId) => accountStore.pushTokensFor(deviceId),
+        }
+      : undefined,
+    onPush: (messages) => {
+      void sendExpoPushes(messages, opts.fetchImpl ?? fetch).catch((err) => {
+        log(`push: ${err instanceof Error ? err.message : err}`);
+      });
+    },
     onAuthorized: (socket) => authMarks.get(socket)?.(),
   });
 

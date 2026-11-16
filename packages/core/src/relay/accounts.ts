@@ -162,6 +162,15 @@ export class RelayAccountStore {
       this.db.exec('ALTER TABLE devices ADD COLUMN session_token_hash TEXT');
     }
     this.db.exec('CREATE INDEX IF NOT EXISTS devices_session ON devices(session_token_hash)');
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        token TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (token, device_id)
+      );
+      CREATE INDEX IF NOT EXISTS push_tokens_device ON push_tokens(device_id);
+    `);
   }
 
   close(): void {
@@ -328,6 +337,35 @@ export class RelayAccountStore {
     const token = sessionToken.trim();
     if (!id || !token) return;
     this.db.prepare('UPDATE devices SET session_token_hash = ? WHERE device_id = ?').run(sha256(token), id);
+  }
+
+  /** Replace every Mac this Expo token should reach. An empty list forgets it. */
+  replacePushToken(token: string, deviceIds: string[]): void {
+    const id = token.trim();
+    if (!id) return;
+    const ids = [...new Set(deviceIds.map((row) => row.trim()).filter(Boolean))];
+    const now = Date.now();
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM push_tokens WHERE token = ?').run(id);
+      const insert = this.db.prepare(
+        'INSERT INTO push_tokens (token, device_id, updated_at) VALUES (?, ?, ?)',
+      );
+      for (const deviceId of ids) insert.run(id, deviceId, now);
+      this.db.exec('COMMIT');
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  pushTokensFor(deviceId: string): string[] {
+    const id = deviceId.trim();
+    if (!id) return [];
+    const rows = this.db
+      .prepare('SELECT token FROM push_tokens WHERE device_id = ? ORDER BY updated_at')
+      .all(id) as { token: string }[];
+    return rows.map((row) => row.token);
   }
 
   findPhoneSession(sessionToken: string): { deviceId: string; deviceLabel: string } | null {

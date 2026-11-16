@@ -21,7 +21,7 @@ The phone app is remote control for the **local** orchestrator. Agents, worktree
 
 **Settings → Remote** shows the relay address, Relay connected, this Mac’s name, and **Show pairing code**. Start `apps/mobile` from the Run menu (**Mobile**) or with `pnpm --filter @sideboard-ai/mobile start`, set the phone’s **Relay** field to the same address, then scan that QR code. Paste the line under the code if you can’t scan. The phone keeps every Mac it has paired and you choose which desktop to open. Send `stop` to cancel a turn. `ask_user` options render as buttons on the phone.
 
-A URL saved in **Settings → Remote → Relay** is the phone relay this Mac uses. Leave it blank for Sideboard’s relay. The phone uses `/remote` on that host. Slack sign-in and Listen stay on Sideboard’s relay. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
+A URL saved in **Settings → Remote → Relay** is the phone relay this Mac uses. Leave it blank for Sideboard’s relay. The phone uses `/remote` on that host. Slack sign-in and Listen stay on Sideboard’s relay. `SIDEBOARD_REMOTE_RELAY_URL` applies only when that field is empty (default `wss://relay.sideboard.build/remote`). Push messages are not supported on a custom relay. Deploy steps: [self-hosted-relay.md](self-hosted-relay.md). That image is the relay only. It does not serve the marketing site.
 
 ## Slack
 

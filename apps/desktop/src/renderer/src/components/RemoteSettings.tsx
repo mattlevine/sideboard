@@ -164,8 +164,8 @@ export function RemoteSettings({
         <p className="settings-hint">
           Leave this blank to use Sideboard’s relay for the phone. Slack sign-in and Listen stay
           on Sideboard’s Slack relay. To run your own phone relay, deploy the relay service (not
-          the website) and paste the same address here and in the phone app. Saving a different
-          relay signs this Mac out.
+          the website) and paste the same address here and in the phone app. Push messages are
+          not supported on a custom relay. Saving a different relay signs this Mac out.
         </p>
         <div className="settings-key-row" style={{ marginTop: 12 }}>
           <input

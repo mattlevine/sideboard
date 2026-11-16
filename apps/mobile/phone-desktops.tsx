@@ -10,6 +10,7 @@ type ListedDesktop = {
   sessionToken: string;
   online: boolean | null;
   expired: boolean;
+  notify?: boolean;
 };
 
 export function PhoneDesktopsScreen<T extends ListedDesktop>({
@@ -17,13 +18,17 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
   error,
   onChoose,
   onForget,
+  onToggleNotify,
   onPair,
+  pushSupported = true,
 }: {
   desktops: T[];
   error: string | null;
   onChoose: (desktop: T) => void;
   onForget: (deviceId: string) => void;
+  onToggleNotify: (deviceId: string) => void;
   onPair: () => void;
+  pushSupported?: boolean;
 }) {
   function confirmForget(desktop: T) {
     Alert.alert(
@@ -44,6 +49,7 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
         <Text style={styles.title}>Choose a desktop</Text>
         <Text style={styles.hint}>
           Pair each Mac from Settings → Remote. The name you save there is the name in this list.
+          {pushSupported ? '' : ' Push messages are not supported on a custom relay.'}
         </Text>
       </View>
       <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad}>
@@ -60,6 +66,16 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
                 />
                 <Text style={styles.status}>{desktopStatus(desktop)}</Text>
               </View>
+            </Pressable>
+            <Pressable
+              style={styles.ghost}
+              accessibilityRole="button"
+              accessibilityLabel={
+                desktop.notify === false ? `Alerts off for ${desktop.deviceLabel}` : `Alerts on for ${desktop.deviceLabel}`
+              }
+              onPress={() => onToggleNotify(desktop.deviceId)}
+            >
+              <Text style={styles.ghostText}>{desktop.notify === false ? 'Alerts off' : 'Alerts'}</Text>
             </Pressable>
             <Pressable
               style={styles.ghost}

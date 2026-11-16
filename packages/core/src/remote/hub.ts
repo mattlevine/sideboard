@@ -5,6 +5,7 @@ import {
   type RemoteHostSummary,
   type RemoteServerMessage,
 } from './protocol.js';
+import { expoPushMessage, MemoryPushTokens, type PushKind, type PushTokenStore } from './push.js';
 
 export interface RemoteSocket {
   send(data: string): void;
@@ -74,6 +75,8 @@ export type RemotePhoneSessions = {
   save(deviceId: string, sessionToken: string): void;
 };
 
+export type { PushTokenStore };
+
 /**
  * In-memory phone ↔ Mac registry. One active phone socket per Mac.
  * A phone may hold session tokens for several Macs and attaches to one at a time.
@@ -88,13 +91,20 @@ export class RemoteHub {
   private readonly codes = new Map<string, PairingCode>();
   private readonly phonesByToken = new Map<string, RemotePhoneSession>();
 
+  private readonly pushTokens: PushTokenStore;
+  private readonly pushTokenBySocket = new Map<RemoteSocket, string>();
+
   constructor(
     private readonly opts: {
       authorizeHost?: RemoteHostAuthorizer;
       phoneSessions?: RemotePhoneSessions;
+      pushTokens?: PushTokenStore;
+      onPush?: (messages: ReturnType<typeof expoPushMessage>[]) => void;
       onAuthorized?: (socket: RemoteSocket) => void;
     } = {},
-  ) {}
+  ) {
+    this.pushTokens = opts.pushTokens ?? new MemoryPushTokens();
+  }
 
   handleClientMessage(socket: RemoteSocket, raw: string): void {
     const msg = parseRemoteClientMessage(raw);
@@ -125,6 +135,7 @@ export class RemoteHub {
     }
     if (bound.role === 'phone' && host.phone === socket) {
       host.phone = null;
+      this.pushTokenBySocket.delete(socket);
       send(host.socket, { type: 'phone_left' });
     }
   }
@@ -152,6 +163,14 @@ export class RemoteHub {
     }
     if (msg.type === 'list_hosts') {
       this.listHosts(socket, msg.sessionTokens);
+      return;
+    }
+    if (msg.type === 'push_register') {
+      this.registerPush(socket, msg.token, msg.sessionTokens);
+      return;
+    }
+    if (msg.type === 'push_notify') {
+      this.notifyPush(socket, msg.chatId, msg.kind);
       return;
     }
     if (msg.type === 'prompt' || msg.type === 'stop') {
@@ -223,6 +242,7 @@ export class RemoteHub {
       }
       if (existing.phone) {
         send(existing.phone, { type: 'host_offline' });
+        this.pushTokenBySocket.delete(existing.phone);
         this.bySocket.delete(existing.phone);
       }
     }
@@ -361,6 +381,7 @@ export class RemoteHub {
     this.bySocket.delete(socket);
     if (prev?.phone === socket) {
       prev.phone = null;
+      this.pushTokenBySocket.delete(socket);
       send(prev.socket, { type: 'phone_left' });
     }
   }
@@ -377,6 +398,7 @@ export class RemoteHub {
     }
     const already = host.phone === socket;
     if (host.phone && host.phone !== socket) {
+      this.pushTokenBySocket.delete(host.phone);
       this.bySocket.delete(host.phone);
       try {
         host.phone.close();
@@ -437,5 +459,35 @@ export class RemoteHub {
       return;
     }
     send(host.phone, { type: 'ask_user', text: msg.text, questions: msg.questions });
+  }
+
+  private registerPush(socket: RemoteSocket, token: string, sessionTokens: string[]): void {
+    const deviceIds: string[] = [];
+    for (const sessionToken of sessionTokens) {
+      const known = this.knownSession(sessionToken);
+      if (known && !deviceIds.includes(known.deviceId)) deviceIds.push(known.deviceId);
+    }
+    this.pushTokens.replace(token, deviceIds);
+    this.pushTokenBySocket.set(socket, token);
+  }
+
+  private notifyPush(socket: RemoteSocket, chatId: string, kind: PushKind): void {
+    const bound = this.bySocket.get(socket);
+    const host = bound?.role === 'host' ? this.hosts.get(bound.deviceId) : null;
+    if (!host || host.socket !== socket) return;
+    const connected = host.phone ? this.pushTokenBySocket.get(host.phone) : undefined;
+    const messages = this.pushTokens
+      .tokens(host.deviceId)
+      .filter((token) => token !== connected)
+      .map((to) =>
+        expoPushMessage({
+          to,
+          deviceLabel: host.deviceLabel,
+          deviceId: host.deviceId,
+          chatId,
+          kind,
+        }),
+      );
+    if (messages.length > 0) this.opts.onPush?.(messages);
   }
 }
