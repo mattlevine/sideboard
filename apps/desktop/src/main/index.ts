@@ -581,6 +581,7 @@ function caffeinateUiState(): ReturnType<typeof getCaffeinateHold> & {
 }
 
 let dockUnreadCount = 0;
+let visibleThreadId: string | null = null;
 
 function applyDockUnreadBadge(): void {
   if (process.platform !== 'darwin' || !app.dock) return;
@@ -887,8 +888,11 @@ function setupNotifications(): void {
       syncCaffeinate();
     }
 
-    const focused = mainWindow?.isFocused() ?? false;
-    if (focused || !Notification.isSupported()) return;
+    const watching =
+      (mainWindow?.isFocused() ?? false) &&
+      'threadId' in event &&
+      event.threadId === visibleThreadId;
+    if (watching || !Notification.isSupported()) return;
 
     if (event.type === 'turn_finished') {
       new Notification({
@@ -942,8 +946,9 @@ function registerIpc(): void {
     applyAppEnvironment(process.env);
     return loginManagedAccount(id);
   });
-  ipcMain.handle('setDockBadge', (_e, count: number) => {
+  ipcMain.handle('setDockBadge', (_e, count: number, threadId?: string | null) => {
     dockUnreadCount = Math.max(0, Math.floor(Number(count) || 0));
+    visibleThreadId = typeof threadId === 'string' && threadId ? threadId : null;
     applyDockUnreadBadge();
   });
   ipcMain.handle('getAppSettings', () => toPublicAppSettings(loadAppSettings()));

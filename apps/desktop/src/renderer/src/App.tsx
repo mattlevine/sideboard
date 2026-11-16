@@ -950,7 +950,7 @@ export function App() {
       activeChatId: selectedId,
       viewIsThread: view === 'thread',
     });
-    void window.sideboard.setDockBadge?.(n);
+    void window.sideboard.setDockBadge?.(n, view === 'thread' ? selectedId : null);
   }, [threads, selectedId, view, unreadEpoch]);
 
   function onSelect(id: string, multi: boolean) {

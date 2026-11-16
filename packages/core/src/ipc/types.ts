@@ -130,8 +130,8 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
   removeManagedAccount(id: string): Promise<PublicAppSettings>;
   renameManagedAccount(id: string, label: string): Promise<PublicAppSettings>;
   loginManagedAccount(id: string): Promise<AgentSetupActionResult>;
-  /** macOS Dock unread count (empty string when 0). */
-  setDockBadge(count: number): Promise<void>;
+  /** macOS Dock unread count. The open chat rides along so a focused window can skip that chat's banner. */
+  setDockBadge(count: number, visibleThreadId?: string | null): Promise<void>;
   /** Brightsy login + connected teams (shared by CLI, Brightsy agent, and Claude MCP). */
   getBrightsySession(): Promise<BrightsySession>;
   /**
