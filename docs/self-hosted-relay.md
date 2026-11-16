@@ -2,7 +2,7 @@
 
 The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.
 
-Sideboard hosts a relay at `wss://relay.sideboard.build/remote`. This page is how to run your own and point the desktop and the phone at it.
+Sideboard hosts a relay at `wss://relay.sideboard.build/remote`. This page is how to run your own and point the desktop and the phone at it. Push messages are not supported on a custom relay.
 
 The process you deploy is the relay only. It accepts the phone and desktop WebSocket, GitHub sign-in, and the account database. It does not serve the Sideboard website. The website stays on [www.sideboard.build](https://www.sideboard.build/), which is a separate setting on Sideboard’s own Fly app ([deploy.md](system/deploy.md)).
 

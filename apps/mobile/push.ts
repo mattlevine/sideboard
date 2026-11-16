@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { hostedPushRelay, isExpoPushToken } from '../../packages/core/src/remote/push';
-import { parsePushData, sessionTokensForPush } from './push-plan';
+import { hostedPushRelay, isExpoPushToken, parsePushData, sessionTokensForPush } from './push-plan';
+
+export { hostedPushRelay };
 
 const EAS_PROJECT_ID = 'df689cd6-ee41-404d-868b-5d079dfa3e76';
 

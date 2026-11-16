@@ -20,6 +20,7 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
   onForget,
   onToggleNotify,
   onPair,
+  pushSupported = true,
 }: {
   desktops: T[];
   error: string | null;
@@ -27,6 +28,7 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
   onForget: (deviceId: string) => void;
   onToggleNotify: (deviceId: string) => void;
   onPair: () => void;
+  pushSupported?: boolean;
 }) {
   function confirmForget(desktop: T) {
     Alert.alert(
@@ -47,6 +49,7 @@ export function PhoneDesktopsScreen<T extends ListedDesktop>({
         <Text style={styles.title}>Choose a desktop</Text>
         <Text style={styles.hint}>
           Pair each Mac from Settings → Remote. The name you save there is the name in this list.
+          {pushSupported ? '' : ' Push messages are not supported on a custom relay.'}
         </Text>
       </View>
       <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad}>

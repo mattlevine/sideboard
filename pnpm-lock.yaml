@@ -182,6 +182,9 @@ importers:
       expo-image-picker:
         specifier: ~57.0.20
         version: 57.0.20(expo@57.0.27)
+      expo-modules-autolinking:
+        specifier: ~57.0.14
+        version: 57.0.14(typescript@6.0.3)
       expo-notifications:
         specifier: ~57.0.25
         version: 57.0.25(expo@57.0.27)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
@@ -7431,7 +7434,7 @@ snapshots:
 
   '@expo/image-utils@0.11.6(typescript@6.0.3)':
     dependencies:
-      '@expo/require-utils': 57.0.6(typescript@6.0.3)
+      '@expo/require-utils': 57.0.7(typescript@6.0.3)
       '@expo/spawn-async': 1.8.0
       chalk: 4.1.2
       getenv: 2.0.0
@@ -9963,7 +9966,7 @@ snapshots:
 
   expo-modules-autolinking@57.0.14(typescript@6.0.3):
     dependencies:
-      '@expo/require-utils': 57.0.6(typescript@6.0.3)
+      '@expo/require-utils': 57.0.7(typescript@6.0.3)
       '@expo/spawn-async': 1.8.0
       chalk: 4.1.2
       commander: 7.2.0

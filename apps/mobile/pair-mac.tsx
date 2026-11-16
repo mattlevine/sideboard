@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { hostedPushRelay } from './push-plan';
 import { Brand } from './phone-chrome';
 import { PairScan } from './pair-scan';
 import { palette, styles } from './styles';
@@ -105,6 +106,9 @@ export function PairMacScreen({
             value={relayUrl}
             onChangeText={onChangeRelay}
           />
+          {relayUrl.trim() && !hostedPushRelay(relayUrl) ? (
+            <Text style={styles.hint}>Push messages are not supported on a custom relay.</Text>
+          ) : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable
             style={[styles.primary, !code.trim() && styles.primaryDisabled]}

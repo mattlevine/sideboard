@@ -1,3 +1,19 @@
+const EXPO_TOKEN = /^(?:Exponent|Expo)PushToken\[[A-Za-z0-9_-]{8,140}\]$/;
+const HOSTED_RELAY = 'relay.sideboard.build';
+
+export function isExpoPushToken(value: string): boolean {
+  return EXPO_TOKEN.test(value);
+}
+
+/** Push is sent only by Sideboard's relay. A custom relay has no push key. */
+export function hostedPushRelay(url: string): boolean {
+  try {
+    return new URL(url).hostname === HOSTED_RELAY;
+  } catch {
+    return false;
+  }
+}
+
 export function sessionTokensForPush(
   desktops: Array<{ sessionToken: string; notify?: boolean }>,
 ): string[] {

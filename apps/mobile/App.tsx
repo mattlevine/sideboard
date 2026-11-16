@@ -65,7 +65,7 @@ import {
   togglePhoneTagFilter,
 } from './sidebar-filter';
 import { palette, styles } from './styles';
-import { usePhonePush } from './push';
+import { hostedPushRelay, usePhonePush } from './push';
 import { parseServer } from './server-message';
 import { useTransientError } from './transient-error';
 import { composerOptionsFor, type PhoneAccountDefaults } from './account-defaults';
@@ -1333,6 +1333,7 @@ export default function App() {
         onChoose={choose}
         onForget={forget}
         onToggleNotify={toggleNotify}
+        pushSupported={hostedPushRelay(relay.url)}
         onPair={() => {
           setError(null);
           setScreen('pair');

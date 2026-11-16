@@ -91,13 +91,21 @@ Human at a real terminal: `pnpm release patch mac` is still fine for the Electro
 
 ## Phone (when they asked for a phone release)
 
-The iOS app is `apps/mobile` (Expo). A desktop `v*` tag does not build it. After the release commit is the tree you want in the binary, start one production build and let EAS submit it to App Store Connect. Detach it (`/long-running`); a cloud build plus submit takes longer than a turn.
+The iOS app is `apps/mobile` (Expo). A desktop `v*` tag does not build it. After the release commit is the tree you want in the binary, start one production build and let EAS submit it to App Store Connect. `eas.json` `production` auto-increments the iOS build number (`appVersionSource: remote`) and submits with App Store Connect app `6820766038`. Do not start a second build for the same cut. `eas whoami` must already be `matthewklevine`.
+
+The first build that ships push (`expo-notifications` in `app.json`) creates the Apple Push Notifications key. There is no key yet. Do not pass `--non-interactive` and do not detach it: EAS has to ask, and the Apple login needs a person at the terminal. From `apps/mobile`, run:
+
+```bash
+npx eas-cli build --platform ios --profile production --auto-submit
+```
+
+Answer yes to both: set up Push Notifications for this project, and generate a new Apple Push Notifications service key. The Apple account has to be an Account Holder or Admin for `cloud.sideboard.mobile`. EAS stores the key on the Expo project. The relay never sees it.
+
+After that key exists, later phone builds detach and stay non-interactive. Run this from the repo root:
 
 ```bash
 node scripts/detached-job.cjs start eas-ios -- bash -lc 'cd apps/mobile && npx eas-cli build --platform ios --profile production --non-interactive --auto-submit --wait'
 ```
-
-Run that from the repo root so the job id is visible to `wait_for_job`. `eas.json` `production` auto-increments the iOS build number (`appVersionSource: remote`) and submits with App Store Connect app `6820766038`. Do not start a second build for the same cut. `eas whoami` must already be `matthewklevine`.
 
 ## `@cursor/sdk` (user-installed)
 

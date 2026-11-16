@@ -77,8 +77,6 @@ Rules:
 
 Depends on item 1. A push needs the signed build with the push entitlement.
 
-Push goes through Sideboard's relay only. There is no relay a user deploys, so there is no second place that would need Sideboard's push key. A phone on the same network can still talk to the Mac directly (`sideboard serve --lan`). That path has no public server and no push.
-
 **Done when** a locked phone shows the alert while the app is closed, and tapping it opens that chat.
 
 ### 3. Correct the comparison
@@ -188,7 +186,6 @@ Orca's tasks carry status and gates. Sideboard's plans carry dependencies.
 - **A Sideboard agent or model.** Agents stay plugs.
 - **A Windows or Linux desktop app** before the Linux host in item 6 exists.
 - **A hosted control plane that requires an account.** The local stdio MCP is the difference from Superset and Conductor. The phone relay is the one hosted piece, and it only forwards ciphertext.
-- **A relay you deploy yourself.** One relay, Sideboard's. The Settings field and [self-hosted-relay.md](self-hosted-relay.md) stay until a removal pass. New work does not add to them.
 - **YAML pipelines.** Recurring method stays a committed skill.
 
 ## Decided
@@ -198,7 +195,6 @@ Orca's tasks carry status and gates. Sideboard's plans carry dependencies.
 - **Machines you own.** Sideboard moves from "always this Mac" to "always machines you own." Item 6.
 - **Agent Client Protocol.** Sideboard adds the adapter. Item 7. An ACP harness ships without `attach`.
 - **Push notifications on the phone.** Item 2. No message text in a push. Push goes through Sideboard's relay only.
-- **No custom relay.** A user does not deploy their own. Same-network `sideboard serve --lan` stays.
 
 ## Open decisions
 

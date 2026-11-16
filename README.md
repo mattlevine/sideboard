@@ -398,7 +398,7 @@ A phone can pair with more than one Mac. Name each one in **Settings → Remote*
 
 Send `stop` to cancel the in-progress turn. When the coordinator calls `ask_user`, the phone shows the options.
 
-**Settings → Remote → Relay** is the phone relay for this Mac. The phone uses `wss://host/remote`. Leave it blank for Sideboard’s relay. Slack sign-in and Listen stay on Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Steps to deploy the phone relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
+**Settings → Remote → Relay** is the phone relay for this Mac. The phone uses `wss://host/remote`. Leave it blank for Sideboard’s relay. Slack sign-in and Listen stay on Sideboard’s relay. A saved URL wins over `SIDEBOARD_REMOTE_RELAY_URL` (that variable applies only when the field is empty; default `wss://relay.sideboard.build/remote`). Push messages are not supported on a custom relay. Steps to deploy the phone relay: [docs/self-hosted-relay.md](docs/self-hosted-relay.md).
 
 The phone project is `apps/mobile`. The Run menu’s **Mobile** entry starts Metro and opens the iOS Simulator when that app is installed. If Simulator.app is missing, Metro stays up and Expo Go opens on a simulator that is already booted. Pair from **Settings → Remote**.
 

@@ -2,7 +2,7 @@
 
 The phone app talks to the Mac through a relay. The phone and this Mac encrypt the session. The relay forwards ciphertext. Agents, repos, and secrets stay on the Mac.
 
-Sideboard hosts a relay at `wss://relay.sideboard.build/remote`. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website.
+Sideboard hosts a relay at `wss://relay.sideboard.build/remote`. You can run your own and point the desktop and the phone at it. That service is the relay only: the phone and desktop connection, GitHub sign-in, and the account database. It does not serve this website. Push messages are not supported on a custom relay.
 
 **Settings → Remote** changes the phone only. Slack sign-in and Listen stay on Sideboard’s relay. Running Slack on a relay you operate is a separate Slack app, not these steps, and not a pasted bot token. Add a team with **Add via browser**.
 
