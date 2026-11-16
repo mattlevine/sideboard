@@ -153,8 +153,10 @@ import {
 } from '../lib/panel-widths';
 import {
   dropRemovedFollowUp,
+  extendsOpenUserMessage,
   extraPendingFollowUps,
   joinsClaimedBefore,
+  openUserText,
   pendingSnapshotChanged,
   attachmentsOnPendingBubble,
   pendingTranscriptTexts,
@@ -1178,6 +1180,13 @@ export function ThreadPanel({
   const { currentTurnPrompt: currentTurnFromQueue, followUps: followUpQueue } =
     splitTurnQueue(thread.queue, thread.status, turnBusy);
   const queueIndexOffset = currentTurnFromQueue ? 1 : 0;
+  // A steer that joined onto the open prompt is queued as `A\nB`. That row is
+  // a follow-up, not another bubble under the transcript.
+  const steerFollowUp =
+    currentTurnFromQueue && extendsOpenUserMessage(currentTurnFromQueue, thread.messages)
+      ? currentTurnFromQueue
+      : null;
+  const dockFollowUps = steerFollowUp ? [steerFollowUp, ...followUpQueue] : followUpQueue;
 
   const pendingNotLanded =
     pendingUser &&
@@ -1227,10 +1236,13 @@ export function ThreadPanel({
     ],
     pendingFollowUpsLive,
   );
+  const openShown = openUserText(thread.messages);
+  const dockFollowUpVisible = (text: string) =>
+    !shownInTranscript.has(text) && text !== openShown;
   const showQueueDock =
-    followUpQueue.some((text) => !shownInTranscript.has(text)) ||
-    Boolean(pendingQueue && !shownInTranscript.has(pendingQueue)) ||
-    optimisticFollowUps.some((item) => !shownInTranscript.has(item.text));
+    dockFollowUps.some((text) => dockFollowUpVisible(text)) ||
+    Boolean(pendingQueue && dockFollowUpVisible(pendingQueue)) ||
+    optimisticFollowUps.some((item) => dockFollowUpVisible(item.text));
 
   function pickAutocomplete(item: AutocompleteItem) {
     if (!acQuery) return;
@@ -2508,9 +2520,10 @@ export function ThreadPanel({
           >
             <div className="queued-messages-label">Queued</div>
             <div className="queued-messages-list">
-              {followUpQueue.map((text, i) => {
-                const queueIndex = i + queueIndexOffset;
-                if (shownInTranscript.has(text)) return null;
+              {dockFollowUps.map((text, i) => {
+                const queueIndex = steerFollowUp ? i : i + queueIndexOffset;
+                if (!dockFollowUpVisible(text)) return null;
+                if (optimisticFollowUps.some((item) => text.endsWith(`\n${item.text}`))) return null;
                 return (
                 <div
                   key={`queued-${queueIndex}`}
@@ -2620,7 +2633,7 @@ export function ThreadPanel({
                 </div>
                 );
               })}
-              {pendingQueue && !shownInTranscript.has(pendingQueue) && (
+              {pendingQueue && dockFollowUpVisible(pendingQueue) && (
                 <div className="queued-msg pending">
                   {pendingAttachments.length > 0 && (
                     <ComposerAttachmentChips
@@ -2634,7 +2647,7 @@ export function ThreadPanel({
                 </div>
               )}
               {optimisticFollowUps
-                .filter((item) => !shownInTranscript.has(item.text))
+                .filter((item) => dockFollowUpVisible(item.text))
                 .map((item) => (
                 <div key={item.id} className="queued-msg pending">
                   {(item.attachments?.length ?? 0) > 0 && (
