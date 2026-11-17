@@ -76,6 +76,25 @@ function rebuildBetterSqlite3ForBundledNode(nodeBin) {
       `stage-sideboard-mcp: better-sqlite3 bundled-node rebuild failed:\n${result.stdout || ''}${result.stderr || ''}`,
     );
   }
+  // node-gyp leaves Mach-O .o files under obj.target. codesign --timestamp
+  // rejects them ("A timestamp was expected but was not found") and fails the pack.
+  pruneSqliteObjects(sqliteDir);
+}
+
+function pruneSqliteObjects(sqliteDir) {
+  fs.rmSync(path.join(sqliteDir, 'build', 'Release', 'obj.target'), { recursive: true, force: true });
+  fs.rmSync(path.join(sqliteDir, 'build', 'Release', '.deps'), { recursive: true, force: true });
+  const buildDir = path.join(sqliteDir, 'build');
+  if (!fs.existsSync(buildDir)) return;
+  const stack = [buildDir];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else if (entry.name.endsWith('.o')) fs.rmSync(full);
+    }
+  }
 }
 
 function assertIsolatedMcpLoads(nodeBin) {
