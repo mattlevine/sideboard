@@ -631,16 +631,7 @@ export type AgentEvent =
 export type OrchestratorEvent =
   | { type: 'turn_started'; threadId: string; prompt: string }
   | { type: 'turn_output'; threadId: string; event: AgentEvent }
-  | {
-      type: 'turn_finished';
-      threadId: string;
-      exitCode: number | null;
-      /**
-       * The user stopped this turn (Stop, or a new message that replaced it).
-       * Not a finish or a failure — phone and desktop alerts stay quiet.
-       */
-      routineStop?: boolean;
-    }
+  | { type: 'turn_finished'; threadId: string; exitCode: number | null; routineStop?: boolean }
   | { type: 'status_changed'; threadId: string; status: ThreadStatus }
   | { type: 'queue_changed'; threadId: string; queue: string[] }
   | { type: 'context_compacted';
