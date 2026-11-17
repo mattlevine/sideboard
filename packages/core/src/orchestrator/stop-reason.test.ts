@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRoutineStopNote, reasonToKeepOnStop, resolveStopReason } from './stop-reason.js';
+import { isRoutineStopNote, reasonToKeepOnStop, resolveStopReason, turnFinishedEvent } from './stop-reason.js';
 
 describe('stop reasons', () => {
   it('names the stop kind when nobody passed a note', () => {
@@ -21,5 +21,11 @@ describe('stop reasons', () => {
     expect(isRoutineStopNote(resolveStopReason({ continueQueue: true }))).toBe(true);
     expect(isRoutineStopNote('Stopped')).toBe(true);
     expect(isRoutineStopNote('context limit')).toBe(false);
+  });
+
+  it('marks a user stop so alerts stay quiet, and leaves a real failure alone', () => {
+    expect(turnFinishedEvent('chat-1', 143, true, 'Stopped to send the next prompt').routineStop).toBe(true);
+    expect(turnFinishedEvent('chat-1', 1, true, 'context limit').routineStop).toBeUndefined();
+    expect(turnFinishedEvent('chat-1', 1, false, 'Process died (agent exited)').routineStop).toBeUndefined();
   });
 });

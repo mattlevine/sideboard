@@ -73,6 +73,24 @@ describe('push alerts', () => {
     ).toEqual([{ chatId: 'chat-9999', kind: 'failed' }]);
   });
 
+  it('stays quiet when the user stopped the turn, including to send the next message', () => {
+    const ids = new Set(['chat-1234']);
+    expect(
+      pushNotes({
+        event: { type: 'turn_finished', threadId: 'chat-9999', exitCode: 143, routineStop: true },
+        before: ids,
+        after: ids,
+      }),
+    ).toEqual([]);
+    expect(
+      pushNotes({
+        event: { type: 'turn_finished', threadId: 'chat-9999', exitCode: 0, routineStop: true },
+        before: ids,
+        after: ids,
+      }),
+    ).toEqual([]);
+  });
+
   it('does not repeat a needs-you that is already showing', () => {
     const ids = new Set(['chat-1234']);
     expect(pushNotes({ event: null, before: ids, after: ids })).toEqual([]);
@@ -149,6 +167,8 @@ describe('startPhonePushWatch', () => {
       subscribe: () => () => undefined,
     });
     listener?.({ type: 'turn_finished', threadId: 'chat-9999', exitCode: 0 });
+    expect(notes).toEqual([{ chatId: 'chat-9999', kind: 'finished' }]);
+    listener?.({ type: 'turn_finished', threadId: 'chat-9999', exitCode: 143, routineStop: true });
     expect(notes).toEqual([{ chatId: 'chat-9999', kind: 'finished' }]);
     stop();
   });

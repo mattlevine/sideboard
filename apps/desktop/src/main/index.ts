@@ -896,7 +896,7 @@ function setupNotifications(): void {
       event.threadId === visibleThreadId;
     if (watching || !Notification.isSupported()) return;
 
-    if (event.type === 'turn_finished') {
+    if (event.type === 'turn_finished' && !event.routineStop) {
       new Notification({
         title: 'Sideboard',
         body: `Turn finished (${event.threadId.slice(0, 8)})`,

@@ -78,9 +78,13 @@ describe('Orchestrator stop during compact', () => {
     );
 
     const orch = new Orchestrator();
-    const events: Array<{ type: string; threadId?: string }> = [];
+    const events: Array<{ type: string; threadId?: string; routineStop?: boolean }> = [];
     orch.on((e) => {
-      events.push({ type: e.type, threadId: 'threadId' in e ? e.threadId : undefined });
+      events.push({
+        type: e.type,
+        threadId: 'threadId' in e ? e.threadId : undefined,
+        ...(e.type === 'turn_finished' ? { routineStop: e.routineStop } : {}),
+      });
     });
     const internal = orch as unknown as {
       runTurn: (threadId: string, prompt: string) => Promise<void>;
@@ -102,6 +106,8 @@ describe('Orchestrator stop during compact', () => {
       true,
     );
     expect(events.some((e) => e.type === 'turn_started' && e.threadId === thread.id)).toBe(true);
-    expect(events.some((e) => e.type === 'turn_finished' && e.threadId === thread.id)).toBe(true);
+    expect(events.some((e) => e.type === 'turn_finished' && e.threadId === thread.id && e.routineStop)).toBe(
+      true,
+    );
   });
 });

@@ -127,7 +127,7 @@ import {
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
 import { settleChildReportAfterTurn } from './child-report.js';
-import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
+import { resolveStopReason, turnFinishedEvent, writeStoppedStatus } from './stop-reason.js';
 import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
   archiveEphemeralAutomationIfReady,
@@ -753,7 +753,7 @@ export class Orchestrator {
       if (!this.shouldReclaimRunningThread(thread)) continue;
       setStatus(thread.id, 'stopped', 'Process died (agent exited)');
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
-      this.emit({ type: 'turn_finished', threadId: thread.id, exitCode: 1 });
+      this.emit(turnFinishedEvent(thread.id, 1, this.stoppedTurns.has(thread.id), readThread(thread.id)?.lastError));
       const latest = readThread(thread.id);
       if (latest) {
         notifyParentOfChildHalt(latest, 'stopped', (id, prompt) => this.send(id, prompt));
@@ -1435,7 +1435,7 @@ export class Orchestrator {
       if (stopped?.status === 'stopped') {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
       }
-      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      this.emit(turnFinishedEvent(threadId, 1, this.stoppedTurns.has(threadId), readThread(threadId)?.lastError));
       return;
     }
 
@@ -2024,7 +2024,7 @@ export class Orchestrator {
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode });
+        this.emit(turnFinishedEvent(threadId, exitCode, this.stoppedTurns.has(threadId), readThread(threadId)?.lastError));
       } else {
         const failDetail = formatTurnExitError(exitCode, detail);
         // When the agent bubble already shows the session/rate-limit (or similar)
@@ -2048,7 +2048,7 @@ export class Orchestrator {
             status: written.status,
           });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode });
+        this.emit(turnFinishedEvent(threadId, exitCode, this.stoppedTurns.has(threadId), readThread(threadId)?.lastError));
         if (exitCode === 0) {
           this.crashContinued.delete(threadId);
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
@@ -2085,14 +2085,14 @@ export class Orchestrator {
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+        this.emit(turnFinishedEvent(threadId, 1, this.stoppedTurns.has(threadId), readThread(threadId)?.lastError));
       } else {
         const written = writeLiveStatus(threadId, 'error', message);
         if (written?.status === 'error') {
           this.emit({ type: 'error', threadId, message });
           this.emit({ type: 'status_changed', threadId, status: 'error' });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+        this.emit(turnFinishedEvent(threadId, 1, this.stoppedTurns.has(threadId), readThread(threadId)?.lastError));
         const failedOver = await isolateQuotaFailover(() =>
           this.maybeHandleOrchestrationQuotaFailover(threadId, message),
         );
@@ -2150,9 +2150,7 @@ export class Orchestrator {
       this.activeTurns.has(thread.id) || this.startingTurns.has(thread.id);
     // Only sticky-mark when a turn is in flight — otherwise a later send/runTurn
     // would inherit a stale stop and treat a normal finish as intentional stop.
-    if (inFlight) {
-      this.stoppedTurns.add(thread.id);
-    }
+    if (inFlight) this.stoppedTurns.add(thread.id);
     if (clearQueue && thread.queue.length > 0) {
       this.haltDrain.delete(thread.id);
       updateThread(thread.id, { queue: [], queueAttachments: [] });
@@ -2163,6 +2161,7 @@ export class Orchestrator {
     } else if (continueQueue) {
       this.haltDrain.delete(thread.id);
     }
+    let stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
     const handle = this.activeTurns.get(thread.id);
     if (handle) handle.kill();
     const proc = this.processes.get(`${thread.id}:agent`);
@@ -2183,12 +2182,12 @@ export class Orchestrator {
         }
       }
     }
-    const stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
+    stopped = readThread(thread.id) ?? stopped;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
-      // Idle stop (archive, leftover status) is not a mid-turn death.
+      // Idle stop is not a mid-turn death. A new message is not a halt either.
       // MCP force_stop / stop_chat pass notifyParent: false — the caller already knows.
-      if (inFlight && opts?.notifyParent !== false) {
+      if (inFlight && opts?.notifyParent !== false && !continueQueue) {
         notifyParentOfChildHalt(stopped, 'stopped', (id, prompt) => this.send(id, prompt));
       }
     }

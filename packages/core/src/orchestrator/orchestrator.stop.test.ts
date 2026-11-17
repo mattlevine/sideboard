@@ -275,6 +275,29 @@ describe('Orchestrator.stop force-stop', () => {
     expect(drainQueue).toHaveBeenCalledWith(parent.id);
   });
 
+  it('does not tell the parent when a new message stops the live turn', () => {
+    const { child } = seedOrchChild();
+    const orch = new Orchestrator();
+    const send = vi.spyOn(orch, 'send');
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+    };
+    internal.activeTurns.set(child.id, {
+      pid: 1,
+      kill: () => undefined,
+      done: Promise.resolve({
+        exitCode: 143,
+        sessionId: null,
+        assistantText: '',
+        parts: [],
+        usage: null,
+      }),
+    });
+    orch.stop(child.id, { clearQueue: false, continueQueue: true });
+    expect(send).not.toHaveBeenCalled();
+    expect(readThread(child.id)?.lastError).toBe('Stopped to send the next prompt');
+  });
+
   it('does not notify the parent when MCP force_stop already owns the interrupt', () => {
     const { child } = seedOrchChild();
     const orch = new Orchestrator();

@@ -1,5 +1,5 @@
 import { readThread, setStatus } from '../store/thread-store.js';
-import type { Thread } from '../types/thread.js';
+import type { OrchestratorEvent, Thread } from '../types/thread.js';
 
 /** Cap so a stop note stays a label, not a transcript. */
 const STOP_REASON_MAX = 500;
@@ -45,6 +45,26 @@ export function reasonToKeepOnStop(
   const prior = existing?.trim();
   if (prior) return prior.slice(0, STOP_REASON_MAX);
   return 'Stopped';
+}
+
+/**
+ * A user stop is not a finish. `routineStop` keeps phone and desktop alerts
+ * quiet, including when a new message killed the turn (often a non-zero exit).
+ */
+export function turnFinishedEvent(
+  threadId: string,
+  exitCode: number | null,
+  userStopped: boolean,
+  lastError?: string | null,
+): Extract<OrchestratorEvent, { type: 'turn_finished' }> {
+  const note = lastError?.trim() ?? '';
+  const routineStop = userStopped && (note.length === 0 || isRoutineStopNote(note));
+  return {
+    type: 'turn_finished',
+    threadId,
+    exitCode,
+    ...(routineStop ? { routineStop: true } : {}),
+  };
 }
 
 /** Mark a thread stopped and keep the note across the later turn unwind. */

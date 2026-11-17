@@ -55,7 +55,8 @@ export function expoPushMessage(input: {
 
 /**
  * New "needs you" chats, plus a finished or failed turn that is not itself
- * a new needs-you (that alert is the one that matters).
+ * a new needs-you (that alert is the one that matters). A turn the user
+ * stopped, including by sending the next message, is not an alert.
  */
 export function pushNotes(input: {
   event: OrchestratorEvent | null;
@@ -71,6 +72,9 @@ export function pushNotes(input: {
   }
   const event = input.event;
   if (!event || (event.type !== 'turn_finished' && event.type !== 'error')) return notes;
+  // Stop, or a new message that replaced the turn, is not news. A real
+  // finish or failure (context limit, process died) still alerts.
+  if (event.type === 'turn_finished' && event.routineStop) return notes;
   if (fresh.has(event.threadId)) return notes;
   const finished = event.type === 'turn_finished' && (event.exitCode === 0 || event.exitCode == null);
   notes.push({ chatId: event.threadId, kind: finished ? 'finished' : 'failed' });
