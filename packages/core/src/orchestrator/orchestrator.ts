@@ -127,7 +127,7 @@ import {
   shouldNotifyParentAfterTurnError,
 } from './child-halt.js';
 import { settleChildReportAfterTurn } from './child-report.js';
-import { resolveStopReason, writeStoppedStatus } from './stop-reason.js';
+import { isRoutineStopNote, resolveStopReason, writeStoppedStatus } from './stop-reason.js';
 import { claimSteerRequest, isUnclaimedSteerRequest, nextSteerRequest } from './steer-request.js';
 import {
   archiveEphemeralAutomationIfReady,
@@ -421,6 +421,21 @@ export class Orchestrator {
 
   private emit(event: OrchestratorEvent): void {
     this.events.emit('event', event);
+  }
+
+  /**
+   * A turn the user stopped — Stop, or a new message that took its place —
+   * is not a finish. Alerts key off `routineStop` so that kill does not ping.
+   */
+  private emitTurnFinished(threadId: string, exitCode: number | null): void {
+    const routineStop =
+      this.stoppedTurns.has(threadId) && isRoutineStopNote(readThread(threadId)?.lastError);
+    this.emit({
+      type: 'turn_finished',
+      threadId,
+      exitCode,
+      ...(routineStop ? { routineStop: true } : {}),
+    });
   }
 
   /** True when disk says running but this process is not actually turning. */
@@ -753,7 +768,7 @@ export class Orchestrator {
       if (!this.shouldReclaimRunningThread(thread)) continue;
       setStatus(thread.id, 'stopped', 'Process died (agent exited)');
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
-      this.emit({ type: 'turn_finished', threadId: thread.id, exitCode: 1 });
+      this.emitTurnFinished(thread.id, 1);
       const latest = readThread(thread.id);
       if (latest) {
         notifyParentOfChildHalt(latest, 'stopped', (id, prompt) => this.send(id, prompt));
@@ -1435,7 +1450,7 @@ export class Orchestrator {
       if (stopped?.status === 'stopped') {
         this.emit({ type: 'status_changed', threadId, status: 'stopped' });
       }
-      this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+      this.emitTurnFinished(threadId, 1);
       return;
     }
 
@@ -2024,7 +2039,7 @@ export class Orchestrator {
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode });
+        this.emitTurnFinished(threadId, exitCode);
       } else {
         const failDetail = formatTurnExitError(exitCode, detail);
         // When the agent bubble already shows the session/rate-limit (or similar)
@@ -2048,7 +2063,7 @@ export class Orchestrator {
             status: written.status,
           });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode });
+        this.emitTurnFinished(threadId, exitCode);
         if (exitCode === 0) {
           this.crashContinued.delete(threadId);
           this.maybeEnqueueJobContinue(threadId, chatText, parts);
@@ -2085,14 +2100,14 @@ export class Orchestrator {
         if (stopped?.status === 'stopped') {
           this.emit({ type: 'status_changed', threadId, status: 'stopped' });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+        this.emitTurnFinished(threadId, 1);
       } else {
         const written = writeLiveStatus(threadId, 'error', message);
         if (written?.status === 'error') {
           this.emit({ type: 'error', threadId, message });
           this.emit({ type: 'status_changed', threadId, status: 'error' });
         }
-        this.emit({ type: 'turn_finished', threadId, exitCode: 1 });
+        this.emitTurnFinished(threadId, 1);
         const failedOver = await isolateQuotaFailover(() =>
           this.maybeHandleOrchestrationQuotaFailover(threadId, message),
         );
@@ -2163,6 +2178,9 @@ export class Orchestrator {
     } else if (continueQueue) {
       this.haltDrain.delete(thread.id);
     }
+    // Record the reason before kill. A runner that unwinds inside kill()
+    // must already see a routine stop, or the phone treats the kill as a failure.
+    let stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
     const handle = this.activeTurns.get(thread.id);
     if (handle) handle.kill();
     const proc = this.processes.get(`${thread.id}:agent`);
@@ -2183,12 +2201,13 @@ export class Orchestrator {
         }
       }
     }
-    const stopped = writeStoppedStatus(thread.id, resolveStopReason(opts)) ?? readThread(thread.id) ?? thread;
+    stopped = readThread(thread.id) ?? stopped;
     if (stopped.status === 'stopped') {
       this.emit({ type: 'status_changed', threadId: thread.id, status: 'stopped' });
       // Idle stop (archive, leftover status) is not a mid-turn death.
       // MCP force_stop / stop_chat pass notifyParent: false — the caller already knows.
-      if (inFlight && opts?.notifyParent !== false) {
+      // Sending the next prompt stops the live turn on purpose; that is not a halt.
+      if (inFlight && opts?.notifyParent !== false && !continueQueue) {
         notifyParentOfChildHalt(stopped, 'stopped', (id, prompt) => this.send(id, prompt));
       }
     }
