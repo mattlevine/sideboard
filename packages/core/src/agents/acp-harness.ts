@@ -47,7 +47,7 @@ export const ACP_HARNESSES: Record<AcpHarnessId, AcpHarnessSpec> = {
     loginCommand: 'copilot',
     docsUrl: 'https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server',
     authHint:
-      'Copilot CLI is on PATH but no GitHub token was found. Set GH_TOKEN / GITHUB_TOKEN / COPILOT_GITHUB_TOKEN, or run `copilot` once to sign in.',
+      'Copilot CLI is on PATH but no GitHub login was found. Run `gh auth login` or `copilot`, or set GH_TOKEN.',
   },
 };
 
@@ -92,14 +92,16 @@ function fileMentionsCredential(path: string): boolean {
 }
 
 /**
- * Local, non-interactive auth hint. Does not spawn the CLI (a login prompt
- * would hang detect). A miss means "we did not find a credential", not a
- * proof the CLI will reject the turn.
+ * Local auth hint. Does not spawn the harness (a login prompt would hang
+ * detect). Copilot also counts a logged-in `gh` when the caller has already
+ * checked `gh auth status` — macOS keeps that token in the keychain, so
+ * hosts.yml often has no `oauth_token`. A miss is "no credential found".
  */
 export function acpHarnessLooksAuthenticated(
   id: AcpHarnessId,
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
+  opts?: { ghLoggedIn?: boolean },
 ): boolean {
   if (id === 'gemini') {
     if (envSet(env, 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENAI_API_KEY')) return true;
@@ -109,10 +111,19 @@ export function acpHarnessLooksAuthenticated(
     );
   }
   if (envSet(env, 'COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN')) return true;
-  return (
+  if (
     fileMentionsCredential(join(home, '.copilot', 'config.json')) ||
     fileMentionsCredential(join(home, '.config', 'gh', 'hosts.yml'))
-  );
+  ) {
+    return true;
+  }
+  return opts?.ghLoggedIn === true;
+}
+
+/** `gh auth status` exits 0 for a keychain login as well as a token file. */
+async function copilotGhLoggedIn(): Promise<boolean> {
+  const status = await run('gh', ['auth', 'status'], { reject: false, timeoutMs: 5_000 });
+  return status.exitCode === 0;
 }
 
 export function acpHarnessStatus(input: {
@@ -121,6 +132,8 @@ export function acpHarnessStatus(input: {
   binPath: string | null;
   env?: NodeJS.ProcessEnv;
   home?: string;
+  /** True when `gh auth status` already succeeded (keychain login). */
+  ghLoggedIn?: boolean;
 }): AgentStatus {
   const spec = ACP_HARNESSES[input.id];
   if (!input.binPath) {
@@ -139,6 +152,7 @@ export function acpHarnessStatus(input: {
     input.id,
     input.env ?? process.env,
     input.home ?? homedir(),
+    { ghLoggedIn: input.ghLoggedIn },
   );
   return {
     agent: 'acp',
@@ -168,7 +182,11 @@ export async function detectAcpHarness(id: AcpHarnessId): Promise<AgentStatus> {
   const spec = ACP_HARNESSES[id];
   const which = await run('which', [spec.bin], { reject: false, timeoutMs: 3_000 });
   const file = which.exitCode === 0 ? which.stdout.trim().split('\n')[0]?.trim() ?? '' : '';
-  return acpHarnessStatus({ id, binPath: file || null });
+  const ghLoggedIn =
+    id === 'copilot' && file && !acpHarnessLooksAuthenticated(id)
+      ? await copilotGhLoggedIn()
+      : false;
+  return acpHarnessStatus({ id, binPath: file || null, ghLoggedIn });
 }
 
 export async function detectAcpHarnesses(): Promise<AgentStatus[]> {

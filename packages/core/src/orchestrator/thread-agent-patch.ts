@@ -22,8 +22,10 @@ export function applyThreadAgentPatch(
     agent !== thread.agent || (agent === 'acp' && harness !== (thread.acpHarness ?? null));
   if (providerChanged) {
     if (thread.messages.length > 0) {
+      const from = thread.agent === 'acp' ? (thread.acpHarness === 'copilot' ? 'copilot' : 'gemini') : thread.agent;
+      const to = agent === 'acp' ? (harness === 'copilot' ? 'copilot' : 'gemini') : agent;
       throw new Error(
-        `Cannot switch agent provider mid-chat (${thread.agent} → ${agent}). Start a new chat tab instead.`,
+        `Cannot switch agent provider mid-chat (${from} → ${to}). Start a new chat tab instead.`,
       );
     }
     if (isOrchestratorThread(thread)) assertOrchestratorCapableAgent(agent);

@@ -257,6 +257,7 @@ export function CreateModal({
           {
             ...prev,
             agent: defaults.agent,
+            acpHarness: defaults.agent === 'acp' ? (defaults.acpHarness ?? 'gemini') : null,
             model: defaults.model,
             effort: defaults.effort,
             fast: defaults.fast,
@@ -378,14 +379,15 @@ export function CreateModal({
         setOptions((prev) =>
           coerceOptionsForMode(
             {
-              ...prev,
-              agent: defaults.agent,
-              model: defaults.model,
-              effort: defaults.effort,
-              fast: defaults.fast,
-              autonomy: defaults.autonomy,
-            },
-            next,
+            ...prev,
+            agent: defaults.agent,
+            acpHarness: defaults.agent === 'acp' ? (defaults.acpHarness ?? 'gemini') : null,
+            model: defaults.model,
+            effort: defaults.effort,
+            fast: defaults.fast,
+            autonomy: defaults.autonomy,
+          },
+          next,
           ),
         );
       },

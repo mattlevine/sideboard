@@ -108,6 +108,14 @@ describe('ACP session updates', () => {
     expect(
       sessionUpdateToEvents({
         update: {
+          sessionUpdate: 'user_message_chunk',
+          content: { type: 'text', text: 'echo' },
+        },
+      }),
+    ).toEqual([]);
+    expect(
+      sessionUpdateToEvents({
+        update: {
           sessionUpdate: 'agent_thought_chunk',
           content: { type: 'text', text: 'hmm' },
         },
@@ -172,6 +180,11 @@ describe('ACP harness detect', () => {
     mkdirSync(join(ghHome, '.config', 'gh'), { recursive: true });
     writeFileSync(join(ghHome, '.config', 'gh', 'hosts.yml'), 'oauth_token: secret\n');
     expect(acpHarnessLooksAuthenticated('copilot', {}, ghHome)).toBe(true);
+    const keychainHome = mkdtempSync(join(tmpdir(), 'acp-keychain-'));
+    expect(acpHarnessLooksAuthenticated('copilot', {}, keychainHome)).toBe(false);
+    expect(acpHarnessLooksAuthenticated('copilot', {}, keychainHome, { ghLoggedIn: true })).toBe(
+      true,
+    );
   });
 
   it('hides attach', () => {

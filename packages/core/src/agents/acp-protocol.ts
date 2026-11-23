@@ -180,7 +180,8 @@ export function sessionUpdateToEvents(params: unknown): AgentEvent[] {
   const update = asRecord(root?.update) ?? root;
   if (!update) return [];
   const kind = typeof update.sessionUpdate === 'string' ? update.sessionUpdate : '';
-  if (kind === 'agent_message_chunk' || kind === 'user_message_chunk') {
+  if (kind === 'user_message_chunk') return [];
+  if (kind === 'agent_message_chunk') {
     const text = acpContentToText(update.content);
     return text ? [{ type: 'stdout', data: text }] : [];
   }
