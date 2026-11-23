@@ -110,9 +110,7 @@ Done 2026-11-22 in [COMPARE.md](COMPARE.md), the homepage, and [/docs/compare/](
 
 ### 4. Forget a Mac on the relay
 
-An account can register 3 Macs. A slot stays taken after a reinstall or a replaced Mac, and the fourth Mac is refused. The relay guide says "There is no forget control yet."
-
-- **Done when** Settings → Remote lists this account's Macs and can remove one.
+Done. Settings → Remote lists this account’s Macs and can remove one. Forgetting a Mac frees its slot under the 3-Mac cap. Forgetting this Mac also signs it out. A Mac that is still signed in registers again the next time it connects.
 
 ## Next — first quarter of 2027
 

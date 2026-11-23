@@ -5,6 +5,7 @@ import {
   type RemoteHostSummary,
   type RemoteServerMessage,
 } from './protocol.js';
+import { dropForgottenMac } from './hub-forget.js';
 import { expoPushMessage, MemoryPushTokens, type PushKind, type PushTokenStore } from './push.js';
 
 export interface RemoteSocket {
@@ -117,6 +118,10 @@ export class RemoteHub {
       return;
     }
     this.dispatch(socket, msg);
+  }
+
+  forgetDevice(deviceId: string): void {
+    dropForgottenMac(deviceId, this.hosts, this.remembered, this.codes, this.phonesByToken, this.bySocket, this.pushTokenBySocket);
   }
 
   detachSocket(socket: RemoteSocket): void {

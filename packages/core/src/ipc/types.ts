@@ -65,7 +65,7 @@ import type { OrderIpc } from './order-api.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesOptions, ListIssuesResult } from '../integrations/issues.js';
 import type { RelayAccountProvider } from '../relay/account-oauth.js';
-
+import type { RemoteAccountIpc } from './remote-account-api.js';
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
 export interface CloudConnectStatus {
   enabled: boolean;
@@ -84,7 +84,7 @@ import type { SlackOrgIpc } from './slack-org.js';
 import type { WorktreeOpener, WorktreeOpenerId } from './worktree-opener.js';
 export type { WorktreeOpener, WorktreeOpenerId };
 
-export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
+export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc, RemoteAccountIpc {
   detectAgents(): Promise<AgentStatus[]>;
   /** Install recipe + docs for Settings → Agents. */
   getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;
