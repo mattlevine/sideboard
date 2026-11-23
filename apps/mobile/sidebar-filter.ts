@@ -7,6 +7,7 @@
 export type SidebarChat = {
   title: string;
   agent?: string;
+  acpHarness?: string;
   preview?: string;
 };
 

@@ -244,23 +244,17 @@ function AgentSheet(props: {
   onClose: () => void;
   onChange: (next: ComposerOptions) => void;
 }) {
-  const agents = props.allowBrightsy
-    ? AGENTS
-    : AGENTS.filter((row) => row.id !== 'brightsy' && row.id !== 'acp');
+  const agents = AGENTS.filter((row) => props.allowBrightsy || (row.id !== 'brightsy' && row.id !== 'acp'));
   return (
     <Modal visible={props.open} animationType="slide" transparent onRequestClose={props.onClose}>
       <Pressable style={styles.backdrop} onPress={props.onClose}>
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <Text style={styles.sheetTitle}>Agent</Text>
           <View style={styles.wrap}>
-            {agents.map((agent) => {
-              const selected =
-                props.options.agent === agent.id &&
-                (agent.id !== 'acp' || (props.options.acpHarness ?? 'gemini') === agent.acpHarness);
-              return (
+            {agents.map((agent) => (
               <Pressable
                 key={agent.key}
-                style={[styles.chip, selected && styles.chipOn]}
+                style={[styles.chip, props.options.agent === agent.id && (agent.id !== 'acp' || (props.options.acpHarness ?? 'gemini') === agent.acpHarness) && styles.chipOn]}
                 onPress={() => {
                   props.onNeedModels(agent.id);
                   props.onChange({
@@ -275,8 +269,7 @@ function AgentSheet(props: {
                 <AgentKindIcon agent={agent.id} acpHarness={agent.acpHarness} />
                 <Text style={styles.chipText}>{agent.label}</Text>
               </Pressable>
-              );
-            })}
+            ))}
           </View>
           <Text style={styles.sheetLabel}>Model</Text>
           <ScrollView style={styles.modelList}>
