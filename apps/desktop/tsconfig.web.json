@@ -16,6 +16,7 @@
     "types": ["vite/client"],
     "paths": {
       "@sideboard/message-parts": ["../../packages/core/src/agents/message-parts.ts"],
+      "@sideboard/injected-notices": ["../../packages/core/src/threads/injected-notices.ts"],
       "@sideboard/usage": ["../../packages/core/src/agents/usage.ts"],
       "@sideboard/context-estimate": ["../../packages/core/src/composer/context-estimate.ts"],
       "@sideboard/worktree-labels": ["../../packages/core/src/git/worktree-labels.ts"],

@@ -1,3 +1,4 @@
+import type { ChatFollowUp } from '../threads/chat-follow-ups.js';
 import type { ThinkingEffort } from './thinking-effort.js';
 
 export type AgentKind = 'claude' | 'codex' | 'opencode' | 'brightsy' | 'cursor';
@@ -181,6 +182,11 @@ export interface Thread {
   prChecksFailed?: boolean;
   /** This checkout opts in to CI / review-request wakes. Off until set. */
   wakeOnGithubEdges?: boolean;
+  /**
+   * Follow-ups this chat registered for itself. `ci` sends when checks finish.
+   * `at` sends at a time. A running turn is not interrupted. Cap 10.
+   */
+  followUps?: ChatFollowUp[];
   /** Source-ticket blockers. Empty if none; absent until looked up. Not an agent block. */
   issueBlockedBy?: string[];
   /**

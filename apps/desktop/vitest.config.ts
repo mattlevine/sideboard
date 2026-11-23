@@ -11,6 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@sideboard/message-parts': core('agents/message-parts.ts'),
+      '@sideboard/injected-notices': core('threads/injected-notices.ts'),
       '@sideboard/usage': core('agents/usage.ts'),
       '@sideboard/claude-usage': core('agents/claude-usage.ts'),
       '@sideboard/usage-on-limit': core('store/usage-on-limit.ts'),

@@ -21,7 +21,7 @@ What is still Sideboard's:
 
 - A control plane that is local: stdio MCP and a CLI against this Mac's store, with no vendor account between the coordinator and the fleet.
 - One board and one orchestrator across Claude Code, Codex, OpenCode, and Cursor.
-- The checkout as the unit. Several chats share one worktree (`fork_chat`), where peers are one agent per checkout.
+- The checkout as the unit. Several chats share one worktree (`fork_chat`). Multica also checks out a worktree per run; its unit is the issue and the named agent.
 - The structure column: artifacts, a schema the agent invents rendered as a table or form, and files.
 - `attach` / `adopt`, so a session can leave the app.
 
@@ -30,13 +30,13 @@ What is still Sideboard's:
 | Gap | Who has it | What the repo shows |
 |-----|------------|---------------------|
 | A phone app people can install | Orca (App Store, Android APK), Conductor (iOS), ChatGPT and Claude apps | The site sells the phone app. It has no App Store, TestFlight, or Play link, and the docs start `apps/mobile` from source. `eas.json` has a production profile. |
-| A push when an agent needs you | Orca, Codex, Claude | `apps/mobile` has no notification library. **Needs you** shows only while the app is open. |
+| Push on a relay you host | Orca, Codex, Claude, Multica channels | The Sideboard relay pushes when a chat needs you, a turn finishes, or a chat fails. A custom relay does not. Alerts name the Mac and carry no message text. |
 | Agents keep working with the laptop closed | Orca and Emdash (SSH, your VPS), Codex (Remote SSH), Conductor / Cursor / Claude (their cloud) | Always this Mac. The README sends this user elsewhere. |
-| Many harnesses | Orca 27, Emdash 34, Superset "any CLI" | Four coding harnesses plus Brightsy. Each is a hand-written adapter. |
-| Work that starts from an event | Conductor Cloud routines (webhook trigger, per a third-party migration guide) | Automations are clock-only. GitHub wakes are information-only. Codex automations are clock-only too. |
+| Many harnesses | Orca 27, Emdash 34, Superset "any CLI", Multica 31 | Four coding harnesses plus Brightsy. Each is a hand-written adapter. |
+| Work that starts from an event | Conductor Cloud routines (webhook trigger, per a third-party migration guide), Multica (CI finish, inbox) | Automations are clock-only. GitHub wakes are information-only. A chat can register its own follow-up for CI or a time. Codex automations are clock-only too. |
 | Search across past chats | Orca (transcript search), Conductor (`run_sql`) | Find works inside one chat. Nothing searches across chats. |
 | Company controls | Conductor Enterprise (provisioning, security controls) | No audit log and no managed policy. Agents run as the local user. |
-| Other platforms | Orca, Emdash (Windows, Linux) | Apple Silicon `dmg` and `zip` only. |
+| Other platforms | Orca, Emdash (Windows, Linux), Multica desktop (Windows, Linux) and iOS from source | Apple Silicon `dmg` and `zip` only. |
 
 ## Now — before the end of the year
 
@@ -52,7 +52,7 @@ The phone is one of three headline claims and the site gives no way to install i
 
 ### 2. Push notifications on the phone (decided)
 
-The reason to carry the remote is to hear about a blocked agent. Today the phone has to be open.
+The reason to carry the remote is to hear about a blocked agent. The Sideboard relay already pushes when a chat needs you, a turn finishes, or a chat fails. A custom relay does not, and the alert carries no message text.
 
 What exists:
 

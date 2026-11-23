@@ -70,7 +70,7 @@ export function registerArchiveTools(server: McpServer, orch: Orchestrator): voi
 
   server.tool(
     'archive_chat',
-    'Archive one agent chat: stop the turn and move that chat to Settings → History. Other agents on the workspace stay, and the worktree is removed only when this is the last agent. Orchestration chats archive without removing a project checkout. Refuses the cloud coordinator. To archive every agent on a checkout, use archive_workspace. Commit, push, and open PRs via ask_git before archiving when the work should be kept. Merge only when the user explicitly asked.',
+    'Archive one agent chat: stop the turn and move that chat to Settings → History. Other agents on the workspace stay, and the worktree is removed only when this is the last agent. Uncommitted and untracked files are saved on a hidden git ref and put back uncommitted if that checkout is restored. If that snapshot fails, the checkout stays. History Delete does not keep the snapshot. Orchestration chats archive without removing a project checkout. Refuses the cloud coordinator. To archive every agent on a checkout, use archive_workspace. Commit, push, and open PRs via ask_git before archiving when the work should be kept. Merge only when the user explicitly asked.',
     { ref: z.string().describe('Chat id to archive') },
     async ({ ref }) => {
       const t = orch.getThread(ref);

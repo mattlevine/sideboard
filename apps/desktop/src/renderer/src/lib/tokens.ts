@@ -1,4 +1,5 @@
 import type { AgentKind, TokenUsage } from '@sideboard-ai/core';
+import { isNonTurnAgentText } from '@sideboard/injected-notices';
 
 /** Assumed context window for every agent/model (meter fill = occupancy / this). */
 export const CONTEXT_WINDOW_TOKENS = 1_000_000;
@@ -62,22 +63,48 @@ export function formatCostUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+export type CostCoverageSource =
+  | TokenUsage
+  | { role?: string; usage?: TokenUsage | null; text?: string; origin?: string }
+  | null
+  | undefined;
+
+function coverageUsage(item: CostCoverageSource): {
+  role?: string;
+  usage?: TokenUsage | null;
+  text?: string;
+  origin?: string;
+} {
+  if (!item) return {};
+  if ('inputTokens' in item) return { usage: item };
+  return { role: item.role, usage: item.usage, text: item.text, origin: item.origin };
+}
+
 /**
- * Finished turns that billed tokens. `silentTurns` reported no `costUsd`
- * (Codex JSONL, Cursor when getUsage did not answer). A rollup that includes
- * any of those is a lower bound, even when other turns did report dollars.
- * Pass stored messages only — in-flight `liveUsage` is not a silent turn.
- * Claude emits tokens before `result` sets `costUsd`.
+ * Finished turns that billed tokens, plus finished agent turns that reported
+ * no usage at all. `silentTurns` reported no `costUsd` (Codex JSONL, Cursor
+ * when getUsage did not answer, or a harness that reported nothing). A rollup
+ * that includes any of those is a lower bound, even when other turns did
+ * report dollars. Pass stored messages only — in-flight `liveUsage` is not a
+ * silent turn. Claude emits tokens before `result` sets `costUsd`. User and
+ * summary messages are not turns. Injected notices, status lines, and quota
+ * notes are `role: 'agent'` but not turns.
  */
-export function costCoverage(list: (TokenUsage | undefined | null)[]): {
+export function costCoverage(list: CostCoverageSource[]): {
   silentTurns: number;
   pricedTurns: number;
 } {
   let silentTurns = 0;
   let pricedTurns = 0;
-  for (const u of list) {
-    if (!u || totalTokens(u) <= 0) continue;
-    if (u.costUsd == null) silentTurns += 1;
+  for (const item of list) {
+    const { role, usage, text, origin } = coverageUsage(item);
+    if (role === 'agent' && isNonTurnAgentText(text, origin)) continue;
+    if (role === 'agent' && (!usage || totalTokens(usage) <= 0)) {
+      silentTurns += 1;
+      continue;
+    }
+    if (!usage || totalTokens(usage) <= 0) continue;
+    if (usage.costUsd == null) silentTurns += 1;
     else pricedTurns += 1;
   }
   return { silentTurns, pricedTurns };
@@ -95,7 +122,7 @@ export function messageCostLowerBound(
 function costGapNote(costUsd: number | null | undefined, silentTurns: number): string {
   const priced = costUsd != null ? `≥${formatCostUsd(costUsd)}` : 'not reported';
   const noun = silentTurns === 1 ? 'turn' : 'turns';
-  return `Cost ${priced} (${silentTurns} ${noun} reported tokens and no dollars)`;
+  return `Cost ${priced} (${silentTurns} ${noun} reported no dollars)`;
 }
 
 /** ` · $X` when showCost is on. A lower bound is ` · ≥$X`, or ` · ≥` when no turn priced itself. */

@@ -3,7 +3,7 @@ import { createClippedMcpServer } from './wrap-mcp-tools.js';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
-import { getOrchestrator, resolveOrchChildFollowUp } from '../orchestrator/orchestrator.js';
+import { getOrchestrator } from '../orchestrator/orchestrator.js';
 import { needsCoordinatorAction } from '../orchestrator/task-state.js';
 import {
   listBranches,
@@ -75,6 +75,8 @@ import {
 } from '../store/app-settings.js';
 import { registerArchiveTools } from './archive-tools.js';
 import { registerScheduleTools } from './schedule-tools.js';
+import { registerFollowUpTools } from './follow-up-tools.js';
+import { classifyTurnFailure } from '../agents/error-detail.js';
 import { registerOrderTools } from './order-tools.js';
 import { presentArtifactResult } from '../agent-rpc/handlers.js';
 import { AGENT_GIT_ACTIONS } from '../git/agent-git-actions.js';
@@ -815,6 +817,7 @@ export async function startMcpServer(): Promise<void> {
   }
 
   registerScheduleTools(server);
+  registerFollowUpTools(server);
   registerOrderTools(server);
 
   server.tool(
@@ -1123,7 +1126,7 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'send_to_chat',
-    'Steer a prompt on a workspace chat (Settings → Follow-up, default steer: interrupt the in-flight turn and start now, same as the workspace composer). Use after create_workspace to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. Do not send_to_chat to check in, resume after a halt notice, or because wait_for_turn returned stillRunning; that interrupts the child mid-thought. Call wait_for_turn again instead.',
+    'Send a prompt to a workspace chat. A second send joins that prompt only while it is still queued or not yet handed to the process. Once the process has started, the send waits behind the turn and does not stop it or change the prompt already running. force_stop=true kills the in-flight turn and clears the queue before this prompt — only when the current request is wrong and must be replaced. The workspace composer still follows Settings → Follow-up. Use after create_workspace to start or continue a conversation. For commit/push/PR, prefer ask_git (canonical desktop-button phrases). Send "Merge PR." / ask_git merge only when the user explicitly asked to merge. Do not send_to_chat to check in, resume after a halt notice, or because wait_for_turn returned stillRunning. Call wait_for_turn again instead.',
     {
       ref: z.string(),
       prompt: z.string(),
@@ -1137,7 +1140,7 @@ export async function startMcpServer(): Promise<void> {
         }
       }
       const thread = await orch.send(ref, prompt, {
-        followUp: resolveOrchChildFollowUp(),
+        followUp: force_stop ? 'steer' : 'join',
       });
       return mcpJson({
         id: thread.id,
@@ -1151,7 +1154,7 @@ export async function startMcpServer(): Promise<void> {
   if (shouldRegisterMcpWaitForTurn()) {
   server.tool(
     'wait_for_turn',
-    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. blockedReason is why the child is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. If stillRunning, text and usage are empty (they would be the previous turn) — read progress and call wait_for_turn again. Do not send_to_chat a check-in (that steers / interrupts). On failed, lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, text is this turn’s assistant reply and usage is that turn’s tokens + costUsd (this turn, not the Claude session total; sessionCostUsd is the provider session total when present).',
+    'Wait until the chat finishes its current/queued turn, or return early with a live progress snapshot. MCP clients often kill tools around 60s, so this returns within 45s even while the child is still working. taskState is the A2A-style lifecycle: submitted (queued, not started), working, input-required (ask_user), completed, failed, canceled. stillRunning is true only for submitted/working. blockedReason is why the child is waiting on a person (the question, plan approval, or a reported block) — read it and do not send_to_chat a check-in. If stillRunning, text and usage are empty (they would be the previous turn) — read progress and call wait_for_turn again. Do not send_to_chat a check-in. On failed, read failureClass: auth, quota, and refused are not a retry; timeout or runner can be one. lastError/text is the failure. On canceled, the child did not finish — resume with send_to_chat or tell the user. On input-required, wait for the user in that chat. When finished, text is this turn’s assistant reply and usage is that turn’s tokens + costUsd (this turn, not the Claude session total; sessionCostUsd is the provider session total when present).',
     {
       ref: z.string(),
       timeoutMs: z.number().optional(),
@@ -1181,14 +1184,19 @@ export async function startMcpServer(): Promise<void> {
 
   server.tool(
     'get_turn_result',
-    'Assistant message and last-turn usage when the turn finished. While stillRunning (submitted/working), text and usage are empty so a previous reply cannot be mistaken for this turn — use progress for tools/thinking. Not the full transcript. Includes taskState (A2A lifecycle) and blockedReason (why the agent is waiting on a person).',
+    'Assistant message and last-turn usage when the turn finished. While stillRunning (submitted/working), text and usage are empty so a previous reply cannot be mistaken for this turn — use progress for tools/thinking. Not the full transcript. Includes taskState (A2A lifecycle), failureClass when the turn failed (auth, quota, refused, timeout, runner, other), and blockedReason (why the agent is waiting on a person).',
     { ref: z.string() },
     async ({ ref }) => {
       const result = orch.getTurnResult(ref);
-      const hint = mcpWaitTaskHint(result.taskState, result.status, result.blockedReason);
+      const failureClass =
+        result.taskState === 'failed' && result.status !== 'broken'
+          ? classifyTurnFailure(result.lastError || result.text)
+          : null;
+      const hint = mcpWaitTaskHint(result.taskState, result.status, result.blockedReason, failureClass);
       const waiting = Boolean(result.blockedReason) && !result.stillRunning && result.taskState !== 'failed' && result.taskState !== 'canceled';
       return mcpJson({
         ...result,
+        failureClass,
         hint,
         incomplete: needsCoordinatorAction(result.taskState) || waiting,
       });

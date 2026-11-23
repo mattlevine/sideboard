@@ -22,6 +22,26 @@ export function isInjectedNoticeText(text: string): boolean {
   return isSlackExternalReplyText(text);
 }
 
+/** Quota failover lines Sideboard appends. They are not a billed agent turn. */
+export function isQuotaFailoverNote(text: string): boolean {
+  const t = text.trim();
+  return (
+    t.startsWith('Sideboard will auto-retry this chat around ') ||
+    /^Session limit on \S+\. Sideboard continued on /.test(t)
+  );
+}
+
+/**
+ * Agent-role transcript rows that are not a harness turn. Cost coverage must
+ * not treat them as a missing `costUsd`.
+ */
+export function isNonTurnAgentText(text: string | undefined, origin?: string): boolean {
+  if (origin === 'continue') return true;
+  const t = text?.trim() ?? '';
+  if (!t) return false;
+  return isInjectedNoticeText(t) || isInternalAgentStatusText(t) || isQuotaFailoverNote(t);
+}
+
 /**
  * Notices appended after the last agent turn and before the current user
  * prompt, oldest first. `match` narrows to one source.

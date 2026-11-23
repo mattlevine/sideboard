@@ -621,6 +621,37 @@ describe('Orchestrator queued-message editing', () => {
     expect(drainQueue).toHaveBeenCalledWith(thread.id);
   });
 
+  it('queues a join behind a spawned turn without rewriting the running prompt', async () => {
+    writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
+    const thread = seedThread(['later']);
+    const live = readThread(thread.id)!;
+    live.status = 'running';
+    live.messages = [{ role: 'user', text: 'Work on issue A', ts: '2026-01-01T00:00:00.000Z' }];
+    writeThread(live);
+    const orch = new Orchestrator();
+    const kill = vi.fn();
+    const internal = orch as unknown as {
+      activeTurns: Map<string, { pid: number; kill: () => void; done: Promise<unknown> }>;
+      openSteerPrompt: Map<string, { text: string; spawned: boolean }>;
+      drainQueue: (id: string) => Promise<void>;
+    };
+    const drainQueue = vi.fn().mockResolvedValue(undefined);
+    internal.drainQueue = drainQueue;
+    internal.openSteerPrompt.set(thread.id, { text: 'Work on issue A', spawned: true });
+    internal.activeTurns.set(thread.id, {
+      pid: 1,
+      kill,
+      done: new Promise(() => {}),
+    });
+
+    const updated = await orch.send(thread.id, 'And B', { followUp: 'join' });
+    expect(kill).not.toHaveBeenCalled();
+    expect(updated.queue).toEqual(['later', 'And B']);
+    expect(readThread(thread.id)?.messages.at(-1)?.text).toBe('Work on issue A');
+    expect(internal.openSteerPrompt.get(thread.id)?.text).toBe('Work on issue A');
+    expect(drainQueue).toHaveBeenCalledWith(thread.id);
+  });
+
   it('steers ahead of parked follow-ups when nothing is in flight', async () => {
     writeFileSync(join(dataDir, 'desktop-host.pid'), `${process.pid}\n`);
     const thread = seedThread(['parked']);

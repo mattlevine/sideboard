@@ -1,3 +1,4 @@
+import { classifyTurnFailure, type TurnFailureClass } from '../agents/error-detail.js';
 import { needsCoordinatorAction, type TaskState } from '../orchestrator/task-state.js';
 import type { AgentBlockSource } from '../types/agent-block.js';
 import type { TokenUsage } from '../types/thread.js';
@@ -34,6 +35,17 @@ export const MCP_WAIT_BROKEN_HINT =
 export const MCP_WAIT_ERROR_HINT =
   'Child turn failed. lastError/text is the failure — switch agent, tell the user, or retry. Do not treat empty text as success.';
 
+/** auth, quota, and refused are not a retry. timeout and runner can be one. */
+export function mcpWaitFailureHint(failureClass: TurnFailureClass | null): string {
+  if (failureClass === 'auth' || failureClass === 'quota' || failureClass === 'refused') {
+    return `Child turn failed (${failureClass}). Do not retry the same request. Tell the user or switch agent.`;
+  }
+  if (failureClass === 'timeout' || failureClass === 'runner') {
+    return `Child turn failed (${failureClass}). One retry is reasonable. Do not treat empty text as success.`;
+  }
+  return MCP_WAIT_ERROR_HINT;
+}
+
 export const MCP_WAIT_INPUT_REQUIRED_HINT =
   'Child asked the user a question (ask_user). taskState is input-required. Wait for the user to answer in that chat — do not send_to_chat a check-in.';
 
@@ -53,6 +65,7 @@ export function mcpWaitTaskHint(
   taskState: TaskState,
   status?: string,
   blockedReason?: string | null,
+  failureClass?: TurnFailureClass | null,
 ): string | undefined {
   const why = blockedReason?.trim();
   if (why && taskState !== 'failed' && taskState !== 'canceled') {
@@ -74,7 +87,7 @@ export function mcpWaitTaskHint(
     case 'canceled':
       return MCP_WAIT_STOPPED_HINT;
     case 'failed':
-      return status === 'broken' ? MCP_WAIT_BROKEN_HINT : MCP_WAIT_ERROR_HINT;
+      return status === 'broken' ? MCP_WAIT_BROKEN_HINT : mcpWaitFailureHint(failureClass ?? null);
     default:
       return undefined;
   }
@@ -117,6 +130,11 @@ export type WaitForTurnToolResult = {
    */
   blockedReason?: string | null;
   blockedSource?: AgentBlockSource | null;
+  /**
+   * Set when taskState is failed and the error text classifies.
+   * Omitted on older fixtures; live results set it (null when not a failure).
+   */
+  failureClass?: TurnFailureClass | null;
   hint: string | undefined;
   incomplete: boolean;
 };
@@ -140,12 +158,17 @@ export function waitForTurnToolResult(input: {
     !input.stillRunning &&
     input.taskState !== 'failed' &&
     input.taskState !== 'canceled';
+  const failureClass =
+    input.taskState === 'failed' && input.status !== 'broken'
+      ? classifyTurnFailure(input.lastError || input.text)
+      : null;
   return {
     ...input,
     usage: input.usage ?? null,
     blockedReason,
     blockedSource: blockedReason ? input.blockedSource ?? null : null,
-    hint: mcpWaitTaskHint(input.taskState, input.status, blockedReason),
+    failureClass,
+    hint: mcpWaitTaskHint(input.taskState, input.status, blockedReason, failureClass),
     incomplete: needsCoordinatorAction(input.taskState) || waiting,
   };
 }

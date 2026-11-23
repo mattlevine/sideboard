@@ -92,13 +92,13 @@ describe('contextMeterTooltip', () => {
         costUsd: 1.23,
         silentTurns: 2,
       }),
-    ).toContain('Cost ≥$1.23 (2 turns reported tokens and no dollars)');
+    ).toContain('Cost ≥$1.23 (2 turns reported no dollars)');
     expect(
       contextMeterTooltip(usage, 1_000_000, { showCost: true, costUsd: 1.23, silentTurns: 0 }),
     ).not.toContain('Cost');
     expect(
       contextMeterTooltip(usage, 1_000_000, { showCost: true, silentTurns: 1 }),
-    ).toContain('Cost not reported (1 turn reported tokens and no dollars)');
+    ).toContain('Cost not reported (1 turn reported no dollars)');
   });
 });
 
@@ -240,6 +240,32 @@ describe('costCoverage', () => {
       ]),
     ).toEqual({ silentTurns: 1, pricedTurns: 1 });
   });
+
+  it('ignores sideboard notices that are not turns', () => {
+    expect(
+      costCoverage([
+        { role: 'agent', text: 'Slack reply from Ada (not a command): hi' },
+        { role: 'agent', text: 'Agent is running. Waiting for gate to pass.' },
+        {
+          role: 'agent',
+          text: 'Session limit on claude. Sideboard continued on codex (Auto) in [next](sideboard://chat/x).',
+        },
+        { role: 'agent', text: 'keep going', origin: 'continue' },
+        { role: 'agent', usage: { inputTokens: 3, outputTokens: 1, costUsd: 0.02 } },
+      ]),
+    ).toEqual({ silentTurns: 0, pricedTurns: 1 });
+  });
+
+  it('counts an agent turn that reported no usage', () => {
+    expect(
+      costCoverage([
+        { role: 'agent', usage: undefined },
+        { role: 'user', usage: undefined },
+        { role: 'summary' },
+        { role: 'agent', usage: { inputTokens: 3, outputTokens: 1, costUsd: 0.02 } },
+      ]),
+    ).toEqual({ silentTurns: 1, pricedTurns: 1 });
+  });
 });
 
 describe('messageCostLowerBound', () => {
@@ -257,7 +283,7 @@ describe('usageTooltip lower bound', () => {
   it('says how many turns reported no dollars', () => {
     const u = { inputTokens: 10, outputTokens: 5, costUsd: 0.03 };
     expect(usageTooltip(u, { showCost: true, silentTurns: 2, context: false })).toContain(
-      'Cost ≥$0.03 (2 turns reported tokens and no dollars)',
+      'Cost ≥$0.03 (2 turns reported no dollars)',
     );
   });
 });

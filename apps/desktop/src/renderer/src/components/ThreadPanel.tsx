@@ -1671,7 +1671,7 @@ export function ThreadPanel({
   }, [thread.messages, liveUsage]);
   // Stored messages only. Live usage is still in flight — Claude sets costUsd on result.
   const finishedCostCoverage = useMemo(
-    () => costCoverage(thread.messages.map((m) => m.usage)),
+    () => costCoverage(thread.messages),
     [thread.messages],
   );
   const latestContextUsage = useMemo(() => {

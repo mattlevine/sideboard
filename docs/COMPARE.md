@@ -42,7 +42,7 @@ Use Orca when you want the whole agent IDE (terminal + browser + design mode) an
 
 ## vs Multica
 
-[Multica](https://github.com/multica-ai/multica) is a source-available workspace where people and agents share one issue tracker. An agent is a durable identity: name, instructions, skills, and which computer runs it. A run is one execution of that identity. The board is issues, not checkouts. A daemon on your machine (or a box you control) claims the run and drives a CLI you already installed — the docs list 31. The control plane is [multica.ai](https://multica.ai) or a Go API and Postgres you host. Web, desktop (macOS, Windows, Linux), and an iOS app you build from source. The license is Apache 2.0 plus extra terms for hosted services, commercial embedding, and branding.
+[Multica](https://github.com/multica-ai/multica) is a source-available workspace where people and agents share one issue tracker. An agent is a durable identity: name, instructions, skills, and which computer runs it. A run is one execution of that identity. The board is issues, not checkouts. A daemon on your machine (or a box you control) claims the run and drives a CLI you already installed — the docs list 31. A run checks out a worktree (or edits a local directory in place). The control plane is [multica.ai](https://multica.ai) or a Go API and Postgres you host. Web, desktop (macOS, Windows, Linux), and an iOS app you build from source. The license is Apache 2.0 plus extra terms for hosted services, commercial embedding, and branding.
 
 Sideboard does not put a server between you and the checkout. The workspace is the git worktree, several chats share it, and the orchestrator is an agent on this Mac.
 
@@ -52,7 +52,7 @@ Sideboard does not put a server between you and the checkout. The workspace is t
 | Who an agent is | Named teammate. The config survives the run | Which CLI is plugged into this chat |
 | Where it runs | Daemon on a computer you connect. The server stores issues, comments, and transcripts | Always this Mac. No account |
 | Other systems | `multica` CLI and HTTP API. Agents use the same path | `sideboard` CLI, stdio MCP, phone paired to this Mac |
-| When you are needed | Inbox: mentions, failures, and statuses that need a person. Routine comments on someone else’s issue stay on the issue | Board and the open chat. The phone shows **Needs you** while the app is open |
+| When you are needed | Inbox: mentions and failures. Status-change notifications are off by default. Routine comments on someone else’s issue stay on the issue | Board and the open chat. The phone alerts when a chat needs you, a turn finishes, or a chat fails (Sideboard relay). A custom relay does not push. Alerts name the Mac and carry no message text |
 | Handoff | A workflow step assigns the next agent on the same issue. Agents move work to in review; done follows a merged PR or a person | PR columns on the board. Merge stays human |
 | Skills | Workspace copies attached to specific agents, plus whatever the CLI reads from the repo | The repo’s `.claude/skills/`. The same file for Sideboard, Claude Code, and `attach` |
 

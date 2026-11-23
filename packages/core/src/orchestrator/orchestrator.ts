@@ -30,6 +30,11 @@ import {
   resolvePrSelector,
   switchWorktreeBranch,
 } from '../git/worktree.js';
+import {
+  applyWorktreeLeftovers,
+  deleteWorktreeLeftovers,
+  saveWorktreeLeftovers,
+} from '../git/worktree-leftovers.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
   AGENT_GIT_ACTIONS,
@@ -211,6 +216,7 @@ import { expandComposerPrompt } from '../composer/expand.js';
 import {
   beginOpenSteerDraft,
   enqueueThreadSend,
+  type SendFollowUp,
   openSteerTurnAttachments,
   promptAfterJoinedSteer,
   reuseJoinedUserBubble,
@@ -295,6 +301,7 @@ import {
 import { releaseCaffeinateHoldForThread } from '../store/caffeinate-hold.js';
 import { armGithubEdgeWatch } from './github-edge-watch.js';
 import { armSchedules } from './schedule-runner.js';
+import { armChatFollowUps } from './chat-follow-up-runner.js';
 import {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,
@@ -596,6 +603,7 @@ export class Orchestrator {
     // Re-arm session-quota wait timers (and fire any that are already due).
     this.schedulePendingQuotaResumes();
     armSchedules();
+    armChatFollowUps();
     armGithubEdgeWatch();
   }
 
@@ -1138,7 +1146,7 @@ export class Orchestrator {
   async send(
     threadRef: string,
     prompt: string,
-    opts?: { followUp?: FollowUpBehavior; attachments?: Thread['attachments'] },
+    opts?: { followUp?: SendFollowUp; attachments?: Thread['attachments'] },
   ): Promise<Thread> {
     const sent = await enqueueThreadSend(
       {
@@ -3650,7 +3658,10 @@ export class Orchestrator {
     this.stop(thread.id, { notifyParent: false });
     this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
-      const archived = setStatus(thread.id, 'archived');
+      let archived = setStatus(thread.id, 'archived');
+      if ((archived.followUps?.length ?? 0) > 0) {
+        archived = updateThread(archived.id, { followUps: [] });
+      }
       this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
       this.enforceHistoryRetention();
       return archived;
@@ -3671,10 +3682,21 @@ export class Orchestrator {
         } catch {
           // Best-effort archive script
         }
+        const saved = await saveWorktreeLeftovers(
+          thread.repoPath,
+          thread.worktreePath,
+          thread.branchName,
+        );
+        if (!saved.ok) {
+          throw new Error(`Could not save uncommitted files: ${saved.error}`);
+        }
         await removeWorktree(thread.repoPath, thread.worktreePath);
       }
     }
-    const archived = setStatus(thread.id, 'archived');
+    let archived = setStatus(thread.id, 'archived');
+    if ((archived.followUps?.length ?? 0) > 0) {
+      archived = updateThread(archived.id, { followUps: [] });
+    }
     this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
     this.enforceHistoryRetention();
     // A project the user did not remove stays registered after its last worktree is archived.
@@ -3714,6 +3736,7 @@ export class Orchestrator {
         await removeWorktree(thread.repoPath, thread.worktreePath, {
           deleteBranch: deleteBranch ? thread.branchName : undefined,
         });
+        await deleteWorktreeLeftovers(thread.repoPath, thread.branchName).catch(() => undefined);
       }
     }
     deleteThreadRecord(thread.id);
@@ -3744,6 +3767,7 @@ export class Orchestrator {
       });
       const { ensureWorktreeSideboardIgnored } = await import('../git/worktree-exclude.js');
       await ensureWorktreeSideboardIgnored(dest);
+      await applyWorktreeLeftovers(thread.repoPath, dest, thread.branchName).catch(() => false);
     }
 
     // Conductor guard: unarchiving a merged-PR workspace must not immediately

@@ -105,10 +105,10 @@ function groupSpendLabel(
   threads: Thread[],
   showCost: boolean,
 ): { label: string; tooltip: string } | null {
-  const rows = threads.flatMap((t) => t.messages.map((m) => m.usage));
-  const usage = sumUsage(rows);
+  const messages = threads.flatMap((t) => t.messages);
+  const usage = sumUsage(messages.map((m) => m.usage));
   if (!usage) return null;
-  const silentTurns = costCoverage(rows).silentTurns;
+  const silentTurns = costCoverage(messages).silentTurns;
   const chatNote =
     threads.length > 1 ? ` across ${threads.length} open chats` : '';
   return {

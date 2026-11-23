@@ -47,7 +47,7 @@ A new CLI is supported when this row is filled. Sideboard does not guess the bla
 | Cursor | SDK create / resume / send in `cursor-runner.ts` | Sideboard injects its MCP into the SDK turn | Account default unless the chat pins one | Stream is tokens. After the turn, `agent.getUsage()` fills `costUsd` when the account’s billing API answers |
 | Brightsy | Chat session when the adapter has one | No local MCP. Chat-only | Account default | Usage cost when the API reports it |
 
-Transient runner failures (network, a dead Node process, a stale resume id) retry once. Auth, quota, and “the model refused” do not. See `shouldRetryFailedAgentTurn` in `packages/core/src/agents/error-detail.ts`.
+Transient runner failures (network, a dead Node process, a stale resume id) retry once. Cursor stream cutoffs resume up to 3 times (`CURSOR_STREAM_CUTOFF_CONTINUE_LIMIT`). Auth, quota, and “the model refused” do not. `wait_for_turn` and `get_turn_result` return `failureClass` (`auth`, `quota`, `refused`, `timeout`, `runner`, `other`) so a coordinator does not parse the error text. See `shouldRetryFailedAgentTurn` and `classifyTurnFailure` in `packages/core/src/agents/error-detail.ts`.
 
 ## Checklist for a new agent
 
