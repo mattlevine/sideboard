@@ -13,7 +13,6 @@ import {
   looksLikeBrightsyEmptyCompletion,
   looksLikeCursorStreamCutOff,
   looksLikeRetryableRunnerCrash,
-  classifyTurnFailure,
   looksLikeV8Oom,
   looksLikeCodexMcpError,
   shouldRetryCodexPluginIsolate,
@@ -24,6 +23,7 @@ import {
   summarizeTurnStderr,
   turnFailChatText,
 } from './error-detail.js';
+import { classifyTurnFailure } from './turn-failure-class.js';
 
 describe('formatUnknownDetail', () => {
   it('reads RunError-shaped objects instead of [object Object]', () => {

@@ -1,4 +1,4 @@
-import { classifyTurnFailure, type TurnFailureClass } from '../agents/error-detail.js';
+import { classifyTurnFailure, type TurnFailureClass } from '../agents/turn-failure-class.js';
 import { needsCoordinatorAction, type TaskState } from '../orchestrator/task-state.js';
 import type { AgentBlockSource } from '../types/agent-block.js';
 import type { TokenUsage } from '../types/thread.js';

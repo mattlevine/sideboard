@@ -110,6 +110,32 @@ export function costCoverage(list: CostCoverageSource[]): {
   return { silentTurns, pricedTurns };
 }
 
+/** Hover text for one agent message, plus whether its chip should show `≥`. */
+export function agentMessageUsageTitle(input: {
+  usage: TokenUsage | null | undefined;
+  streaming: boolean;
+  showCost: boolean;
+  summedContext: boolean;
+  shownOccupancy: number | null;
+  windowTokens: number;
+  estimated?: boolean;
+}): { title: string | undefined; lowerBound: boolean } {
+  const { usage, showCost, summedContext, shownOccupancy, windowTokens } = input;
+  const lowerBound = messageCostLowerBound(usage, input.streaming);
+  const silentTurns = showCost && lowerBound ? 1 : 0;
+  let title: string | undefined;
+  if (summedContext && shownOccupancy == null && usage) {
+    title = usageTooltip(usage, { showCost, context: false, silentTurns });
+  } else if (shownOccupancy != null) {
+    title = contextMeterTooltip(usage ?? null, windowTokens, {
+      occupancy: shownOccupancy, estimated: input.estimated, showCost, costUsd: usage?.costUsd, silentTurns,
+    });
+  } else if (usage) {
+    title = contextMeterTooltip(usage, windowTokens, { showCost, costUsd: usage.costUsd, silentTurns });
+  }
+  return { title, lowerBound };
+}
+
 /** Finished message that billed tokens and reported no dollars. Streaming has not finished. */
 export function messageCostLowerBound(
   usage: TokenUsage | null | undefined,

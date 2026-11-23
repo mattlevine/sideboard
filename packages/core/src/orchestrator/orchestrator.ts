@@ -24,17 +24,12 @@ import {
   getPrMeta as fetchPrMeta,
   markPrReady as markGithubPrReady,
   mergePr as mergeGithubPr,
-  removeWorktree,
   resolveGithubRepoSlug,
   resolveOriginRemote,
   resolvePrSelector,
   switchWorktreeBranch,
 } from '../git/worktree.js';
-import {
-  applyWorktreeLeftovers,
-  deleteWorktreeLeftovers,
-  saveWorktreeLeftovers,
-} from '../git/worktree-leftovers.js';
+import { applyWorktreeLeftovers, archiveClearingFollowUps, removeWorktreeDroppingLeftovers, removeWorktreeSavingLeftovers } from '../git/worktree-leftovers.js';
 import { getPrStack as fetchPrStack } from '../git/stack.js';
 import {
   AGENT_GIT_ACTIONS,
@@ -300,8 +295,7 @@ import {
 } from '../store/global-workspace.js';
 import { releaseCaffeinateHoldForThread } from '../store/caffeinate-hold.js';
 import { armGithubEdgeWatch } from './github-edge-watch.js';
-import { armSchedules } from './schedule-runner.js';
-import { armChatFollowUps } from './chat-follow-up-runner.js';
+import { armSchedules } from './schedule-runner.js'; import { armChatFollowUps } from './chat-follow-up-runner.js';
 import {
   coordinatorSystemPrompt,
   coordinatorTurnReminder,
@@ -602,8 +596,7 @@ export class Orchestrator {
 
     // Re-arm session-quota wait timers (and fire any that are already due).
     this.schedulePendingQuotaResumes();
-    armSchedules();
-    armChatFollowUps();
+    armSchedules(); armChatFollowUps();
     armGithubEdgeWatch();
   }
 
@@ -3658,10 +3651,7 @@ export class Orchestrator {
     this.stop(thread.id, { notifyParent: false });
     this.releaseOrchestratorCaffeinate(thread);
     if (isGlobalThread(thread)) {
-      let archived = setStatus(thread.id, 'archived');
-      if ((archived.followUps?.length ?? 0) > 0) {
-        archived = updateThread(archived.id, { followUps: [] });
-      }
+      const archived = archiveClearingFollowUps(thread.id);
       this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
       this.enforceHistoryRetention();
       return archived;
@@ -3682,21 +3672,10 @@ export class Orchestrator {
         } catch {
           // Best-effort archive script
         }
-        const saved = await saveWorktreeLeftovers(
-          thread.repoPath,
-          thread.worktreePath,
-          thread.branchName,
-        );
-        if (!saved.ok) {
-          throw new Error(`Could not save uncommitted files: ${saved.error}`);
-        }
-        await removeWorktree(thread.repoPath, thread.worktreePath);
+        await removeWorktreeSavingLeftovers(thread);
       }
     }
-    let archived = setStatus(thread.id, 'archived');
-    if ((archived.followUps?.length ?? 0) > 0) {
-      archived = updateThread(archived.id, { followUps: [] });
-    }
+    const archived = archiveClearingFollowUps(thread.id);
     this.emit({ type: 'status_changed', threadId: archived.id, status: 'archived' });
     this.enforceHistoryRetention();
     // A project the user did not remove stays registered after its last worktree is archived.
@@ -3733,10 +3712,7 @@ export class Orchestrator {
         }
         const { deleteBranchOnPurgeEnabled } = await import('../store/app-settings.js');
         const deleteBranch = opts?.deleteBranch ?? deleteBranchOnPurgeEnabled();
-        await removeWorktree(thread.repoPath, thread.worktreePath, {
-          deleteBranch: deleteBranch ? thread.branchName : undefined,
-        });
-        await deleteWorktreeLeftovers(thread.repoPath, thread.branchName).catch(() => undefined);
+        await removeWorktreeDroppingLeftovers(thread, deleteBranch ? thread.branchName : undefined);
       }
     }
     deleteThreadRecord(thread.id);

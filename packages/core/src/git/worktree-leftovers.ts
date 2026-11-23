@@ -1,4 +1,7 @@
+import { setStatus, updateThread } from '../store/thread-store.js';
+import type { Thread } from '../types/thread.js';
 import { git } from './run.js';
+import { removeWorktree } from './worktree.js';
 
 /** Hidden commits of uncommitted work, kept across `git worktree remove --force`. */
 export const LEFTOVER_REF_PREFIX = 'refs/sideboard/leftovers/';
@@ -108,4 +111,29 @@ export async function applyWorktreeLeftovers(
 /** Drop a leftover ref. History Delete uses this so a removed chat cannot come back. */
 export async function deleteWorktreeLeftovers(repoPath: string, branch: string): Promise<void> {
   await git(['update-ref', '-d', leftoverRefName(branch)], repoPath, { reject: false });
+}
+
+/** Archive the thread and drop follow-ups so a later poll cannot send them. */
+export function archiveClearingFollowUps(id: string): Thread {
+  const archived = setStatus(id, 'archived');
+  if ((archived.followUps?.length ?? 0) === 0) return archived;
+  return updateThread(archived.id, { followUps: [] });
+}
+
+/** Save dirty files, then remove the checkout. Throws when the snapshot fails. */
+export async function removeWorktreeSavingLeftovers(
+  thread: Pick<Thread, 'repoPath' | 'worktreePath' | 'branchName'>,
+): Promise<void> {
+  const saved = await saveWorktreeLeftovers(thread.repoPath, thread.worktreePath, thread.branchName);
+  if (!saved.ok) throw new Error(`Could not save uncommitted files: ${saved.error}`);
+  await removeWorktree(thread.repoPath, thread.worktreePath);
+}
+
+/** Delete the checkout and any leftover ref. History Delete does not keep the snapshot. */
+export async function removeWorktreeDroppingLeftovers(
+  thread: Pick<Thread, 'repoPath' | 'worktreePath' | 'branchName'>,
+  deleteBranch?: string,
+): Promise<void> {
+  await removeWorktree(thread.repoPath, thread.worktreePath, { deleteBranch });
+  await deleteWorktreeLeftovers(thread.repoPath, thread.branchName).catch(() => undefined);
 }

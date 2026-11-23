@@ -6,9 +6,7 @@ import {
   renameSync,
   rmSync,
   statSync,
-  unlinkSync,
-  writeFileSync,
-  readdirSync,
+  unlinkSync, writeFileSync, readdirSync,
 } from 'node:fs';
 import { basename } from 'node:path';
 import lockfile from 'proper-lockfile';
