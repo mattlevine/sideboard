@@ -7,7 +7,7 @@ import type { Thread, ThreadOptionsPatch } from '../types/thread.js';
 export function applyThreadAgentPatch(
   thread: Thread,
   patch: ThreadOptionsPatch,
-  next: Thread,
+  next: Partial<Thread>,
 ): void {
   const agent = patch.agent ?? thread.agent;
   const harness =
