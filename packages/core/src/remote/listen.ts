@@ -99,6 +99,13 @@ function publishOpenedChat(
 function applyPhoneOptions(chatId: string, draft: PhoneDraft): void {
   const patch: PhoneDraft = {};
   if (draft.agent) patch.agent = draft.agent;
+  if (draft.acpHarness === 'gemini' || draft.acpHarness === 'copilot' || draft.acpHarness === null) {
+    patch.acpHarness = draft.acpHarness;
+  } else if (draft.agent === 'acp') {
+    patch.acpHarness = 'gemini';
+  } else if (draft.agent) {
+    patch.acpHarness = null;
+  }
   if ('model' in draft) patch.model = draft.model ?? null;
   if (draft.effort) patch.effort = draft.effort;
   if (draft.fast !== undefined) patch.fast = draft.fast;

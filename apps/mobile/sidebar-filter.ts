@@ -70,7 +70,7 @@ function chatHay<C extends SidebarChat>(
   worktree: SidebarWorktree<C>,
   chat: C,
 ): string {
-  return `${worktree.label} ${worktree.workspace ?? ''} ${chat.title} ${chat.agent ?? ''} ${chat.preview ?? ''} ${projectName} ${(worktree.tags ?? []).join(' ')}`.toLowerCase();
+  return `${worktree.label} ${worktree.workspace ?? ''} ${chat.title} ${chat.agent ?? ''} ${chat.acpHarness ?? ''} ${chat.preview ?? ''} ${projectName} ${(worktree.tags ?? []).join(' ')}`.toLowerCase();
 }
 
 export function filterPhoneOrchestration<T extends SidebarChat>(
@@ -80,7 +80,7 @@ export function filterPhoneOrchestration<T extends SidebarChat>(
   const q = query.trim().toLowerCase();
   if (!q) return [...chats];
   return chats.filter((chat) =>
-    `${chat.title} ${chat.agent ?? ''} ${chat.preview ?? ''} global orchestration`.toLowerCase().includes(q),
+    `${chat.title} ${chat.agent ?? ''} ${chat.acpHarness ?? ''} ${chat.preview ?? ''} global orchestration`.toLowerCase().includes(q),
   );
 }
 

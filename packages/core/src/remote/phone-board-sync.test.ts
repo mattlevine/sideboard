@@ -95,6 +95,9 @@ describe('phone board sync', () => {
     expect(phoneBoardKey(board({ orchestration: [chat({ title: 'Renamed' })] }))).not.toBe(
       phoneBoardKey(first),
     );
+    expect(phoneBoardKey(board({ orchestration: [chat({ agent: 'acp', acpHarness: 'copilot' })] }))).not.toBe(
+      phoneBoardKey(board({ orchestration: [chat({ agent: 'acp', acpHarness: 'gemini' })] })),
+    );
   });
 
   it('pushes the sidebar immediately and again when a worktree appears', () => {

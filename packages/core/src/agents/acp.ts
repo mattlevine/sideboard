@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isOrchestratorThread } from '../store/global-workspace.js';
@@ -14,9 +15,11 @@ import {
 import type { AcpTurnRequest } from './acp-runner.js';
 import {
   acpPriorTranscript,
+  acpUserStdioServers,
   parseAcpRunnerLine,
   toAcpMcpServers,
 } from './acp-protocol.js';
+import { listUserClaudeMcpServerEntries } from './orch-mcp-isolation.js';
 import {
   buildInjectedMcpServers,
   shouldInjectBrightsyMcp,
@@ -90,6 +93,13 @@ export const acpAdapter: AgentAdapter = {
       orchestratorThreadId: isOrchestrator ? thread.id : null,
       threadId: thread.id,
     });
+    const injectedAcp = toAcpMcpServers(injected);
+    const userMcp = isOrchestrator
+      ? []
+      : acpUserStdioServers(
+          listUserClaudeMcpServerEntries(homedir(), [thread.repoPath, thread.worktreePath]),
+          new Set(injectedAcp.map((server) => server.name)),
+        );
     const req: AcpTurnRequest = {
       prompt,
       resumePrompt,
@@ -99,7 +109,7 @@ export const acpAdapter: AgentAdapter = {
       harness,
       command: command.file,
       args: command.args,
-      mcpServers: toAcpMcpServers(injected),
+      mcpServers: [...injectedAcp, ...userMcp],
       planMode: thread.planMode,
       autonomy: thread.autonomy,
     };

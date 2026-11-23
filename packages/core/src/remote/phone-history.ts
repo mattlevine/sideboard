@@ -50,12 +50,15 @@ export function listPhoneHistory(opts?: { query?: string; after?: string }): Pho
         updatedAt: historyStamp(thread),
         where: isGlobalThread(thread) ? 'Orchestration' : repoName(thread.repoPath),
         agent: thread.agent,
+        ...(thread.agent === 'acp'
+          ? { acpHarness: thread.acpHarness === 'copilot' ? 'copilot' as const : 'gemini' as const }
+          : {}),
         ...(workspace ? { workspace } : {}),
       };
     })
     .filter((chat) => {
       if (!query) return true;
-      return `${chat.title} ${chat.where} ${chat.agent} ${chat.workspace ?? ''} ${chat.preview}`
+      return `${chat.title} ${chat.where} ${chat.agent} ${chat.acpHarness ?? ''} ${chat.workspace ?? ''} ${chat.preview}`
         .toLowerCase()
         .includes(query);
     });

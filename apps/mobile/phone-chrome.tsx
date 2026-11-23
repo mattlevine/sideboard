@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
-import { AgentKindIcon } from './agent-icons';
+import { AgentKindIcon, agentKindLabel } from './agent-icons';
 import { agentStatus } from './labels';
 import { palette, styles } from './styles';
 
@@ -11,6 +11,7 @@ export type PhoneChat = {
   preview: string;
   updatedAt: string;
   agent?: string;
+  acpHarness?: 'gemini' | 'copilot';
   prUrl?: string;
   prNumber?: string;
   prStatus?: string;
@@ -44,6 +45,7 @@ export type PhoneHistoryChat = {
   updatedAt: string;
   where: string;
   agent: string;
+  acpHarness?: 'gemini' | 'copilot';
   workspace?: string;
 };
 
@@ -184,7 +186,7 @@ export function ChatRow({
     <View style={styles.row}>
       <Pressable style={styles.rowMain} onPress={onOpen}>
         <View style={styles.titleRow}>
-          <AgentKindIcon agent={chat.agent || ''} />
+          <AgentKindIcon agent={chat.agent || ''} acpHarness={chat.acpHarness} />
           <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
         </View>
         <Text style={[styles.preview, needsYou ? styles.previewNeed : null]} numberOfLines={2}>
@@ -233,7 +235,7 @@ export function HistoryRow({
     <View style={styles.row}>
       <View style={styles.rowMain}>
         <View style={styles.titleRow}>
-          <AgentKindIcon agent={chat.agent} />
+          <AgentKindIcon agent={chat.agent} acpHarness={chat.acpHarness} />
           <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
           {chat.workspace ? (
             <View style={styles.historyWorkspace} accessibilityLabel={`Workspace ${chat.workspace}`}>
@@ -249,7 +251,7 @@ export function HistoryRow({
           </Text>
         ) : null}
         <Text style={styles.status}>
-          {chat.where} · {chat.agent}
+          {chat.where} · {agentKindLabel(chat.agent, chat.acpHarness)}
         </Text>
       </View>
       <Pressable

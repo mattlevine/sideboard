@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import Svg, { Circle, Path, SvgXml } from 'react-native-svg';
 import { BRIGHTSY_MARK } from './agent-brightsy';
 import { palette } from './styles';
@@ -12,11 +12,13 @@ const LABEL: Record<string, string> = {
   opencode: 'OpenCode',
   cursor: 'Cursor',
   brightsy: 'Brightsy',
-  acp: 'ACP',
+  acp: 'Gemini CLI',
 };
 
-function labelFor(agent: string): string {
-  return LABEL[agent] ?? 'Agent';
+export function agentKindLabel(agent: string, acpHarness?: string | null): string {
+  if (agent === 'acp' && acpHarness === 'copilot') return 'Copilot CLI';
+  if (agent === 'acp') return 'Gemini CLI';
+  return LABEL[agent] ?? agent;
 }
 
 function Mark({ children }: { children: ReactNode }) {
@@ -27,8 +29,16 @@ function Mark({ children }: { children: ReactNode }) {
   );
 }
 
-function KindGlyph({ agent }: { agent: string }) {
+function KindGlyph({ agent, acpHarness }: { agent: string; acpHarness?: string | null }) {
   switch (agent) {
+    case 'acp':
+      return (
+        <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: palette.text }}>
+            {acpHarness === 'copilot' ? 'C' : 'G'}
+          </Text>
+        </View>
+      );
     case 'claude':
       return (
         <Mark>
@@ -65,11 +75,17 @@ function KindGlyph({ agent }: { agent: string }) {
 }
 
 /** Same marks as the desktop sidebar: Claude, Codex, Cursor, OpenCode, Brightsy. */
-export function AgentKindIcon({ agent }: { agent: string }) {
-  const label = labelFor(agent);
+export function AgentKindIcon({
+  agent,
+  acpHarness,
+}: {
+  agent: string;
+  acpHarness?: string | null;
+}) {
+  const label = agentKindLabel(agent, acpHarness);
   return (
     <View accessibilityRole="image" accessibilityLabel={label} style={{ width: SIZE, height: SIZE }}>
-      <KindGlyph agent={agent} />
+      <KindGlyph agent={agent} acpHarness={acpHarness} />
     </View>
   );
 }

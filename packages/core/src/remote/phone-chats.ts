@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { defaultAcpHarness } from '../agents/acp-harness.js';
 import { listModelsForAgent } from '../agents/list-models.js';
 import { classifyWorktreeListBadges, groupHomeBoardWorktrees, issueBlockedByIds, visibleAgentBlock } from '../board/home-board.js';
 import { persistPendingFileAttachments } from '../composer/stage-files.js';
@@ -57,6 +58,8 @@ export interface PhoneChatSummary {
   preview: string;
   updatedAt: string;
   agent: AgentKind;
+  /** Gemini CLI or Copilot CLI when `agent` is `acp`. */
+  acpHarness?: 'gemini' | 'copilot';
   /** Set when this chat has a pull request. The phone paints the desktop PR pill from these. */
   prUrl?: string;
   prNumber?: string;
@@ -91,6 +94,8 @@ export interface PhoneOpened {
 /** Same knobs as the desktop composer and create modal. */
 export interface PhoneComposerOptions {
   agent: AgentKind;
+  /** Set when `agent` is `acp`. */
+  acpHarness?: 'gemini' | 'copilot' | null;
   model: string | null;
   effort: ThinkingEffort;
   fast: boolean;
@@ -130,6 +135,15 @@ export interface PhoneModelRow {
 }
 
 const AGENT_KINDS = new Set<AgentKind>(['claude', 'codex', 'opencode', 'brightsy', 'cursor', 'acp']);
+
+function phoneAcpHarness(
+  agent: AgentKind,
+  raw: 'gemini' | 'copilot' | null | undefined,
+): 'gemini' | 'copilot' | null {
+  if (agent !== 'acp') return null;
+  if (raw === 'gemini' || raw === 'copilot') return raw;
+  return defaultAcpHarness();
+}
 const MAX_PHONE_FILES = 8;
 const MAX_PHONE_FILE_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3);
 const MAX_PHONE_FILES_CHARS = Math.ceil((20 * 1024 * 1024 * 4) / 3);
@@ -142,7 +156,9 @@ export interface PhoneHistoryChat {
   preview: string;
   updatedAt: string;
   where: string;
-  agent: string; workspace?: string;
+  agent: string;
+  acpHarness?: 'gemini' | 'copilot';
+  workspace?: string;
 }
 
 export interface PhoneHistoryPage {
@@ -156,6 +172,7 @@ export interface PhoneHistoryPage {
 /** Fields shared by a prompt and by creating a chat that starts with a message. */
 export interface PhoneDraft {
   agent?: AgentKind;
+  acpHarness?: 'gemini' | 'copilot' | null;
   model?: string | null;
   effort?: ThinkingEffort;
   fast?: boolean;
@@ -377,6 +394,12 @@ function parsePhoneDraft(value: object): PhoneDraft | 'invalid' {
     if (!agent) return 'invalid';
     draft.agent = agent;
   }
+  if ('acpHarness' in value) {
+    const harness = (value as { acpHarness?: unknown }).acpHarness;
+    if (harness === null || harness === '') draft.acpHarness = null;
+    else if (harness === 'gemini' || harness === 'copilot') draft.acpHarness = harness;
+    else return 'invalid';
+  }
   if ('model' in value) {
     const model = (value as { model?: unknown }).model;
     if (model === null || model === '') draft.model = null;
@@ -504,6 +527,9 @@ function summarize(thread: Thread): PhoneChatSummary {
     preview: previewOf(thread),
     updatedAt: thread.updatedAt,
     agent: thread.agent,
+    ...(thread.agent === 'acp'
+      ? { acpHarness: thread.acpHarness === 'copilot' ? 'copilot' as const : 'gemini' as const }
+      : {}),
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
@@ -600,6 +626,9 @@ export function readPhoneThread(chatId: string): Thread | null {
 export function phoneComposerOptions(thread: Thread): PhoneComposerOptions {
   return {
     agent: thread.agent,
+    ...(thread.agent === 'acp'
+      ? { acpHarness: thread.acpHarness === 'copilot' ? 'copilot' as const : 'gemini' as const }
+      : {}),
     model: thread.model ?? null,
     effort: thread.effort,
     fast: Boolean(thread.fast),
@@ -681,8 +710,10 @@ function draftAgentOptions(draft: PhoneDraft | undefined, defaults: {
   fast: boolean;
   autonomy: Autonomy;
 }) {
+  const agent = draft?.agent ?? defaults.agent;
   return {
-    agent: draft?.agent ?? defaults.agent,
+    agent,
+    acpHarness: phoneAcpHarness(agent, draft?.acpHarness),
     model: draft && 'model' in draft ? (draft.model ?? null) : defaults.model,
     effort: draft?.effort ?? defaults.effort,
     fast: draft?.fast ?? defaults.fast,
@@ -735,6 +766,7 @@ export function createPhoneWorktreeAgent(fromChatId: string, draft?: PhoneDraft)
   const thread = createChatTab({
     fromThreadId: source.id,
     agent: options.agent,
+    ...(options.agent === 'acp' ? { acpHarness: options.acpHarness } : {}),
     model: options.model,
     effort: options.effort,
     fast: options.fast,
@@ -769,6 +801,7 @@ export async function createPhoneProjectWorktree(
     title: input.title,
     cowboy: input.cowboy,
     agent: options.agent,
+    ...(options.agent === 'acp' ? { acpHarness: options.acpHarness } : {}),
     model: options.model,
     effort: options.effort,
     fast: options.fast,

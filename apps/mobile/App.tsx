@@ -1500,7 +1500,10 @@ export default function App() {
             <Text style={styles.link}>Back</Text>
           </Pressable>
           <View style={[styles.titleRow, styles.titleFlex]}>
-            <AgentKindIcon agent={activeChat?.agent || chatOptions[activeChatId ?? '']?.agent || ''} />
+            <AgentKindIcon
+              agent={activeChat?.agent || chatOptions[activeChatId ?? '']?.agent || ''}
+              acpHarness={activeChat?.acpHarness || chatOptions[activeChatId ?? '']?.acpHarness}
+            />
             <Text style={styles.chromeTitle} numberOfLines={1}>
               {activeChat?.title || 'Agent'}
             </Text>

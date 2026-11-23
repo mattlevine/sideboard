@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { createAllowEmpty } from './account-defaults';
 import type { PickedFile } from './media';
-import { AgentKindIcon } from './agent-icons';
+import { AgentKindIcon, agentKindLabel } from './agent-icons';
 import { EmptyChat } from './empty-chat';
 
 const palette = {
@@ -29,10 +29,11 @@ const palette = {
   accent: '#007fd4',
 };
 
-export type AgentId = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
+export type AgentId = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy' | 'acp';
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type ComposerOptions = {
   agent: AgentId;
+  acpHarness?: 'gemini' | 'copilot' | null;
   model: string | null;
   effort: Effort;
   fast: boolean;
@@ -59,12 +60,14 @@ export type PhoneSources = {
   warnings?: string[];
 };
 
-const AGENTS: Array<{ id: AgentId; label: string }> = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'opencode', label: 'OpenCode' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'brightsy', label: 'Brightsy' },
+const AGENTS: Array<{ key: string; id: AgentId; label: string; acpHarness?: 'gemini' | 'copilot' }> = [
+  { key: 'claude', id: 'claude', label: 'Claude' },
+  { key: 'codex', id: 'codex', label: 'Codex' },
+  { key: 'opencode', id: 'opencode', label: 'OpenCode' },
+  { key: 'cursor', id: 'cursor', label: 'Cursor' },
+  { key: 'brightsy', id: 'brightsy', label: 'Brightsy' },
+  { key: 'gemini', id: 'acp', label: 'Gemini CLI', acpHarness: 'gemini' },
+  { key: 'copilot', id: 'acp', label: 'Copilot CLI', acpHarness: 'copilot' },
 ];
 
 const EFFORTS: Array<{ id: Effort; label: string }> = [
@@ -75,8 +78,8 @@ const EFFORTS: Array<{ id: Effort; label: string }> = [
   { id: 'max', label: 'Max' },
 ];
 
-function agentLabel(agent: AgentId): string {
-  return AGENTS.find((row) => row.id === agent)?.label ?? agent;
+function agentLabel(agent: AgentId, acpHarness?: 'gemini' | 'copilot' | null): string {
+  return agentKindLabel(agent, acpHarness);
 }
 
 function effortLabel(effort: Effort): string {
@@ -136,8 +139,8 @@ export function ComposerDock(props: {
                 setAgentOpen(true);
               }}
             >
-              <AgentKindIcon agent={props.options.agent} />
-              <Text style={styles.chipText} numberOfLines={1}>{agentLabel(props.options.agent)} · {modelLabel(props.options, props.models)}</Text>
+              <AgentKindIcon agent={props.options.agent} acpHarness={props.options.acpHarness} />
+              <Text style={styles.chipText} numberOfLines={1}>{agentLabel(props.options.agent, props.options.acpHarness)} · {modelLabel(props.options, props.models)}</Text>
             </Pressable>
             <Pressable
               style={styles.chip}
@@ -241,31 +244,39 @@ function AgentSheet(props: {
   onClose: () => void;
   onChange: (next: ComposerOptions) => void;
 }) {
-  const agents = props.allowBrightsy ? AGENTS : AGENTS.filter((row) => row.id !== 'brightsy');
+  const agents = props.allowBrightsy
+    ? AGENTS
+    : AGENTS.filter((row) => row.id !== 'brightsy' && row.id !== 'acp');
   return (
     <Modal visible={props.open} animationType="slide" transparent onRequestClose={props.onClose}>
       <Pressable style={styles.backdrop} onPress={props.onClose}>
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <Text style={styles.sheetTitle}>Agent</Text>
           <View style={styles.wrap}>
-            {agents.map((agent) => (
+            {agents.map((agent) => {
+              const selected =
+                props.options.agent === agent.id &&
+                (agent.id !== 'acp' || (props.options.acpHarness ?? 'gemini') === agent.acpHarness);
+              return (
               <Pressable
-                key={agent.id}
-                style={[styles.chip, props.options.agent === agent.id && styles.chipOn]}
+                key={agent.key}
+                style={[styles.chip, selected && styles.chipOn]}
                 onPress={() => {
                   props.onNeedModels(agent.id);
                   props.onChange({
                     ...props.options,
                     agent: agent.id,
+                    acpHarness: agent.id === 'acp' ? (agent.acpHarness ?? 'gemini') : null,
                     model: agent.id === 'cursor' ? 'default' : null,
                     fast: agent.id === 'cursor' ? props.options.fast : false,
                   });
                 }}
               >
-                <AgentKindIcon agent={agent.id} />
+                <AgentKindIcon agent={agent.id} acpHarness={agent.acpHarness} />
                 <Text style={styles.chipText}>{agent.label}</Text>
               </Pressable>
-            ))}
+              );
+            })}
           </View>
           <Text style={styles.sheetLabel}>Model</Text>
           <ScrollView style={styles.modelList}>

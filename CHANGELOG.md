@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.350] - 2026-11-22
+
+### Added
+
+- Gemini CLI and Copilot CLI run as worktree chats through one Agent Client Protocol adapter. A harness that can load a session does; otherwise Sideboard replays the transcript. There is no attach.
+- The phone names Gemini CLI and Copilot CLI, and a project chat can start either one.
+
+### Fixed
+
+- Plan mode refuses an ACP tool permission when the kind is missing or is not a read.
+- Gemini and Copilot chats receive the user's stdio MCP servers.
+
 ## [0.1.349] - 2026-11-22
 
 ### Added

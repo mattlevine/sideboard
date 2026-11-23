@@ -32,7 +32,50 @@ export type AcpTranscriptTurn = {
   text: string;
 };
 
-const WRITE_TOOL_KINDS = new Set(['edit', 'delete', 'move', 'execute']);
+/** Plan mode may allow these. Anything else, including a missing kind, is refused. */
+const PLAN_READ_TOOL_KINDS = new Set(['read', 'search', 'think']);
+
+/**
+ * One user stdio MCP entry (Claude `mcpServers` shape). HTTP/SSE entries and
+ * rows without a command are skipped — the harness launches stdio servers.
+ */
+export function acpStdioServerFromEntry(
+  name: string,
+  entry: Record<string, unknown>,
+): AcpMcpServer | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const type = typeof entry.type === 'string' ? entry.type : '';
+  if (type === 'http' || type === 'sse' || typeof entry.url === 'string') return null;
+  const command = typeof entry.command === 'string' ? entry.command.trim() : '';
+  if (!command) return null;
+  const args = Array.isArray(entry.args)
+    ? entry.args.filter((item): item is string => typeof item === 'string')
+    : [];
+  const env: Array<{ name: string; value: string }> = [];
+  const rawEnv = entry.env;
+  if (rawEnv && typeof rawEnv === 'object' && !Array.isArray(rawEnv)) {
+    for (const [key, value] of Object.entries(rawEnv)) {
+      if (key === 'ELECTRON_RUN_AS_NODE' || typeof value !== 'string') continue;
+      env.push({ name: key, value });
+    }
+  }
+  return { name: trimmed, command, args, env };
+}
+
+/** User stdio servers whose names are not already injected. */
+export function acpUserStdioServers(
+  entries: Record<string, Record<string, unknown>>,
+  taken: ReadonlySet<string>,
+): AcpMcpServer[] {
+  const out: AcpMcpServer[] = [];
+  for (const [name, entry] of Object.entries(entries)) {
+    if (taken.has(name.trim())) continue;
+    const server = acpStdioServerFromEntry(name, entry);
+    if (server) out.push(server);
+  }
+  return out;
+}
 
 export function toAcpMcpServers(
   servers: Array<{ name: string; command: string; args?: string[]; env?: Record<string, string> }>,
@@ -105,7 +148,11 @@ export function selectAcpPermissionOption(
   const allowOnce = options.find((option) => option.kind === 'allow_once');
   const rejectOnce = options.find((option) => option.kind === 'reject_once');
   const rejectAlways = options.find((option) => option.kind === 'reject_always');
-  if (mode === 'plan' && toolKind && WRITE_TOOL_KINDS.has(toolKind)) {
+  if (mode === 'plan') {
+    if (toolKind && PLAN_READ_TOOL_KINDS.has(toolKind)) {
+      const allow = allowOnce ?? allowAlways;
+      if (allow) return { outcome: 'selected', optionId: allow.optionId };
+    }
     const reject = rejectOnce ?? rejectAlways;
     if (reject) return { outcome: 'selected', optionId: reject.optionId };
     return { outcome: 'cancelled' };

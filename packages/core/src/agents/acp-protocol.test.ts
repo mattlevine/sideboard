@@ -10,6 +10,8 @@ import {
 import {
   acpPriorTranscript,
   acpSessionOpenPlan,
+  acpStdioServerFromEntry,
+  acpUserStdioServers,
   ACP_REPLAY_CHAR_BUDGET,
   buildAcpReplayPrompt,
   parseAcpRunnerLine,
@@ -78,6 +80,22 @@ describe('ACP permissions', () => {
       outcome: 'selected',
       optionId: 'once',
     });
+    expect(selectAcpPermissionOption(options, 'plan', 'search')).toEqual({
+      outcome: 'selected',
+      optionId: 'once',
+    });
+    expect(selectAcpPermissionOption(options, 'plan', null)).toEqual({
+      outcome: 'selected',
+      optionId: 'no',
+    });
+    expect(selectAcpPermissionOption(options, 'plan', 'other')).toEqual({
+      outcome: 'selected',
+      optionId: 'no',
+    });
+    expect(selectAcpPermissionOption(options, 'plan', 'fetch')).toEqual({
+      outcome: 'selected',
+      optionId: 'no',
+    });
   });
 
   it('prefers allow-always when autonomy is full', () => {
@@ -92,6 +110,34 @@ describe('ACP permissions', () => {
       outcome: 'selected',
       optionId: 'once',
     });
+  });
+});
+
+describe('ACP user MCP', () => {
+  it('keeps stdio servers and drops http entries and names already injected', () => {
+    expect(
+      acpStdioServerFromEntry('docs', {
+        command: 'npx',
+        args: ['-y', 'docs'],
+        env: { TOKEN: 'x', ELECTRON_RUN_AS_NODE: '1', n: 1 },
+      }),
+    ).toEqual({
+      name: 'docs',
+      command: 'npx',
+      args: ['-y', 'docs'],
+      env: [{ name: 'TOKEN', value: 'x' }],
+    });
+    expect(acpStdioServerFromEntry('web', { type: 'http', url: 'https://example.test' })).toBeNull();
+    expect(
+      acpUserStdioServers(
+        {
+          sideboard: { command: 'node', args: ['mcp.js'] },
+          docs: { command: 'npx', args: ['docs'] },
+          web: { url: 'https://example.test' },
+        },
+        new Set(['sideboard']),
+      ),
+    ).toEqual([{ name: 'docs', command: 'npx', args: ['docs'], env: [] }]);
   });
 });
 

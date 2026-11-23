@@ -15,6 +15,7 @@ function chatKey(row: PhoneChatSummary): string {
     row.title,
     row.status,
     row.agent,
+    row.acpHarness ?? '',
     row.preview,
     row.needsYou ? '1' : '0',
     row.blockedReason ?? '',
