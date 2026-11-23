@@ -54,6 +54,8 @@ import {
   restartRemoteHost,
   signInRemoteAccount,
   signOutRemoteAccount,
+  listSignedInRemoteMacs,
+  forgetSignedInRemoteMac,
   startRemoteHost,
 } from './remote-host-daemon';
 import { initDesktopSecretVault } from './secret-vault';
@@ -1235,6 +1237,8 @@ function registerIpc(): void {
     signInRemoteAccount(provider, (url) => shell.openExternal(url)),
   );
   ipcMain.handle('disconnectRemoteAccount', () => signOutRemoteAccount());
+  ipcMain.handle('listRemoteAccountMacs', () => listSignedInRemoteMacs());
+  ipcMain.handle('forgetRemoteAccountMac', (_e, deviceId: string) => forgetSignedInRemoteMac(deviceId));
   ipcMain.handle('getCaffeinateHold', () => caffeinateUiState());
   ipcMain.handle('listIssues', async (_e, path: string, opts?: ListIssuesOptions) =>
     listIssues(await resolveRepoRoot(path), opts),

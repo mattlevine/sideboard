@@ -362,4 +362,126 @@ describe('relay account sign-in', () => {
     };
     expect(badResult.ok).toBe(false);
   });
+
+  it('lists Macs and frees a slot when one is forgotten', async () => {
+    const accountsPath = join(mkdtempSync(join(tmpdir(), 'sb-relay-forget-')), 'accounts.sqlite');
+    handle = await startRelayServer({
+      skipSocketMode: true,
+      host: '127.0.0.1',
+      port: 0,
+      accountsPath,
+      relayOAuth: { github: { clientId: 'gid', clientSecret: 'gsecret' } },
+      fetchImpl: async (input) => {
+        const url = String(input);
+        if (url.includes('github.com/login/oauth/access_token')) {
+          return new Response(JSON.stringify({ access_token: 'github-access' }));
+        }
+        if (url.includes('api.github.com/user/emails')) {
+          return new Response(JSON.stringify([{ email: 'ada@example.com', primary: true, verified: true }]));
+        }
+        if (url.includes('api.github.com/user')) {
+          return new Response(JSON.stringify({ id: 42 }));
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      },
+    });
+    const origin = `http://127.0.0.1:${handle.port}`;
+    const state = 'c'.repeat(32);
+    const started = await fetch(`${origin}/remote/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: 'github', state }),
+    });
+    expect(started.ok).toBe(true);
+    expect((await fetch(`${origin}/remote/oauth/callback?code=from-github&state=${state}`)).status).toBe(200);
+    const session = (await (await fetch(`${origin}/remote/oauth/result?state=${state}`)).json()) as {
+      credential?: string;
+    };
+    expect(session.credential).toBeTruthy();
+    const token = session.credential!;
+    const wsUrl = `ws://127.0.0.1:${handle.port}${REMOTE_RELAY_PATH}`;
+    for (const id of ['mac-1', 'mac-2', 'mac-3']) {
+      const registered = await once(wsUrl, {
+        type: 'host_register',
+        deviceId: id,
+        deviceLabel: id,
+        hostSecret: `secret-${id}`,
+        accountToken: token,
+      });
+      expect(registered).toMatchObject({ type: 'registered', deviceId: id });
+    }
+    const live = await connect(wsUrl);
+    live.send({
+      type: 'host_register',
+      deviceId: 'mac-1',
+      deviceLabel: 'Work',
+      hostSecret: 'secret-mac-1',
+      accountToken: token,
+    });
+    expect(await live.next()).toMatchObject({ type: 'registered', deviceId: 'mac-1' });
+
+    const unauthorized = await fetch(`${origin}/remote/macs`);
+    expect(unauthorized.status).toBe(401);
+    const listed = await fetch(`${origin}/remote/macs`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const listBody = (await listed.json()) as { ok?: boolean; macs?: { deviceId: string; deviceLabel: string }[] };
+    expect(listed.status).toBe(200);
+    expect(listBody.macs?.map((mac) => mac.deviceId)).toEqual(['mac-1', 'mac-2', 'mac-3']);
+    expect(listBody.macs?.find((mac) => mac.deviceId === 'mac-1')?.deviceLabel).toBe('Work');
+
+    const forgot = await fetch(`${origin}/remote/macs/forget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountToken: token, deviceId: 'mac-2' }),
+    });
+    expect(await forgot.json()).toEqual({ ok: true });
+    const after = (await (
+      await fetch(`${origin}/remote/macs`, { headers: { Authorization: `Bearer ${token}` } })
+    ).json()) as { macs?: { deviceId: string }[] };
+    expect(after.macs?.map((mac) => mac.deviceId)).toEqual(['mac-1', 'mac-3']);
+
+    const fourth = await once(wsUrl, {
+      type: 'host_register',
+      deviceId: 'mac-4',
+      deviceLabel: 'mac-4',
+      hostSecret: 'secret-mac-4',
+      accountToken: token,
+    });
+    expect(fourth).toMatchObject({ type: 'registered', deviceId: 'mac-4' });
+    const fifth = await once(wsUrl, {
+      type: 'host_register',
+      deviceId: 'mac-5',
+      deviceLabel: 'mac-5',
+      hostSecret: 'secret-mac-5',
+      accountToken: token,
+    });
+    expect(fifth).toEqual({ type: 'error', message: 'This account already has the maximum number of Macs.' });
+
+    const removed = await fetch(`${origin}/remote/macs/forget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountToken: token, deviceId: 'mac-1' }),
+    });
+    expect(removed.status).toBe(200);
+    expect(await live.next()).toEqual({ type: 'error', message: 'This Mac was removed from the account.' });
+    live.close();
+
+    const missing = await fetch(`${origin}/remote/macs/forget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountToken: token, deviceId: 'mac-1' }),
+    });
+    expect(missing.status).toBe(404);
+    const denied = await fetch(`${origin}/remote/macs/forget`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountToken: 'nope', deviceId: 'mac-3' }),
+    });
+    expect(denied.status).toBe(401);
+    const still = (await (
+      await fetch(`${origin}/remote/macs`, { headers: { Authorization: `Bearer ${token}` } })
+    ).json()) as { macs?: { deviceId: string }[] };
+    expect(still.macs?.map((mac) => mac.deviceId)).toEqual(['mac-3', 'mac-4']);
+  });
 });

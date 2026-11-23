@@ -35,6 +35,13 @@ export type RelayHostAuthorization =
   | { ok: true; accountId: string }
   | { ok: false; message: string };
 
+/** A Mac registered on one Sideboard account. */
+export type RelayAccountMac = {
+  deviceId: string;
+  deviceLabel: string;
+  createdAt: number;
+};
+
 type IdentityRow = {
   issuer: string;
   subject: string;
@@ -325,6 +332,54 @@ export class RelayAccountStore {
       this.db.prepare('UPDATE devices SET device_label = ? WHERE device_id = ?').run(deviceLabel, deviceId);
       this.db.exec('COMMIT');
       return { ok: true, accountId };
+    } catch (err) {
+      this.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  /**
+   * Macs registered on the account that owns `accountToken`.
+   * `null` means the credential is missing or no longer valid.
+   */
+  listMacs(accountToken: string): RelayAccountMac[] | null {
+    const accountId = this.verifyCredential(accountToken);
+    if (!accountId) return null;
+    const rows = this.db
+      .prepare(
+        'SELECT device_id, device_label, created_at FROM devices WHERE account_id = ? ORDER BY created_at, device_id',
+      )
+      .all(accountId) as { device_id: string; device_label: string; created_at: number }[];
+    return rows.map((row) => ({
+      deviceId: row.device_id,
+      deviceLabel: row.device_label,
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * Remove one Mac from the signed-in account. The row no longer counts
+   * toward the cap. The account and its other credentials stay.
+   */
+  forgetMac(accountToken: string, deviceId: string): { ok: true } | { ok: false; message: string } {
+    const id = deviceId.trim();
+    const accountId = this.verifyCredential(accountToken);
+    if (!accountId) return { ok: false, message: 'sign in required' };
+    if (!id) return { ok: false, message: 'Mac not found' };
+
+    this.db.exec('BEGIN');
+    try {
+      const device = this.db
+        .prepare('SELECT account_id FROM devices WHERE device_id = ?')
+        .get(id) as { account_id: string } | undefined;
+      if (!device || device.account_id !== accountId) {
+        this.db.exec('ROLLBACK');
+        return { ok: false, message: 'Mac not found' };
+      }
+      this.db.prepare('DELETE FROM push_tokens WHERE device_id = ?').run(id);
+      this.db.prepare('DELETE FROM devices WHERE device_id = ?').run(id);
+      this.db.exec('COMMIT');
+      return { ok: true };
     } catch (err) {
       this.db.exec('ROLLBACK');
       throw err;

@@ -76,7 +76,7 @@ On the phone, open **Pair a Mac**, set **Relay** to that same address, and scan 
 
 Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch. Slack does not follow this address.
 
-Each account can register 3 Macs. A slot stays after you reinstall or replace that Mac. There is no forget control yet.
+Each account can register 3 Macs. Settings → Remote lists the Macs on this account and can forget one, which frees the slot. Forgetting this Mac also signs it out. Sign out alone keeps the slot. A Mac that is still signed in registers again the next time it connects.
 
 ## What it stores
 
@@ -104,6 +104,6 @@ Logs:
 docker compose -f apps/relay/docker-compose.yml logs -f relay
 ```
 
-`sign in required` means sign in on this relay again. `host secret rejected` means this Mac’s device id is already registered with a different secret. `This account already has the maximum number of Macs.` means the 3-Mac limit. `remote rate limit` means 20 phone sockets are already open for that client address. A phone that drops while idle needs a longer proxy timeout.
+`sign in required` means sign in on this relay again. `host secret rejected` means this Mac’s device id is already registered with a different secret. `This account already has the maximum number of Macs.` means the 3-Mac limit. Forget a Mac under Settings → Remote to free a slot. `remote rate limit` means 20 phone sockets are already open for that client address. A phone that drops while idle needs a longer proxy timeout.
 
 See [Phone](/docs/remote/) for pairing, and [Support](/support/) for product questions.

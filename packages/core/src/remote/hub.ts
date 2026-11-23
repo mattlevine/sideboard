@@ -119,6 +119,40 @@ export class RemoteHub {
     this.dispatch(socket, msg);
   }
 
+  /** The account forgot this Mac. Drop its sockets and the remembered secret. */
+  forgetDevice(deviceId: string): void {
+    const id = deviceId.trim();
+    if (!id) return;
+    this.remembered.delete(id);
+    for (const [code, row] of this.codes) {
+      if (row.deviceId === id) this.codes.delete(code);
+    }
+    for (const [token, session] of this.phonesByToken) {
+      if (session.deviceId === id) this.phonesByToken.delete(token);
+    }
+    const host = this.hosts.get(id);
+    if (!host) return;
+    const phone = host.phone;
+    this.hosts.delete(id);
+    this.bySocket.delete(host.socket);
+    if (phone) {
+      this.bySocket.delete(phone);
+      this.pushTokenBySocket.delete(phone);
+      send(phone, { type: 'host_offline' });
+      try {
+        phone.close();
+      } catch {
+        // ignore
+      }
+    }
+    send(host.socket, { type: 'error', message: 'This Mac was removed from the account.' });
+    try {
+      host.socket.close();
+    } catch {
+      // ignore
+    }
+  }
+
   detachSocket(socket: RemoteSocket): void {
     const bound = this.bySocket.get(socket);
     if (!bound) return;

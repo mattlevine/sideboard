@@ -394,11 +394,13 @@ export {
 export type { RemoteServerMessage, RemoteAskQuestion } from './remote/protocol.js';
 export {
   disconnectRemoteAccount,
+  forgetRemoteAccountMac,
   isRemoteAccountLoginCancelled,
+  listRemoteAccountMacs,
   remoteAccountHttpOrigin,
   startRemoteAccountLogin,
 } from './relay/account-login.js';
-export type { RelayAccountProvider, RemoteAccountSession } from './relay/account-login.js';
+export type { RelayAccountProvider, RemoteAccountMac, RemoteAccountSession } from './relay/account-login.js';
 export { SlackRelayHub } from './slack/relay-hub.js';
 export { startRelayServer } from './relay/server.js';
 export type { RelayServerOptions, RelayServerHandle } from './relay/server.js';

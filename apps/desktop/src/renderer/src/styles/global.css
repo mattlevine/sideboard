@@ -13287,6 +13287,22 @@ body:has(.update-banner) .team-toast-stack {
   border-radius: 8px;
 }
 
+.settings-mac-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-mac-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .settings-env-key {
   font-family: var(--mono);
   font-size: 12px;
