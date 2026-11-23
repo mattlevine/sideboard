@@ -197,6 +197,65 @@ describe('relay accounts', () => {
     ).toEqual({ ok: false, message: 'This Mac is registered to another account.' });
   });
 
+  it('forgets a Mac and frees its slot', () => {
+    const store = open();
+    const signed = store.signIn({
+      issuer: GITHUB_ACCOUNT_ISSUER,
+      subject: '99',
+      email: null,
+      emailVerified: false,
+    });
+    for (const id of ['mac-1', 'mac-2', 'mac-3']) {
+      expect(
+        store.authorizeHost({
+          accountToken: signed.credential,
+          deviceId: id,
+          deviceLabel: id,
+          hostSecret: `secret-${id}`,
+        }).ok,
+      ).toBe(true);
+    }
+    store.savePhoneSession('mac-2', 'phone-token');
+    store.replacePushToken('expo-token', ['mac-2', 'mac-3']);
+    expect(store.listMacs('nope')).toBeNull();
+    expect(store.listMacs(signed.credential)?.map((mac) => mac.deviceLabel)).toEqual(['mac-1', 'mac-2', 'mac-3']);
+
+    const other = store.signIn({
+      issuer: OTHER_GIT_HOST_ISSUER,
+      subject: '7',
+      email: null,
+      emailVerified: false,
+    });
+    expect(store.forgetMac(other.credential, 'mac-2')).toEqual({ ok: false, message: 'Mac not found' });
+    expect(store.forgetMac(signed.credential, 'missing')).toEqual({ ok: false, message: 'Mac not found' });
+    expect(store.forgetMac('', 'mac-2')).toEqual({ ok: false, message: 'sign in required' });
+    expect(store.findPhoneSession('phone-token')?.deviceId).toBe('mac-2');
+
+    expect(store.forgetMac(signed.credential, ' mac-2 ')).toEqual({ ok: true });
+    expect(store.verifyCredential(signed.credential)).toBe(signed.accountId);
+    expect(store.findPhoneSession('phone-token')).toBeNull();
+    expect(store.pushTokensFor('mac-2')).toEqual([]);
+    expect(store.pushTokensFor('mac-3')).toEqual(['expo-token']);
+    expect(store.listMacs(signed.credential)?.map((mac) => mac.deviceId)).toEqual(['mac-1', 'mac-3']);
+
+    expect(
+      store.authorizeHost({
+        accountToken: signed.credential,
+        deviceId: 'mac-4',
+        deviceLabel: 'mac-4',
+        hostSecret: 'secret-mac-4',
+      }).ok,
+    ).toBe(true);
+    expect(
+      store.authorizeHost({
+        accountToken: signed.credential,
+        deviceId: 'mac-5',
+        deviceLabel: 'mac-5',
+        hostSecret: 'secret-mac-5',
+      }),
+    ).toEqual({ ok: false, message: 'This account already has the maximum number of Macs.' });
+  });
+
   it('logout drops one credential and revoke drops the account', () => {
     const store = open();
     const signed = store.signIn({

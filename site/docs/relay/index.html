@@ -102,7 +102,7 @@ docker compose -f apps/relay/docker-compose.yml up --build -d</pre>
 <p>Save. Sideboard signs this Mac out of the previous relay. <strong>Sign in with GitHub, Cursor, or Entire</strong>, name the Mac, then <strong>Show pairing code</strong>.</p>
 <p>On the phone, open <strong>Pair a Mac</strong>, set <strong>Relay</strong> to that same address, and scan the QR code. The phone remembers it. Paste the line under the code if you can’t scan.</p>
 <p>Leave the Mac field blank, and the phone on the prefilled Sideboard address, to use Sideboard’s relay again. Sign in again after you switch. Slack does not follow this address.</p>
-<p>Each account can register 3 Macs. A slot stays after you reinstall or replace that Mac. There is no forget control yet.</p>
+<p>Each account can register 3 Macs. Settings → Remote lists the Macs on this account and can forget one, which frees the slot. Forgetting this Mac also signs it out. Sign out alone keeps the slot. A Mac that is still signed in registers again the next time it connects.</p>
 <h2>What it stores</h2>
 <p>The account file holds the git-host identity, the Mac’s name, and hashes of the Mac credential and the phone session token. Message text stays encrypted between the phone and the Mac. Prompts, repos, and secrets are not stored.</p>
 <p>A restart drops live sockets and a sign-in that has not finished. Pairings resume from the account file.</p>
@@ -115,7 +115,7 @@ docker compose -f apps/relay/docker-compose.yml start relay</pre>
 <p>Open <code>https://relay.example.com/health</code>. You should see JSON with <code>"service": "sideboard-relay"</code>, <code>"accounts": true</code>, and <code>"providers": { "github": true }</code>. <code>phoneSockets</code> counts open phone connections. <code>/</code> on this host is that same JSON.</p>
 <p>Logs:</p>
 <pre>docker compose -f apps/relay/docker-compose.yml logs -f relay</pre>
-<p><code>sign in required</code> means sign in on this relay again. <code>host secret rejected</code> means this Mac’s device id is already registered with a different secret. <code>This account already has the maximum number of Macs.</code> means the 3-Mac limit. <code>remote rate limit</code> means 20 phone sockets are already open for that client address. A phone that drops while idle needs a longer proxy timeout.</p>
+<p><code>sign in required</code> means sign in on this relay again. <code>host secret rejected</code> means this Mac’s device id is already registered with a different secret. <code>This account already has the maximum number of Macs.</code> means the 3-Mac limit. Forget a Mac under Settings → Remote to free a slot. <code>remote rate limit</code> means 20 phone sockets are already open for that client address. A phone that drops while idle needs a longer proxy timeout.</p>
 <p>See <a href="/docs/remote/">Phone</a> for pairing, and <a href="/support/">Support</a> for product questions.</p>
 </article>
 </div>

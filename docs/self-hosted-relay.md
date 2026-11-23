@@ -96,7 +96,7 @@ The account file holds the git-host subject, a verified email when the provider 
 
 A restart drops live sockets, pairing codes, and a sign-in that has not finished. The Mac and phone reconnect. Pairings resume from the account file. Finish sign-in again if the browser step was still open. That step lives in memory for 10 minutes.
 
-Each account can register 3 Macs. A slot stays after you reinstall Sideboard or replace that Mac. There is no forget control yet. The fourth Mac gets `This account already has the maximum number of Macs.` Replacing the account file is the reset.
+Each account can register 3 Macs. Settings → Remote lists the Macs on this account and can forget one, which frees the slot. Forgetting this Mac also signs it out. Sign out alone keeps the slot. A Mac that is still signed in registers again the next time it connects. A fourth Mac, while three are registered, gets `This account already has the maximum number of Macs.`
 
 ## Backup and upgrade
 
@@ -138,7 +138,7 @@ docker compose -f apps/relay/docker-compose.yml logs -f relay
 | Process exits: accounts are on the machine root filesystem | Keep the Compose volume at `/data`. |
 | `sign in required` | Sign in on this relay. A credential from another relay does not work. |
 | `host secret rejected` | This Mac’s device id is already registered with a different secret. |
-| `This account already has the maximum number of Macs.` | This account already has 3 Macs. There is no forget control yet. |
+| `This account already has the maximum number of Macs.` | This account already has 3 Macs. Forget one under Settings → Remote. |
 | `This Mac is registered to another account.` | That device id belongs to a different sign-in. |
 | `remote rate limit` and the socket closes with `too many connections` | 20 phone sockets are open for that client address, or 4000 on the process. |
 | The phone drops while idle | Raise the proxy idle timeout above 20 seconds. |

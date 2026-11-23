@@ -253,6 +253,7 @@ export async function startRelayServer(
           sessions: accountSessions,
           publicOrigin: publicOrigin(),
           fetchImpl: opts.fetchImpl,
+          onMacForgotten: (deviceId) => remoteHub.forgetDevice(deviceId),
         }))
       ) {
         return;

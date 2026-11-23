@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { PublicAppSettings, RelayAccountProvider, RemoteHostStatus } from '@sideboard-ai/core';
+import type { PublicAppSettings, RelayAccountProvider, RemoteAccountMac, RemoteHostStatus } from '@sideboard-ai/core';
 import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
 import { PairingQr } from './PairingQr';
 
@@ -31,6 +31,10 @@ export function RemoteSettings({
   const [relayDraft, setRelayDraft] = useState(settings.integrations.remoteRelayUrl ?? '');
   const [signingIn, setSigningIn] = useState<RelayAccountProvider | 'out' | null>(null);
   const [pairing, setPairing] = useState(false);
+  const [macs, setMacs] = useState<Array<RemoteAccountMac & { thisMac: boolean }>>([]);
+  const [macsLoaded, setMacsLoaded] = useState(false);
+  const [macsFailed, setMacsFailed] = useState(false);
+  const [forgettingId, setForgettingId] = useState<string | null>(null);
   const signedIn = Boolean(settings.integrations.hasRemoteAccount);
 
   useEffect(() => {
@@ -44,6 +48,35 @@ export function RemoteSettings({
   useEffect(() => {
     setRelayDraft(settings.integrations.remoteRelayUrl ?? '');
   }, [settings.integrations.remoteRelayUrl]);
+
+  useEffect(() => {
+    if (!signedIn) {
+      setMacs([]);
+      setMacsLoaded(false);
+      setMacsFailed(false);
+      return;
+    }
+    let cancelled = false;
+    void window.sideboard
+      .listRemoteAccountMacs()
+      .then((rows) => {
+        if (cancelled) return;
+        setMacs(rows);
+        setMacsFailed(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setMacs([]);
+        setMacsFailed(true);
+        setError(errorText(err));
+      })
+      .finally(() => {
+        if (!cancelled) setMacsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, remote?.connected, remote?.deviceLabel, settings.integrations.remoteAccountEmail, setError]);
 
   useEffect(() => {
     const api = window.sideboard.getRemoteStatus;
@@ -99,6 +132,28 @@ export function RemoteSettings({
       setError(errorText(err));
     } finally {
       setSigningIn(null);
+    }
+  }
+
+  async function forgetMac(mac: RemoteAccountMac & { thisMac: boolean }) {
+    const name = mac.thisMac ? 'this Mac' : mac.deviceLabel || 'that Mac';
+    const extra = mac.thisMac
+      ? ' This Mac will be signed out.'
+      : ' A Mac that is still signed in registers again the next time it connects.';
+    if (!window.confirm(`Forget ${name}? Its slot will be free.${extra}`)) return;
+    setForgettingId(mac.deviceId);
+    setError(null);
+    try {
+      const next = await window.sideboard.forgetRemoteAccountMac(mac.deviceId);
+      applySettings(next);
+      if (!mac.thisMac) {
+        const rows = await window.sideboard.listRemoteAccountMacs();
+        setMacs(rows);
+      }
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setForgettingId(null);
     }
   }
 
@@ -249,6 +304,37 @@ export function RemoteSettings({
           ) : null}
         </div>
       </div>
+
+      {signedIn ? (
+        <div className="settings-section settings-section-card">
+          <div className="settings-section-title">Macs</div>
+          <p className="settings-hint">
+            This account can register 3 Macs. Forget a Mac you no longer use to free its slot.
+            Forgetting this Mac signs it out. Sign out keeps the slot.
+          </p>
+          {macsLoaded && !macsFailed && macs.length === 0 ? (
+            <p className="settings-hint">No Macs registered yet. This Mac registers when the relay connects.</p>
+          ) : (
+            <div className="settings-mac-list">
+              {macs.map((mac) => (
+                <div key={mac.deviceId} className="settings-mac-row">
+                  <span>
+                    {mac.deviceLabel || 'Mac'}
+                    {mac.thisMac ? <span className="settings-hint"> · This Mac</span> : null}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy || signingIn !== null || forgettingId !== null}
+                    onClick={() => void forgetMac(mac)}
+                  >
+                    {forgettingId === mac.deviceId ? 'Forgetting…' : 'Forget'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Pair a phone</div>

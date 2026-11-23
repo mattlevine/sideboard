@@ -31,6 +31,8 @@ export const REMOTE_LOGIN_PATH = '/remote/login';
 export const REMOTE_OAUTH_CALLBACK_PATH = '/remote/oauth/callback';
 export const REMOTE_OAUTH_RESULT_PATH = '/remote/oauth/result';
 export const REMOTE_LOGOUT_PATH = '/remote/logout';
+export const REMOTE_MACS_PATH = '/remote/macs';
+export const REMOTE_MACS_FORGET_PATH = '/remote/macs/forget';
 
 const STATE_RE = /^[A-Za-z0-9_-]{16,128}$/;
 const LOGIN_TTL_MS = 10 * 60 * 1000;
@@ -264,6 +266,13 @@ function sendHtml(res: ServerResponse, status: number, title: string, body: stri
   res.end(oauthReturnPage(title, body));
 }
 
+function bearerToken(req: IncomingMessage): string {
+  const header = req.headers.authorization;
+  if (typeof header !== 'string') return '';
+  const match = /^Bearer\s+(\S+)/i.exec(header.trim());
+  return match?.[1]?.trim() ?? '';
+}
+
 /**
  * Git-host sign-in for the phone relay. Each host is a registry entry.
  * Client secrets stay on the relay. The desktop receives a Sideboard
@@ -277,6 +286,8 @@ export async function handleRelayAccountHttp(opts: {
   sessions: RelayLoginSessions;
   publicOrigin: string;
   fetchImpl?: typeof fetch;
+  /** Live sockets for a Mac that was just removed. The account row is already gone. */
+  onMacForgotten?: (deviceId: string) => void;
 }): Promise<boolean> {
   const reqUrl = opts.req.url || '/';
   const path = reqUrl.split('?')[0];
@@ -402,6 +413,42 @@ export async function handleRelayAccountHttp(opts: {
       email: result.email,
       accountId: result.accountId,
     });
+    return true;
+  }
+
+  if (method === 'GET' && path === REMOTE_MACS_PATH) {
+    const macs = opts.store.listMacs(bearerToken(opts.req));
+    if (!macs) {
+      sendJson(opts.res, 401, { ok: false, error: 'sign in required' });
+      return true;
+    }
+    sendJson(opts.res, 200, { ok: true, macs });
+    return true;
+  }
+
+  if (method === 'POST' && path === REMOTE_MACS_FORGET_PATH) {
+    let body: { accountToken?: unknown; deviceId?: unknown };
+    try {
+      body = (await readBody(opts.req)) as typeof body;
+    } catch {
+      sendJson(opts.res, 400, { ok: false, error: 'invalid request' });
+      return true;
+    }
+    const token =
+      (typeof body.accountToken === 'string' ? body.accountToken.trim() : '') || bearerToken(opts.req);
+    const deviceId = typeof body.deviceId === 'string' ? body.deviceId : '';
+    const result = opts.store.forgetMac(token, deviceId);
+    if (!result.ok) {
+      const status = result.message === 'sign in required' ? 401 : 404;
+      sendJson(opts.res, status, { ok: false, error: result.message });
+      return true;
+    }
+    try {
+      opts.onMacForgotten?.(deviceId.trim());
+    } catch {
+      // The registration is already gone. A live socket drops when it registers again.
+    }
+    sendJson(opts.res, 200, { ok: true });
     return true;
   }
 

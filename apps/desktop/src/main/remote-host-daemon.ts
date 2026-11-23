@@ -1,6 +1,8 @@
 import {
   disconnectRemoteAccount,
   ensureRemoteHostCredentials,
+  forgetRemoteAccountMac,
+  listRemoteAccountMacs,
   saveRemotePhoneToken,
   isRemoteAccountLoginCancelled,
   loadAppSettings,
@@ -12,9 +14,11 @@ import {
   updateIntegrationsSettings,
   type PublicAppSettings,
   type RelayAccountProvider,
+  type RemoteAccountMac,
   type RemoteHostStatus,
 } from '@sideboard-ai/core';
 import type { BrowserWindow } from 'electron';
+import { runForgetRemoteMac } from './forget-remote-mac';
 import { transcribeWavFile } from './speech-dictate';
 
 let onActivity: () => void = () => {};
@@ -208,6 +212,39 @@ export async function signInRemoteAccount(
   } finally {
     if (remoteAccountAbort === ac) remoteAccountAbort = null;
   }
+}
+
+export async function listSignedInRemoteMacs(): Promise<Array<RemoteAccountMac & { thisMac: boolean }>> {
+  const token = loadAppSettings().integrations.remoteAccountToken?.trim() ?? '';
+  if (!token) return [];
+  const macs = await listRemoteAccountMacs({
+    accountToken: token,
+    origin: remoteAccountHttpOrigin(activeRelayUrl()),
+  });
+  const { deviceId } = ensureRemoteHostCredentials();
+  return macs.map((mac) => ({ ...mac, thisMac: mac.deviceId === deviceId }));
+}
+
+/** Drop one Mac on the relay. This Mac also signs out, so it does not register again. */
+export async function forgetSignedInRemoteMac(deviceId: string): Promise<PublicAppSettings> {
+  const id = deviceId.trim();
+  const token = loadAppSettings().integrations.remoteAccountToken?.trim() ?? '';
+  if (!token) throw new Error('sign in required');
+  if (!id) throw new Error('Mac not found');
+  const self = ensureRemoteHostCredentials().deviceId === id;
+  return runForgetRemoteMac({
+    self,
+    stopHost: stopRemoteHost,
+    startHost: startRemoteHost,
+    forget: () =>
+      forgetRemoteAccountMac({
+        accountToken: token,
+        deviceId: id,
+        origin: remoteAccountHttpOrigin(activeRelayUrl()),
+      }),
+    signOut: () => signOutRemoteAccount(),
+    settings: () => toPublicAppSettings(loadAppSettings()),
+  });
 }
 
 export async function signOutRemoteAccount(): Promise<PublicAppSettings> {

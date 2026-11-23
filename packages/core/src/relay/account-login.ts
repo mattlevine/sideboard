@@ -1,7 +1,15 @@
 import { randomBytes } from 'node:crypto';
 import { currentHttpFetch, formatFetchError } from '../http/fetch.js';
 import { remoteRelayUrl } from '../remote/protocol.js';
-import { REMOTE_LOGIN_PATH, REMOTE_LOGOUT_PATH, REMOTE_OAUTH_RESULT_PATH, type RelayAccountProvider } from './account-oauth.js';
+import type { RelayAccountMac } from './accounts.js';
+import {
+  REMOTE_LOGIN_PATH,
+  REMOTE_LOGOUT_PATH,
+  REMOTE_MACS_FORGET_PATH,
+  REMOTE_MACS_PATH,
+  REMOTE_OAUTH_RESULT_PATH,
+  type RelayAccountProvider,
+} from './account-oauth.js';
 
 export type { RelayAccountProvider };
 
@@ -50,6 +58,9 @@ export type RemoteAccountSession = {
   accountId: string;
 };
 
+/** A Mac on the signed-in relay account. `thisMac` is set by the desktop. */
+export type RemoteAccountMac = RelayAccountMac & { thisMac?: boolean };
+
 const RELAY_TLS_HINT =
   ' — the TLS certificate was rejected. A work proxy often does this when Sideboard is not allowlisted, or when the app does not trust the corporate CA.';
 
@@ -80,13 +91,13 @@ async function relayFetch(
   }
 }
 
-async function readJson<T>(res: Response, url: string): Promise<T> {
+async function readJson<T>(res: Response, url: string, what = 'sign-in'): Promise<T> {
   try {
     return (await res.json()) as T;
   } catch {
     const kind = (res.headers.get('content-type') ?? '').includes('html') ? 'an HTML page' : 'a non-JSON body';
     throw new Error(
-      `Relay sign-in returned HTTP ${res.status} with ${kind} (${url}). A work proxy or allowlist often answers with a block page instead of the relay.`,
+      `Relay ${what} returned HTTP ${res.status} with ${kind} (${url}). A work proxy or allowlist often answers with a block page instead of the relay.`,
     );
   }
 }
@@ -173,4 +184,56 @@ export async function disconnectRemoteAccount(opts: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ accountToken: opts.accountToken }),
   });
+}
+
+function macRows(value: unknown): RemoteAccountMac[] {
+  if (!Array.isArray(value)) return [];
+  const macs: RemoteAccountMac[] = [];
+  for (const row of value) {
+    if (!row || typeof row !== 'object') continue;
+    const deviceId = 'deviceId' in row && typeof row.deviceId === 'string' ? row.deviceId.trim() : '';
+    const deviceLabel = 'deviceLabel' in row && typeof row.deviceLabel === 'string' ? row.deviceLabel : '';
+    const createdAt = 'createdAt' in row && typeof row.createdAt === 'number' ? row.createdAt : 0;
+    if (!deviceId) continue;
+    macs.push({ deviceId, deviceLabel, createdAt });
+  }
+  return macs;
+}
+
+/** Macs registered on the account that owns `accountToken`. */
+export async function listRemoteAccountMacs(opts: {
+  accountToken: string;
+  origin?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<RemoteAccountMac[]> {
+  const origin = (opts.origin ?? remoteAccountHttpOrigin()).replace(/\/+$/, '');
+  const url = `${origin}${REMOTE_MACS_PATH}`;
+  const res = await relayFetch(opts.fetchImpl, url, {
+    headers: { Authorization: `Bearer ${opts.accountToken}` },
+  });
+  const body = await readJson<{ ok?: boolean; macs?: unknown; error?: string }>(res, url, 'Mac list');
+  if (!res.ok || !body.ok) {
+    throw new Error(body.error || `Could not list Macs (HTTP ${res.status}).`);
+  }
+  return macRows(body.macs);
+}
+
+/** Remove one Mac from the account. The slot is free for the next register. */
+export async function forgetRemoteAccountMac(opts: {
+  accountToken: string;
+  deviceId: string;
+  origin?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  const origin = (opts.origin ?? remoteAccountHttpOrigin()).replace(/\/+$/, '');
+  const url = `${origin}${REMOTE_MACS_FORGET_PATH}`;
+  const res = await relayFetch(opts.fetchImpl, url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accountToken: opts.accountToken, deviceId: opts.deviceId }),
+  });
+  const body = await readJson<{ ok?: boolean; error?: string }>(res, url, 'forget Mac');
+  if (!res.ok || !body.ok) {
+    throw new Error(body.error || `Could not forget that Mac (HTTP ${res.status}).`);
+  }
 }

@@ -74,7 +74,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           "name": "How is this different from Conductor?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, CLI. Use Conductor if you want their finished workspace UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on."
+            "text": "Conductor is joining Meta (announced November 4, 2026). The Mac app is a board around local worktrees. The iOS app can drive those local workspaces: it is experimental, and both devices sign in to the same Conductor account. Conductor Cloud is the sandbox product. A shutdown of Cloud was announced with the acquisition and withdrawn on November 13. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, and a CLI. The fleet stays on the VPN you already sit on."
           }
         },
         {
@@ -82,7 +82,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           "name": "How is this different from Orca?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (phone, CLI, MCP) so you can reach this Mac."
+            "text": "Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, a mobile companion, and Windows and Linux. It also has an orchestration CLI. Sideboard has no IDE. Several chats share one checkout, and one board covers Claude Code, Codex, OpenCode, and Cursor."
           }
         },
         {
@@ -91,6 +91,22 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           "acceptedAnswer": {
             "@type": "Answer",
             "text": "Multica is an issue tracker where named agents are assignees. A daemon on a computer you connect runs the CLI, and a server — theirs, or one you host — keeps the issue, the comments, and the run transcript. Sideboard does not put a server between you and the checkout. The workspace is the git worktree on this Mac, several chats share it, and another agent can drive the fleet over MCP."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is this different from Superset?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Superset is the same shape: a task gets its own git worktree, and many CLI harnesses run there. The docs now call it Paradev. Its MCP is hosted at api.superset.sh, and the sign-in is an organization. Sideboard’s MCP is a local stdio server on this Mac."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How is this different from the Codex app and Claude Code Remote Control?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Each of those is a phone remote for one harness. The ChatGPT app drives Codex on a connected computer. Claude Code Remote Control drives one Claude Code session, and that machine has to stay on. Sideboard’s phone is one client for every harness on this Mac."
           }
         },
         {
@@ -106,7 +122,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           "name": "Does it keep running if I close the laptop?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "On power, a connected phone keeps this Mac awake, including with the lid closed. On battery, closing the lid can still sleep it. Automations still opt in from Settings → Advanced. Agents that must keep running after this Mac sleeps belong in a cloud sandbox."
+            "text": "On power, a connected phone keeps this Mac awake, including with the lid closed. On battery, closing the lid can still sleep it. Automations still opt in from Settings → Advanced."
           }
         },
         {
@@ -297,7 +313,7 @@ sideboard land &lt;thread&gt;</pre>
       <span class="kicker">Why it exists</span>
       <h2>Started as a local port. Kept the rest on this machine.</h2>
       <p class="sub">When Conductor moved the interesting part of a worktree board into a paid cloud, Sideboard began as an open port of the local loop. Then came the pieces that still belong on this Mac: an orchestration tier, a kanban of the fleet, a phone app so you can reach it from somewhere else, and CLI / MCP so other systems can drive it — without moving the repo off the network you already sit on.</p>
-      <p class="sub"><a href="https://www.conductor.build/">Conductor</a> is the polished Mac board (and a $50/mo cloud). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE — terminals, browser, mobile. <a href="https://github.com/multica-ai/multica">Multica</a> is the shared issue tracker: named agents, a daemon on your computer, a server that holds the transcript. Sideboard is the local orchestration layer — the checkout stays on this Mac, and another agent can drive the fleet.</p>
+      <p class="sub"><a href="https://www.conductor.build/">Conductor</a>, now part of Meta, is the Mac board. Its iOS app can drive local workspaces (experimental, same Conductor account). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE and has an orchestration CLI. <a href="https://github.com/superset-sh/superset">Superset</a> is the same worktree shape, with a hosted MCP that signs in to an org. <a href="https://github.com/multica-ai/multica">Multica</a> is the shared issue tracker: named agents, a daemon on your computer, a server that holds the transcript. The Codex app and Claude Code Remote Control each drive one harness. Sideboard is the local orchestration layer — several chats share a checkout, and the phone reaches every harness on this Mac.</p>
     </div>
     <table class="compare">
       <thead>
@@ -310,12 +326,12 @@ sideboard land &lt;thread&gt;</pre>
       <tbody>
         <tr>
           <td>Run N agents in isolated worktrees</td>
-          <td>Conductor, Orca, IDE agents</td>
+          <td>Conductor, Orca, Superset</td>
           <td>Yes — on this Mac</td>
         </tr>
         <tr>
           <td>Orchestrate the fleet, agent-visible</td>
-          <td>Human board, or a cloud API</td>
+          <td>Orca’s CLI, or a hosted MCP</td>
           <td>MCP + global board, local</td>
         </tr>
         <tr>
@@ -335,7 +351,7 @@ sideboard land &lt;thread&gt;</pre>
         </tr>
         <tr>
           <td>Reach it from your phone</td>
-          <td>Cloud app or shared workspace</td>
+          <td>Conductor iOS, Codex app, or Claude Code Remote Control</td>
           <td>Pair the phone, pick the Mac</td>
         </tr>
         <tr>
@@ -394,15 +410,23 @@ sideboard land &lt;thread&gt;</pre>
   <div class="faq-list">
     <details open>
       <summary>How is this different from Conductor?</summary>
-      <p>Conductor’s free Mac app is a polished human board around local worktrees. Their paid product is cloud sandboxes, multiplayer, a cloud API, and a mobile app. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, CLI. Use Conductor if you want their finished workspace UI or always-on Vercel sandboxes. Use Sideboard if the fleet should stay on the VPN you already sit on.</p>
+      <p>Conductor is joining Meta (announced November 4, 2026). The Mac app is a board around local worktrees. The iOS app can drive those local workspaces: it is experimental, and both devices sign in to the same Conductor account. Conductor Cloud is the sandbox product. A shutdown of Cloud was announced with the acquisition and withdrawn on November 13. Sideboard keeps orchestration on this machine: MCP, a kanban, a phone app to the Mac, and a CLI. The fleet stays on the VPN you already sit on.</p>
     </details>
     <details>
       <summary>How is this different from Orca?</summary>
-      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (phone, CLI, MCP) so you can reach this Mac.</p>
+      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, a mobile companion, and Windows and Linux. It also has an orchestration CLI. Sideboard has no IDE. Several chats share one checkout, and one board covers Claude Code, Codex, OpenCode, and Cursor.</p>
     </details>
     <details>
       <summary>How is this different from Multica?</summary>
       <p><a href="https://github.com/multica-ai/multica">Multica</a> is an issue tracker where named agents are assignees. A daemon on a computer you connect runs the CLI, and a server — theirs, or one you host — keeps the issue, the comments, and the run transcript. Sideboard does not put a server between you and the checkout. The workspace is the git worktree on this Mac, several chats share it, and another agent can drive the fleet over MCP.</p>
+    </details>
+    <details>
+      <summary>How is this different from Superset?</summary>
+      <p><a href="https://github.com/superset-sh/superset">Superset</a> is the same shape: a task gets its own git worktree, and many CLI harnesses run there. The docs now call it Paradev. Its MCP is hosted at <code>api.superset.sh</code>, and the sign-in is an organization. Sideboard’s MCP is a local stdio server on this Mac.</p>
+    </details>
+    <details>
+      <summary>How is this different from the Codex app and Claude Code Remote Control?</summary>
+      <p>Each of those is a phone remote for one harness. The ChatGPT app drives Codex on a connected computer. Claude Code Remote Control drives one Claude Code session, and that machine has to stay on. Sideboard’s phone is one client for every harness on this Mac.</p>
     </details>
     <details>
       <summary>Do I pay Sideboard for models?</summary>
@@ -410,7 +434,7 @@ sideboard land &lt;thread&gt;</pre>
     </details>
     <details>
       <summary>Does it keep running if I close the laptop?</summary>
-      <p>On power, a connected phone keeps this Mac awake, including with the lid closed. On battery, closing the lid can still sleep it. Automations still opt in from Settings → Advanced. Agents that must keep running after this Mac sleeps belong in a cloud sandbox.</p>
+      <p>On power, a connected phone keeps this Mac awake, including with the lid closed. On battery, closing the lid can still sleep it. Automations still opt in from Settings → Advanced.</p>
     </details>
     <details>
       <summary>Can agents message my team in Slack?</summary>
@@ -427,10 +451,6 @@ sideboard land &lt;thread&gt;</pre>
   <div class="card">
     <h3>It fits if…</h3>
     <p>You already run several local CLI agents on a Mac — especially one on a corporate VPN — and you want an orchestrator you can see, an agent can drive, and a phone app, MCP, or the CLI can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.</p>
-  </div>
-  <div class="card">
-    <h3>Use something else if…</h3>
-    <p>You want a polished local board and will never touch CLI or MCP (<a href="https://www.conductor.build/">Conductor</a> free), you want always-on cloud workspaces, you want a full agent IDE (<a href="https://www.onorca.dev/">Orca</a>), you want a shared issue tracker where agents are assignees (<a href="https://github.com/multica-ai/multica">Multica</a>), you live in an IDE-native agents window, or you are on Windows or Linux.</p>
   </div>
 </section>
 

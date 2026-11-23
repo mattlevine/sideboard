@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setHttpFetchImpl } from '../http/fetch.js';
-import { startRemoteAccountLogin } from './account-login.js';
+import { forgetRemoteAccountMac, listRemoteAccountMacs, startRemoteAccountLogin } from './account-login.js';
 
 const ORIGIN = 'https://relay.sideboard.cloud';
 
@@ -86,5 +86,47 @@ describe('startRemoteAccountLogin', () => {
       `${ORIGIN}/remote/login`,
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('lists Macs with the account token and forgets one by id', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ ok: true, macs: [{ deviceId: 'mac-1', deviceLabel: 'Work', createdAt: 1 }] }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+    const macs = await listRemoteAccountMacs({
+      accountToken: 'token-1',
+      origin: ORIGIN,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(macs).toEqual([{ deviceId: 'mac-1', deviceLabel: 'Work', createdAt: 1 }]);
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(`${ORIGIN}/remote/macs`);
+    expect(fetchImpl.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer token-1' },
+    });
+    await forgetRemoteAccountMac({
+      accountToken: 'token-1',
+      deviceId: 'mac-1',
+      origin: ORIGIN,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe(`${ORIGIN}/remote/macs/forget`);
+    expect(JSON.parse(String((fetchImpl.mock.calls[1]?.[1] as RequestInit).body))).toEqual({
+      accountToken: 'token-1',
+      deviceId: 'mac-1',
+    });
+  });
+
+  it('surfaces a relay refusal when a Mac cannot be forgotten', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: false, error: 'Mac not found' }, 404));
+    await expect(
+      forgetRemoteAccountMac({
+        accountToken: 'token-1',
+        deviceId: 'missing',
+        origin: ORIGIN,
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow('Mac not found');
   });
 });
