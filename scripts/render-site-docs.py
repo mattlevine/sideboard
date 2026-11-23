@@ -67,6 +67,16 @@ def inline(text: str) -> str:
     return "".join(parts)
 
 
+def is_separator_row(row: str) -> bool:
+    """A markdown rule (`|---|---|`), including a one-dash cell (`|-|`).
+
+    A header with an empty first cell (`| | Conductor | Sideboard |`) is not a
+    rule: every cell of a rule is only dashes and optional colons.
+    """
+    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+    return bool(cells) and all(re.fullmatch(r":?-+:?", cell) for cell in cells)
+
+
 def md_to_html(md: str) -> str:
     lines = md.splitlines()
     # drop leading H1 — chrome already has the title
@@ -120,7 +130,7 @@ def md_to_html(md: str) -> str:
             while i < len(lines) and lines[i].startswith("|"):
                 rows.append(lines[i])
                 i += 1
-            body = [r for r in rows if not re.match(r"^\|\s*[-: ]+\|", r)]
+            body = [r for r in rows if not is_separator_row(r)]
             if not body:
                 continue
             def cells(row: str) -> list[str]:

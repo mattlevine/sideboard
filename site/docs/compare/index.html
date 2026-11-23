@@ -57,10 +57,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <p>The Mac app is a board around local worktrees. Conductor Cloud is the sandbox product. A Cloud shutdown was announced with the acquisition and withdrawn on November 13, 2026 (<a href="https://www.conductor.build/changelog/0.94.2-conductor-is-back">changelog 0.94.2</a>, &quot;Conductor is back&quot;). The announcement page still contains both the earlier Cloud wind-down and the later &quot;plans have changed.&quot;</p>
 <p>The iOS app is not only the cloud product. <a href="https://www.conductor.build/docs/reference/remote-control">Remote control</a> (shipped in <a href="https://www.conductor.build/changelog/0.92.0-remote-control">0.92.0</a>, October 23, 2026) lets the iOS app browse and create <strong>local</strong> workspaces, read and send chats, pick models, stop agents, and archive workspaces. It is experimental (<code>Settings → Experimental → Remote control</code>). Both devices sign in to the same Conductor account, Conductor must be open on an awake Mac, and the traffic is end-to-end encrypted through Conductor&#x27;s relay.</p>
 <table><thead><tr>
-<th>Where agents run</th>
-<th>Local workspaces on the Mac, and Conductor Cloud</th>
-<th>Always this Mac — inside the corporate VPN</th>
+<th>&nbsp;</th>
+<th>Conductor</th>
+<th>Sideboard</th>
 </tr></thead><tbody>
+<tr>
+<td>Where agents run</td>
+<td>Local workspaces on the Mac, and Conductor Cloud</td>
+<td>Always this Mac — inside the corporate VPN</td>
+</tr>
 <tr>
 <td>Phone</td>
 <td>iOS remote control of local workspaces. Experimental. Same Conductor account. Conductor open on an awake Mac</td>
@@ -97,10 +102,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <li>Sideboard has no IDE. Orca is the IDE: terminals, browser, and design mode.</li>
 </ul>
 <table><thead><tr>
-<th>Category</th>
-<th>Agent IDE, plus an orchestration CLI</th>
-<th>Local orchestration for a fleet. No IDE</th>
+<th>&nbsp;</th>
+<th>Orca</th>
+<th>Sideboard</th>
 </tr></thead><tbody>
+<tr>
+<td>Category</td>
+<td>Agent IDE, plus an orchestration CLI</td>
+<td>Local orchestration for a fleet. No IDE</td>
+</tr>
 <tr>
 <td>Checkout</td>
 <td>A worker can take the current worktree or a new child</td>
@@ -131,10 +141,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <p><a href="https://github.com/superset-sh/superset">Superset</a> is the same shape as Sideboard: a task gets its own git worktree, and many CLI harnesses run there. The docs now call the product Paradev, formerly Superset. The hosted MCP is still <code>https://api.superset.sh/mcp</code> (<a href="https://docs.paradev.com/mcp-server">Paradev MCP server</a>).</p>
 <p>That MCP is not a local stdio server. OAuth 2.1 scopes the token to the active organization. A headless client uses an API key created in the app (<code>Settings → API Keys</code>), and that key also grants the organization. Sideboard&#x27;s MCP is stdio on this Mac and needs no org sign-in.</p>
 <table><thead><tr>
-<th>Shape</th>
-<th>Task, git worktree, many CLIs</th>
-<th>Workspace, git worktree, many chats</th>
+<th>&nbsp;</th>
+<th>Superset</th>
+<th>Sideboard</th>
 </tr></thead><tbody>
+<tr>
+<td>Shape</td>
+<td>Task, git worktree, many CLIs</td>
+<td>Workspace, git worktree, many chats</td>
+</tr>
 <tr>
 <td>MCP</td>
 <td>Hosted at <code>api.superset.sh</code>. Org OAuth, or an org API key</td>
@@ -156,10 +171,15 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <p>Read 2026-11-22 from the public repo and docs: <code>README</code>, <code>VISION</code>, concepts, agents, squads, inbox, runs, autopilots, issue wakeups, workflows, analytics, providers, daemon, security model.</p>
 <p>Sideboard does not put a server between you and the checkout. The workspace is the git worktree, several chats share it, and the orchestrator is an agent on this Mac.</p>
 <table><thead><tr>
-<th>The record</th>
-<th>Issue: goal, comments, status, every run</th>
-<th>Workspace: one checkout, many chats</th>
+<th>&nbsp;</th>
+<th>Multica</th>
+<th>Sideboard</th>
 </tr></thead><tbody>
+<tr>
+<td>The record</td>
+<td>Issue: goal, comments, status, every run</td>
+<td>Workspace: one checkout, many chats</td>
+</tr>
 <tr>
 <td>Who an agent is</td>
 <td>Named teammate. The config survives the run</td>
