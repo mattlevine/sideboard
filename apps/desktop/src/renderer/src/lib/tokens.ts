@@ -62,13 +62,53 @@ export function formatCostUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-/** ` · $X` when showCost is on and costUsd is present; otherwise empty. */
+/**
+ * Finished turns that billed tokens. `silentTurns` reported no `costUsd`
+ * (Codex JSONL, Cursor when getUsage did not answer). A rollup that includes
+ * any of those is a lower bound, even when other turns did report dollars.
+ * Pass stored messages only — in-flight `liveUsage` is not a silent turn.
+ * Claude emits tokens before `result` sets `costUsd`.
+ */
+export function costCoverage(list: (TokenUsage | undefined | null)[]): {
+  silentTurns: number;
+  pricedTurns: number;
+} {
+  let silentTurns = 0;
+  let pricedTurns = 0;
+  for (const u of list) {
+    if (!u || totalTokens(u) <= 0) continue;
+    if (u.costUsd == null) silentTurns += 1;
+    else pricedTurns += 1;
+  }
+  return { silentTurns, pricedTurns };
+}
+
+/** Finished message that billed tokens and reported no dollars. Streaming has not finished. */
+export function messageCostLowerBound(
+  usage: TokenUsage | null | undefined,
+  streaming = false,
+): boolean {
+  if (streaming || !usage || totalTokens(usage) <= 0) return false;
+  return usage.costUsd == null;
+}
+
+function costGapNote(costUsd: number | null | undefined, silentTurns: number): string {
+  const priced = costUsd != null ? `≥${formatCostUsd(costUsd)}` : 'not reported';
+  const noun = silentTurns === 1 ? 'turn' : 'turns';
+  return `Cost ${priced} (${silentTurns} ${noun} reported tokens and no dollars)`;
+}
+
+/** ` · $X` when showCost is on. A lower bound is ` · ≥$X`, or ` · ≥` when no turn priced itself. */
 export function formatCostSuffix(
   costUsd: number | undefined | null,
   showCost: boolean,
+  lowerBound = false,
 ): string {
-  if (!showCost || costUsd == null) return '';
-  return ` · ${formatCostUsd(costUsd)}`;
+  if (!showCost) return '';
+  if (lowerBound && costUsd == null) return ' · ≥';
+  if (costUsd == null) return '';
+  const amount = formatCostUsd(costUsd);
+  return lowerBound ? ` · ≥${amount}` : ` · ${amount}`;
 }
 
 /** Compact display: 950 -> "950", 1200 -> "1.2k", 1_500_000 -> "1.5M". */
@@ -84,7 +124,7 @@ export function formatTokenCount(n: number): string {
 
 export function usageTooltip(
   u: TokenUsage,
-  opts?: { showCost?: boolean; context?: boolean },
+  opts?: { showCost?: boolean; context?: boolean; silentTurns?: number },
 ): string {
   const billed = totalTokens(u);
   const bits = [
@@ -95,7 +135,12 @@ export function usageTooltip(
   ];
   if (u.cacheReadTokens) bits.push(`Cache read: ${u.cacheReadTokens.toLocaleString()}`);
   if (u.cacheWriteTokens) bits.push(`Cache write: ${u.cacheWriteTokens.toLocaleString()}`);
-  if (opts?.showCost && u.costUsd != null) bits.push(`Cost ${formatCostUsd(u.costUsd)}`);
+  const silent = opts?.silentTurns ?? 0;
+  if (opts?.showCost && silent > 0) {
+    bits.push(costGapNote(u.costUsd, silent));
+  } else if (opts?.showCost && u.costUsd != null) {
+    bits.push(`Cost ${formatCostUsd(u.costUsd)}`);
+  }
   return bits.join(' · ');
 }
 
@@ -171,7 +216,16 @@ export function tabUsageRingRatio(
 export function contextMeterTooltip(
   usage: TokenUsage | null,
   windowTokens: number,
-  opts?: { compacted?: boolean; billedTotal?: number; occupancy?: number; estimated?: boolean },
+  opts?: {
+    compacted?: boolean;
+    billedTotal?: number;
+    occupancy?: number;
+    estimated?: boolean;
+    /** When set with `silentTurns` > 0, explain a `≥` cost suffix. Exact prices stay off this hover. */
+    showCost?: boolean;
+    costUsd?: number | null;
+    silentTurns?: number;
+  },
 ): string {
   const occ =
     opts?.occupancy != null && opts.occupancy > 0
@@ -198,6 +252,8 @@ export function contextMeterTooltip(
   if (opts?.billedTotal != null && opts.billedTotal > 0) {
     bits.push(`Thread billed Σ ${formatTokenCount(opts.billedTotal)}`);
   }
+  const silent = opts?.silentTurns ?? 0;
+  if (opts?.showCost && silent > 0) bits.push(costGapNote(opts.costUsd, silent));
   return bits.join(' · ');
 }
 
@@ -207,8 +263,12 @@ export function contextOccupancyLabel(usage: TokenUsage, windowTokens: number): 
 }
 
 /** Billed total string shared by the worktree hover card. */
-export function billedUsageLabel(usage: TokenUsage, showCost: boolean): string {
-  return `${formatTokenCount(totalTokens(usage))} tok${formatCostSuffix(usage.costUsd, showCost)}`;
+export function billedUsageLabel(
+  usage: TokenUsage,
+  showCost: boolean,
+  lowerBound = false,
+): string {
+  return `${formatTokenCount(totalTokens(usage))} tok${formatCostSuffix(usage.costUsd, showCost, lowerBound)}`;
 }
 
 /** Tabs-bar label: going-forward occupancy / fixed window. Never billed Σ. */
@@ -217,6 +277,7 @@ export function tabsContextLabel(
   windowTokens: number,
   costUsd?: number | null,
   showCost = false,
+  lowerBound = false,
 ): string {
-  return `${formatTokenCount(Math.max(0, occupancy))} / ${formatTokenCount(windowTokens)}${formatCostSuffix(costUsd, showCost)}`;
+  return `${formatTokenCount(Math.max(0, occupancy))} / ${formatTokenCount(windowTokens)}${formatCostSuffix(costUsd, showCost, lowerBound)}`;
 }

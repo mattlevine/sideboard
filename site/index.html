@@ -87,6 +87,14 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         },
         {
           "@type": "Question",
+          "name": "How is this different from Multica?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Multica is an issue tracker where named agents are assignees. A daemon on a computer you connect runs the CLI, and a server — theirs, or one you host — keeps the issue, the comments, and the run transcript. Sideboard does not put a server between you and the checkout. The workspace is the git worktree on this Mac, several chats share it, and another agent can drive the fleet over MCP."
+          }
+        },
+        {
+          "@type": "Question",
           "name": "Do I pay Sideboard for models?",
           "acceptedAnswer": {
             "@type": "Answer",
@@ -289,7 +297,7 @@ sideboard land &lt;thread&gt;</pre>
       <span class="kicker">Why it exists</span>
       <h2>Started as a local port. Kept the rest on this machine.</h2>
       <p class="sub">When Conductor moved the interesting part of a worktree board into a paid cloud, Sideboard began as an open port of the local loop. Then came the pieces that still belong on this Mac: an orchestration tier, a kanban of the fleet, a phone app so you can reach it from somewhere else, and CLI / MCP so other systems can drive it — without moving the repo off the network you already sit on.</p>
-      <p class="sub"><a href="https://www.conductor.build/">Conductor</a> is the polished Mac board (and a $50/mo cloud). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE — terminals, browser, mobile. Sideboard is the local orchestration layer both of those leave on the table.</p>
+      <p class="sub"><a href="https://www.conductor.build/">Conductor</a> is the polished Mac board (and a $50/mo cloud). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE — terminals, browser, mobile. <a href="https://github.com/multica-ai/multica">Multica</a> is the shared issue tracker: named agents, a daemon on your computer, a server that holds the transcript. Sideboard is the local orchestration layer — the checkout stays on this Mac, and another agent can drive the fleet.</p>
     </div>
     <table class="compare">
       <thead>
@@ -309,6 +317,11 @@ sideboard land &lt;thread&gt;</pre>
           <td>Orchestrate the fleet, agent-visible</td>
           <td>Human board, or a cloud API</td>
           <td>MCP + global board, local</td>
+        </tr>
+        <tr>
+          <td>Assign an issue to a named agent</td>
+          <td>Multica</td>
+          <td>A checkout on this Mac; the orchestrator assigns chats</td>
         </tr>
         <tr>
           <td>Stay on the corporate VPN</td>
@@ -388,6 +401,10 @@ sideboard land &lt;thread&gt;</pre>
       <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, mobile companion, Windows and Linux. Sideboard is not trying to be an IDE. It is the orchestration tier: a board, an agent that can drive other threads, and remotes (phone, CLI, MCP) so you can reach this Mac.</p>
     </details>
     <details>
+      <summary>How is this different from Multica?</summary>
+      <p><a href="https://github.com/multica-ai/multica">Multica</a> is an issue tracker where named agents are assignees. A daemon on a computer you connect runs the CLI, and a server — theirs, or one you host — keeps the issue, the comments, and the run transcript. Sideboard does not put a server between you and the checkout. The workspace is the git worktree on this Mac, several chats share it, and another agent can drive the fleet over MCP.</p>
+    </details>
+    <details>
       <summary>Do I pay Sideboard for models?</summary>
       <p>No. Bring the Claude, Codex, OpenCode, or Cursor subscriptions you already have. Sideboard is Apache-2.0. The desktop and CLI are free. You are not renting a sandbox from us.</p>
     </details>
@@ -413,7 +430,7 @@ sideboard land &lt;thread&gt;</pre>
   </div>
   <div class="card">
     <h3>Use something else if…</h3>
-    <p>You want a polished local board and will never touch CLI or MCP (<a href="https://www.conductor.build/">Conductor</a> free), you want always-on cloud workspaces, you want a full agent IDE (<a href="https://www.onorca.dev/">Orca</a>), you live in an IDE-native agents window, or you are on Windows or Linux.</p>
+    <p>You want a polished local board and will never touch CLI or MCP (<a href="https://www.conductor.build/">Conductor</a> free), you want always-on cloud workspaces, you want a full agent IDE (<a href="https://www.onorca.dev/">Orca</a>), you want a shared issue tracker where agents are assignees (<a href="https://github.com/multica-ai/multica">Multica</a>), you live in an IDE-native agents window, or you are on Windows or Linux.</p>
   </div>
 </section>
 

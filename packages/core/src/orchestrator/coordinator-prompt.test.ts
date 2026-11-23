@@ -12,6 +12,15 @@ import {
 } from './coordinator-prompt.js';
 
 describe('coordinator-prompt', () => {
+  it('assigns one worker and does not retry auth or quota', () => {
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Dispatch —');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('one send_to_chat joins the turn already waiting');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'Auth, quota, and a model that refused are not a retry',
+    );
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('A finished turn is not shipped');
+  });
+
   const prevData = process.env.SIDEBOARD_APP_DATA;
   const prevVault = process.env.SIDEBOARD_SECRET_VAULT;
   let dataDir: string;

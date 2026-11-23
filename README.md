@@ -22,7 +22,7 @@ Run agents in isolated `thread/*` worktrees from the CLI, desktop, or MCP. A con
 
 Fits if you already run several local CLI agents on a Mac — especially one on a corporate VPN — and want an orchestrator you can see, an agent can drive, and a phone app, the CLI, or MCP can reach. Extra fit when the agent produces structured content or HTML that should sit next to the diff.
 
-Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE ([Orca](https://www.onorca.dev/)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
+Use something else if you want a polished local board and will not use CLI/MCP ([Conductor](https://www.conductor.build/) free), their paid cloud workspaces (agents that keep running after you close the laptop, off-VPN), a full agent IDE ([Orca](https://www.onorca.dev/)), an issue tracker where named agents are assignees and a server holds the transcript ([Multica](https://github.com/multica-ai/multica)), an IDE-native Agents window (Cursor 3), Windows/Linux desktop ([Emdash](https://emdash.sh/), [Superset](https://github.com/superset-sh/superset)), or cloud agents that do not run on this machine.
 
 Peer-by-peer notes: [Compare](docs/COMPARE.md).
 

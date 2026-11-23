@@ -35,6 +35,20 @@ Reference implementations:
 - Cursor (SDK) — `packages/core/src/agents/cursor.ts` (user-installed `@cursor/sdk`, not packed in Sideboard)
 - Brightsy (chat-only, optional) — `packages/core/src/agents/brightsy.ts`
 
+## Support matrix
+
+A new CLI is supported when this row is filled. Sideboard does not guess the blank cells. Repo skills (`.claude/skills/`) are loaded for every harness that reads them; they are not copied into a workspace store.
+
+| Agent | Session resume | MCP | Model | Cost |
+|--------|----------------|-----|-------|------|
+| Claude Code | `resolveSessionId` | Sideboard injects its MCP into the turn | Account default unless the chat pins one | Turn `costUsd` from `modelUsage`. A session total is stored as `sessionCostUsd` and converted to a turn delta |
+| Codex | `resolveSessionId` | Sideboard injects its MCP into the turn | Account default unless the chat pins one | Tokens on `turn.completed`. That stream has no dollars |
+| OpenCode | `resolveSessionId` | Sideboard injects its MCP into the turn | Account default unless the chat pins one | `cost` on steps |
+| Cursor | SDK create / resume / send in `cursor-runner.ts` | Sideboard injects its MCP into the SDK turn | Account default unless the chat pins one | Stream is tokens. After the turn, `agent.getUsage()` fills `costUsd` when the account’s billing API answers |
+| Brightsy | Chat session when the adapter has one | No local MCP. Chat-only | Account default | Usage cost when the API reports it |
+
+Transient runner failures (network, a dead Node process, a stale resume id) retry once. Auth, quota, and “the model refused” do not. See `shouldRetryFailedAgentTurn` in `packages/core/src/agents/error-detail.ts`.
+
 ## Checklist for a new agent
 
 1. Add the kind to `AgentKind` in `packages/core/src/types/thread.ts`.
@@ -43,6 +57,7 @@ Reference implementations:
 4. Wire any CLI flags / desktop agent picker that enumerate kinds.
 5. Add unit tests next to the adapter (`*.test.ts`) for `parseEvent` / detect stubs.
 6. Document install + auth in the root README under **Agent CLIs**.
+7. Add a row to the [support matrix](#support-matrix): session resume, who injects MCP, who picks the model, and whether the CLI reports tokens, dollars, both, or neither.
 
 ## Guidelines
 

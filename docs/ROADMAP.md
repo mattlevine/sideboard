@@ -9,7 +9,7 @@ Two limits on the evidence:
 
 ## What the review found
 
-One checkout per task with several agents in parallel is now a default feature. Conductor, Orca, Superset, Emdash, Cursor's Agents Window, the Codex app, and Claude Code all do it.
+One checkout per task with several agents in parallel is now a default feature. Conductor, Orca, Superset, Emdash, Cursor's Agents Window, the Codex app, and Claude Code all do it. Multica is a different shape: the board is issues, agents are durable assignees, and a daemon on a connected computer runs the CLI. The control plane is their cloud or a server you host.
 
 Three things changed since [COMPARE.md](COMPARE.md) was written:
 
@@ -86,6 +86,7 @@ Depends on item 1. A push needs the signed build with the push entitlement.
 - Conductor: owned by Meta, and its iOS app now drives local workspaces (experimental, needs a Conductor account). Sideboard's site still describes Conductor's mobile app as part of the paid cloud.
 - Orca: it has an orchestration CLI. "Use Sideboard when you want an orchestrator other agents can call" no longer separates the two. The difference is the shared checkout, the cross-harness board, and no IDE.
 - Superset: add it. Same shape as Sideboard; its MCP is hosted and needs an org sign-in.
+- Multica: in [COMPARE.md](COMPARE.md), the README, and the site (2026-11-22). Source is the public repo and docs as of that day's push (`README`, `VISION`, concepts, agents, squads, inbox, runs, autopilots, issue wakeups, workflows, analytics, providers, daemon, security model).
 - Add the Codex app and Claude Code Remote Control. Both are single-harness.
 - **Done when** every claim about a peer has a source dated this quarter.
 

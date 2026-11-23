@@ -7,7 +7,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow, usageTooltip } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, messageCostLowerBound, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow, usageTooltip } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import { type FilePathLink } from '../lib/file-path-link';
@@ -351,16 +351,30 @@ export function AgentMessage({
         : usage
           ? meterOccupancyTokens(usage, windowTokens)
           : null;
+  // Streaming is not a missing price: Claude reports tokens before `result` sets costUsd.
+  const costLowerBound = messageCostLowerBound(usage, Boolean(streaming));
+  const silentTurns = showCost && costLowerBound ? 1 : 0;
   const usageTitle =
     summedContext && shownOccupancy == null && usage
-      ? usageTooltip(usage, { showCost, context: false })
+      ? usageTooltip(usage, {
+          showCost,
+          context: false,
+          silentTurns,
+        })
       : shownOccupancy != null
         ? contextMeterTooltip(usage ?? null, windowTokens, {
             occupancy: shownOccupancy,
             estimated: occupancyEstimated,
+            showCost,
+            costUsd: usage?.costUsd,
+            silentTurns,
           })
         : usage
-          ? contextMeterTooltip(usage, windowTokens)
+          ? contextMeterTooltip(usage, windowTokens, {
+              showCost,
+              costUsd: usage.costUsd,
+              silentTurns,
+            })
           : undefined;
 
   function openFileReference(link: FilePathLink) {
@@ -674,7 +688,7 @@ export function AgentMessage({
                       : 0),
                 )}{' '}
                 tok
-                {formatCostSuffix(usage?.costUsd, showCost)}
+                {formatCostSuffix(usage?.costUsd, showCost, costLowerBound)}
               </span>
             )}
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>

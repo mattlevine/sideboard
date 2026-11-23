@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billedUsageLabel, contextFillRatio, contextMeterTone, contextMeterTooltip, contextOccupancyLabel, contextTokens, formatCostSuffix, formatCostUsd, formatTokenCount, meterOccupancyTokens, occupancyFillRatio, resolveContextWindow, sumUsage, tabsContextLabel, tabUsageRingRatio, totalTokens, usageTooltip } from './tokens';
+import { billedUsageLabel, contextFillRatio, contextMeterTone, contextMeterTooltip, contextOccupancyLabel, contextTokens, costCoverage, formatCostSuffix, formatCostUsd, formatTokenCount, messageCostLowerBound, meterOccupancyTokens, occupancyFillRatio, resolveContextWindow, sumUsage, tabsContextLabel, tabUsageRingRatio, totalTokens, usageTooltip } from './tokens';
 
 describe('contextTokens', () => {
   it('prefers last-request occupancy over billed turn totals', () => {
@@ -83,6 +83,23 @@ describe('contextMeterTooltip', () => {
       contextMeterTooltip(usage, 1_000_000, { billedTotal: 3_400_000 }),
     ).toContain('Thread billed Σ 3.4M');
   });
+
+  it('explains a lower-bound cost and leaves a full price off the hover', () => {
+    const usage = { inputTokens: 10, outputTokens: 2, lastRequestTokens: 94_000 };
+    expect(
+      contextMeterTooltip(usage, 1_000_000, {
+        showCost: true,
+        costUsd: 1.23,
+        silentTurns: 2,
+      }),
+    ).toContain('Cost ≥$1.23 (2 turns reported tokens and no dollars)');
+    expect(
+      contextMeterTooltip(usage, 1_000_000, { showCost: true, costUsd: 1.23, silentTurns: 0 }),
+    ).not.toContain('Cost');
+    expect(
+      contextMeterTooltip(usage, 1_000_000, { showCost: true, silentTurns: 1 }),
+    ).toContain('Cost not reported (1 turn reported tokens and no dollars)');
+  });
 });
 
 describe('billedUsageLabel', () => {
@@ -95,6 +112,7 @@ describe('billedUsageLabel', () => {
     expect(billedUsageLabel(usage, false)).toBe('4.6M tok');
     expect(billedUsageLabel(usage, false)).not.toContain('/');
     expect(billedUsageLabel({ ...usage, costUsd: 1.23 }, true)).toBe('4.6M tok · $1.23');
+    expect(billedUsageLabel({ ...usage, costUsd: 1.23 }, true, true)).toBe('4.6M tok · ≥$1.23');
   });
 });
 
@@ -202,5 +220,44 @@ describe('formatCostSuffix', () => {
 
   it('formats when showCost is on', () => {
     expect(formatCostSuffix(0.01, true)).toBe(' · $0.01');
+  });
+
+  it('marks a lower bound when some turns reported no dollars', () => {
+    expect(formatCostSuffix(0.03, true, true)).toBe(' · ≥$0.03');
+    expect(formatCostSuffix(null, true, true)).toBe(' · ≥');
+    expect(formatCostSuffix(null, false, true)).toBe('');
+  });
+});
+
+describe('costCoverage', () => {
+  it('counts billed turns that omitted cost', () => {
+    expect(
+      costCoverage([
+        { inputTokens: 10, outputTokens: 1, costUsd: 0.01 },
+        { inputTokens: 4, outputTokens: 1 },
+        { inputTokens: 0, outputTokens: 0 },
+        undefined,
+      ]),
+    ).toEqual({ silentTurns: 1, pricedTurns: 1 });
+  });
+});
+
+describe('messageCostLowerBound', () => {
+  const tokens = { inputTokens: 10, outputTokens: 1 };
+
+  it('ignores a streaming turn that has not reported dollars yet', () => {
+    expect(messageCostLowerBound(tokens, true)).toBe(false);
+    expect(messageCostLowerBound({ ...tokens, costUsd: 0.01 }, false)).toBe(false);
+    expect(messageCostLowerBound(tokens, false)).toBe(true);
+    expect(messageCostLowerBound({ inputTokens: 0, outputTokens: 0 }, false)).toBe(false);
+  });
+});
+
+describe('usageTooltip lower bound', () => {
+  it('says how many turns reported no dollars', () => {
+    const u = { inputTokens: 10, outputTokens: 5, costUsd: 0.03 };
+    expect(usageTooltip(u, { showCost: true, silentTurns: 2, context: false })).toContain(
+      'Cost ≥$0.03 (2 turns reported tokens and no dollars)',
+    );
   });
 });
