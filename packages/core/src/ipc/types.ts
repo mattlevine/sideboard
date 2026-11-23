@@ -65,8 +65,7 @@ import type { OrderIpc } from './order-api.js';
 import type { SlackWorkspaceInfo } from '../slack/workspaces.js';
 import type { ListIssuesOptions, ListIssuesResult } from '../integrations/issues.js';
 import type { RelayAccountProvider } from '../relay/account-oauth.js';
-import type { RemoteAccountMac } from '../relay/account-login.js';
-
+import type { RemoteAccountIpc } from './remote-account-api.js';
 /** Live status of the Brightsy cloud connect daemon in the desktop app. */
 export interface CloudConnectStatus {
   enabled: boolean;
@@ -85,7 +84,7 @@ import type { SlackOrgIpc } from './slack-org.js';
 import type { WorktreeOpener, WorktreeOpenerId } from './worktree-opener.js';
 export type { WorktreeOpener, WorktreeOpenerId };
 
-export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
+export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc, RemoteAccountIpc {
   detectAgents(): Promise<AgentStatus[]>;
   /** Install recipe + docs for Settings → Agents. */
   getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;
@@ -268,13 +267,6 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
   requestRemotePairingCode(): Promise<RemoteHostStatus>;
   startRemoteAccountLogin(provider: RelayAccountProvider): Promise<PublicAppSettings>;
   disconnectRemoteAccount(): Promise<PublicAppSettings>;
-  /** Macs registered on the signed-in relay account. `thisMac` is this computer. */
-  listRemoteAccountMacs(): Promise<Array<RemoteAccountMac & { thisMac: boolean }>>;
-  /**
-   * Remove one Mac from the account so its slot is free.
-   * Forgetting this Mac also signs out (relay credential and local vault).
-   */
-  forgetRemoteAccountMac(deviceId: string): Promise<PublicAppSettings>;
   setSlackListen(opts: { enabled: boolean }): Promise<SlackListenStatus>;
   /** Live caffeinate: chat hold and/or Settings (agents running / Slack Listen). */
   getCaffeinateHold(): Promise<CaffeinateHoldState & { appCaffeinated: boolean }>;
