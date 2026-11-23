@@ -91,7 +91,7 @@ Helpers: `packages/core/src/mcp/create-orch-child.ts`, `maxOrchThreads` in `pack
 
 ## Plans (shipped)
 
-Each orchestration chat has one plan. `set_plan` drafts it. `show_plan` opens the diagram in the side column and keeps it current as gates clear and steps start. A worktree on that plan also opens `.context/attachments/plan.md` when the file exists. A draft does not create workspaces or `send_to_chat` for that work. `execute_plan` with `agreed: true` runs only after the user says to. It marks the plan active and returns ready versus waiting steps.
+Each orchestration chat has one plan. `set_plan` drafts it. `show_plan` opens the diagram in the side column and keeps it current as gates clear and steps start. A worktree on that plan also opens `.context/attachments/plan.md` when the file exists. A draft does not create workspaces or `send_to_chat` for that work. `execute_plan` with `agreed: true` runs only after the user says to. It marks the plan active and returns `start`, `waiting`, and `mergeHeld`. `start` is the work to open or continue, including the first step others are waiting on. `waiting` is blocked by `hold=start`. `mergeHeld` may proceed and must not merge. A `hold=merge` does not keep the later step from starting.
 
 Code: `packages/core/src/order/`, `packages/core/src/plan/`.
 

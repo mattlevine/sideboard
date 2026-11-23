@@ -21,6 +21,7 @@ import {
   type OrderEdge,
   type OrderMark,
   type OrderPlan,
+  type PlanWork,
   type OrderRow,
   type OrderTarget,
   type OrderThreadSnapshot,
@@ -275,8 +276,9 @@ export function setOrderPlan(input: {
 
 export function executeOrderPlan(ownerThreadId?: string): {
   plan: OrderPlan;
-  ready: OrderRow[];
-  waiting: OrderRow[];
+  start: PlanWork[];
+  waiting: PlanWork[];
+  mergeHeld: PlanWork[];
 } {
   const file = readFile();
   const current = planByOwner(file, ownerThreadId);
@@ -292,7 +294,7 @@ export function executeOrderPlan(ownerThreadId?: string): {
   const ids = new Set(edges.map((edge) => edge.id));
   const rows = resolveOrchestrationGates(file.plans, file.edges, threadSnapshots(), file.marks);
   const slice = executionSlice(rows.filter((row) => ids.has(row.id)));
-  return { plan, ready: slice.ready, waiting: slice.waiting };
+  return { plan, start: slice.start, waiting: slice.waiting, mergeHeld: slice.mergeHeld };
 }
 
 export function listOrderEdges(): OrderEdge[] {
