@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.351] - 2026-11-23
+
+### Fixed
+
+- Running a plan starts the first step other steps are waiting on. A step held only from merging can still be worked on, and it must not merge until its gate is clear. A step that cannot start yet stays waiting.
+
 ## [0.1.350] - 2026-11-22
 
 ### Added

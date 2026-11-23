@@ -229,7 +229,7 @@ export function registerOrderTools(server: McpServer): void {
 
     server.tool(
       'execute_plan',
-      'Mark the plan active after the user has seen it and told you to run it. Returns ready steps (start those with create_workspace or send_to_chat) and waiting steps (leave them alone). Does not create workspaces. Pass agreed: true only after they agree. Merge only if they asked.',
+      'Mark the plan active after the user has seen it and told you to run it. Returns start (open or continue these, including the first step others wait on), waiting (hold=start is still unmet; leave them alone), and mergeHeld (work may proceed; do not merge). Does not create workspaces. Pass agreed: true only after they agree. Merge only if they asked.',
       {
         agreed: z
           .literal(true)
@@ -238,23 +238,22 @@ export function registerOrderTools(server: McpServer): void {
       async () => {
         try {
           const result = executeOrderPlan(orchestrationOwnerId(false));
-          const brief = (row: (typeof result.ready)[number]) => ({
-            id: row.id,
-            hold: row.hold,
-            gate: row.gate,
-            waitsOn: row.waitsOnLabel,
-            subject: row.subjectLabel,
+          const brief = (row: (typeof result.start)[number]) => ({
+            kind: row.target.kind,
+            ref: row.target.ref,
+            ...(row.target.repoPath ? { repoPath: row.target.repoPath } : {}),
+            label: row.label,
             detail: row.detail,
-            ...(row.loop ? { loop: true } : {}),
           });
           return mcpJson({
             ok: true,
             status: result.plan.status,
             title: result.plan.title,
-            ready: result.ready.map(brief),
+            start: result.start.map(brief),
             waiting: result.waiting.map(brief),
+            mergeHeld: result.mergeHeld.map(brief),
             message:
-              'Plan is active. Start ready steps with create_workspace or send_to_chat. Leave waiting steps alone. Merge only if the user asked.',
+              'Plan is active. Start every step in start with create_workspace (kind pr or issue; pass repoPath when set) or send_to_chat (kind workspace or orchestration). create_workspace returns a checkout that already exists. Leave waiting alone. Steps in mergeHeld can proceed; do not merge them. Merge only if the user asked.',
           });
         } catch (err) {
           return mcpJson({ error: err instanceof Error ? err.message : String(err) }, true);

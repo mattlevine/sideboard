@@ -182,7 +182,8 @@ describe('order of operations', () => {
     expect(chains[0]?.nodes.map((node) => node.depth)).toEqual([0, 1, 2]);
     expect(chains[0]?.nodes[2]?.incoming[0]?.hold).toBe('start');
     const text = formatOrderText(rows);
-    expect(text).toMatch(/PR #1 must be in main before PR #2 can merge/);
+    expect(text).toMatch(/1\. merge {2}PR #1 must be in main before PR #2 can merge/);
+    expect(text).toMatch(/2\. waiting {2}PR #2 must be in prod before ENG-4 can start/);
     expect(text).toMatch(/waiting to be marked in production/);
     expect(text).toContain(a.id.slice(0, 8));
     const html = formatWaterfallHtml(chains);
@@ -190,6 +191,8 @@ describe('order of operations', () => {
     expect(html).toContain('PR #2');
     expect(html).toContain('ENG-4');
     expect(html).toContain('in production');
+    expect(html).toContain('can start');
+    expect(html).toContain('bar start');
     expect(formatWaterfallHtml([])).toContain('No order yet');
     const escaped = formatWaterfallHtml([
       {
@@ -319,7 +322,7 @@ describe('order of operations', () => {
     ).toThrow(/own workspace/);
   });
 
-  it('stays a draft until execute, then splits ready and waiting', async () => {
+  it('stays a draft until execute, then starts the root and the merge-held step', async () => {
     const { setOrderPlan, setOrderDependency, satisfyOrderDependency, executeOrderPlan, getOrderPlan } =
       await store();
     const plan = setOrderPlan({
@@ -336,17 +339,71 @@ describe('order of operations', () => {
       hold: 'merge',
     }).edge;
     expect(getOrderPlan()?.status).toBe('draft');
-    const waiting = executeOrderPlan();
-    expect(waiting.plan.status).toBe('active');
-    expect(waiting.ready).toHaveLength(0);
-    expect(waiting.waiting).toHaveLength(1);
+    const ran = executeOrderPlan();
+    expect(ran.plan.status).toBe('active');
+    expect(ran.start.map((step) => step.target.ref)).toEqual(['1', '2']);
+    expect(ran.waiting).toHaveLength(0);
+    expect(ran.mergeHeld.map((step) => step.target.ref)).toEqual(['2']);
     satisfyOrderDependency(edge.id, true);
-    const ready = executeOrderPlan();
-    expect(ready.ready.map((row) => row.subject.ref)).toEqual(['2']);
-    expect(ready.waiting).toHaveLength(0);
+    const clear = executeOrderPlan();
+    expect(clear.start.map((step) => step.target.ref)).toEqual(['2']);
+    expect(clear.waiting).toHaveLength(0);
+    expect(clear.mergeHeld).toHaveLength(0);
   });
 
-  it('puts a loop in ready and leaves the first-pass gate waiting', async () => {
+  it('starts the first step and holds the one that cannot begin yet', async () => {
+    const { setOrderPlan, setOrderDependency, executeOrderPlan } = await store();
+    setOrderPlan({ title: 'API then reporting', summary: 'Reporting waits to start.' });
+    setOrderDependency({
+      waitsOn: { kind: 'pr', ref: '70', label: 'API' },
+      gate: 'in-prod',
+      subject: { kind: 'pr', ref: '71', label: 'Reporting' },
+      hold: 'start',
+    });
+    const ran = executeOrderPlan();
+    expect(ran.start.map((step) => step.target.ref)).toEqual(['70']);
+    expect(ran.waiting.map((step) => step.target.ref)).toEqual(['71']);
+    expect(ran.mergeHeld).toHaveLength(0);
+    expect(ran.start[0]?.detail).toMatch(/production/);
+  });
+
+  it('keeps a start hold out of mergeHeld until that gate is clear', async () => {
+    const { setOrderPlan, setOrderDependency, satisfyOrderDependency, executeOrderPlan, listOrderRows, getOrderPlan } =
+      await store();
+    setOrderPlan({ title: 'Both holds', summary: 'Start after API. Merge after auth.' });
+    setOrderDependency({
+      waitsOn: { kind: 'pr', ref: '1', label: 'Auth' },
+      gate: 'in-prod',
+      subject: { kind: 'pr', ref: '3', label: 'Billing' },
+      hold: 'merge',
+    });
+    const startEdge = setOrderDependency({
+      waitsOn: { kind: 'pr', ref: '2', label: 'API' },
+      gate: 'in-main',
+      subject: { kind: 'pr', ref: '3', label: 'Billing' },
+      hold: 'start',
+    }).edge;
+    const ran = executeOrderPlan();
+    expect(ran.start.map((step) => step.target.ref).sort()).toEqual(['1', '2']);
+    expect(ran.waiting.map((step) => step.target.ref)).toEqual(['3']);
+    expect(ran.mergeHeld).toHaveLength(0);
+    const held = formatOrderText(listOrderRows(), getOrderPlan());
+    expect(held).toMatch(/1\. merge {2}PR #1 · Auth must be in prod before PR #3 · Billing can merge/);
+    expect(held).toMatch(/2\. waiting {2}PR #2 · API must be in main before PR #3 · Billing can start/);
+    expect(held).toContain('Do not start:');
+    expect(held).not.toContain('Do not merge:');
+    satisfyOrderDependency(startEdge.id, true);
+    const open = executeOrderPlan();
+    expect(open.waiting).toHaveLength(0);
+    expect(open.start.map((step) => step.target.ref).sort()).toEqual(['1', '3']);
+    expect(open.mergeHeld.map((step) => step.target.ref)).toEqual(['3']);
+    const released = formatOrderText(listOrderRows(), getOrderPlan());
+    expect(released).toMatch(/\. merge {2}PR #1 · Auth must be in prod before PR #3 · Billing can merge/);
+    expect(released).toContain('Do not merge:');
+    expect(released).not.toMatch(/\d+\. waiting {2}/);
+  });
+
+  it('starts both steps of a loop and merge-holds the later one', async () => {
     const { setOrderPlan, setOrderDependency, executeOrderPlan } = await store();
     setOrderPlan({ title: 'Loop', summary: 'Back to the start.' });
     setOrderDependency({
@@ -362,8 +419,9 @@ describe('order of operations', () => {
       hold: 'start',
     });
     const ran = executeOrderPlan();
-    expect(ran.ready.some((row) => row.loop)).toBe(true);
-    expect(ran.waiting.every((row) => !row.loop)).toBe(true);
+    expect(ran.start.map((step) => step.target.ref).sort()).toEqual(['1', '2']);
+    expect(ran.waiting).toHaveLength(0);
+    expect(ran.mergeHeld.map((step) => step.target.ref)).toEqual(['2']);
   });
 
   it('tells a checkout where it sits and refuses edits to other steps', async () => {
@@ -421,10 +479,11 @@ describe('order of operations', () => {
       },
     ];
     const waiting = buildWaterfall(resolveOrderRows(edges, [], []));
+    expect(planWatchCopy(waiting)).toContain('PR #70 · API enhancement can start');
     expect(planWatchCopy(waiting)).toContain(
       'PR #71 · Reporting can start once PR #70 · API enhancement is in production',
     );
-    expect(planWatchCopy(waiting)).toContain('idle');
+    expect(planWatchCopy(waiting)).not.toContain('idle');
     const api = waiting[0]?.nodes.find((node) => node.ref === '70');
     const reporting = waiting[0]?.nodes.find((node) => node.ref === '71');
     expect(api && waterfallNodeState(api, waiting)).toBe('Waiting on production');

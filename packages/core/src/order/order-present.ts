@@ -8,10 +8,8 @@ import type {
   WaterfallNode,
   WaterfallChain,
 } from './order-model.js';
-import {
-  orderTargetMatches,
-} from './order-model.js';
-import { gatePhrase, holdPhrase } from './order-board.js';
+import { orderTargetMatches, targetKey } from './order-model.js';
+import { gatePhrase, holdPhrase, planWatchCopy } from './order-board.js';
 
 /** Steps this checkout is waiting on, ready for, or blocking. */
 export function formatOrderPlace(rows: OrderRow[], you: OrderThreadSnapshot): string {
@@ -46,11 +44,107 @@ export function formatOrderPlace(rows: OrderRow[], you: OrderThreadSnapshot): st
   return lines.join('\n');
 }
 
-export function executionSlice(rows: OrderRow[]): { ready: OrderRow[]; waiting: OrderRow[] } {
-  return {
-    ready: rows.filter((row) => row.met || row.loop),
-    waiting: rows.filter((row) => !row.met && !row.loop),
+/** One pull request, issue, workspace, or orchestration chat on a plan. */
+export interface PlanWork {
+  target: OrderTarget;
+  label: string;
+  detail: string;
+}
+
+/**
+ * Work this plan can start now, work held from starting, and work that may
+ * proceed but must not merge. A root that others wait on is in `start` until
+ * it reaches that gate. `hold=merge` does not keep the later step from starting.
+ * An unmet `hold=start` keeps that step in `waiting` only.
+ * A loop does not block the first pass.
+ */
+export function executionSlice(rows: OrderRow[]): {
+  start: PlanWork[];
+  waiting: PlanWork[];
+  mergeHeld: PlanWork[];
+} {
+  const byKey = new Map<
+    string,
+    {
+      target: OrderTarget;
+      label: string;
+      depth: number;
+      asSubject: boolean;
+      incoming: OrderRow[];
+      outgoing: OrderRow[];
+    }
+  >();
+  const touch = (target: OrderTarget, label: string, depth: number, asSubject: boolean) => {
+    const key = targetKey(target);
+    const found = byKey.get(key);
+    if (!found) {
+      byKey.set(key, {
+        target,
+        label,
+        depth: asSubject ? depth : Number.POSITIVE_INFINITY,
+        asSubject,
+        incoming: [],
+        outgoing: [],
+      });
+      return;
+    }
+    if (asSubject || !found.asSubject) found.label = label;
+    if (asSubject) {
+      found.asSubject = true;
+      found.depth = Math.min(found.depth, depth);
+    }
   };
+  for (const row of rows) {
+    touch(row.subject, row.subjectLabel, row.depth, true);
+    touch(row.waitsOn, row.waitsOnLabel, row.depth, false);
+    if (row.loop) continue;
+    byKey.get(targetKey(row.subject))!.incoming.push(row);
+    byKey.get(targetKey(row.waitsOn))!.outgoing.push(row);
+  }
+  const start: PlanWork[] = [];
+  const waiting: PlanWork[] = [];
+  const mergeHeld: PlanWork[] = [];
+  const gateName = (row: OrderRow) => (row.gate === 'in-prod' ? 'in prod' : 'in main');
+  const items = [...byKey.values()].sort((a, b) => {
+    const depthA = Number.isFinite(a.depth) ? a.depth : 0;
+    const depthB = Number.isFinite(b.depth) ? b.depth : 0;
+    return depthA - depthB || a.label.localeCompare(b.label);
+  });
+  for (const item of items) {
+    const startBlocked = item.incoming.filter((row) => !row.met && row.hold === 'start');
+    const mergeBlocked = item.incoming.filter((row) => !row.met && row.hold === 'merge');
+    const settled =
+      item.outgoing.length > 0 &&
+      item.outgoing.every((row) => row.met) &&
+      startBlocked.length === 0 &&
+      mergeBlocked.length === 0;
+    if (startBlocked.length > 0) {
+      const edge = startBlocked[0]!;
+      waiting.push({
+        target: item.target,
+        label: item.label,
+        detail: `${edge.waitsOnLabel} must be ${gateName(edge)} before this can start`,
+      });
+    } else if (!settled) {
+      const pending = item.outgoing.find((row) => !row.met);
+      start.push({
+        target: item.target,
+        label: item.label,
+        detail: pending
+          ? `Start this so it can reach ${pending.gate === 'in-prod' ? 'production' : 'main'}`
+          : 'Start this',
+      });
+    }
+    if (mergeBlocked.length > 0 && startBlocked.length === 0) {
+      const edge = mergeBlocked[0]!;
+      mergeHeld.push({
+        target: item.target,
+        label: item.label,
+        detail: `Do not merge until ${edge.waitsOnLabel} is ${gateName(edge)}`,
+      });
+    }
+  }
+  return { start, waiting, mergeHeld };
 }
 
 export function orderEdgeTouches(edge: Pick<OrderEdge, 'waitsOn' | 'subject'>, you: OrderThreadSnapshot): boolean {
@@ -75,7 +169,7 @@ export function formatOrderText(rows: OrderRow[], plan?: OrderPlan | null): stri
   rows.forEach((row, index) => {
     const gate = row.gate === 'in-prod' ? 'in prod' : 'in main';
     const hold = row.hold === 'merge' ? 'merge' : 'start';
-    const state = row.loop ? 'loop' : row.met ? 'clear' : 'waiting';
+    const state = row.loop ? 'loop' : row.met ? 'clear' : row.hold === 'merge' ? 'merge' : 'waiting';
     lines.push(
       row.loop
         ? `${index + 1}. ${state}  ${row.subjectLabel} returns to ${row.waitsOnLabel} once it is ${gate}`
@@ -85,6 +179,17 @@ export function formatOrderText(rows: OrderRow[], plan?: OrderPlan | null): stri
     if (row.note) lines.push(`   ${row.note}`);
     lines.push(`   id: ${row.id.slice(0, 8)}`);
   });
+  if (plan?.status === 'active') {
+    const slice = executionSlice(rows);
+    const section = (title: string, items: PlanWork[]) => {
+      if (!items.length) return;
+      lines.push('', title);
+      for (const item of items) lines.push(`- ${item.label}. ${item.detail}`);
+    };
+    section('Start now:', slice.start);
+    section('Do not start:', slice.waiting);
+    section('Do not merge:', slice.mergeHeld);
+  }
   return lines.join('\n');
 }
 
@@ -129,6 +234,19 @@ export function markWorkingChains(
   }));
 }
 
+/** How a diagram row should look: start it, it is held, or the gate is clear. */
+function waterfallBar(node: WaterfallNode, chain: WaterfallChain): string {
+  const gating = node.incoming.filter((edge) => !edge.loop);
+  const startBlocked = gating.some((edge) => !edge.met && edge.hold === 'start');
+  const outgoing = chain.nodes
+    .flatMap((other) => other.incoming)
+    .filter((edge) => edge.fromKey === node.key && !edge.loop);
+  const settled = outgoing.length > 0 && outgoing.every((edge) => edge.met) && !startBlocked;
+  if (startBlocked) return ' waiting';
+  if (settled || (gating.length > 0 && gating.every((edge) => edge.met))) return ' clear';
+  return ' start';
+}
+
 function nodeIsYou(node: WaterfallNode, you: OrderThreadSnapshot | null | undefined): boolean {
   if (!you) return false;
   return orderTargetMatches(
@@ -149,11 +267,15 @@ export function formatWaterfallHtml(
   const plan = opts?.plan ?? null;
   const you = opts?.you ?? null;
   const title = plan?.title?.trim() || 'Planner';
+  const watch = chains.length ? planWatchCopy(chains) : '';
   const status = plan
     ? plan.status === 'active'
-      ? 'Running. Ready steps can start. Waiting steps stay held.'
-      : 'Draft. Discuss this and change it. Nothing runs until you agree.'
-    : 'Later steps wait until the one above reaches its gate. In main clears when that pull request is merged. In production stays waiting until it is marked.';
+      ? watch || 'Running. Start the steps that are free. Leave held steps alone.'
+      : watch
+        ? `Draft. Nothing runs until you agree. ${watch}`
+        : 'Draft. Discuss this and change it. Nothing runs until you agree.'
+    : watch ||
+      'Later steps wait until the one above reaches its gate. In main clears when that pull request is merged. In production stays waiting until it is marked.';
   const body =
     chains.length === 0
       ? '<p class="empty">No order yet.</p>'
@@ -161,11 +283,10 @@ export function formatWaterfallHtml(
           .map((chain) => {
             const nodes = chain.nodes
               .map((node) => {
-                const waiting = node.incoming.some((edge) => !edge.met && !edge.loop);
-                const clear = node.incoming.some((edge) => !edge.loop) && !waiting;
                 const yours = nodeIsYou(node, you);
                 const working = node.working === true;
-                const state = `${waiting ? ' waiting' : clear ? ' clear' : ''}${yours ? ' you' : ''}${working ? ' current' : ''}`;
+                const bar = waterfallBar(node, chain);
+                const state = `${working ? ' current' : ''}${bar}${yours ? ' you' : ''}`;
                 const drops = node.incoming
                   .map((edge) => {
                     const tone = edge.loop ? 'loop' : edge.met ? 'clear' : 'waiting';
@@ -173,7 +294,7 @@ export function formatWaterfallHtml(
                     return `<div class="drop"><span>After ${escapeHtml(edge.fromLabel)} is ${escapeHtml(gatePhrase(edge.gate))}, this ${escapeHtml(holdPhrase(edge.hold))}</span><span class="${tone}">${escapeHtml(edge.detail)}</span>${note}</div>`;
                   })
                   .join('');
-                const kicker = `${WATERFALL_KIND[node.kind]}${working ? ' · Working' : ''}${yours ? ' · You' : ''}`;
+                const kicker = `${WATERFALL_KIND[node.kind]}${bar === ' start' ? ' · Start' : ''}${working ? ' · Working' : ''}${yours ? ' · You' : ''}`;
                 return `<li class="node" style="margin-left:${node.depth * 28}px">${drops}<div class="bar${state}"><span class="kicker">${kicker}</span><strong>${escapeHtml(node.label)}</strong></div></li>`;
               })
               .join('');
@@ -200,6 +321,7 @@ h1 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
 .bar { border: 1px solid #333; border-radius: 10px; padding: 10px 12px; background: #1c1c1c; display: flex; flex-direction: column; gap: 2px; }
 .bar.waiting { border-color: #6a5420; background: #221c10; }
 .bar.clear { border-color: #2d5a32; background: #142016; }
+.bar.start { border-color: #2a4a7a; background: #141c28; }
 .bar.you { outline: 1px solid #8ab4ff; }
 .bar.current { border-color: #8ab4ff; box-shadow: inset 3px 0 0 #8ab4ff; }
 .bar.current .kicker { color: #ececec; }

@@ -168,34 +168,50 @@ function joinCapped(lines: string[], max = 3): string {
   return `${lines.slice(0, max).join('. ')}. ${extra} more`;
 }
 
-/** Idle waits, and the steps a cleared gate just unblocked. */
+/** Who can start, who a cleared gate just unblocked, and who is still held. */
 export function planWatchCopy(chains: WaterfallChain[]): string {
+  const start: string[] = [];
   const waiting: string[] = [];
   const ready: string[] = [];
   for (const chain of chains) {
+    const incoming = chain.nodes.flatMap((node) => node.incoming);
     for (const node of chain.nodes) {
-      if (node.incoming.length === 0) continue;
       const gating = node.incoming.filter((edge) => !edge.loop);
-      if (gating.length === 0) continue;
       const blocked = gating.filter((edge) => !edge.met);
       if (blocked.length > 0) {
-        const edge = blocked[0]!;
-        const verb = edge.hold === 'start' ? 'start' : 'merge';
-        waiting.push(`${node.label} can ${verb} once ${edge.fromLabel} is ${gatePhrase(edge.gate)}`);
-      } else {
+        const verb = blocked.some((edge) => edge.hold === 'start') ? 'start' : 'merge';
+        const edge = blocked.find((row) => row.hold === verb) ?? blocked[0]!;
+        waiting.push(
+          `${node.label} can ${verb} once ${edge.fromLabel} is ${gatePhrase(edge.gate)}`,
+        );
+        if (verb === 'merge') start.push(`${node.label} can start`);
+        continue;
+      }
+      if (gating.length > 0) {
         const verb = gating.every((edge) => edge.hold === 'merge') ? 'merge' : 'start';
         ready.push(`${node.label} can ${verb}`);
+        continue;
       }
+      const outgoing = incoming.filter((edge) => edge.fromKey === node.key && !edge.loop);
+      if (outgoing.length > 0 && outgoing.every((edge) => edge.met)) continue;
+      start.push(`${node.label} can start`);
     }
   }
-  if (waiting.length === 0 && ready.length === 0) {
+  if (start.length === 0 && waiting.length === 0 && ready.length === 0) {
     return 'Later steps wait until the one above reaches its gate. In main clears when that pull request is merged. In production stays waiting until you mark it.';
   }
-  if (ready.length === 0) {
-    return `Running and idle. ${joinCapped(waiting)}. A merge or a production mark is what moves the next step.`;
+  const sentences: string[] = [];
+  if (start.length) sentences.push(joinCapped(start));
+  if (ready.length) sentences.push(joinCapped(ready));
+  if (waiting.length) {
+    sentences.push(
+      start.length || ready.length
+        ? `Still waiting: ${joinCapped(waiting)}`
+        : `Running and idle. ${joinCapped(waiting)}. A merge or a production mark is what moves the next step`,
+    );
   }
-  if (waiting.length === 0) return `${joinCapped(ready)}.`;
-  return `${joinCapped(ready)}. Still idle: ${joinCapped(waiting)}.`;
+  const text = sentences.join('. ');
+  return text.endsWith('.') ? text : `${text}.`;
 }
 
 export function gatePhrase(gate: OrderGate): string {
