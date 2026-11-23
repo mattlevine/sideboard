@@ -56,6 +56,7 @@ import {
 import { forwardOccupancyTokens, threadHasCompactedContext } from '@sideboard/context-estimate';
 import {
   contextMeterTooltip,
+  costCoverage,
   occupancyFillRatio,
   resolveContextWindow,
   sumUsage,
@@ -1668,6 +1669,11 @@ export function ThreadPanel({
     if (!liveUsage) return fromMessages;
     return sumUsage([fromMessages ?? undefined, liveUsage]);
   }, [thread.messages, liveUsage]);
+  // Stored messages only. Live usage is still in flight — Claude sets costUsd on result.
+  const finishedCostCoverage = useMemo(
+    () => costCoverage(thread.messages),
+    [thread.messages],
+  );
   const latestContextUsage = useMemo(() => {
     if (liveUsage) return liveUsage;
     for (let i = thread.messages.length - 1; i >= 0; i--) {
@@ -2169,12 +2175,16 @@ export function ThreadPanel({
                 contextWindow,
                 threadUsage?.costUsd,
                 showCost,
+                finishedCostCoverage.silentTurns > 0,
               )}
               contextTooltip={contextMeterTooltip(latestContextUsage, contextWindow, {
                 occupancy: forwardOccupancy,
                 compacted: contextCompacted,
                 estimated: occupancyEstimated,
                 billedTotal: threadUsage ? totalTokens(threadUsage) : undefined,
+                showCost,
+                costUsd: threadUsage?.costUsd,
+                silentTurns: finishedCostCoverage.silentTurns,
               })}
             />
           </>

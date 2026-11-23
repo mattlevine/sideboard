@@ -194,7 +194,7 @@ export function formatWorktreeDirective(
   lines.push(formatDevAccessHint(opts?.activeRuns));
   lines.push('');
   lines.push(
-    'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. Future jobs turn on Caffeinate.',
+    'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. Future jobs turn on Caffeinate. `create_follow_up` (ci|at) waits behind this turn.',
   );
   lines.push(
     '`set_workspace_tags` labels this checkout (omit ref). `set_wake_on_github_edges` opts this checkout in when Advanced is already on (omit ref).',

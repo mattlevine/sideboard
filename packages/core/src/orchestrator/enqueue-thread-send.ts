@@ -21,14 +21,24 @@ import { followUpBehavior, type FollowUpBehavior } from '../store/app-settings.j
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import type { OrchestratorEvent, Thread, ThreadAttachment, ThreadMessage } from '../types/thread.js';
 
+/** `join` waits behind a running turn. Settings still use `queue` or `steer`. */
+export type SendFollowUp = FollowUpBehavior | 'join';
+
+/** True when this send should stop the in-flight turn. `join` and `queue` never do. */
+export function sendFollowUpInterrupts(followUp: SendFollowUp, busy: boolean): boolean {
+  return followUp === 'steer' && busy;
+}
+
 /**
  * Desktop/CLI pass follow-up explicitly. Internal sends (child-halt
  * "Sideboard: …" notices, Slack, schedules) omit it — orchestrators then
  * use Settings → Follow-up behavior (default steer) so those do not sit
  * in the queue while the user asked to interrupt.
  *
- * Orchestrator → worktree talk (`send_to_chat`, `ask_git`) must
- * pass {@link resolveOrchChildFollowUp} so those prompts steer by default.
+ * `ask_git` passes {@link resolveOrchChildFollowUp} so those prompts steer.
+ * `send_to_chat` passes `join`. That merges only while the prompt is still
+ * queued or not yet handed to the process. Once the process has started, the
+ * new text waits behind the turn and the running prompt is left as sent.
  * Create/reuse first prompts still queue unless the caller opts in.
  */
 export function resolveSendFollowUp(
@@ -198,13 +208,15 @@ function clearSendBookkeeping(host: EnqueueSendHost, threadId: string): void {
 /**
  * Queue a prompt. A steer that arrives before the agent has replied is joined
  * onto the open prompt (`Work on issue A` + `And B`) instead of replacing it.
+ * `join` uses that merge only when the process has not been started. After
+ * start it appends behind the turn and does not rewrite the prompt already sent.
  * Returns whether the caller should still interrupt via send-now.
  */
 export async function enqueueThreadSend(
   host: EnqueueSendHost,
   threadRef: string,
   prompt: string,
-  opts?: { followUp?: FollowUpBehavior; attachments?: Thread['attachments'] },
+  opts?: { followUp?: SendFollowUp; attachments?: Thread['attachments'] },
 ): Promise<{ thread: Thread; shouldSteer: boolean }> {
   const thread = host.requireThread(threadRef);
   if (thread.status === 'archived') {
@@ -216,7 +228,12 @@ export async function enqueueThreadSend(
     if (current.status === 'archived') {
       throw new Error(`Thread is archived: ${thread.id}`);
     }
-    const followUp = resolveSendFollowUp(current, opts?.followUp);
+    const requested = opts?.followUp;
+    const join = requested === 'join';
+    const followUp = resolveSendFollowUp(
+      current,
+      join ? 'steer' : requested,
+    );
     // [] is this turn's files. Omitting attachments takes chips staged on the Mac.
     const explicit = opts?.attachments;
     const consumed =
@@ -233,8 +250,12 @@ export async function enqueueThreadSend(
       !inFlightEarly && current.status === 'queued' && current.queue.length > 0
         ? current.queue[0]!
         : null;
+    // Join can fold into a prompt the process has not received. Once spawned,
+    // the process already has the old text — rewriting the bubble would lie.
+    const joinCanMerge =
+      (draft != null && !draft.spawned) || (!inFlightEarly && queuedHead != null);
     const unanswered =
-      followUp === 'steer' && !agentHasRepliedEarly
+      followUp === 'steer' && !agentHasRepliedEarly && (!join || joinCanMerge)
         ? (draft?.text ?? (inFlightEarly ? trailingUnansweredUserText(current.messages) : queuedHead))
         : null;
     // Before any agent output, steer appends onto the open prompt so the
@@ -298,7 +319,10 @@ export async function enqueueThreadSend(
     // Same interrupt as before: a running turn, or anything already parked.
     // A follow-up that was joined onto a prompt the process has not received
     // yet returned above and does not start a second turn.
-    shouldSteer = followUp === 'steer' && (inFlight || current.queue.length > 0);
+    shouldSteer = sendFollowUpInterrupts(
+      join ? 'join' : followUp,
+      inFlight || current.queue.length > 0,
+    );
     const patch: Partial<Thread> = queued;
     if (explicit === undefined && consumed.consumed.length > 0) {
       patch.attachments = consumed.attachments;

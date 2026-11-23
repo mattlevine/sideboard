@@ -146,4 +146,31 @@ describe('waitForTurnToolResult', () => {
     expect(result.hint).toMatch(/Need a Linear token/);
     expect(result.hint).toMatch(/Do not send_to_chat/);
   });
+
+  it('classifies a failed turn and tells the coordinator not to retry quota', () => {
+    const result = waitForTurnToolResult({
+      id: 't1',
+      status: 'error',
+      taskState: 'failed',
+      text: '',
+      lastError: 'You have hit your session limit',
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+    });
+    expect(result.failureClass).toBe('quota');
+    expect(result.hint).toMatch(/Do not retry/);
+    const runner = waitForTurnToolResult({
+      id: 't1',
+      status: 'error',
+      taskState: 'failed',
+      text: '',
+      lastError: 'connection stalled',
+      stillRunning: false,
+      progress: null,
+      lastActivityAt: null,
+    });
+    expect(runner.failureClass).toBe('timeout');
+    expect(runner.hint).toMatch(/One retry is reasonable/);
+  });
 });

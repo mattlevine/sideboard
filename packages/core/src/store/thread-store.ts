@@ -6,9 +6,7 @@ import {
   renameSync,
   rmSync,
   statSync,
-  unlinkSync,
-  writeFileSync,
-  readdirSync,
+  unlinkSync, writeFileSync, readdirSync,
 } from 'node:fs';
 import { basename } from 'node:path';
 import lockfile from 'proper-lockfile';
@@ -23,6 +21,7 @@ import { sanitizeMcpServerName } from '../agents/claude-mcp.js';
 import { cursorSdkStoreDir } from '../agents/cursor-store.js';
 import { threadFilePath, threadLockPath, threadsDir } from './paths.js';
 import { deleteSchedulesForThread } from './schedules.js';
+import { normalizeChatFollowUps } from '../threads/chat-follow-ups.js';
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -116,6 +115,7 @@ export function normalizeThread(raw: Thread): Thread {
     prLabels: Array.isArray(raw.prLabels) ? raw.prLabels : [],
     prChecksFailed: typeof raw.prChecksFailed === 'boolean' ? raw.prChecksFailed : undefined,
     wakeOnGithubEdges: raw.wakeOnGithubEdges === true ? true : undefined,
+    followUps: normalizeChatFollowUps(raw.followUps),
     issueBlockedBy: sanitizeIssueBlockedBy(raw.issueBlockedBy),
     skipAutoArchiveOnMerge: Boolean(raw.skipAutoArchiveOnMerge),
     cowboy: Boolean(raw.cowboy),

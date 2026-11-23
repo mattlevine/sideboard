@@ -12,6 +12,18 @@ import {
 } from './coordinator-prompt.js';
 
 describe('coordinator-prompt', () => {
+  it('assigns one worker and does not retry auth or quota', () => {
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Dispatch —');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'A second send_to_chat joins that prompt only while it is still queued',
+    );
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Read failureClass on a failed turn');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain(
+      'Auth, quota, and a model that refused are not a retry',
+    );
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('A finished turn is not shipped');
+  });
+
   const prevData = process.env.SIDEBOARD_APP_DATA;
   const prevVault = process.env.SIDEBOARD_SECRET_VAULT;
   let dataDir: string;
@@ -276,7 +288,7 @@ describe('coordinator-prompt', () => {
       expect(agents).toContain('do not ask_user after it');
       expect(agents).not.toContain('Post this review');
       expect(agents).toContain('force_stop: true');
-      expect(agents).toContain('steer a prompt');
+      expect(agents).toContain('does not stop it');
       expect(agents).toContain('Greenfield');
       expect(agents).toContain('ask_git');
       expect(agents).toContain('get_pr_checks');

@@ -9,7 +9,7 @@ import {
   type SidebarPrMeta,
 } from '../lib/follow-thread-pr';
 import { classifyMergeIssue, prPillModifier, prPillStatusLabel } from '../lib/pr-format';
-import { billedUsageLabel, sumUsage, usageTooltip } from '../lib/tokens';
+import { billedUsageLabel, costCoverage, sumUsage, usageTooltip } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 
 function relativeTime(iso: string): string {
@@ -105,13 +105,15 @@ function groupSpendLabel(
   threads: Thread[],
   showCost: boolean,
 ): { label: string; tooltip: string } | null {
-  const usage = sumUsage(threads.flatMap((t) => t.messages.map((m) => m.usage)));
+  const messages = threads.flatMap((t) => t.messages);
+  const usage = sumUsage(messages.map((m) => m.usage));
   if (!usage) return null;
+  const silentTurns = costCoverage(messages).silentTurns;
   const chatNote =
     threads.length > 1 ? ` across ${threads.length} open chats` : '';
   return {
-    label: billedUsageLabel(usage, showCost),
-    tooltip: `Open chats${chatNote} — ${usageTooltip(usage, { showCost })}`,
+    label: billedUsageLabel(usage, showCost, silentTurns > 0),
+    tooltip: `Open chats${chatNote} — ${usageTooltip(usage, { showCost, silentTurns })}`,
   };
 }
 

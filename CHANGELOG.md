@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.349] - 2026-11-22
+
+### Added
+
+- A chat can wait until GitHub checks finish, or until a time you set, and then continue. A turn that has already started is not stopped.
+- Archiving the last chat on a checkout saves uncommitted files and puts them back if you restore that chat. History Delete does not keep that copy.
+
+### Changed
+
+- The site and compare notes describe Multica: named agents, a daemon, and a server that holds the transcript.
+- When cost is visible, a finished turn that reported no dollars shows ≥. Sideboard status lines are not counted.
+- An orchestrator can tell auth, quota, and a model refusal from a timeout or a runner crash, and does not retry the first three.
+
 ## [0.1.348] - 2026-11-17
 
 ### Fixed

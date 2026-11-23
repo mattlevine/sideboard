@@ -23,6 +23,7 @@ import {
   summarizeTurnStderr,
   turnFailChatText,
 } from './error-detail.js';
+import { classifyTurnFailure } from './turn-failure-class.js';
 
 describe('formatUnknownDetail', () => {
   it('reads RunError-shaped objects instead of [object Object]', () => {
@@ -663,5 +664,25 @@ describe('humanizeAgentFailDetail / formatTurnExitError', () => {
 
   it('keeps exit code for opaque CLI failures', () => {
     expect(formatTurnExitError(2, 'segfault at 0x0')).toBe('exit 2: segfault at 0x0');
+  });
+});
+
+describe('classifyTurnFailure', () => {
+  it('puts quota ahead of auth and names a refusal', () => {
+    expect(classifyTurnFailure('')).toBeNull();
+    expect(classifyTurnFailure("You've hit your session limit")).toBe('quota');
+    expect(classifyTurnFailure('credit balance is too low')).toBe('quota');
+    expect(classifyTurnFailure('429 too many requests')).toBe('quota');
+    expect(classifyTurnFailure('Invalid API key')).toBe('auth');
+    expect(classifyTurnFailure('prompt is too long')).toBe('refused');
+    expect(classifyTurnFailure('the model refused the request')).toBe('refused');
+    expect(classifyTurnFailure('connection stalled')).toBe('timeout');
+    expect(classifyTurnFailure('cursor runner crashed in node')).toBe('runner');
+    expect(classifyTurnFailure('something else went wrong')).toBe('other');
+    expect(classifyTurnFailure('billing page tests failed')).toBe('other');
+    expect(classifyTurnFailure('the API returned unauthorized')).toBe('other');
+    expect(classifyTurnFailure('authentication failed for the webhook')).toBe('other');
+    expect(classifyTurnFailure('the script set a timeout')).toBe('other');
+    expect(classifyTurnFailure('inactivity in the worker pool')).toBe('other');
   });
 });

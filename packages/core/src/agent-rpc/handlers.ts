@@ -252,6 +252,7 @@ export async function handleTurnWait(
       incomplete: false,
       blockedReason: null,
       blockedSource: null,
+      failureClass: null,
     }
   );
 }

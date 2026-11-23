@@ -7,7 +7,7 @@ import {
   isSchemaPane,
   type RightPaneContent,
 } from '../lib/right-pane';
-import { formatTokenCount, formatCostSuffix, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, contextMeterTooltip, resolveContextWindow, usageTooltip } from '../lib/tokens';
+import { formatTokenCount, formatCostSuffix, agentMessageUsageTitle, meterOccupancyTokens, occupancyFillRatio, totalTokens, contextFillRatio, resolveContextWindow } from '../lib/tokens';
 import { useShowCost } from '../lib/show-cost';
 import { ContextMeter } from './ContextMeter';
 import { type FilePathLink } from '../lib/file-path-link';
@@ -351,17 +351,10 @@ export function AgentMessage({
         : usage
           ? meterOccupancyTokens(usage, windowTokens)
           : null;
-  const usageTitle =
-    summedContext && shownOccupancy == null && usage
-      ? usageTooltip(usage, { showCost, context: false })
-      : shownOccupancy != null
-        ? contextMeterTooltip(usage ?? null, windowTokens, {
-            occupancy: shownOccupancy,
-            estimated: occupancyEstimated,
-          })
-        : usage
-          ? contextMeterTooltip(usage, windowTokens)
-          : undefined;
+  const cost = agentMessageUsageTitle({
+    usage, streaming: Boolean(streaming), showCost, summedContext, shownOccupancy, windowTokens, estimated: occupancyEstimated,
+  });
+  const usageTitle = cost.title;
 
   function openFileReference(link: FilePathLink) {
     void openWorktreePathLink({
@@ -674,7 +667,7 @@ export function AgentMessage({
                       : 0),
                 )}{' '}
                 tok
-                {formatCostSuffix(usage?.costUsd, showCost)}
+                {formatCostSuffix(usage?.costUsd, showCost, cost.lowerBound)}
               </span>
             )}
             <button type="button" className="msg-foot-btn" title="Copy" onClick={() => void copyAnswer()}>

@@ -1,3 +1,4 @@
+import type { ChatFollowUp } from '../threads/chat-follow-ups.js';
 import type { ThinkingEffort } from './thinking-effort.js';
 
 export type AgentKind = 'claude' | 'codex' | 'opencode' | 'brightsy' | 'cursor';
@@ -172,15 +173,14 @@ export interface Thread {
   prMergeStateStatus?: string | null;
   /** Cached GitHub merge-queue flag from the last `getPrMeta`. */
   prIsInMergeQueue?: boolean;
-  /**
-   * Cached GitHub label names (workflow tags like `eng-review`).
-   * Used for sidebar / board list badges.
-   */
+  /** Cached GitHub label names (workflow tags like `eng-review`) for sidebar and board badges. */
   prLabels?: string[];
   /** True when `gh pr checks` reported a failing CI run. */
   prChecksFailed?: boolean;
   /** This checkout opts in to CI / review-request wakes. Off until set. */
   wakeOnGithubEdges?: boolean;
+  /** CI or time follow-ups on this chat. A running turn is not interrupted. Cap 10. */
+  followUps?: ChatFollowUp[];
   /** Source-ticket blockers. Empty if none; absent until looked up. Not an agent block. */
   issueBlockedBy?: string[];
   /**
