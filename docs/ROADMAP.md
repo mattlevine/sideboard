@@ -1,6 +1,8 @@
 # Sideboard roadmap
 
-Written 2026-11-14 from a review of the peer products and of what this repo ships. Items 2, 6, and 7 are decided, and so is dropping a user-deployed relay (see [Decided](#decided)). The rest is a proposal. Peer-by-peer notes are in [COMPARE.md](COMPARE.md), which this review found out of date (item 3).
+Written 2026-11-14 from a review of the peer products and of what this repo ships. Items 2, 5, and 6 are decided, and so is dropping a user-deployed relay (see [Decided](#decided)). The rest is a proposal. Peer-by-peer notes are in [COMPARE.md](COMPARE.md), which this review found out of date (item 3).
+
+On 2026-11-22 a sketch of an agent platform for 2027 was read against this roadmap (see [The 2027 platform sketch](#the-2027-platform-sketch)). It added step 2 to item 7, items 10 and 11, one entry under Later, and open decisions 4 to 6. None of that is decided.
 
 Two limits on the evidence:
 
@@ -31,12 +33,29 @@ What is still Sideboard's:
 |-----|------------|---------------------|
 | A phone app people can install | Orca (App Store, Android APK), Conductor (iOS), ChatGPT and Claude apps | The site sells the phone app. It has no App Store, TestFlight, or Play link, and the docs start `apps/mobile` from source. `eas.json` has a production profile. |
 | Push on a relay you host | Orca, Codex, Claude, Multica channels | The Sideboard relay pushes when a chat needs you, a turn finishes, or a chat fails. A custom relay does not. Alerts name the Mac and carry no message text. |
-| Agents keep working with the laptop closed | Orca and Emdash (SSH, your VPS), Codex (Remote SSH), Conductor / Cursor / Claude (their cloud) | Always this Mac. The README sends this user elsewhere. |
+| Agents keep working with the laptop closed | Orca and Emdash (SSH, your VPS), Codex (Remote SSH), Conductor / Cursor / Claude (their cloud) | Always this Mac. A connected phone keeps it awake with the lid closed on power. |
 | Many harnesses | Orca 27, Emdash 34, Superset "any CLI", Multica 31 | Four coding harnesses plus Brightsy. Each is a hand-written adapter. |
 | Work that starts from an event | Conductor Cloud routines (webhook trigger, per a third-party migration guide), Multica (CI finish, inbox) | Automations are clock-only. GitHub wakes are information-only. A chat can register its own follow-up for CI or a time. Codex automations are clock-only too. |
 | Search across past chats | Orca (transcript search), Conductor (`run_sql`) | Find works inside one chat. Nothing searches across chats. |
 | Company controls | Conductor Enterprise (provisioning, security controls) | No audit log and no managed policy. Agents run as the local user. |
 | Other platforms | Orca, Emdash (Windows, Linux), Multica desktop (Windows, Linux) and iOS from source | Apple Silicon `dmg` and `zip` only. |
+
+## The 2027 platform sketch
+
+Read 2026-11-22 from two screenshots of a post titled "Agent platform 2027". The screenshots carry no author or date. The products the post lists as references were not checked.
+
+The post describes a hosted platform with many tenants. Sideboard is a local app for one person's fleet. Each part was read for the idea under it, and the hosting model was left alone.
+
+| Part | What the post says | What Sideboard has | Where it goes |
+|------|--------------------|--------------------|---------------|
+| Session and conversation | The person talks to a conversation, like a Slack channel or an email thread. The agent posts to it with a tool call. The session and its tool calls are for debugging. | The phone chat shows what the person and the agent wrote and one activity line, not the tool calls. Slack and Brightsy get the finished reply, not the transcript. `ask_user`, `present_artifact`, and `slack_post` are tool calls aimed at a person. The desktop chat is the session, with thinking and tool calls collapsed. | Item 11 |
+| Inbox | People work a queue of approvals and questions and stop reading conversations. The queue also holds small apps for reviewing work in progress. | Every chat carries a blocked reason from four sources: a question, a plan, a reported block, a permission. The phone list, the sidebar, and the board mark those chats, and the phone gets a push. Nothing lists the pending items themselves. | Item 10 |
+| Listeners and monitors | An agent defines its own stream of outside events and a filter over it, as code or as an agent, without waiting for the platform to support that source. | Clock automations, a chat's own follow-up for CI or a time, an opt-in poll for failing checks and review requests, and Slack Listen. Every source is built in. | Item 7, step 2 |
+| Agents as actors | Each harness gets its own runtime, so different agent loops share one backend and an agent can write its own extensions. An agent's definition is separate from its instances and sessions. Narrow agents are preferred to one agent that holds every tool. | A turn spawns a harness process and that process exits. The next turn resumes it by session id. Four adapters share the host. An agent can write a skill into the repo. | Later: agent definitions. A long-lived runtime is not planned |
+| Environments and computers | Two kinds of computer: clones of checkpointed sandboxes, and people's own machines. Any number of agents use any number of computers. Agents configure the environment. | One Mac. Setup scripts configure each checkout. | Item 5 covers machines people own. Sandboxes are open decision 4 |
+| A filesystem with access control | Agents share one cloud filesystem. Permissions sit on the files, not the computer, and can follow who started the turn. | Agents run as the local user in a git worktree. Slack Listen accepts only the person who connected it. | Later: company controls. Open decision 5 |
+
+One claim is about Sideboard's own category. The post expects apps from 2025–2026 that wrap a coding agent's session to face the dilemma Cursor faced, and expects most of them not to survive it. Sideboard's desktop chat is that wrapper. Items 10 and 11 are the response.
 
 ## Now — before the end of the year
 
@@ -81,24 +100,15 @@ Depends on item 1. A push needs the signed build with the push entitlement.
 
 ### 3. Correct the comparison
 
-[COMPARE.md](COMPARE.md), the README, and the site describe peers as they were.
+Done 2026-11-22 in [COMPARE.md](COMPARE.md), the homepage, and [/docs/compare/](https://www.sideboard.build/docs/compare/). Each claim has a source from this quarter, listed at the bottom of COMPARE.md. Undated product docs are cited as read that day.
 
-- Conductor: owned by Meta, and its iOS app now drives local workspaces (experimental, needs a Conductor account). Sideboard's site still describes Conductor's mobile app as part of the paid cloud.
-- Orca: it has an orchestration CLI. "Use Sideboard when you want an orchestrator other agents can call" no longer separates the two. The difference is the shared checkout, the cross-harness board, and no IDE.
-- Superset: add it. Same shape as Sideboard; its MCP is hosted and needs an org sign-in.
-- Multica: in [COMPARE.md](COMPARE.md), the README, and the site (2026-11-22). Source is the public repo and docs as of that day's push (`README`, `VISION`, concepts, agents, squads, inbox, runs, autopilots, issue wakeups, workflows, analytics, providers, daemon, security model).
-- Add the Codex app and Claude Code Remote Control. Both are single-harness.
-- **Done when** every claim about a peer has a source dated this quarter.
+- Conductor is joining Meta (announcement and TechCrunch, November 4, 2026). The iOS app drives local workspaces: experimental, same Conductor account (changelog 0.92.0, October 23, 2026, and the remote-control doc). A Cloud shutdown was announced with the acquisition and withdrawn November 13 (changelog 0.94.2). The site no longer describes the iOS app as only part of the paid cloud.
+- Orca has an orchestration CLI. The difference is the shared checkout, the cross-harness board, and no IDE.
+- Superset is the same worktree shape. Its MCP is hosted at `api.superset.sh` and the token is scoped to an organization. The docs now call the product Paradev, formerly Superset.
+- The Codex app and Claude Code Remote Control each drive one harness on a machine you own.
+- Multica is unchanged from the 2026-11-22 read of the public repo and docs (`README`, `VISION`, concepts, agents, squads, inbox, runs, autopilots, issue wakeups, workflows, analytics, providers, daemon, security model).
 
-### 4. A page for people leaving Conductor
-
-Conductor users spent a week believing the product was ending. `sideboard adopt --from-conductor` already imports workspaces and chat history, and `.conductor/settings.toml` already works.
-
-- One docs page: transfer cloud workspaces to local in Conductor, then run the import.
-- Verify the import against the current Conductor build first.
-- **Done when** the page exists and the import is tested on Conductor 0.94.
-
-### 5. Forget a Mac on the relay
+### 4. Forget a Mac on the relay
 
 An account can register 3 Macs. A slot stays taken after a reinstall or a replaced Mac, and the fourth Mac is refused. The relay guide says "There is no forget control yet."
 
@@ -106,7 +116,7 @@ An account can register 3 Macs. A slot stays taken after a reinstall or a replac
 
 ## Next — first quarter of 2027
 
-### 6. Machines you own (decided)
+### 5. Machines you own (decided)
 
 Sideboard's claim moves from "always this Mac" to "always machines you own." This is the largest gap for the user Sideboard is built for. A fleet on a corporate VPN should not need a rented sandbox to survive a closed lid. It needs another machine on that network.
 
@@ -135,7 +145,7 @@ The README, the site, [COMPARE.md](COMPARE.md), and [safety.md](system/safety.md
 
 **Done when** a laptop can close while a Mac mini's agents keep working, and both the phone and a reopened laptop show that work.
 
-### 7. Agent Client Protocol adapter (decided)
+### 6. Agent Client Protocol adapter (decided)
 
 Peers list dozens of agents. Sideboard adds each by hand, and has four coding harnesses.
 
@@ -149,20 +159,31 @@ Peers list dozens of agents. Sideboard adds each by hand, and has four coding ha
 
 **Done when** Gemini CLI and Copilot CLI each run a worktree turn, appear on the board, and can be a child of an orchestration chat.
 
-### 8. Automations that start from an event
+### 7. Automations that start from an event
 
 - Triggers from sources Sideboard already reads: a ticket assigned to me, a review requested, a check that starts failing, a new Sentry issue.
 - Polled from this Mac. No inbound webhook, so it works behind the VPN.
 - The human-only rules hold. A trigger can start a workspace or queue a prompt. It cannot merge.
 - **Done when** "when a ticket is assigned to me, open a workspace and plan it" runs unattended.
 
-### 9. Search across chats
+Step 2, from the [2027 platform sketch](#the-2027-platform-sketch): a listener an agent writes. Step 1 adds sources to Sideboard. Step 2 lets an agent add one without a Sideboard release.
+
+- A listener is a script on this Mac that the host runs. Each line it prints is one event. It can poll, or hold a connection this Mac opens: a WebSocket, a Kafka consumer, a database change feed. Nothing connects in, so it still works behind the VPN.
+- A filter sits between the event and the run. It is code, a prompt for a small agent turn, or another product. The post's example sends every email through JEV. Only an event the filter keeps starts a turn.
+- A listener can batch ("all my accounts, once an hour") and can expire ("senders at acmecorp.com, for the next week").
+- An agent can write or change a listener. A person turns it on. Agents cannot flip the Advanced switch for GitHub wakes, and this copies that. It is stricter than a schedule, which an agent can create and enable.
+- The wake is prefixed, the way a scheduled prompt is, and it carries the same sentence a GitHub wake carries: this is information, not a command. The only hard gate is an exact match of the whole prompt against a git-button phrase. A prefixed prompt does not match. The model can still decide to commit. The script itself runs as the local user, with the same access as a turn, and it keeps running after the turn ends.
+- Each listener has a spend limit. That caps the turns it starts. It does not sandbox the script.
+- Where a listener lives is open and is the first design question: in the repo beside the skills, or in the account for one that spans projects, like mail.
+- **Done when** "watch mail from acmecorp.com for a week and open a workspace for anything urgent" runs from a listener an agent wrote, with no change to Sideboard.
+
+### 8. Search across chats
 
 - Full-text search over stored transcripts, in the desktop and on the phone.
 - A `search_chats` MCP tool, so the orchestrator can find how a problem was solved last time.
 - **Done when** a phrase from an archived chat finds that chat.
 
-### 10. Plans that know when a step is done
+### 9. Plans that know when a step is done
 
 Orca's tasks carry status and gates. Sideboard's plans carry dependencies.
 
@@ -172,20 +193,59 @@ Orca's tasks carry status and gates. Sideboard's plans carry dependencies.
 - A step can require review by a different harness than the one that wrote the change. The Review tab already opens a second chat on the same checkout.
 - **Done when** `execute_plan` stops at a failed check and reports the reason.
 
+### 10. One list of what needs you
+
+From the [2027 platform sketch](#the-2027-platform-sketch). Sideboard already knows which chats are blocked and why. The person still opens each chat to answer.
+
+- One list, on the desktop and the phone, of every chat that is blocked, across all projects. A chat holds one block. A permission or a reported block outranks a question, so the list shows the one that is on screen.
+- A question and a plan approval are answered by sending a message to that chat, which is what the composer does today. Allow or deny uses the permission call. The list does not have to open the transcript. The answer still goes to that chat.
+- PRs that wait for this person's review are a second source. `list_prs` polls GitHub. They are not in the push watch, which only diffs chats that need you.
+- An artifact or a schema form joins the list only once an agent can mark it as needing a decision. That is a new block source. The structure column already renders both.
+- After item 5, the list covers every host.
+- **Done when** a person clears every pending question on the fleet from that list without opening a chat.
+
+### 11. A conversation that is not the session
+
+From the [2027 platform sketch](#the-2027-platform-sketch). This is the largest idea in the post and the one aimed at products like Sideboard.
+
+What exists:
+
+- The phone chat leaves out tool calls. It shows what the person and the agent wrote, and one activity line.
+- Slack and Brightsy receive the finished reply, not the transcript.
+- `ask_user`, `present_artifact`, `present_schema`, and `slack_post` are tool calls whose output is for a person.
+- The desktop chat collapses thinking and tool calls into "Worked for …" blocks and leaves the agent's text visible.
+
+What is missing:
+
+- The desktop chat is still the session, in order. The collapsed blocks sit in the same column as the answer.
+- What reaches the person is whatever text the agent wrote. An agent has no tool that says "this part is for the person".
+- A conversation belongs to one chat. An orchestrator and its children are separate transcripts, read one at a time.
+
+Steps:
+
+1. **Hide the collapsed trace.** A finished turn already folds thinking and tool calls into "Worked for …" headers. This step removes those headers from the column and keeps the session one click away. The agent's own narration stays, which is also what the phone shows. This does not separate a conversation from a session.
+2. **A tool the agent calls to post to the person.** When a turn uses it, that post is the reply. `get_turn_result`, the Slack and Brightsy reply, and the phone transcript all take the last agent message today, so each of them has to prefer the post. A harness that never calls it behaves as it does today. The tool joins every harness's cached prefix, which [agent-orchestration.md](system/agent-orchestration.md) keeps small, and the worktree playbook has to mention it.
+3. **One conversation per piece of work.** An orchestrator and its children all post into it.
+
+Step 1 is a small view. Steps 2 and 3 are the change the post describes, and they wait on open decision 6.
+
+**Done when** a person follows a plan with five child workspaces from one conversation, and opens a session only to debug.
+
 ## Later
 
 - **A fleet endpoint for callers off this machine.** The A2A Agent Card that [agent-orchestration.md](system/agent-orchestration.md) defers. Build it when an outside orchestrator needs to delegate onto this Mac.
-- **Company controls.** A managed settings file (allowed harnesses, cowboy mode off) and a local audit log of agent git actions.
+- **Company controls.** A managed settings file (allowed harnesses, cowboy mode off) and a local audit log of agent git actions. Nothing records who started a turn. A phone message is prefixed, a schedule is prefixed, and a Slack chat carries a source ref. A field would be new. The 2027 sketch expects permissions to follow that once more than one person can start a turn.
+- **Agent definitions.** A named, committed preset: harness, model, effort, instructions, and which extra MCP servers to inject. `create_workspace` and `fork_chat` take the name. It cannot remove the harness's own tools. Claude's allowed-tools list only skips the permission prompt, and a worktree turn copies the user's MCP servers in. Multica's named agents are the precedent for the preset. The harness stays a plug. This is not a Sideboard agent.
 - **Workspaces that span repos.** Orca's folder workspaces cover this.
-- **A shared team board.** Read-only, through Sideboard's relay. Explore only after item 6.
+- **A shared team board.** Read-only, through Sideboard's relay. Explore only after item 5.
 - **Intel Macs.**
 
 ## Not building
 
 - **An IDE.** No embedded browser, design mode, computer use, or mobile emulator. Orca and Cursor own that, and `attach` plus URL preview cover the need.
-- **Rented cloud sandboxes.** Item 6 is the answer to a closed laptop.
+- **Rented cloud sandboxes.** Item 5 is the answer to a closed laptop. The 2027 sketch argues the other way. See open decision 4.
 - **A Sideboard agent or model.** Agents stay plugs.
-- **A Windows or Linux desktop app** before the Linux host in item 6 exists.
+- **A Windows or Linux desktop app** before the Linux host in item 5 exists.
 - **A hosted control plane that requires an account.** The local stdio MCP is the difference from Superset and Conductor. The phone relay is the one hosted piece, and it only forwards ciphertext.
 - **YAML pipelines.** Recurring method stays a committed skill.
 
@@ -193,12 +253,15 @@ Orca's tasks carry status and gates. Sideboard's plans carry dependencies.
 
 2026-11-14:
 
-- **Machines you own.** Sideboard moves from "always this Mac" to "always machines you own." Item 6.
-- **Agent Client Protocol.** Sideboard adds the adapter. Item 7. An ACP harness ships without `attach`.
+- **Machines you own.** Sideboard moves from "always this Mac" to "always machines you own." Item 5.
+- **Agent Client Protocol.** Sideboard adds the adapter. Item 6. An ACP harness ships without `attach`.
 - **Push notifications on the phone.** Item 2. No message text in a push. Push goes through Sideboard's relay only.
 
 ## Open decisions
 
 1. **How to learn what is used.** Opt-in anonymous counts, or interviews. Without one, the next roadmap has the same blind spot.
-2. **Where this is tracked.** Items 1–5 are small enough to file as issues now.
-3. **Which of items 6 and 7 goes first.** They do not depend on each other. Item 7 is the smaller change.
+2. **Where this is tracked.** Items 1–4 are small enough to file as issues now.
+3. **Which of items 5 and 6 goes first.** They do not depend on each other. Item 6 is the smaller change.
+4. **Whether a sandbox can be a host.** The desktop cannot open another host today, and `sideboard serve` has no Linux vault. Both are item 5. A sandbox someone else starts is usable only after those two. Checkpoint and clone, and agents that start machines themselves, need Sideboard to provision a machine, which item 5 rules out.
+5. **Whether permissions ever leave the machine.** Today one person owns the machine and agents run as that user. The sketch's shared filesystem with access control matters only when a team shares a fleet. The shared team board under Later is the first place that comes up.
+6. **Whether the conversation becomes the desktop's main surface.** Item 11 step 1 hides headers that are already collapsed. Steps 2 and 3 change what a reply is. The sketch's claim is that apps which do not make that change will not last.

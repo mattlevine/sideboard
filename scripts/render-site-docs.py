@@ -33,7 +33,7 @@ PAGES = {
     "compare.md": {
         "out": "compare/index.html",
         "title": "Compare — Sideboard",
-        "description": "Sideboard vs Conductor, Orca, Cursor, and other local boards.",
+        "description": "Sideboard vs Conductor, Orca, Superset, Multica, and the single-harness phone remotes.",
         "h1": "Compare",
     },
     "security.md": {
