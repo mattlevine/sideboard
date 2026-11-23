@@ -1,6 +1,6 @@
 # Sideboard roadmap
 
-Written 2026-11-14 from a review of the peer products and of what this repo ships. Items 2, 5, and 6 are decided, and so is dropping a user-deployed relay (see [Decided](#decided)). The rest is a proposal. Peer-by-peer notes are in [COMPARE.md](COMPARE.md), which this review found out of date (item 3).
+Written 2026-11-14 from a review of the peer products and of what this repo ships. Items 2, 5, and 6 are decided, and so is dropping a user-deployed relay (see [Decided](#decided)). The rest is a proposal. Peer-by-peer notes are in [COMPARE.md](COMPARE.md), corrected on 2026-11-22 (item 3).
 
 On 2026-11-22 a sketch of an agent platform for 2027 was read against this roadmap (see [The 2027 platform sketch](#the-2027-platform-sketch)). It added step 2 to item 7, items 10 and 11, one entry under Later, and open decisions 4 to 6. None of that is decided.
 
@@ -13,7 +13,7 @@ Two limits on the evidence:
 
 One checkout per task with several agents in parallel is now a default feature. Conductor, Orca, Superset, Emdash, Cursor's Agents Window, the Codex app, and Claude Code all do it. Multica is a different shape: the board is issues, agents are durable assignees, and a daemon on a connected computer runs the CLI. The control plane is their cloud or a server you host.
 
-Three things changed since [COMPARE.md](COMPARE.md) was written:
+Three things that review had not yet written into [COMPARE.md](COMPARE.md), now recorded there:
 
 1. **The labs ship their own phone remote to your machine.** Codex in the ChatGPT mobile app drives Codex on a connected Mac or SSH host. Claude Code Remote Control does the same for a local Claude session, and Projects can run a thread on your computer. Each covers one harness.
 2. **Peers got agent-driven orchestration.** Orca has a first-party orchestration CLI (runs, tasks, supervised workers, decision gates). Superset has a CLI, a TypeScript SDK, and a hosted MCP. Conductor's MCP and API still reach cloud workspaces only.
