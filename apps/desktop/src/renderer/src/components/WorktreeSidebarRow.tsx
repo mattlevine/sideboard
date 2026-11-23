@@ -103,6 +103,7 @@ export function WorktreeSidebarRow({
   const tagBtnRef = useRef<HTMLButtonElement>(null);
   const [addDefaults, setAddDefaults] = useState<{
     agent: AgentKind;
+    acpHarness?: 'gemini' | 'copilot' | null;
     model: string | null;
     autonomy: Autonomy;
     effort: ThinkingEffort;
@@ -201,6 +202,7 @@ export function WorktreeSidebarRow({
     const defaults = await loadThreadDefaults();
     setAddDefaults({
       agent: defaults.agent,
+      acpHarness: defaults.agent === 'acp' ? (defaults.acpHarness ?? 'gemini') : null,
       model: defaults.model,
       autonomy: defaults.autonomy,
       effort: defaults.effort,
@@ -403,6 +405,7 @@ export function WorktreeSidebarRow({
         onApply={(next) => {
           onAddAgent?.(primary.id, {
             agent: next.agent,
+            acpHarness: next.acpHarness,
             model: next.model,
             autonomy: next.autonomy,
             effort: next.effort,

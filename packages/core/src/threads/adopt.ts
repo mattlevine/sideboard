@@ -129,6 +129,14 @@ export async function adoptThread(input: AdoptInput): Promise<Thread> {
     worktreePath: input.worktreePath,
     repoPath,
     agent: input.agent,
+    ...(input.agent === 'acp'
+      ? {
+          acpHarness:
+            input.acpHarness === 'gemini' || input.acpHarness === 'copilot'
+              ? input.acpHarness
+              : undefined,
+        }
+      : {}),
     sessionId: input.sessionId ?? null,
     messages: input.messages ?? [],
   });

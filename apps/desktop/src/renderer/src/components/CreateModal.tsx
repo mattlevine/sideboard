@@ -53,7 +53,7 @@ function coerceOptionsForMode(
   if ((ORCHESTRATOR_AGENT_KINDS as readonly string[]).includes(next.agent)) {
     return next;
   }
-  return { ...next, agent: 'claude', model: null };
+  return { ...next, agent: 'claude', acpHarness: null, model: null };
 }
 
 interface Props {
@@ -344,7 +344,11 @@ export function CreateModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [discardOpen, moreMenuOpen, pickerOpen, repoMenuOpen, requestClose]);
 
-  const agentStatus = statuses.find((s) => s.agent === options.agent);
+  const agentStatus = statuses.find((s) =>
+    options.agent === 'acp'
+      ? s.agent === 'acp' && s.acpHarness === (options.acpHarness ?? 'gemini')
+      : s.agent === options.agent,
+  );
   const agentOk = Boolean(agentStatus?.installed && agentStatus.authenticated);
 
   async function addWorkspace() {
@@ -449,6 +453,7 @@ export function CreateModal({
     try {
       const draft = {
         agent: options.agent,
+        ...(options.agent === 'acp' ? { acpHarness: options.acpHarness ?? 'gemini' } : {}),
         autonomy: options.autonomy,
         model: options.model,
         effort: options.effort,

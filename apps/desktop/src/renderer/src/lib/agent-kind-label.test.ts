@@ -8,11 +8,14 @@ describe('agentKindLabel', () => {
     expect(agentKindLabel('opencode')).toBe('OpenCode');
     expect(agentKindLabel('cursor')).toBe('Cursor');
     expect(agentKindLabel('brightsy')).toBe('Brightsy');
+    expect(agentKindLabel('acp')).toBe('ACP');
+    expect(agentKindLabel('acp', 'gemini')).toBe('Gemini CLI');
+    expect(agentKindLabel('acp', 'copilot')).toBe('Copilot CLI');
   });
 
   it('covers every known agent kind', () => {
     expect(Object.keys(AGENT_KIND_LABELS).sort()).toEqual(
-      ['brightsy', 'claude', 'codex', 'cursor', 'opencode'].sort(),
+      ['acp', 'brightsy', 'claude', 'codex', 'cursor', 'opencode'].sort(),
     );
   });
 

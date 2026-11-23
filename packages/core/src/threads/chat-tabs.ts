@@ -14,6 +14,7 @@ import {
   isOrchestratorThread,
   isSlackCoordinatorThread,
 } from '../store/global-workspace.js';
+import { defaultAcpHarness } from '../agents/acp-harness.js';
 import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
 import {
   createEmptyThread,
@@ -142,6 +143,7 @@ export function workspaceAgentChatSummaries(worktreePath: string | undefined): {
   id: string;
   title: string;
   agent: Thread['agent'];
+  acpHarness?: Thread['acpHarness'];
   status: Thread['status'];
   link: string;
   blockedReason?: string;
@@ -152,6 +154,7 @@ export function workspaceAgentChatSummaries(worktreePath: string | undefined): {
     id: t.id,
     title: t.title,
     agent: t.agent,
+    ...(t.acpHarness ? { acpHarness: t.acpHarness } : {}),
     status: t.status,
     link: `sideboard://chat/${t.id}`,
     ...(t.agentBlock?.reason
@@ -198,6 +201,15 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     allocateTeamName(takenTeamSlugsForChatTab(binding.worktreePath)).name;
 
   const nextAgent = input.agent ?? from.agent;
+  const nextHarness =
+    nextAgent === 'acp'
+      ? input.acpHarness === 'gemini' || input.acpHarness === 'copilot'
+        ? input.acpHarness
+        : from.agent === 'acp' &&
+            (from.acpHarness === 'gemini' || from.acpHarness === 'copilot')
+          ? from.acpHarness
+          : defaultAcpHarness()
+      : undefined;
   if (isOrchestratorThread(from) || binding.sourceType === 'orchestration') {
     assertOrchestratorCapableAgent(nextAgent);
   }
@@ -216,6 +228,7 @@ export function createChatTab(input: CreateChatTabInput): Thread {
     // the connected chat.
     sourceRef: singletonInbox ? title : binding.sourceRef,
     agent: nextAgent,
+    ...(nextHarness ? { acpHarness: nextHarness } : {}),
     model:
       input.model !== undefined
         ? input.model
@@ -246,6 +259,7 @@ export function forkChatTab(input: ForkChatTabInput): Thread {
   const tab = createChatTab({
     fromThreadId: input.threadId,
     agent: input.agent ?? from.agent,
+    acpHarness: input.acpHarness,
     model: input.model,
     title: input.title?.trim() || undefined,
     attachments: [attachment],

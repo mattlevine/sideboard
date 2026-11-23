@@ -9,6 +9,7 @@ import { parseThinkingEffort } from '../components/ThinkingEffortChip';
 
 export type ThreadDefaults = {
   agent: AgentKind;
+  acpHarness?: 'gemini' | 'copilot';
   model: string | null;
   effort: ThinkingEffort;
   /** Cursor Fast speed tier (account / orchestrator defaults). */
@@ -35,8 +36,10 @@ function coerceOrchestratorAgent(agent: AgentKind): AgentKind {
 export function threadDefaultsFromSettings(
   settings: Pick<PublicAppSettings, 'defaults'>,
 ): ThreadDefaults {
+  const harness = settings.defaults?.acpHarness;
   return {
     agent: settings.defaults?.agent ?? 'claude',
+    ...(harness === 'gemini' || harness === 'copilot' ? { acpHarness: harness } : {}),
     model: settings.defaults?.model?.trim() || null,
     effort: parseThinkingEffort(settings.defaults?.effort),
     fast: settings.defaults?.fast === true,

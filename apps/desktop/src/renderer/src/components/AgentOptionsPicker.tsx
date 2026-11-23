@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentKind, Autonomy, ThinkingEffort } from '@sideboard-ai/core';
+import type { AcpHarnessId, AgentKind, Autonomy, ThinkingEffort } from '@sideboard-ai/core';
+import {
+  AGENT_OPTION_ROWS,
+  agentRowSelected,
+  pickerAcpHarness,
+  stampAgentOptions,
+  type AgentOptionsValue,
+} from './agent-options-rows';
 import { shouldSnapshotPickerFromHost } from '../lib/agent-options-picker-sync';
 import {
   decodeBrightsyTarget,
@@ -18,6 +25,8 @@ import {
   thinkingEffortLabel,
 } from './ThinkingEffortChip';
 
+export type { AgentOptionsValue };
+
 const CLAUDE_MODELS = [
   { id: null as string | null, label: 'Auto' },
   { id: 'fable', label: 'Fable' },
@@ -26,28 +35,7 @@ const CLAUDE_MODELS = [
   { id: 'haiku', label: 'Haiku' },
 ];
 
-const AGENTS: Array<{ id: AgentKind; label: string }> = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'opencode', label: 'OpenCode' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'brightsy', label: 'Brightsy' },
-];
-
 const BRIGHTSY_AGENT_LIMIT = 40;
-
-export interface AgentOptionsValue {
-  agent: AgentKind;
-  model: string | null;
-  autonomy: Autonomy;
-  /** Thinking / reasoning effort (Conductor-style). */
-  effort: ThinkingEffort;
-  /**
-   * Cursor Fast speed tier (~2× usage for Grok / Composer Fast).
-   * Ignored for non-Cursor agents.
-   */
-  fast: boolean;
-}
 
 interface Props {
   open: boolean;
@@ -109,12 +97,15 @@ export function AgentOptionsPicker({
   allowedAgents,
 }: Props) {
   const agents = useMemo(() => {
-    if (!allowedAgents?.length) return AGENTS;
+    if (!allowedAgents?.length) return AGENT_OPTION_ROWS;
     const allow = new Set(allowedAgents);
-    return AGENTS.filter((a) => allow.has(a.id));
+    return AGENT_OPTION_ROWS.filter((a) => allow.has(a.id));
   }, [allowedAgents]);
 
   const [agent, setAgent] = useState<AgentKind>(value.agent);
+  const [acpHarness, setAcpHarness] = useState<AcpHarnessId | null>(
+    value.agent === 'acp' ? (value.acpHarness ?? 'gemini') : null,
+  );
   const [model, setModel] = useState<string | null>(value.model);
   const [autonomy, setAutonomy] = useState<Autonomy>(value.autonomy);
   const [effort, setEffort] = useState<ThinkingEffort>(value.effort ?? 'high');
@@ -140,14 +131,16 @@ export function AgentOptionsPicker({
     snapshottedOpenRef.current = true;
     const nextAgent =
       agents.some((a) => a.id === value.agent) ? value.agent : (agents[0]?.id ?? 'claude');
+    const nextHarness = pickerAcpHarness(nextAgent, value.acpHarness);
     setAgent(nextAgent);
+    setAcpHarness(nextHarness);
     setModel(nextAgent === value.agent ? value.model : defaultModelFor(nextAgent));
     setAutonomy(value.autonomy);
     setEffort(value.effort ?? 'high');
     setFast(Boolean(value.fast));
     setQuery('');
     prefetchAgentModels();
-  }, [open, value.agent, value.model, value.autonomy, value.effort, value.fast, agents]);
+  }, [open, value.agent, value.acpHarness, value.model, value.autonomy, value.effort, value.fast, agents]);
 
   useEffect(() => {
     if (!open || agent !== 'brightsy') return;
@@ -213,6 +206,9 @@ export function AgentOptionsPicker({
           description: m.description,
         })),
       ];
+    }
+    if (agent === 'acp') {
+      return [{ id: null, label: 'Harness default' }];
     }
     if (agent === 'cursor') {
       const list = cursorModels ?? [];
@@ -282,14 +278,15 @@ export function AgentOptionsPicker({
     onClose();
   }
 
-  function selectAgent(next: AgentKind) {
-    setAgent(next);
-    setModel(next === value.agent ? value.model : defaultModelFor(next));
+  function selectAgent(row: (typeof AGENT_OPTION_ROWS)[number]) {
+    setAgent(row.id);
+    setAcpHarness(row.id === 'acp' ? (row.acpHarness ?? 'gemini') : null);
+    setModel(row.id === value.agent ? value.model : defaultModelFor(row.id));
     setQuery('');
   }
 
   function pickModel(id: string | null) {
-    commit({ agent, model: id, autonomy, effort, fast });
+    commit(stampAgentOptions(agent, id, autonomy, effort, fast, acpHarness));
   }
 
   function pickBrightsy(target: BrightsyChatTarget) {
@@ -304,7 +301,7 @@ export function AgentOptionsPicker({
     } else {
       encoded = encodeBrightsyTarget(target.type, target.id, accountId);
     }
-    commit({ agent: 'brightsy', model: encoded, autonomy, effort, fast });
+    commit(stampAgentOptions('brightsy', encoded, autonomy, effort, fast, null));
   }
 
   const catalogLoading =
@@ -361,12 +358,12 @@ export function AgentOptionsPicker({
         <div className="composer-picker-team-chips agent-options-agent-chips" role="tablist">
           {agents.map((a) => (
             <button
-              key={a.id}
+              key={a.key}
               type="button"
               role="tab"
-              aria-selected={agent === a.id}
-              className={`composer-picker-team-chip${agent === a.id ? ' active' : ''}`}
-              onClick={() => selectAgent(a.id)}
+              aria-selected={agentRowSelected(agent, acpHarness, a)}
+              className={`composer-picker-team-chip${agentRowSelected(agent, acpHarness, a) ? ' active' : ''}`}
+              onClick={() => selectAgent(a)}
             >
               {a.label}
             </button>
@@ -401,7 +398,7 @@ export function AgentOptionsPicker({
                 setEffort(level);
                 // Live persist when the host opts in — never via onApply (create-tab
                 // / mid-chat agent switch would spawn a chat from a chip click).
-                onLiveChange?.({ agent, model, autonomy, effort: level, fast });
+                onLiveChange?.(stampAgentOptions(agent, model, autonomy, level, fast, acpHarness));
               }}
             >
               <ThinkingEffortIcon effort={level} />{' '}
@@ -419,7 +416,7 @@ export function AgentOptionsPicker({
               onClick={() => {
                 const next = !fast;
                 setFast(next);
-                onLiveChange?.({ agent, model, autonomy, effort, fast: next });
+                onLiveChange?.(stampAgentOptions(agent, model, autonomy, effort, next, acpHarness));
               }}
             >
               <span className="chip-bolt" aria-hidden>
@@ -629,7 +626,7 @@ export function AgentOptionsPicker({
           <button
             type="button"
             className="agent-options-picker-done"
-            onClick={() => commit({ agent, model, autonomy, effort, fast })}
+            onClick={() => commit(stampAgentOptions(agent, model, autonomy, effort, fast, acpHarness))}
           >
             {confirmLabel}
           </button>

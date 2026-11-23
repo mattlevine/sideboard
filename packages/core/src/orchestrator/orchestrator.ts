@@ -145,7 +145,7 @@ import { createThread } from '../threads/create.js';
 import { applyWorkspaceTags } from '../threads/workspace-tags.js';
 import { resolveCreateFirstPrompt } from '../threads/implied-first-prompt.js';
 import { isCowboyThread, isPrimaryCheckoutThread, shouldRemoveWorktreeOnTeardown } from '../threads/cowboy.js';
-import { assertOrchestratorCapableAgent } from '../agents/orchestrator-capable.js';
+import { applyThreadAgentPatch } from './thread-agent-patch.js';
 import {
   createChatTab as createChatTabImpl,
   forkChatTab as forkChatTabImpl,
@@ -3512,23 +3512,8 @@ export class Orchestrator {
     if (patch.fast !== undefined) next.fast = patch.fast;
     if (patch.planMode !== undefined) next.planMode = patch.planMode;
     if (patch.model !== undefined) next.model = patch.model;
-    if (patch.agent !== undefined) {
-      if (patch.agent !== thread.agent) {
-        if (thread.messages.length > 0) {
-          throw new Error(
-            `Cannot switch agent provider mid-chat (${thread.agent} → ${patch.agent}). Start a new chat tab instead.`,
-          );
-        }
-        if (isOrchestratorThread(thread)) {
-          assertOrchestratorCapableAgent(patch.agent);
-        }
-        next.agent = patch.agent;
-        // Model aliases are agent-specific; clear when switching unless the patch
-        // also sets a new model (Brightsy uses model for agent:/model: targets).
-        if (patch.agent !== 'claude' && patch.model === undefined) next.model = null;
-        // Session ids are agent-specific — never resume Claude/Codex under Brightsy.
-        next.sessionId = null;
-      }
+    if (patch.agent !== undefined || patch.acpHarness !== undefined) {
+      applyThreadAgentPatch(thread, patch, next);
     }
     return updateThread(thread.id, next);
   }
@@ -3536,6 +3521,7 @@ export class Orchestrator {
   createChatTab(input: {
     fromThreadId: string;
     agent?: Thread['agent'];
+    acpHarness?: Thread['acpHarness'];
     model?: string | null;
     autonomy?: Thread['autonomy'];
     effort?: Thread['effort'];
@@ -3550,6 +3536,7 @@ export class Orchestrator {
     threadId: string;
     throughIndex?: number;
     agent?: Thread['agent'];
+    acpHarness?: Thread['acpHarness'];
     model?: string | null;
     title?: string;
   }): Thread {
@@ -3560,6 +3547,7 @@ export class Orchestrator {
     threadId: string;
     throughIndex?: number;
     agent?: Thread['agent'];
+    acpHarness?: Thread['acpHarness'];
     model?: string | null;
     title?: string;
   }): Promise<Thread> {

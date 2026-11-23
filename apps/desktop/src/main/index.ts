@@ -917,12 +917,12 @@ function registerIpc(): void {
     return detectAgents();
   });
   ipcMain.handle('getAgentSetupInfo', (_e, agent: AgentKind) => getAgentSetupInfo(agent));
-  ipcMain.handle('installAgent', async (_e, agent: AgentKind) => {
+  ipcMain.handle('installAgent', async (_e, agent: AgentKind | 'gemini' | 'copilot') => {
     ensureAgentPath();
     applyAppEnvironment(process.env);
     return installAgent(agent);
   });
-  ipcMain.handle('loginAgent', async (_e, agent: AgentKind) => {
+  ipcMain.handle('loginAgent', async (_e, agent: AgentKind | 'gemini' | 'copilot') => {
     ensureAgentPath();
     applyAppEnvironment(process.env);
     return loginAgent(agent);

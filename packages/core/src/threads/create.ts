@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { defaultAcpHarness } from '../agents/acp-harness.js';
 import { requireAgent } from '../detect/detect.js';
 import {
   allocateTeamSlug,
@@ -119,7 +120,13 @@ export async function createThread(
     fast: input.fast,
     autonomy: input.autonomy,
   });
-  await requireAgent(resolved.agent);
+  const acpHarness =
+    resolved.agent === 'acp'
+      ? input.acpHarness === 'gemini' || input.acpHarness === 'copilot'
+        ? input.acpHarness
+        : defaultAcpHarness()
+      : undefined;
+  await requireAgent(resolved.agent, { acpHarness });
 
   if (input.cowboy) {
     const { cowboyModeEnabled } = await import('../store/app-settings.js');
@@ -157,6 +164,7 @@ export async function createThread(
       worktreePath: repoPath,
       repoPath,
       agent: resolved.agent,
+      ...(acpHarness ? { acpHarness } : {}),
       autonomy: resolved.autonomy,
       model: resolved.model,
       effort: resolved.effort,
@@ -299,6 +307,7 @@ export async function createThread(
     worktreePath,
     repoPath,
     agent: resolved.agent,
+    ...(acpHarness ? { acpHarness } : {}),
     autonomy: resolved.autonomy,
     model: resolved.model,
     effort: resolved.effort,

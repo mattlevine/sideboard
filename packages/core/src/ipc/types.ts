@@ -89,9 +89,9 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
   /** Install recipe + docs for Settings → Agents. */
   getAgentSetupInfo(agent: AgentKind): Promise<AgentSetupInfo>;
   /** Install a CLI agent (npm in-process or Terminal for curl installers). */
-  installAgent(agent: AgentKind): Promise<AgentSetupActionResult>;
+  installAgent(agent: AgentKind | 'gemini' | 'copilot'): Promise<AgentSetupActionResult>;
   /** Open the agent’s login/auth command in the system terminal. */
-  loginAgent(agent: AgentKind): Promise<AgentSetupActionResult>;
+  loginAgent(agent: AgentKind | 'gemini' | 'copilot'): Promise<AgentSetupActionResult>;
   getAppSettings(): Promise<PublicAppSettings>;
   saveAppSettings(settings: AppSettings): Promise<PublicAppSettings>;
   updateAppEnvironment(patch: Record<string, string | null | undefined>): Promise<PublicAppSettings>;
@@ -198,7 +198,7 @@ export interface IpcApi extends McpUiIpc, GitHostIpcApi, SlackOrgIpc, OrderIpc {
     sentryHost?: string | null;
   }): Promise<PublicAppSettings>;
   updateDefaultsSettings(patch: {
-    agent?: AgentKind | null;
+    agent?: AgentKind | null; acpHarness?: 'gemini' | 'copilot' | null;
     model?: string | null;
     effort?: ThinkingEffort | 'normal' | null;
     fast?: boolean | null; autonomy?: Autonomy | null;

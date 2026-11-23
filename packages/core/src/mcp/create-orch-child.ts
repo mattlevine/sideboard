@@ -60,6 +60,7 @@ export type CreateOrchThreadArgs = {
   repoPath: string;
   title?: string;
   agent?: AgentKind;
+  acpHarness?: 'gemini' | 'copilot';
   model?: string | null;
   cowboy?: boolean;
   parentChatId?: string;
@@ -116,6 +117,7 @@ export async function createOrchChildThread(
         sourceType: args.sourceType,
         sourceRef: args.sourceRef,
         agent: opts.agent,
+        ...(opts.agent === 'acp' ? { acpHarness: args.acpHarness } : {}),
         model: opts.model,
         effort: opts.effort,
         fast: opts.fast,
@@ -144,6 +146,7 @@ export async function createOrchChildThread(
         branchName: thread.branchName,
         worktreePath: thread.worktreePath,
         agent: thread.agent,
+        ...(thread.acpHarness ? { acpHarness: thread.acpHarness } : {}),
         model: thread.model,
         status: thread.status,
         cowboy: Boolean(thread.cowboy),

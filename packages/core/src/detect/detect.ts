@@ -1,10 +1,13 @@
 import { getAdapter, allAdapters, ensureAgentPath, enrichPathWithNpmGlobalBin } from '../agents/index.js';
-import type { AgentKind, AgentStatus } from '../types/thread.js';
+import { defaultAcpHarness, detectAcpHarness, detectAcpHarnesses } from '../agents/acp-harness.js';
+import type { AcpHarnessId, AgentKind, AgentStatus } from '../types/thread.js';
 
 export async function detectAgents(): Promise<AgentStatus[]> {
   ensureAgentPath();
   enrichPathWithNpmGlobalBin();
-  return Promise.all(allAdapters().map((a) => a.detect()));
+  const adapters = allAdapters().filter((adapter) => adapter.kind !== 'acp');
+  const rows = await Promise.all(adapters.map((adapter) => adapter.detect()));
+  return [...rows, ...(await detectAcpHarnesses())];
 }
 
 /**
@@ -17,12 +20,14 @@ const REQUIRE_AGENT_TIMEOUT_MS = 8_000;
 
 export async function requireAgent(
   agent: AgentKind,
-  opts?: { requireLinear?: boolean },
+  opts?: { requireLinear?: boolean; acpHarness?: AcpHarnessId },
 ): Promise<AgentStatus> {
   ensureAgentPath();
   enrichPathWithNpmGlobalBin();
   const status = await Promise.race([
-    getAdapter(agent).detect(),
+    agent === 'acp'
+      ? detectAcpHarness(opts?.acpHarness ?? defaultAcpHarness())
+      : getAdapter(agent).detect(),
     new Promise<never>((_, reject) => {
       setTimeout(() => {
         reject(

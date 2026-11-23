@@ -90,6 +90,20 @@ function assertIsolatedRunnerLoads() {
     if (!/empty stdin/i.test(claudeOut)) {
       throw new Error(`Isolated claude-runner unexpected output:\n${claudeOut}`);
     }
+    const acpRunner = path.join(isolated, 'core-dist', 'agents', 'acp-runner.js');
+    const acpResult = spawnSync(process.execPath, [acpRunner], {
+      encoding: 'utf8',
+      input: '',
+      timeout: 20000,
+      env: { ...process.env, NODE_PATH: '' },
+    });
+    const acpOut = `${acpResult.stdout || ''}${acpResult.stderr || ''}`;
+    if (LOAD_FAILURE_RE.test(acpOut)) {
+      throw new Error(`Isolated acp-runner failed to load:\n${acpOut}`);
+    }
+    if (!/empty stdin/i.test(acpOut)) {
+      throw new Error(`Isolated acp-runner unexpected output:\n${acpOut}`);
+    }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -112,8 +126,12 @@ const packageCount = copyProductionDeps({
 });
 
 const runner = path.join(dest, 'core-dist', 'agents', 'cursor-runner.js');
+const acpRunner = path.join(dest, 'core-dist', 'agents', 'acp-runner.js');
 if (!fs.existsSync(runner)) {
   throw new Error(`stage-cursor-runtime: runner not built (${runner})`);
+}
+if (!fs.existsSync(acpRunner)) {
+  throw new Error(`stage-cursor-runtime: acp-runner not built (${acpRunner})`);
 }
 
 assertIsolatedRunnerLoads();

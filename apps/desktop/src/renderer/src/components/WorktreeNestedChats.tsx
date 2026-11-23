@@ -190,7 +190,7 @@ export function WorktreeNestedChats({
               unread={chatUnread}
               blockedReason={block?.reason}
             />
-            <AgentKindIcon agent={chat.agent} />
+            <AgentKindIcon agent={chat.agent} acpHarness={chat.acpHarness} />
             {renaming ? (
               <input
                 className="nested-chat-input"

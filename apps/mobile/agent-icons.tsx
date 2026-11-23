@@ -12,6 +12,7 @@ const LABEL: Record<string, string> = {
   opencode: 'OpenCode',
   cursor: 'Cursor',
   brightsy: 'Brightsy',
+  acp: 'ACP',
 };
 
 function labelFor(agent: string): string {
