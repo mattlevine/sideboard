@@ -18,6 +18,7 @@ import {
   type RemoteHostStatus,
 } from '@sideboard-ai/core';
 import type { BrowserWindow } from 'electron';
+import { runForgetRemoteMac } from './forget-remote-mac';
 import { transcribeWavFile } from './speech-dictate';
 
 let onActivity: () => void = () => {};
@@ -231,14 +232,19 @@ export async function forgetSignedInRemoteMac(deviceId: string): Promise<PublicA
   if (!token) throw new Error('sign in required');
   if (!id) throw new Error('Mac not found');
   const self = ensureRemoteHostCredentials().deviceId === id;
-  await forgetRemoteAccountMac({
-    accountToken: token,
-    deviceId: id,
-    origin: remoteAccountHttpOrigin(activeRelayUrl()),
+  return runForgetRemoteMac({
+    self,
+    stopHost: stopRemoteHost,
+    startHost: startRemoteHost,
+    forget: () =>
+      forgetRemoteAccountMac({
+        accountToken: token,
+        deviceId: id,
+        origin: remoteAccountHttpOrigin(activeRelayUrl()),
+      }),
+    signOut: () => signOutRemoteAccount(),
+    settings: () => toPublicAppSettings(loadAppSettings()),
   });
-  if (self) return signOutRemoteAccount();
-  restartRemoteHost();
-  return toPublicAppSettings(loadAppSettings());
 }
 
 export async function signOutRemoteAccount(): Promise<PublicAppSettings> {
