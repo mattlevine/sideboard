@@ -142,6 +142,20 @@ sideboard detect                     # cursor should show authenticated
 
 Shell env wins if both are set. Docs: [cursor.com/docs/sdk/typescript](https://cursor.com/docs/sdk/typescript)
 
+#### Gemini CLI and Copilot CLI
+
+Both speak the Agent Client Protocol. Sideboard uses one adapter (`agent: acp`) and a harness setting (`gemini` or `copilot`). Install from **Settings → Agents**, or:
+
+```bash
+npm i -g @google/gemini-cli
+gemini          # sign in, or export GEMINI_API_KEY
+npm i -g @github/copilot
+copilot         # sign in, or use gh auth
+sideboard detect
+```
+
+There is no interactive `sideboard attach` for these harnesses. Continue the chat in Sideboard. A harness that can load a session does; otherwise Sideboard replays the transcript into a new session.
+
 Verify everything Sideboard can see:
 
 ```bash
@@ -309,7 +323,7 @@ Desktop Settings opens on **Agents**. Connections are owned by Sideboard, not pe
 
 | Panel | What |
 |-------|------|
-| **Agents** | Default agent, model, and effort; default orchestrator agent, model, and effort; **Account context** (roles, tickets, review queues as freeform text); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy) |
+| **Agents** | Default agent, model, and effort; default orchestrator agent, model, and effort; **Account context** (roles, tickets, review queues as freeform text); then harness setup (Claude, Codex, OpenCode, Cursor, Brightsy, Gemini CLI, Copilot CLI) |
 | **Projects** | Per-repo context that adds to account context. Agents can update either after you confirm. |
 | **Git** | How this Mac and worktree agents authenticate git (`gh`, SSH, or a PAT) |
 | **Issues** | Preferred tracker plus Linear and AbleTime |

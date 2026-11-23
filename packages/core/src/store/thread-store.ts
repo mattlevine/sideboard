@@ -10,12 +10,7 @@ import {
 } from 'node:fs';
 import { basename } from 'node:path';
 import lockfile from 'proper-lockfile';
-import type {
-  RunScriptRequest,
-  Thread,
-  ThreadMessage,
-  ThreadStatus,
-} from '../types/thread.js';
+import type { RunScriptRequest, Thread, ThreadMessage, ThreadStatus } from '../types/thread.js';
 import { normalizeThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import { sanitizeMcpServerName } from '../agents/claude-mcp.js';
 import { cursorSdkStoreDir } from '../agents/cursor-store.js';
@@ -91,6 +86,7 @@ export function normalizeThread(raw: Thread): Thread {
   return {
     ...raw,
     model: raw.model ?? null,
+    acpHarness: raw.acpHarness === 'gemini' || raw.acpHarness === 'copilot' ? raw.acpHarness : undefined,
     effort: resolveThreadEffort(raw),
     fast: Boolean(raw.fast),
     planMode: Boolean(raw.planMode),
@@ -275,6 +271,7 @@ export function createEmptyThread(
     worktreePath: partial.worktreePath,
     repoPath: partial.repoPath,
     agent: partial.agent,
+    ...(partial.acpHarness === 'gemini' || partial.acpHarness === 'copilot' ? { acpHarness: partial.acpHarness } : {}),
     lastError: null,
     agentPid: null,
     agentPidStartedAt: null,

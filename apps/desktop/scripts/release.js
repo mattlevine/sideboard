@@ -247,12 +247,17 @@ if (doDesktop) {
     appResources,
     'cursor-runtime/core-dist/agents/claude-runner.js',
   );
+  const acpRunner = path.join(
+    appResources,
+    'cursor-runtime/core-dist/agents/acp-runner.js',
+  );
   if (
     !fs.existsSync(cursorRunner) ||
     !fs.existsSync(cursorExeca) ||
     !fs.existsSync(cursorWs) ||
     !fs.existsSync(cursorClaudeSdk) ||
-    !fs.existsSync(claudeRunner)
+    !fs.existsSync(claudeRunner) ||
+    !fs.existsSync(acpRunner)
   ) {
     throw new Error(
       'Packaged extraResources cursor-runtime is incomplete (runner, ws, or Claude SDK missing). Aborting release.',

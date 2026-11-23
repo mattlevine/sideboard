@@ -1059,7 +1059,10 @@ export function ThreadPanel({
    */
   async function applyAgentOptions(next: AgentOptionsValue) {
     setComposerFocused(true);
-    const sameProvider = next.agent === thread.agent;
+    const sameProvider =
+      next.agent === thread.agent &&
+      (next.agent !== 'acp' ||
+        (next.acpHarness ?? 'gemini') === (thread.acpHarness ?? 'gemini'));
     const midChat = thread.messages.length > 0;
 
     if (sameProvider) {
@@ -1080,6 +1083,7 @@ export function ThreadPanel({
       setOptimisticFast(next.fast);
       patchOptions({
         agent: next.agent,
+        acpHarness: next.agent === 'acp' ? (next.acpHarness ?? 'gemini') : null,
         model: next.model,
         autonomy: next.autonomy,
         effort: next.effort,
@@ -1093,6 +1097,7 @@ export function ThreadPanel({
       const t = await window.sideboard.createChatTab({
         fromThreadId: thread.id,
         agent: next.agent,
+        acpHarness: next.acpHarness,
         model: next.model,
         autonomy: next.autonomy,
         effort: next.effort,
@@ -1551,6 +1556,7 @@ export function ThreadPanel({
 
   async function newTab(opts?: {
     agent?: AgentKind;
+    acpHarness?: 'gemini' | 'copilot' | null;
     model?: string | null;
     autonomy?: Thread['autonomy'];
     effort?: ThinkingEffort;
@@ -1559,6 +1565,7 @@ export function ThreadPanel({
     const t = await window.sideboard.createChatTab({
       fromThreadId: thread.id,
       agent: opts?.agent,
+      acpHarness: opts?.acpHarness,
       model: opts?.model,
       autonomy: opts?.autonomy,
       effort: opts?.effort,
@@ -3072,6 +3079,7 @@ export function ThreadPanel({
         open={agentPickerOpen}
         value={{
           agent: thread.agent,
+          acpHarness: thread.acpHarness,
           model: thread.model,
           autonomy: thread.autonomy,
           effort: displayEffort,

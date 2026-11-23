@@ -952,11 +952,15 @@ export async function startMcpServer(): Promise<void> {
       sourceType: z.enum(['branch', 'pr', 'ticket']),
       sourceRef: z.string(),
       agent: z
-        .enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor'])
+        .enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor', 'acp'])
         .optional()
         .describe(
-          `Usually omit. Sideboard uses Account default agent (${accountDefaults.agent}). Passing your own agent or cursor is ignored.`,
+          `Usually omit. Sideboard uses Account default agent (${accountDefaults.agent}). Passing your own agent or cursor is ignored. Pass agent=acp and acpHarness=gemini or copilot for Gemini CLI or Copilot CLI.`,
         ),
+      acpHarness: z
+        .enum(['gemini', 'copilot'])
+        .optional()
+        .describe('When agent is acp: gemini (Gemini CLI) or copilot (GitHub Copilot CLI).'),
       model: z
         .string()
         .nullable()
@@ -1328,7 +1332,7 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
-  const agentEnum = z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor']);
+  const agentEnum = z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor', 'acp']);
 
   server.tool(
     'list_models',
@@ -1357,6 +1361,10 @@ export async function startMcpServer(): Promise<void> {
         .optional()
         .describe('Inclusive message index to include in the transcript (default: all)'),
       agent: agentEnum.optional().describe('Agent for the forked chat (default: same as source)'),
+      acpHarness: z
+        .enum(['gemini', 'copilot'])
+        .optional()
+        .describe('When agent is acp: gemini or copilot.'),
       model: z
         .string()
         .nullable()
@@ -1364,7 +1372,7 @@ export async function startMcpServer(): Promise<void> {
         .describe('Usually omit (Auto). Only set from list_models when you need a specific model'),
       title: z.string().optional(),
     },
-    async ({ ref, through_index, agent, model, title }) => {
+    async ({ ref, through_index, agent, model, title, acpHarness }) => {
       try {
         const source = orch.getThread(ref);
         if (source) await orch.reconcile(source.repoPath, { drainQueues: false });
@@ -1372,6 +1380,7 @@ export async function startMcpServer(): Promise<void> {
           threadId: ref,
           throughIndex: through_index,
           agent,
+          acpHarness,
           model,
           title,
         });
@@ -1402,7 +1411,11 @@ export async function startMcpServer(): Promise<void> {
         .number()
         .optional()
         .describe('Inclusive message index to include in the transcript (default: all)'),
-      agent: agentEnum.optional().describe('Agent for the forked chat (default: same as source)'),
+      agent: agentEnum.optional().describe('Agent for the forked chat (default: same as source). agent=acp with acpHarness=gemini or copilot opens Gemini CLI or Copilot CLI. An orchestration fork cannot use acp.'),
+      acpHarness: z
+        .enum(['gemini', 'copilot'])
+        .optional()
+        .describe('When agent is acp: gemini or copilot.'),
       model: z
         .string()
         .nullable()
@@ -1410,7 +1423,7 @@ export async function startMcpServer(): Promise<void> {
         .describe('Usually omit (Auto). Only set from list_models when you need a specific model'),
       title: z.string().optional(),
     },
-    async ({ ref, through_index, agent, model, title }) => {
+    async ({ ref, through_index, agent, model, title, acpHarness }) => {
       try {
         const source = orch.getThread(ref);
         if (!source) {
@@ -1423,6 +1436,7 @@ export async function startMcpServer(): Promise<void> {
           threadId: source.id,
           throughIndex: through_index,
           agent,
+          acpHarness,
           model,
           title,
         });
@@ -1479,7 +1493,7 @@ export async function startMcpServer(): Promise<void> {
     'Best-of-n: create one thread per agent with the same prompt (parallel attempts)',
     {
       prompt: z.string(),
-      agents: z.array(z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor'])),
+      agents: z.array(z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor', 'acp'])),
       repoPath: z.string(),
       sourceType: z.enum(['branch', 'pr', 'ticket']).optional(),
       sourceRef: z.string().optional(),
@@ -1648,7 +1662,7 @@ export async function startMcpServer(): Promise<void> {
     {
       repoPath: z.string(),
       branches: z.array(z.string()).min(1),
-      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor']),
+      agent: z.enum(['claude', 'codex', 'opencode', 'brightsy', 'cursor', 'acp']),
       base: z.string().optional(),
       title: z.string().optional(),
     },

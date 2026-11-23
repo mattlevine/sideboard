@@ -79,6 +79,7 @@ async function confirm(question: string): Promise<boolean> {
 }
 
 function parseAgent(raw: string): AgentKind {
+  if (raw === 'gemini' || raw === 'copilot' || raw === 'acp') return 'acp';
   if (
     raw === 'claude' ||
     raw === 'codex' ||
@@ -89,6 +90,11 @@ function parseAgent(raw: string): AgentKind {
     return raw;
   }
   throw new Error(`Unknown agent: ${raw}`);
+}
+
+function parseAcpHarness(raw: string): 'gemini' | 'copilot' | undefined {
+  if (raw === 'gemini' || raw === 'copilot') return raw;
+  return undefined;
 }
 
 function parseFrom(raw: string): { sourceType: 'branch' | 'pr' | 'ticket'; sourceRef: string } {
@@ -127,7 +133,7 @@ async function main(): Promise<void> {
         const ok = s.installed && s.authenticated;
         const mark = ok ? chalk.green('✓') : chalk.red('✗');
         console.log(
-          `${mark} ${chalk.bold(s.agent)}  installed=${s.installed}  auth=${s.authenticated}  linearMcp=${s.linearMcp}`,
+          `${mark} ${chalk.bold(s.label ?? s.agent)}  installed=${s.installed}  auth=${s.authenticated}  linearMcp=${s.linearMcp}`,
         );
         if (s.reason) console.log(chalk.yellow(`  ${s.reason}`));
         for (const w of s.warnings) console.log(chalk.yellow(`  warning: ${w}`));
@@ -140,7 +146,7 @@ async function main(): Promise<void> {
       'Create a thread from branch, PR, or ticket (empty ticket prompt starts “Resolve this issue.”)',
     )
     .requiredOption('--from <spec>', 'branch:<name>|pr:<n>|ticket:<key>')
-    .requiredOption('--agent <agent>', 'claude|codex|opencode|brightsy|cursor')
+    .requiredOption('--agent <agent>', 'claude|codex|opencode|brightsy|cursor|gemini|copilot')
     .option('--repo <path>', 'repo path', process.cwd())
     .option('--title <title>', 'thread title')
     .option('--cowboy', 'work on the project checkout (default branch); requires Settings → Advanced → Cowboy mode')
@@ -148,6 +154,7 @@ async function main(): Promise<void> {
       await orch.reconcile(opts.repo);
       const { sourceType, sourceRef } = parseFrom(opts.from);
       const agent = parseAgent(opts.agent);
+      const acpHarness = parseAcpHarness(opts.agent);
       const repoPath = await resolveRepoRoot(opts.repo);
       console.log(chalk.dim(`Creating ${sourceType} thread in ${repoPath}…`));
       const hook = settingsSourceLabel(repoPath);
@@ -160,20 +167,21 @@ async function main(): Promise<void> {
         sourceType,
         sourceRef,
         agent,
+        ...(acpHarness ? { acpHarness } : {}),
         repoPath,
         title: opts.title,
         cowboy: Boolean(opts.cowboy),
       });
       console.log(chalk.green(`Created ${thread.id.slice(0, 8)}  ${thread.branchName}`));
       console.log(`  worktree: ${thread.worktreePath}`);
-      console.log(`  agent:    ${thread.agent}`);
+      console.log(`  agent:    ${thread.acpHarness ?? thread.agent}`);
     });
 
   program
     .command('adopt')
     .description('Adopt an existing worktree or import from Conductor')
     .argument('[path]', 'worktree path')
-    .option('--agent <agent>', 'claude|codex|opencode|brightsy|cursor', 'claude')
+    .option('--agent <agent>', 'claude|codex|opencode|brightsy|cursor|gemini|copilot', 'claude')
     .option('--from-conductor', 'import from Conductor DB')
     .option('--all', 'import all Conductor workspaces')
     .option('--id <id>', 'Conductor workspace id')
@@ -225,6 +233,7 @@ async function main(): Promise<void> {
       const t = await orch.adopt({
         worktreePath: path,
         agent: parseAgent(opts.agent),
+        ...(parseAcpHarness(opts.agent) ? { acpHarness: parseAcpHarness(opts.agent) } : {}),
       });
       console.log(chalk.green(`Adopted ${t.id.slice(0, 8)}  ${t.branchName}`));
     });

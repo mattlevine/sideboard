@@ -1,4 +1,5 @@
 import type { AgentKind } from '../types/thread.js';
+import { acpAdapter } from './acp.js';
 import { brightsyAdapter } from './brightsy.js';
 import { claudeAdapter } from './claude.js';
 import { codexAdapter } from './codex.js';
@@ -26,6 +27,21 @@ export {
 } from './claude.js';
 export { codexAdapter, listCodexModels } from './codex.js';
 export { cursorAdapter } from './cursor.js';
+export { acpAdapter, acpRunnerPath, acpHarnessDisplayName } from './acp.js';
+export {
+  ACP_HARNESSES,
+  ACP_HARNESS_IDS,
+  acpHarnessLabel,
+  acpHarnessLooksAuthenticated,
+  acpHarnessStatus,
+  agentSupportsAttach,
+  defaultAcpHarness,
+  detectAcpHarness,
+  detectAcpHarnesses,
+  isAcpHarnessId,
+  resolveAcpHarnessCommand,
+} from './acp-harness.js';
+export type { AcpHarnessSpec } from './acp-harness.js';
 export {
   cursorSdkMessageToEvents,
   parseCursorRunnerLine,
@@ -116,6 +132,7 @@ const adapters: Record<AgentKind, AgentAdapter> = {
   opencode: opencodeAdapter,
   brightsy: brightsyAdapter,
   cursor: cursorAdapter,
+  acp: acpAdapter,
 };
 
 export function getAdapter(kind: AgentKind): AgentAdapter {

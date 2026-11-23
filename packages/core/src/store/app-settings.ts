@@ -65,6 +65,7 @@ const DEFAULT_AGENTS = new Set<AgentKind>([
   'opencode',
   'brightsy',
   'cursor',
+  'acp',
 ]);
 
 /**
@@ -105,6 +106,8 @@ export interface DefaultsAppSettings {
    * `default` is the agent's normal permission prompts.
    */
   autonomy?: Autonomy;
+  /** ACP CLI for new chats when `agent` is `acp`. Gemini CLI when omitted. */
+  acpHarness?: 'gemini' | 'copilot';
   /**
    * Account context (Settings → Agents): roles, tickets, review queues.
    * Project context (Settings → Projects) adds for that repo.
@@ -933,6 +936,7 @@ function normalizeDefaults(raw: unknown): DefaultsAppSettings {
   ) {
     out.agent = source.agent as AgentKind;
   }
+  if (source.acpHarness === 'gemini' || source.acpHarness === 'copilot') out.acpHarness = source.acpHarness;
   if (typeof source.model === 'string') {
     const model = source.model.trim();
     if (model) out.model = model;
@@ -1701,6 +1705,7 @@ export function updateIntegrationsSettings(
 
 export type DefaultsSettingsPatch = {
   agent?: AgentKind | null;
+  acpHarness?: 'gemini' | 'copilot' | null;
   model?: string | null;
   /** Effort level, or Conductor's `normal` (stored as medium). */
   effort?: ThinkingEffort | 'normal' | null;
@@ -1776,6 +1781,8 @@ export function updateDefaultsSettings(patch: DefaultsSettingsPatch): AppSetting
       defaults.agent = patch.agent;
     }
   }
+  if (patch.acpHarness === 'gemini' || patch.acpHarness === 'copilot') defaults.acpHarness = patch.acpHarness;
+  else if ('acpHarness' in patch) delete defaults.acpHarness;
   if ('model' in patch) {
     if (patch.model == null || patch.model.trim() === '') {
       delete defaults.model;

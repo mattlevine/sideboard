@@ -152,7 +152,7 @@ Peers list dozens of agents. Sideboard adds each by hand, and has four coding ha
 - The runner hands the Sideboard MCP server to the harness when it opens the session, so an ACP harness gets the board, `ask_user`, and orchestration tools.
 - `AgentKind` gains one kind. Which harness it launches is a setting, with a short built-in list to start.
 - The hand-written adapters stay first-class and keep `attach`, plan usage meters, and their own session resume.
-- An ACP harness resumes a session only when it reports that it can load one. For a harness that cannot, the runner either stays alive between turns or replays the transcript. That choice is open and is the first design question.
+- An ACP harness resumes a session only when it reports that it can load one. When it cannot, the runner replays the transcript into a new session (it does not stay alive between turns).
 - `attach` is hidden for an ACP harness. It ships without it.
 
 **Done when** Gemini CLI and Copilot CLI each run a worktree turn, appear on the board, and can be a child of an orchestration chat.
@@ -252,7 +252,7 @@ Step 1 is a small view. Steps 2 and 3 are the change the post describes, and the
 2026-11-14:
 
 - **Machines you own.** Sideboard moves from "always this Mac" to "always machines you own." Item 5.
-- **Agent Client Protocol.** Sideboard adds the adapter. Item 6. An ACP harness ships without `attach`.
+- **Agent Client Protocol.** Sideboard adds the adapter. Item 6. An ACP harness ships without `attach`. A harness that cannot `loadSession` gets a transcript replay, not a process that stays up between turns.
 - **Push notifications on the phone.** Item 2. No message text in a push. Push goes through Sideboard's relay only.
 
 ## Open decisions

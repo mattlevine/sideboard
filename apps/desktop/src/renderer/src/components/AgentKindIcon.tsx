@@ -14,8 +14,23 @@ function Mark({ children }: { children: ReactNode }) {
   );
 }
 
-function KindGlyph({ agent }: { agent: string }) {
+function KindGlyph({ agent, acpHarness }: { agent: string; acpHarness?: string | null }) {
   switch (agent) {
+    case 'acp':
+      return (
+        <Mark>
+          <text
+            x="12"
+            y="16"
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+            fill="currentColor"
+          >
+            {acpHarness === 'copilot' ? 'C' : 'G'}
+          </text>
+        </Mark>
+      );
     case 'claude':
       return (
         <Mark>
@@ -67,11 +82,17 @@ function KindGlyph({ agent }: { agent: string }) {
   }
 }
 
-export function AgentKindIcon({ agent }: { agent: string }) {
-  const label = agentKindLabel(agent);
+export function AgentKindIcon({
+  agent,
+  acpHarness,
+}: {
+  agent: string;
+  acpHarness?: string | null;
+}) {
+  const label = agentKindLabel(agent, acpHarness);
   return (
     <span className="agent-kind-icon" title={label} aria-label={label} role="img">
-      <KindGlyph agent={agent} />
+      <KindGlyph agent={agent} acpHarness={acpHarness} />
     </span>
   );
 }

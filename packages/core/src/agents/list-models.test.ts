@@ -18,6 +18,7 @@ describe('listModelsForAgent', () => {
       'opencode',
       'cursor',
       'brightsy',
+      'acp',
     ]);
     for (const c of catalogs) {
       expect(c.auto).toBe(true);

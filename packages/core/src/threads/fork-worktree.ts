@@ -49,6 +49,12 @@ export async function forkThreadWorktree(
       sourceRef: from.branchName,
       repoPath: from.repoPath,
       agent: nextAgent,
+      acpHarness:
+        nextAgent === 'acp'
+          ? input.acpHarness === 'gemini' || input.acpHarness === 'copilot'
+            ? input.acpHarness
+            : from.acpHarness
+          : undefined,
       autonomy: from.autonomy,
       model: nextModel,
       effort: from.effort,

@@ -48,7 +48,7 @@ export async function listModelsForAgent(
 ): Promise<AgentModelCatalog[]> {
   const kinds: AgentKind[] = agent
     ? [agent]
-    : ['claude', 'codex', 'opencode', 'cursor', 'brightsy'];
+    : ['claude', 'codex', 'opencode', 'cursor', 'brightsy', 'acp'];
 
   const out: AgentModelCatalog[] = [];
   for (const kind of kinds) {
@@ -85,6 +85,15 @@ export async function listModelsForAgent(
         auto: true,
         models: await listCursorModels(),
         note: 'Default Auto — only pass a model id when you have a reason (or use "default").',
+      });
+      continue;
+    }
+    if (kind === 'acp') {
+      out.push({
+        agent: kind,
+        auto: true,
+        models: [],
+        note: 'Gemini CLI and Copilot CLI choose the model. Leave model unset.',
       });
       continue;
     }

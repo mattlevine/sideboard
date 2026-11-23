@@ -8,6 +8,7 @@ npm i -g @openai/codex
 curl -fsSL https://opencode.ai/install | bash
 npm i -g @cursor/sdk
 export CURSOR_API_KEY="cursor_..."
+npm i -g @google/gemini-cli @github/copilot
 ```
 
 Then `sideboard detect` (or Settings → Agents) shows which harnesses are installed and signed in.
@@ -18,6 +19,8 @@ Then `sideboard detect` (or Settings → Agents) shows which harnesses are insta
 | Codex | Official CLI on PATH |
 | OpenCode | Official CLI on PATH |
 | Cursor | User-installed `@cursor/sdk` + API key |
+| Gemini CLI | `@google/gemini-cli` over ACP (`gemini --acp`). No attach |
+| Copilot CLI | `@github/copilot` over ACP (`copilot --acp`). No attach |
 | Brightsy | Optional chat-only adapter |
 
 Mechanical control (list, send, diff, land) stays on the Sideboard CLI — zero tokens. Use MCP when an agent needs judgment across threads or needs to open a pane in the desktop.

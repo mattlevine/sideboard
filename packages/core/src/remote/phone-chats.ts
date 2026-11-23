@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { listModelsForAgent } from '../agents/list-models.js';
 import { classifyWorktreeListBadges, groupHomeBoardWorktrees, issueBlockedByIds, visibleAgentBlock } from '../board/home-board.js';
-import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { workspaceRowLabel, workspaceTagsFromGroup, worktreeAnchorLabel } from '../git/worktree-labels.js';
 import type {
   AgentKind,
@@ -12,18 +10,11 @@ import type {
 } from '../types/thread.js';
 import { isThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
 import type { RemoteAskQuestion } from './protocol.js';
-import {
-  loadAppSettings,
-  resolveNewThreadOptions,
-  resolveOrchestratorDefaults,
-  resolveProjectReviewLabel,
-} from '../store/app-settings.js';
-import { createGlobalChat, isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
-import { findThreadByRef, listThreads, readThread, updateThread } from '../store/thread-store.js';
+import { loadAppSettings, resolveProjectReviewLabel } from '../store/app-settings.js';
+import { isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
+import { findThreadByRef, listThreads, readThread } from '../store/thread-store.js';
 import { isRemovedWorkspace, listWorkspaces } from '../store/workspaces.js';
-import { createChatTab, threadsSharingWorktree } from '../threads/chat-tabs.js';
-import { createThread } from '../threads/create.js';
-import { startOrchestration } from '../orchestrator/orchestrator.js';
+import { threadsSharingWorktree } from '../threads/chat-tabs.js';
 import { parseOpenArtifact, type PhoneOpenArtifact, type PhoneShownReply } from './phone-artifact.js';
 import {
   PHONE_HEADER_GIT_ACTIONS,
@@ -57,6 +48,8 @@ export interface PhoneChatSummary {
   preview: string;
   updatedAt: string;
   agent: AgentKind;
+  /** Gemini CLI or Copilot CLI when `agent` is `acp`. */
+  acpHarness?: 'gemini' | 'copilot';
   /** Set when this chat has a pull request. The phone paints the desktop PR pill from these. */
   prUrl?: string;
   prNumber?: string;
@@ -91,6 +84,8 @@ export interface PhoneOpened {
 /** Same knobs as the desktop composer and create modal. */
 export interface PhoneComposerOptions {
   agent: AgentKind;
+  /** Set when `agent` is `acp`. */
+  acpHarness?: 'gemini' | 'copilot' | null;
   model: string | null;
   effort: ThinkingEffort;
   fast: boolean;
@@ -129,7 +124,8 @@ export interface PhoneModelRow {
   label: string;
 }
 
-const AGENT_KINDS = new Set<AgentKind>(['claude', 'codex', 'opencode', 'brightsy', 'cursor']);
+const AGENT_KINDS = new Set<AgentKind>(['claude', 'codex', 'opencode', 'brightsy', 'cursor', 'acp']);
+
 const MAX_PHONE_FILES = 8;
 const MAX_PHONE_FILE_CHARS = Math.ceil((8 * 1024 * 1024 * 4) / 3);
 const MAX_PHONE_FILES_CHARS = Math.ceil((20 * 1024 * 1024 * 4) / 3);
@@ -142,7 +138,9 @@ export interface PhoneHistoryChat {
   preview: string;
   updatedAt: string;
   where: string;
-  agent: string; workspace?: string;
+  agent: string;
+  acpHarness?: 'gemini' | 'copilot';
+  workspace?: string;
 }
 
 export interface PhoneHistoryPage {
@@ -156,6 +154,7 @@ export interface PhoneHistoryPage {
 /** Fields shared by a prompt and by creating a chat that starts with a message. */
 export interface PhoneDraft {
   agent?: AgentKind;
+  acpHarness?: 'gemini' | 'copilot' | null;
   model?: string | null;
   effort?: ThinkingEffort;
   fast?: boolean;
@@ -377,6 +376,12 @@ function parsePhoneDraft(value: object): PhoneDraft | 'invalid' {
     if (!agent) return 'invalid';
     draft.agent = agent;
   }
+  if ('acpHarness' in value) {
+    const harness = (value as { acpHarness?: unknown }).acpHarness;
+    if (harness === null || harness === '') draft.acpHarness = null;
+    else if (harness === 'gemini' || harness === 'copilot') draft.acpHarness = harness;
+    else return 'invalid';
+  }
   if ('model' in value) {
     const model = (value as { model?: unknown }).model;
     if (model === null || model === '') draft.model = null;
@@ -504,6 +509,9 @@ function summarize(thread: Thread): PhoneChatSummary {
     preview: previewOf(thread),
     updatedAt: thread.updatedAt,
     agent: thread.agent,
+    ...(thread.agent === 'acp'
+      ? { acpHarness: thread.acpHarness === 'copilot' ? 'copilot' as const : 'gemini' as const }
+      : {}),
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
@@ -570,6 +578,15 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
 }
 
 export { listPhoneHistory } from './phone-history.js';
+export {
+  archivePhoneChat,
+  createPhoneChat,
+  createPhoneOrchestration,
+  createPhoneProjectWorktree,
+  createPhoneWorktreeAgent,
+  listPhoneModels,
+} from './phone-create.js';
+export type { PhoneProjectCreate } from './phone-create.js';
 
 function matchPhoneThread(chatId: string): Thread | null {
   const id = chatId.trim();
@@ -600,6 +617,9 @@ export function readPhoneThread(chatId: string): Thread | null {
 export function phoneComposerOptions(thread: Thread): PhoneComposerOptions {
   return {
     agent: thread.agent,
+    ...(thread.agent === 'acp'
+      ? { acpHarness: thread.acpHarness === 'copilot' ? 'copilot' as const : 'gemini' as const }
+      : {}),
     model: thread.model ?? null,
     effort: thread.effort,
     fast: Boolean(thread.fast),
@@ -630,7 +650,7 @@ export function phoneTurnAttachments(draft: {
   return [...links, ...files];
 }
 
-function openedFrom(thread: Thread, place: PhonePlace): PhoneOpened {
+export function openedFrom(thread: Thread, place: PhonePlace): PhoneOpened {
   const fresh = readThread(thread.id) ?? thread;
   return {
     chat: summarize(fresh),
@@ -653,7 +673,7 @@ function sameRepoPath(a: string, b: string): boolean {
   return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
 }
 
-function projectPlace(thread: Thread): PhonePlace {
+export function projectPlace(thread: Thread): PhonePlace {
   const group = threadsSharingWorktree(thread.worktreePath);
   return {
     kind: 'project',
@@ -672,127 +692,4 @@ export function assertKnownProject(repoPath: string): string {
     );
   if (!known) throw new Error('That project is not on this Mac.');
   return path;
-}
-
-function draftAgentOptions(draft: PhoneDraft | undefined, defaults: {
-  agent: AgentKind;
-  model: string | null;
-  effort: ThinkingEffort;
-  fast: boolean;
-  autonomy: Autonomy;
-}) {
-  return {
-    agent: draft?.agent ?? defaults.agent,
-    model: draft && 'model' in draft ? (draft.model ?? null) : defaults.model,
-    effort: draft?.effort ?? defaults.effort,
-    fast: draft?.fast ?? defaults.fast,
-    planMode: Boolean(draft?.planMode),
-    autonomy: draft?.autonomy ?? defaults.autonomy,
-  };
-}
-
-export function createPhoneChat(agent?: AgentKind): PhoneOpened {
-  const defaults = resolveOrchestratorDefaults();
-  const thread = createGlobalChat({
-    agent: agent ?? defaults.agent,
-    model: defaults.model,
-    effort: defaults.effort,
-    fast: defaults.fast,
-  });
-  return openedFrom(thread, { kind: 'orchestration' });
-}
-
-/** Orchestration chat with a goal, the same fields as the desktop create modal. */
-export async function createPhoneOrchestration(draft?: PhoneDraft & { goal?: string }): Promise<PhoneOpened> {
-  const goal = (draft?.goal ?? draft?.prompt ?? '').trim();
-  const attachments = phoneTurnAttachments(draft ?? {});
-  if (!goal && attachments.length === 0) return createPhoneChat(draft?.agent);
-  const defaults = resolveOrchestratorDefaults();
-  const options = draftAgentOptions(draft, defaults);
-  const thread = await startOrchestration({
-    goal: goal || 'See the attached files.',
-    agent: options.agent,
-    model: options.model,
-    effort: options.effort,
-    fast: options.fast,
-    planMode: options.planMode,
-    autonomy: options.autonomy,
-    attachments,
-  });
-  return openedFrom(thread, { kind: 'orchestration' });
-}
-
-/** Sibling agent on an existing project worktree. Same as the desktop worktree +. */
-export function createPhoneWorktreeAgent(fromChatId: string, draft?: PhoneDraft): PhoneOpened {
-  const source = readPhoneThread(fromChatId);
-  if (!source || isGlobalThread(source)) throw new Error('That worktree is not on this Mac.');
-  const defaults = resolveNewThreadOptions();
-  const options = draftAgentOptions(draft, defaults);
-  const attachments = persistPendingFileAttachments(
-    source.worktreePath,
-    phoneTurnAttachments(draft ?? {}),
-  );
-  const thread = createChatTab({
-    fromThreadId: source.id,
-    agent: options.agent,
-    model: options.model,
-    effort: options.effort,
-    fast: options.fast,
-    autonomy: options.autonomy,
-    attachments,
-  });
-  if (draft?.planMode !== undefined) updateThread(thread.id, { planMode: draft.planMode });
-  return openedFrom(thread, projectPlace(readThread(thread.id) ?? thread));
-}
-
-export interface PhoneProjectCreate extends PhoneDraft {
-  repoPath: string;
-  sourceType?: 'branch' | 'pr' | 'ticket';
-  sourceRef?: string;
-  title?: string;
-  cowboy?: boolean;
-}
-
-/** New worktree in a registered project, from a branch, PR, issue, or the default branch. */
-export async function createPhoneProjectWorktree(
-  repoPathOrInput: string | PhoneProjectCreate,
-): Promise<PhoneOpened> {
-  const input: PhoneProjectCreate =
-    typeof repoPathOrInput === 'string' ? { repoPath: repoPathOrInput } : repoPathOrInput;
-  const path = assertKnownProject(input.repoPath);
-  const defaults = resolveNewThreadOptions();
-  const options = draftAgentOptions(input, defaults);
-  const thread = await createThread({
-    sourceType: input.sourceType ?? 'branch',
-    sourceRef: input.sourceRef || 'default',
-    repoPath: path,
-    title: input.title,
-    cowboy: input.cowboy,
-    agent: options.agent,
-    model: options.model,
-    effort: options.effort,
-    fast: options.fast,
-    planMode: options.planMode,
-    autonomy: options.autonomy,
-    attachments: phoneTurnAttachments(input),
-    prompt: input.prompt,
-    reuseExisting: false,
-  });
-  return openedFrom(thread, projectPlace(thread));
-}
-
-/** Model list for the agent picker. Claude is the built-in catalog; others ask the CLI. */
-export async function listPhoneModels(agent: AgentKind): Promise<PhoneModelRow[]> {
-  const catalogs = await listModelsForAgent(agent);
-  return (catalogs[0]?.models ?? []).slice(0, 40).map((model) => ({
-    id: model.id,
-    label: model.displayName || model.id,
-  }));
-}
-
-export function archivePhoneChat(chatId: string): boolean {
-  const thread = readPhoneThread(chatId);
-  if (!thread) return false;
-  updateThread(thread.id, { status: 'archived' });
-  return true;
 }

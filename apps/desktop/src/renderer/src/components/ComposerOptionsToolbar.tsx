@@ -21,6 +21,7 @@ export { ComposerAttachmentChips } from './ComposerAttachmentChips';
 
 export interface ComposerDraftOptions {
   agent: AgentKind;
+  acpHarness?: 'gemini' | 'copilot' | null;
   model: string | null;
   effort: ThinkingEffort;
   /** Cursor Fast speed tier (~2× for Grok). Ignored for other agents. */
@@ -338,6 +339,7 @@ export function ComposerOptionsToolbar({
         open={agentPickerOpen}
         value={{
           agent: options.agent,
+          acpHarness: options.acpHarness,
           model: options.model,
           autonomy: options.autonomy,
           effort: options.effort,
@@ -352,6 +354,7 @@ export function ComposerOptionsToolbar({
         onApply={(next) => {
           patch({
             agent: next.agent,
+            acpHarness: next.agent === 'acp' ? (next.acpHarness ?? 'gemini') : null,
             model: next.model,
             autonomy: next.autonomy,
             effort: next.effort,

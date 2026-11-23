@@ -70,7 +70,7 @@ const SETTINGS_NAV_TITLES: Record<Exclude<SettingsNavId, 'agents'>, string> = {
   history: 'History',
 };
 type NavId = SettingsNavId;
-type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy';
+type AgentPanel = 'claude' | 'codex' | 'opencode' | 'cursor' | 'brightsy' | 'gemini' | 'copilot';
 
 const CLI_PATH_AGENTS = new Set<AgentPanel>(['claude', 'codex', 'opencode', 'brightsy']);
 
@@ -215,6 +215,7 @@ const DEFAULT_AGENT_LABELS: Record<AgentKind, string> = {
   opencode: 'OpenCode',
   cursor: 'Cursor',
   brightsy: 'Brightsy',
+  acp: 'ACP',
 };
 
 const CLAUDE_DEFAULT_MODEL_LABELS: Record<string, string> = {
@@ -230,8 +231,9 @@ function defaultAgentModelLabel(
   effort: ThinkingEffort,
   fast = false,
   autonomy: Autonomy = 'full',
+  acpHarness?: 'gemini' | 'copilot' | null,
 ): string {
-  const agentLabel = DEFAULT_AGENT_LABELS[agent] ?? agent;
+  const agentLabel = agent === 'acp' ? (acpHarness === 'copilot' ? 'Copilot CLI' : 'Gemini CLI') : (DEFAULT_AGENT_LABELS[agent] ?? agent);
   const thinking = thinkingEffortLabel(effort);
   const fastSuffix = agent === 'cursor' && fast ? ' · Fast' : '';
   const autonomyLabel = autonomy === 'full' ? 'Full autonomy' : 'Default permissions';
@@ -312,6 +314,8 @@ const AGENT_PANELS: Array<{
       'Hosted chat via the Brightsy CLI (`brightsy login`) — no local file edits. Connect a team below for Brightsy schema and files. The phone (Settings → Remote) is how you reach this Mac.',
     docsUrl: 'https://www.npmjs.com/package/@brightsy/cli',
   },
+  { id: 'gemini', label: 'Gemini CLI', envKey: 'GEMINI_API_KEY', blurb: 'ACP harness (`gemini --acp`). Sign in or set GEMINI_API_KEY. No attach — continue the chat in Sideboard.', docsUrl: 'https://geminicli.com/docs/cli/acp-mode/' },
+  { id: 'copilot', label: 'Copilot CLI', envKey: null, blurb: 'ACP harness (`copilot --acp`). Sign in with `copilot` or gh. No attach — continue the chat in Sideboard.', docsUrl: 'https://docs.github.com/en/copilot/reference/copilot-cli-reference/acp-server' },
 ];
 
 function maskSecret(value: string): string {
@@ -321,6 +325,9 @@ function maskSecret(value: string): string {
 }
 
 function statusFor(statuses: AgentStatus[], id: AgentPanel): AgentStatus | undefined {
+  if (id === 'gemini' || id === 'copilot') {
+    return statuses.find((s) => s.agent === 'acp' && s.acpHarness === id);
+  }
   return statuses.find((s) => s.agent === id);
 }
 
@@ -617,6 +624,7 @@ export function SettingsModal({
 
   async function saveDefaultsPatch(patch: {
     agent?: AgentKind | null;
+    acpHarness?: 'gemini' | 'copilot' | null;
     model?: string | null;
     effort?: ThinkingEffort | null;
     fast?: boolean | null;
@@ -1000,7 +1008,7 @@ export function SettingsModal({
                         optional (~2× usage for Grok) and off by default.
                       </p>
                       <p className="settings-status-text" style={{ marginTop: 8 }}>
-                        {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort, defaultFast, defaultAutonomy)}
+                        {defaultAgentModelLabel(defaultAgent, defaultModel, defaultEffort, defaultFast, defaultAutonomy, settings.defaults?.acpHarness)}
                       </p>
                     </div>
                     <button
@@ -2419,6 +2427,7 @@ export function SettingsModal({
         open={defaultsPickerOpen}
         value={{
           agent: defaultAgent,
+          acpHarness: settings.defaults?.acpHarness,
           model: defaultModel,
           autonomy: defaultAutonomy,
           effort: defaultEffort,
@@ -2437,6 +2446,7 @@ export function SettingsModal({
         onApply={(next) => {
           void saveDefaultsPatch({
             agent: next.agent,
+            acpHarness: next.agent === 'acp' ? (next.acpHarness ?? 'gemini') : null,
             model: next.model,
             autonomy: next.autonomy,
             effort: next.effort,

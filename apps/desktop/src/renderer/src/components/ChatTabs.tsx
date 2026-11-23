@@ -14,6 +14,7 @@ import { loadOrchestratorDefaults, loadThreadDefaults } from '../lib/thread-defa
 
 export type NewChatTabOptions = {
   agent?: AgentKind;
+  acpHarness?: 'gemini' | 'copilot' | null;
   model?: string | null;
   autonomy?: Autonomy;
   effort?: ThinkingEffort;
@@ -122,6 +123,7 @@ export function ChatTabs({
   const [newOpen, setNewOpen] = useState(false);
   const [newTabDefaults, setNewTabDefaults] = useState<{
     agent: AgentKind;
+    acpHarness?: 'gemini' | 'copilot' | null;
     model: string | null;
     autonomy: Autonomy;
     effort: ThinkingEffort;
@@ -163,6 +165,7 @@ export function ChatTabs({
     }
     setNewTabDefaults({
       agent,
+      acpHarness: agent === 'acp' ? (defaults.acpHarness ?? 'gemini') : null,
       model,
       autonomy: defaults.autonomy,
       effort: defaults.effort,
@@ -234,6 +237,7 @@ export function ChatTabs({
             onApply={(next) => {
               onNewTab({
                 agent: next.agent,
+                acpHarness: next.acpHarness,
                 model: next.model,
                 autonomy: next.autonomy,
                 effort: next.effort,

@@ -1,7 +1,9 @@
 import type { ChatFollowUp } from '../threads/chat-follow-ups.js';
 import type { ThinkingEffort } from './thinking-effort.js';
 
-export type AgentKind = 'claude' | 'codex' | 'opencode' | 'brightsy' | 'cursor';
+export type AgentKind = 'claude' | 'codex' | 'opencode' | 'brightsy' | 'cursor' | 'acp';
+/** CLI the ACP adapter launches. One kind (`acp`); Gemini CLI or Copilot CLI. */
+export type AcpHarnessId = 'gemini' | 'copilot';
 
 export type SourceType = 'branch' | 'pr' | 'ticket' | 'orchestration' | 'adopt';
 
@@ -103,6 +105,8 @@ export interface Thread {
   worktreePath: string;
   repoPath: string;
   agent: AgentKind;
+  /** Gemini CLI or Copilot CLI when `agent` is `acp`. */
+  acpHarness?: AcpHarnessId | null;
   /** Agent model alias (e.g. sonnet, opus). null = Auto / CLI default. */
   model: string | null;
   /**
@@ -143,27 +147,13 @@ export interface Thread {
   prUrl: string | null;
   /** Cached PR title for Conductor-style sidebar labels (PR title > branch). */
   prTitle: string | null;
-  /**
-   * Cached GitHub PR lifecycle from the last `getPrMeta` / merge
-   * (`OPEN` | `MERGED` | `CLOSED`, etc.). Used for purple “done” sidebar
-   * styling and Conductor-style auto-archive-on-merge.
-   */
+  /** Cached PR state (`OPEN` | `MERGED` | `CLOSED`) for sidebar styling and auto-archive. */
   prState: string | null;
-  /**
-   * Cached GitHub draft flag from the last `getPrMeta`. Open + draft → Home
-   * Draft column; open + not draft → Review. Omitted/false when unknown.
-   */
+  /** Cached draft flag. Open + draft → Home Draft; open + not draft → Review. */
   prIsDraft?: boolean;
-  /**
-   * Cached GitHub PR author login from create-from-PR / `getPrMeta`.
-   * Compared to the `gh` viewer login for Board/sidebar Mine vs Reviewing.
-   */
+  /** Cached PR author login, compared to `gh` viewer for Mine vs Reviewing. */
   prAuthorLogin?: string | null;
-  /**
-   * Cached human requested-reviewer logins (bots and team slugs omitted).
-   * Used when the author is unknown so a review-requested PR still counts
-   * as Reviewing.
-   */
+  /** Cached human reviewer logins. Counts as Reviewing when the author is unknown. */
   prReviewerLogins?: string[];
   /** Cached GitHub reviewDecision (APPROVED, CHANGES_REQUESTED, or REVIEW_REQUIRED). */
   prReviewDecision?: string | null;
@@ -252,6 +242,7 @@ export interface CreateChatTabInput {
   /** Existing thread in the worktree to clone workspace metadata from. */
   fromThreadId: string;
   agent?: AgentKind;
+  acpHarness?: AcpHarnessId | null;
   model?: string | null;
   autonomy?: Autonomy;
   /** Thinking effort; omit to inherit from source thread. */
@@ -269,6 +260,7 @@ export interface ForkChatTabInput {
   /** Inclusive message index to fork through; default = all messages. */
   throughIndex?: number;
   agent?: AgentKind;
+  acpHarness?: AcpHarnessId | null;
   /** Model for the forked chat; omit to inherit or Auto when agent changes. */
   model?: string | null;
   title?: string;
@@ -280,6 +272,7 @@ export interface ForkThreadWorktreeInput {
   /** Inclusive message index to seed transcript through; default = all messages. */
   throughIndex?: number;
   agent?: AgentKind;
+  acpHarness?: AcpHarnessId | null;
   /** Model for the forked chat; omit to inherit or Auto when agent changes. */
   model?: string | null;
   title?: string;
@@ -287,6 +280,7 @@ export interface ForkThreadWorktreeInput {
 
 export interface ThreadOptionsPatch {
   agent?: AgentKind;
+  acpHarness?: AcpHarnessId | null;
   model?: string | null;
   effort?: ThinkingEffort;
   fast?: boolean;
@@ -296,6 +290,9 @@ export interface ThreadOptionsPatch {
 
 export interface AgentStatus {
   agent: AgentKind;
+  /** Which ACP CLI this detect row is. `agent` stays `acp`. */
+  acpHarness?: AcpHarnessId;
+  label?: string;
   installed: boolean;
   authenticated: boolean;
   linearMcp: boolean;
@@ -729,6 +726,8 @@ export interface CreateThreadInput {
   sourceType: Exclude<SourceType, 'orchestration'>;
   sourceRef: string;
   agent: AgentKind;
+  /** Gemini CLI or Copilot CLI when `agent` is `acp`. */
+  acpHarness?: AcpHarnessId | null;
   repoPath: string;
   autonomy?: Autonomy;
   /** Claude model id, or Brightsy `agent:` / `model:` target encoding. */
@@ -759,6 +758,7 @@ export interface CreateThreadInput {
 export interface AdoptInput {
   worktreePath: string;
   agent: AgentKind;
+  acpHarness?: AcpHarnessId | null;
   title?: string;
   sessionId?: string | null;
   messages?: ThreadMessage[];

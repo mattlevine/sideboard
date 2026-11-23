@@ -5,7 +5,8 @@ import {
   resolveAgentExecutable,
   type CliAgentKind,
 } from '../store/app-settings.js';
-import type { AgentKind } from '../types/thread.js';
+import type { AcpHarnessId, AgentKind } from '../types/thread.js';
+import { ACP_HARNESSES, isAcpHarnessId } from './acp-harness.js';
 import {
   CLAUDE_NATIVE_INSTALL,
   OPENCODE_NATIVE_INSTALL,
@@ -98,9 +99,18 @@ const SETUP: Record<AgentKind, AgentSetupInfo> = {
     loginCommand: 'brightsy login',
     npmPackage: '@brightsy/cli',
   },
+  acp: {
+    agent: 'acp',
+    kind: 'cli',
+    summary:
+      'One adapter for every ACP harness. Install Gemini CLI or Copilot CLI from Settings — there is no separate ACP binary, and no interactive attach.',
+    docsUrl: 'https://agentclientprotocol.com',
+    installCommand: null,
+    loginCommand: null,
+  },
 };
 
-const CLI_BIN: Record<Exclude<AgentKind, 'cursor'>, string> = {
+const CLI_BIN: Record<Exclude<AgentKind, 'cursor' | 'acp'>, string> = {
   claude: 'claude',
   codex: 'codex',
   opencode: 'opencode',
@@ -305,7 +315,7 @@ async function resolveCliAfterNpmInstall(cliBin: string): Promise<string | null>
 }
 
 async function resolveExistingCli(agent: AgentKind): Promise<string | null> {
-  if (agent === 'cursor') return null;
+  if (agent === 'cursor' || agent === 'acp') return null;
   const exe = resolveAgentExecutable(agent as CliAgentKind);
   if ((exe.includes('/') || exe.includes('\\')) && existsSync(exe)) return exe;
   enrichPathWithNpmGlobalBin();
@@ -342,8 +352,40 @@ function isCurlInstaller(command: string): boolean {
   return /curl\s| \|\s*bash/.test(command);
 }
 
-/** Install or update a CLI agent. */
-export async function installAgent(agent: AgentKind): Promise<AgentSetupActionResult> {
+/** Install one ACP harness CLI (`gemini` / `copilot`). */
+export async function installAcpHarness(id: AcpHarnessId): Promise<AgentSetupActionResult> {
+  const spec = ACP_HARNESSES[id];
+  return installNpmGlobalPackage({
+    npmPackage: spec.npmPackage,
+    installCommand: spec.installCommand,
+    cliBin: spec.bin,
+  });
+}
+
+/** Open the harness login command in the system terminal. */
+export async function loginAcpHarness(id: AcpHarnessId): Promise<AgentSetupActionResult> {
+  const spec = ACP_HARNESSES[id];
+  const prepared = await prepareTerminalCommand(spec.loginCommand);
+  await openInSystemTerminal(prepared);
+  return {
+    ok: true,
+    openedTerminal: true,
+    command: prepared,
+    message: `Opened Terminal to run: ${prepared}`,
+  };
+}
+
+/** Install or update a CLI agent. `gemini` / `copilot` install that ACP harness. */
+export async function installAgent(
+  agent: AgentKind | AcpHarnessId,
+): Promise<AgentSetupActionResult> {
+  if (isAcpHarnessId(agent)) return installAcpHarness(agent);
+  if (agent === 'acp') {
+    return {
+      ok: false,
+      message: 'Install Gemini CLI or Copilot CLI from Settings → Agents. ACP is the adapter, not a binary.',
+    };
+  }
   const info = getAgentSetupInfo(agent);
   if (info.kind === 'bundled-sdk' || info.kind === 'api-key') {
     return {
@@ -382,7 +424,16 @@ export async function installAgent(agent: AgentKind): Promise<AgentSetupActionRe
 }
 
 /** Open the agent’s login/auth command in the system terminal. */
-export async function loginAgent(agent: AgentKind): Promise<AgentSetupActionResult> {
+export async function loginAgent(
+  agent: AgentKind | AcpHarnessId,
+): Promise<AgentSetupActionResult> {
+  if (isAcpHarnessId(agent)) return loginAcpHarness(agent);
+  if (agent === 'acp') {
+    return {
+      ok: false,
+      message: 'Log in to Gemini CLI or Copilot CLI from Settings → Agents.',
+    };
+  }
   const info = getAgentSetupInfo(agent);
   const loginCommand = resolveLoginCommand(agent);
   if (!loginCommand) {
