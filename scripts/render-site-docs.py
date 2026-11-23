@@ -33,7 +33,7 @@ PAGES = {
     "compare.md": {
         "out": "compare/index.html",
         "title": "Compare — Sideboard",
-        "description": "Sideboard vs Conductor, Orca, Cursor, and other local boards.",
+        "description": "Sideboard vs Conductor, Orca, Superset, Multica, and the single-harness phone remotes.",
         "h1": "Compare",
     },
     "security.md": {
@@ -67,6 +67,33 @@ def inline(text: str) -> str:
     return "".join(parts)
 
 
+# GitHub's heading anchors: drop punctuation, spaces become hyphens, lowercase.
+_HEADING_PUNCT = re.compile(
+    r"[\u2000-\u206F\u2E00-\u2E7F\\'\"!#$%&()*+,./:;<=>?@\[\]^`{|}~]"
+)
+
+
+def heading_id(text: str, seen: dict[str, int]) -> str:
+    plain = re.sub(r"`([^`]*)`", r"\1", text)
+    plain = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", plain)
+    plain = re.sub(r"[*_]{1,3}", "", plain)
+    slug = _HEADING_PUNCT.sub("", plain).replace(" ", "-").lower().strip("-")
+    slug = slug or "section"
+    n = seen.get(slug, 0)
+    seen[slug] = n + 1
+    return slug if n == 0 else f"{slug}-{n}"
+
+
+def is_separator_row(row: str) -> bool:
+    """A markdown rule (`|---|---|`), including a one-dash cell (`|-|`).
+
+    A header with an empty first cell (`| | Conductor | Sideboard |`) is not a
+    rule: every cell of a rule is only dashes and optional colons.
+    """
+    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+    return bool(cells) and all(re.fullmatch(r":?-+:?", cell) for cell in cells)
+
+
 def md_to_html(md: str) -> str:
     lines = md.splitlines()
     # drop leading H1 — chrome already has the title
@@ -80,6 +107,7 @@ def md_to_html(md: str) -> str:
     in_ul = False
     in_ol = False
     in_table = False
+    heading_ids: dict[str, int] = {}
 
     def close_lists() -> None:
         nonlocal in_ul, in_ol
@@ -120,7 +148,7 @@ def md_to_html(md: str) -> str:
             while i < len(lines) and lines[i].startswith("|"):
                 rows.append(lines[i])
                 i += 1
-            body = [r for r in rows if not re.match(r"^\|\s*[-: ]+\|", r)]
+            body = [r for r in rows if not is_separator_row(r)]
             if not body:
                 continue
             def cells(row: str) -> list[str]:
@@ -143,7 +171,10 @@ def md_to_html(md: str) -> str:
             close_lists()
             close_table()
             level = len(m.group(1))
-            out.append(f"<h{level}>{inline(m.group(2))}</h{level}>")
+            anchor = heading_id(m.group(2), heading_ids)
+            out.append(
+                f'<h{level} id="{html.escape(anchor, quote=True)}">{inline(m.group(2))}</h{level}>'
+            )
             i += 1
             continue
 

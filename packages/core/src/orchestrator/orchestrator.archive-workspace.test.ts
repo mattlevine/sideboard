@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -28,6 +29,23 @@ describe('Orchestrator workspace archive', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
+  /** Real git worktree so archive can `git status` before the mocked remove. */
+  function initCheckout(worktreePath: string, branch = 'thread/shared'): void {
+    const repo = join(dataDir, 'repo');
+    mkdirSync(repo, { recursive: true });
+    execFileSync('git', ['init', '-b', 'main'], { cwd: repo, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 't@example.com'], { cwd: repo });
+    execFileSync('git', ['config', 'user.name', 't'], { cwd: repo });
+    execFileSync('git', ['commit', '--allow-empty', '-m', 'init'], {
+      cwd: repo,
+      stdio: 'ignore',
+    });
+    execFileSync('git', ['worktree', 'add', '-b', branch, worktreePath], {
+      cwd: repo,
+      stdio: 'ignore',
+    });
+  }
+
   function seed(opts: {
     title: string;
     worktreePath: string;
@@ -49,6 +67,7 @@ describe('Orchestrator workspace archive', () => {
 
   it('archives every agent and tears the worktree down once', async () => {
     const path = join(dataDir, 'wt-shared');
+    initCheckout(path);
     const a = seed({ title: 'alpha', worktreePath: path });
     const b = seed({ title: 'beta', worktreePath: path });
     const other = seed({ title: 'other', worktreePath: join(dataDir, 'wt-other') });
@@ -64,7 +83,7 @@ describe('Orchestrator workspace archive', () => {
 
   it('restores every archived agent on the checkout', async () => {
     const path = join(dataDir, 'wt-shared');
-    mkdirSync(path, { recursive: true });
+    initCheckout(path);
     const a = seed({ title: 'alpha', worktreePath: path });
     const b = seed({ title: 'beta', worktreePath: path });
     const orch = new Orchestrator();
@@ -77,7 +96,7 @@ describe('Orchestrator workspace archive', () => {
 
   it('restores only the archived agent when the checkout is still live', async () => {
     const path = join(dataDir, 'wt-shared');
-    mkdirSync(path, { recursive: true });
+    initCheckout(path, 'thread/live');
     const live = seed({ title: 'live', worktreePath: path });
     const closed = seed({ title: 'closed', worktreePath: path });
     const orch = new Orchestrator();
@@ -104,6 +123,7 @@ describe('Orchestrator workspace archive', () => {
 
   it('tells you when the workspace is already fully archived', async () => {
     const path = join(dataDir, 'wt');
+    initCheckout(path, 'thread/gone');
     const thread = seed({ title: 'gone', worktreePath: path });
     const orch = new Orchestrator();
     await orch.archiveWorkspace(thread.id);
