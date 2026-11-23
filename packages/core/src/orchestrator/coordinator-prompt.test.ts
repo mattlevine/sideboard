@@ -252,6 +252,9 @@ describe('coordinator-prompt', () => {
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('The Orchestration row in the sidebar');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('set_plan');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('execute_plan');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('Do not start a step listed under Do not start');
+    expect(COORDINATOR_TOOL_PLAYBOOK).toContain('An edge line marked merge is a merge hold');
+    expect(COORDINATOR_TOOL_PLAYBOOK).not.toContain('marks that step waiting');
     expect(COORDINATOR_TOOL_PLAYBOOK).toContain('same tags');
   });
 

@@ -55,6 +55,7 @@ export interface PlanWork {
  * Work this plan can start now, work held from starting, and work that may
  * proceed but must not merge. A root that others wait on is in `start` until
  * it reaches that gate. `hold=merge` does not keep the later step from starting.
+ * An unmet `hold=start` keeps that step in `waiting` only.
  * A loop does not block the first pass.
  */
 export function executionSlice(rows: OrderRow[]): {
@@ -134,7 +135,7 @@ export function executionSlice(rows: OrderRow[]): {
           : 'Start this',
       });
     }
-    if (mergeBlocked.length > 0) {
+    if (mergeBlocked.length > 0 && startBlocked.length === 0) {
       const edge = mergeBlocked[0]!;
       mergeHeld.push({
         target: item.target,
@@ -168,7 +169,7 @@ export function formatOrderText(rows: OrderRow[], plan?: OrderPlan | null): stri
   rows.forEach((row, index) => {
     const gate = row.gate === 'in-prod' ? 'in prod' : 'in main';
     const hold = row.hold === 'merge' ? 'merge' : 'start';
-    const state = row.loop ? 'loop' : row.met ? 'clear' : 'waiting';
+    const state = row.loop ? 'loop' : row.met ? 'clear' : row.hold === 'merge' ? 'merge' : 'waiting';
     lines.push(
       row.loop
         ? `${index + 1}. ${state}  ${row.subjectLabel} returns to ${row.waitsOnLabel} once it is ${gate}`
