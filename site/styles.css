@@ -682,6 +682,7 @@ h1, h2, h3, h4, p { text-wrap: pretty }
   gap: 14px;
   margin-top: 96px;
 }
+.split-fit .card:only-child { grid-column: 1 / -1; }
 .end-cta {
   margin: 96px 0 110px;
   text-align: center;
