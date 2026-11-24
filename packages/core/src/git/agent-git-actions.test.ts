@@ -121,7 +121,9 @@ describe('expandCanonicalGitRequest', () => {
       writeFileSync(join(root, '.claude/skills/announce-on-x/SKILL.md'), '# a');
       const out = expandCanonicalGitRequest('Merge PR.', { worktreePath: root });
       expect(out).toMatch(/announce-on-x/);
+      expect(out).toMatch(/each pull request that merge landed/);
       expect(out).toMatch(/Do not schedule a catch-up/);
+      expect(out).not.toMatch(/Post once/);
       expect(expandCanonicalGitRequest('Merge PR into matt/parent.', { worktreePath: root })).not.toMatch(
         /announce-on-x/,
       );

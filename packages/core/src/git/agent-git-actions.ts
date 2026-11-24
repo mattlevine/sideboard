@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { GitForge } from './remote-forge.js';
 
 const ANNOUNCE_AFTER_MERGE =
-  'After that merge to the default branch succeeds, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`) before the turn ends. Post once to @sideboard_build, or record a skip. Do not schedule a catch-up.';
+  'After that merge to the default branch succeeds, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`) before the turn ends. Post or skip each pull request that merge landed on the default branch. Do not schedule a catch-up.';
 
 /** Canonical git prompts the desktop buttons and orchestration `ask_git` send. */
 

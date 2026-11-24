@@ -230,7 +230,9 @@ describe('formatProcessGuideDirective', () => {
     const text = formatWorktreeDirective(thread);
     expect(text).toMatch(/\/announce-on-x/);
     expect(text).toMatch(/before the turn ends/);
+    expect(text).toMatch(/each pull request that merge landed/);
     expect(text).toMatch(/Do not schedule a catch-up/);
+    expect(text).not.toMatch(/Post once/);
     expect(formatProcessGuideDirective({ worktreePath: root })).not.toMatch(/announce-on-x/);
   });
 });

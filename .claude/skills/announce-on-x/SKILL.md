@@ -9,13 +9,13 @@ description: >-
 
 # Announce a merged PR on X
 
-Post to [@sideboard_build](https://x.com/sideboard_build) when a pull request merges to the default branch of `mattlevine/sideboard`. One post, or a recorded skip. Do not ask first. Do not announce any other repo.
+Post to [@sideboard_build](https://x.com/sideboard_build) when a pull request merges to the default branch of `mattlevine/sideboard`. One post per pull request, or a recorded skip. Do not ask first. Do not announce any other repo.
 
 The account keys `X_API_KEY`, `X_API_KEY_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCESS_TOKEN_SECRET` are already in the environment (Settings → Environment, account scope). Do not print them, pass them on a command line, or copy them into the repo.
 
 ## When
 
-You just merged a pull request to the default branch. Announce that PR before the turn ends. Do not schedule a later job to do it.
+You just merged onto the default branch. Before the turn ends, post or skip each pull request that merge landed. A stack merge can land more than this thread's pull request. Do not schedule a later job.
 
 ## Read
 
@@ -38,7 +38,7 @@ If you cannot capture it and a still would carry the same sentence, generate one
 
 ## Send
 
-From the repo root. The script checks the token is `@sideboard_build`, refuses a second post for the same PR, and writes `~/.sideboard/x-announced.json`. Exit code 3 means another announce holds the lock. Leave that run alone.
+From the repo root. The script checks the token is `@sideboard_build`, refuses a second post for the same PR, and writes `~/.sideboard/x-announced.json`. Exit code 3 means another announce holds the lock. Retry this PR in this turn after it clears. Do not schedule a later job.
 
 ```sh
 node .claude/skills/announce-on-x/post.mjs post --pr <n> --text "<text>"

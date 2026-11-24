@@ -162,7 +162,7 @@ export function formatWorktreeDirective(
         ? '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge only when this turn is a Merge PR request or the user explicitly asked — via Entire from this worktree (`entire trail merge`).'
         : '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
-  if (existsSync(join(worktree, '.claude/skills/announce-on-x/SKILL.md'))) lines.push('- After that merge to the default branch succeeds, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`) before the turn ends. Post once to @sideboard_build, or record a skip. Do not schedule a catch-up.');
+  if (existsSync(join(worktree, '.claude/skills/announce-on-x/SKILL.md'))) lines.push('- After that merge to the default branch succeeds, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`) before the turn ends. Post or skip each pull request that merge landed on the default branch. Do not schedule a catch-up.');
   if (thread.prUrl) {
     lines.push(
       `- A PR already exists (${thread.prUrl}). Update it (push + edit title/body if the purpose drifted) instead of opening a duplicate.`,
