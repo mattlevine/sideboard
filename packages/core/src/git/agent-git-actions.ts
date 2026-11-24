@@ -1,4 +1,9 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { GitForge } from './remote-forge.js';
+
+const ANNOUNCE_AFTER_MERGE =
+  'After that merge to the default branch succeeds, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`) before the turn ends. Post or skip each pull request that merge landed on the default branch. Do not schedule a catch-up.';
 
 /** Canonical git prompts the desktop buttons and orchestration `ask_git` send. */
 
@@ -183,9 +188,14 @@ function entireGitActionExpansion(action: AgentGitAction, base: string | null): 
   }
 }
 
+function worktreeHasAnnounceSkill(worktreePath: string | null | undefined): boolean {
+  const root = worktreePath?.trim();
+  return !!root && existsSync(join(root, '.claude/skills/announce-on-x/SKILL.md'));
+}
+
 export function expandCanonicalGitRequest(
   prompt: string,
-  opts?: { forge?: GitForge | null },
+  opts?: { forge?: GitForge | null; worktreePath?: string | null },
 ): string {
   const trimmed = prompt.trim();
   let action: AgentGitAction | null = null;
@@ -230,6 +240,13 @@ export function expandCanonicalGitRequest(
           : 'Investigate that failing check (`gh pr checks`, `gh run view --log-failed`), fix it, commit, and push. Loop only if a goal to keep going until it passes was given.';
   }
   if (!expansion) return prompt;
+  if (
+    action === 'merge' &&
+    (!base || isMainishPrBase(base)) &&
+    worktreeHasAnnounceSkill(opts?.worktreePath)
+  ) {
+    expansion = `${expansion} ${ANNOUNCE_AFTER_MERGE}`;
+  }
   if (expansionPushes(action, trimmed)) expansion = withPushReview(expansion);
   return `${trimmed}\n\n(Sideboard git request — do not ask for clarification: ${expansion})`;
 }

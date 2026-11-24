@@ -1445,7 +1445,10 @@ export class Orchestrator {
     // Composer expansion appends attachments / @files / skills and would
     // both miss exact phrases and false-trigger on skill/file mentions of CI.
     const turnOrigin = thread.worktreePath?.trim() ? await resolveOriginRemote(thread.worktreePath).catch(() => null) : null;
-    const gitPrompt = expandCanonicalGitRequest(promptText, { forge: turnOrigin?.forge });
+    const gitPrompt = expandCanonicalGitRequest(promptText, {
+      forge: turnOrigin?.forge,
+      worktreePath: thread.worktreePath,
+    });
     const expandedAttachments = openSteerTurnAttachments(this.openSteerPrompt.get(threadId), turnAttachments, autoContinue);
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
       thread.worktreePath,
