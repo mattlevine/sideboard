@@ -2,6 +2,8 @@
 
 **Orchestrate a fleet of coding agents on your Mac.** Isolated git worktrees. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.
 
+Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator is the shape: the checkout is the unit, and the editor stays in the harness (`attach`).
+
 Peers often spawn one agent per git worktree. Sideboard isolates the checkout — one workspace per ticket, PR, or named branch — and runs as many agents as that workspace needs. Sibling chats share the files. The remaining job is an **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so you can reach this machine — without moving the repo into someone else’s cloud.
 
 Sideboard started as a local port when Conductor moved that tier into a paid cloud, then added the pieces that still belong on this Mac: MCP orchestration, a global kanban, a phone app, and CLI / MCP so other systems can drive it. Agents are plugs (Claude Code, Codex, OpenCode, Cursor). Compute stays on this machine (corporate VPN, private git, internal APIs). The phone app is remote control, not a rented sandbox.

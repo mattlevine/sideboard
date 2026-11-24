@@ -51,6 +51,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <article>
 <p>Short positioning for contributors and evaluators. Not a feature-complete matrix. Sources were read on 2026-11-22 unless a page itself carries an earlier date this quarter. Undated product docs are cited as read that day.</p>
 <p>Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Superset, Cursor&#x27;s Agents window, Claude Code, Emdash). <a href="https://github.com/multica-ai/multica">Multica</a> is the other shape: an issue tracker where agents are assignees, and a daemon on a computer you connect runs the CLI. Sideboard isolates the checkout and runs many agents on it. The comparison that matters is the <strong>orchestration tier</strong>: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs). The README section Who it&#x27;s for is the ICP cut.</p>
+<p>Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator is the shape: the checkout is the unit, and the editor stays in the harness (<code>attach</code>).</p>
 <p>Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (phone, CLI, MCP) are what stayed on this machine. The phone app is the remote. Slack is not. One phone covers Claude Code, Codex, OpenCode, and Cursor. The Codex app and Claude Code Remote Control each cover one harness.</p>
 <h2 id="vs-conductor-melty">vs Conductor (Melty)</h2>
 <p>Conductor is joining Meta. The founder&#x27;s announcement is <a href="https://www.conductor.build/announcement">Conductor is joining Meta</a> (November 4, 2026). <a href="https://techcrunch.com/2026/11/04/meta-acquires-ai-coding-startup-conductor/">TechCrunch</a> reported the acquisition the same day.</p>
@@ -95,11 +96,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <p>Sideboard keeps the fleet on this machine. The phone app, CLI, and MCP are how you enter the loop.</p>
 <h2 id="vs-orca">vs Orca</h2>
 <p><a href="https://www.onorca.dev/">Orca</a> is an <strong>agent development environment</strong>: parallel worktrees, terminals, an embedded browser, design mode, a mobile companion, and Windows and Linux, with many CLI harnesses. It also has an <a href="https://orca.dev/docs/cli/orchestration">orchestration CLI</a>: a Run, tasks, supervised workers, and decision gates. The CLI talks to a running Orca app. The docs mark orchestration experimental (<code>Settings → Experimental</code>). A worker can be Claude, Codex, Cursor, OpenCode, or another harness Orca launches, often in its own worktree.</p>
-<p>Orca having that CLI means &quot;Sideboard has an orchestrator and Orca does not&quot; is not the split. The split is the checkout, the board, and the IDE:</p>
+<p>Orca having that CLI means &quot;Sideboard has an orchestrator and Orca does not&quot; is not the split. Both are agentic development environments (agent IDEs). The split is the checkout, the board, and where the editor lives:</p>
 <ul>
 <li>Several Sideboard chats share one checkout (<code>fork_chat</code>). Orca&#x27;s supervised workers are started on a worktree, including a new child worktree.</li>
 <li>One Sideboard board covers every harness. Orca&#x27;s orchestration runs inside the Orca app.</li>
-<li>Sideboard has no IDE. Orca is the IDE: terminals, browser, and design mode.</li>
+<li>Sideboard does not embed an editor, terminal, or browser. <code>attach</code> returns to the harness. Orca embeds the editor: terminals, browser, and design mode.</li>
 </ul>
 <table><thead><tr>
 <th>&nbsp;</th>
@@ -109,7 +110,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <tr>
 <td>Category</td>
 <td>Agent IDE, plus an orchestration CLI</td>
-<td>Local orchestration for a fleet. No IDE</td>
+<td>Agent IDE (agentic development environment). Local fleet orchestrator. The editor stays in the harness</td>
 </tr>
 <tr>
 <td>Checkout</td>
