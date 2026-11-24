@@ -28,7 +28,7 @@ Leave out anything the diff does not show. Leave out numbers, testimonials, cert
 
 One or two short sentences. What changed, as a fact. Address the reader as "you" when you address anyone. Sideboard is third person and capitalised. Sentence case. No exclamation marks, emoji, or reassurance ("rest easy", "totally safe", "don't worry"). The launch-note shape is the model: "Sideboard now runs against VPN-only APIs with nothing uploaded." Do not reuse that sentence unless this PR is that change.
 
-The poster appends the pull request URL and counts it as 23 characters. Keep your text at or under 240 characters so the link fits.
+No need to include a link. Leave out the pull request URL and sideboard.build. The account profile already points at the site, and the same link on every post would attach the same preview card. The poster sends the text as written. Keep it at or under 280 characters.
 
 ## Image
 

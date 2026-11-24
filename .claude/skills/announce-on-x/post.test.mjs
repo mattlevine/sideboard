@@ -11,6 +11,7 @@ import {
   releaseOwnedLock,
   signatureBaseString,
   signHmacSha1,
+  shipNoteText,
   tryAcquireLock,
   weightedLength,
 } from './post.mjs';
@@ -81,6 +82,14 @@ test('counts a URL as 23 characters', () => {
   const text = `Sideboard now keeps the board on this Mac.\nhttps://github.com/mattlevine/sideboard/pull/12`;
   assert.equal(weightedLength(text), 'Sideboard now keeps the board on this Mac.\n'.length + 23);
   assert.ok(weightedLength(text) <= 280);
+});
+
+test('sends the note as written and does not add a link', () => {
+  const note = 'Sideboard now keeps the board on this Mac.';
+  assert.equal(shipNoteText(note), note);
+  const withLink = `${note}\nhttps://github.com/mattlevine/sideboard/pull/12`;
+  assert.equal(shipNoteText(withLink), withLink);
+  assert.equal(shipNoteText('  Sideboard now opens the board on this Mac.  '), 'Sideboard now opens the board on this Mac.');
 });
 
 test('secret check ignores sk- inside a word', () => {
