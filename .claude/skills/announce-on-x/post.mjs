@@ -10,16 +10,27 @@
  *   node .claude/skills/announce-on-x/post.mjs post --pr 123 --text "..." [--image file.png]
  */
 import { createHmac, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  fstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const LEDGER_PATH = join(homedir(), '.sideboard', 'x-announced.json');
 const LOCK_PATH = join(homedir(), '.sideboard', 'x-announce.lock');
 const DEFAULT_REPO = 'mattlevine/sideboard';
 const EXPECTED_USERNAME = 'sideboard_build';
-const LOCK_MS = 2 * 60 * 1000;
+export const LOCK_MS = 2 * 60 * 1000;
 const URL_WEIGHT = 23;
 
 export function percentEncode(value) {
@@ -121,27 +132,144 @@ function writeLedger(ledger) {
   renameSync(tmp, LEDGER_PATH);
 }
 
-function withLock(fn) {
-  mkdirSync(join(homedir(), '.sideboard'), { recursive: true });
+function lockOwnerAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 1) return false;
   try {
-    const raw = readFileSync(LOCK_PATH, 'utf8');
-    const age = Date.now() - Number(raw);
-    if (Number.isFinite(age) && age >= 0 && age < LOCK_MS) {
-      console.error('Another announce is in progress.');
-      process.exitCode = 3;
-      return Promise.resolve();
-    }
-  } catch {
-    // no lock
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
   }
-  writeFileSync(LOCK_PATH, String(Date.now()));
-  return Promise.resolve(fn()).finally(() => {
+}
+
+function readFdText(fd) {
+  const chunks = [];
+  const buf = Buffer.alloc(256);
+  let offset = 0;
+  while (offset < 1024) {
+    const n = readSync(fd, buf, 0, buf.length, offset);
+    if (n <= 0) break;
+    chunks.push(Buffer.from(buf.subarray(0, n)));
+    offset += n;
+    if (n < buf.length) break;
+  }
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+function writeExclusive(lockPath, token) {
+  const fd = openSync(lockPath, 'wx');
+  try {
+    writeFileSync(fd, token);
+  } catch (error) {
+    closeSync(fd);
     try {
-      writeFileSync(LOCK_PATH, '0');
+      unlinkSync(lockPath);
     } catch {
-      // ignore
+      // the exclusive file is already gone
     }
-  });
+    throw error;
+  }
+  closeSync(fd);
+}
+
+/** A lock we do not own, or one older than LOCK_MS, can be removed. */
+function isLockStale(raw, now, isAlive) {
+  const owned = /^(\d+) (\d+)\s/.exec(raw);
+  if (!owned) return true;
+  const pid = Number(owned[1]);
+  const ts = Number(owned[2]);
+  if (!Number.isFinite(ts) || now - ts >= LOCK_MS) return true;
+  return !isAlive(pid);
+}
+
+function takeStaleLock(lockPath, now, isAlive) {
+  let fd;
+  try {
+    fd = openSync(lockPath, 'r');
+  } catch (error) {
+    if (error?.code === 'ENOENT') return 'retry';
+    throw error;
+  }
+  try {
+    if (!isLockStale(readFdText(fd), now, isAlive)) return 'busy';
+    const owned = fstatSync(fd);
+    let current;
+    try {
+      current = statSync(lockPath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') return 'retry';
+      throw error;
+    }
+    if (current.ino !== owned.ino || current.dev !== owned.dev) return 'retry';
+    try {
+      unlinkSync(lockPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+    return 'retry';
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Exclusive create. Returns the token to pass to releaseOwnedLock, or null if another live announce holds it. */
+export function tryAcquireLock(lockPath, options = {}) {
+  const now = options.now ?? Date.now();
+  const isAlive = options.isAlive ?? lockOwnerAlive;
+  const token = options.token ?? `${process.pid} ${now} ${randomBytes(8).toString('hex')}\n`;
+  mkdirSync(dirname(lockPath), { recursive: true });
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      writeExclusive(lockPath, token);
+      return token;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+    }
+    if (takeStaleLock(lockPath, now, isAlive) === 'busy') return null;
+  }
+  return null;
+}
+
+/** Unlink only when this token is still the file we created. */
+export function releaseOwnedLock(lockPath, token) {
+  let fd;
+  try {
+    fd = openSync(lockPath, 'r');
+  } catch (error) {
+    if (error?.code === 'ENOENT') return;
+    throw error;
+  }
+  try {
+    if (readFdText(fd) !== token) return;
+    const owned = fstatSync(fd);
+    let current;
+    try {
+      current = statSync(lockPath);
+    } catch (error) {
+      if (error?.code === 'ENOENT') return;
+      throw error;
+    }
+    if (current.ino !== owned.ino || current.dev !== owned.dev) return;
+    try {
+      unlinkSync(lockPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function withLock(fn) {
+  const token = tryAcquireLock(LOCK_PATH);
+  if (!token) {
+    console.error('Another announce is in progress.');
+    process.exitCode = 3;
+    return Promise.resolve();
+  }
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => releaseOwnedLock(LOCK_PATH, token));
 }
 
 async function xFetch(url, { method = 'GET', body, headers } = {}) {
@@ -187,8 +315,8 @@ function prUrl(repo, pr) {
   return `https://github.com/${repo}/pull/${pr}`;
 }
 
-function looksSecret(text) {
-  return /gh[pousr]_|github_pat_|AKIA|xox[baprs]-|sk-|BEGIN [A-Z ]*PRIVATE KEY/i.test(text);
+export function looksSecret(text) {
+  return /gh[pousr]_|github_pat_|AKIA|xox[baprs]-|(?:^|[^A-Za-z0-9])sk-|BEGIN [A-Z ]*PRIVATE KEY/i.test(text);
 }
 
 async function alreadyOnTimeline(userId, url) {
@@ -215,6 +343,10 @@ function remember(pr, entry) {
 }
 
 async function post() {
+  return withLock(() => postWithinLock());
+}
+
+async function postWithinLock() {
   const pr = arg('--pr');
   const text = arg('--text');
   const image = arg('--image');
@@ -271,6 +403,10 @@ async function post() {
 }
 
 function skip() {
+  return withLock(() => skipWithinLock());
+}
+
+function skipWithinLock() {
   const pr = arg('--pr');
   const reason = arg('--reason');
   if (!pr || !/^\d+$/.test(pr)) throw new Error('skip requires --pr <number>');
@@ -285,6 +421,10 @@ function skip() {
 }
 
 function init() {
+  return withLock(() => initWithinLock());
+}
+
+function initWithinLock() {
   const ledger = readLedger();
   if (!ledger.since) ledger.since = new Date().toISOString();
   ledger.repo = DEFAULT_REPO;
@@ -322,7 +462,7 @@ if (isMain()) {
         : command === 'skip'
           ? skip
           : command === 'post'
-            ? () => withLock(post)
+            ? post
             : null;
   if (!run) {
     console.error('Usage: post.mjs status|whoami|init|skip|post');

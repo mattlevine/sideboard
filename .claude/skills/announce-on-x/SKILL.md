@@ -27,7 +27,7 @@ Leave out anything the diff does not show. Leave out numbers, testimonials, cert
 
 ## Write
 
-One or two short sentences. What changed, as a fact. Address the reader as "you" when you address anyone. Sideboard is third person and capitalised. Sentence case. No exclamation marks, emoji, hashtags, or reassurance ("rest easy", "totally safe", "don't worry"). The launch-note shape is the model: "Sideboard now runs against VPN-only APIs with nothing uploaded." Do not reuse that sentence unless this PR is that change.
+One or two short sentences. What changed, as a fact. Address the reader as "you" when you address anyone. Sideboard is third person and capitalised. Sentence case. No exclamation marks, emoji, or reassurance ("rest easy", "totally safe", "don't worry"). The launch-note shape is the model: "Sideboard now runs against VPN-only APIs with nothing uploaded." Do not reuse that sentence unless this PR is that change.
 
 The poster appends the pull request URL and counts it as 23 characters. Keep your text at or under 240 characters so the link fits.
 
@@ -39,7 +39,7 @@ If you cannot capture it and a still would carry the same sentence, generate one
 
 ## Send
 
-From the repo root. The script checks the token is `@sideboard_build`, refuses a second post for the same PR, and writes `~/.sideboard/x-announced.json`.
+From the repo root. The script checks the token is `@sideboard_build`, refuses a second post for the same PR, and writes `~/.sideboard/x-announced.json`. Exit code 3 means another announce holds the lock. Leave that run alone. A later catch-up records the same PR from the ledger or the timeline.
 
 ```sh
 node .claude/skills/announce-on-x/post.mjs post --pr <n> --text "<text>"

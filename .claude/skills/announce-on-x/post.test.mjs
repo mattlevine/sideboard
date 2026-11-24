@@ -1,6 +1,42 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
-import { oauthHeader, percentEncode, signatureBaseString, signHmacSha1, weightedLength } from './post.mjs';
+import {
+  LOCK_MS,
+  looksSecret,
+  oauthHeader,
+  percentEncode,
+  releaseOwnedLock,
+  signatureBaseString,
+  signHmacSha1,
+  tryAcquireLock,
+  weightedLength,
+} from './post.mjs';
+
+function withLockDir(fn) {
+  const dir = mkdtempSync(join(tmpdir(), 'x-lock-'));
+  const lockPath = join(dir, 'x-announce.lock');
+  try {
+    return fn(lockPath);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function deadPid() {
+  let pid = 1_000_000;
+  for (let i = 0; i < 30; i++) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      if (error?.code === 'ESRCH') return pid;
+    }
+    pid += 1000;
+  }
+  throw new Error('could not find an unused pid');
+}
 
 const CONSUMER_SECRET = 'kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw';
 const TOKEN_SECRET = 'LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE';
@@ -45,4 +81,61 @@ test('counts a URL as 23 characters', () => {
   const text = `Sideboard now keeps the board on this Mac.\nhttps://github.com/mattlevine/sideboard/pull/12`;
   assert.equal(weightedLength(text), 'Sideboard now keeps the board on this Mac.\n'.length + 23);
   assert.ok(weightedLength(text) <= 280);
+});
+
+test('secret check ignores sk- inside a word', () => {
+  assert.equal(looksSecret('Sideboard now handles an ask-user prompt.'), false);
+  assert.equal(looksSecret('mask-based redaction stays on this Mac.'), false);
+  assert.equal(looksSecret('sk-proj-abc123'), true);
+  assert.equal(looksSecret('The log contained sk-proj-abc123.'), true);
+  assert.equal(looksSecret('token ghp_abcdefghijklmnopqrstuvwxyz123456'), true);
+});
+
+test('only one acquire holds the lock', () => {
+  withLockDir((lockPath) => {
+    const first = tryAcquireLock(lockPath);
+    const second = tryAcquireLock(lockPath);
+    assert.ok(first);
+    assert.equal(second, null);
+    assert.equal(readFileSync(lockPath, 'utf8'), first);
+    releaseOwnedLock(lockPath, first);
+    const third = tryAcquireLock(lockPath);
+    assert.ok(third);
+    assert.notEqual(third, first);
+  });
+});
+
+test('release does not delete a lock this process no longer owns', () => {
+  withLockDir((lockPath) => {
+    const first = tryAcquireLock(lockPath);
+    assert.ok(first);
+    const replacement = `${process.pid} ${Date.now()} replacement\n`;
+    writeFileSync(lockPath, replacement);
+    releaseOwnedLock(lockPath, first);
+    assert.equal(readFileSync(lockPath, 'utf8'), replacement);
+  });
+});
+
+test('a dead or expired owner can be replaced', () => {
+  withLockDir((lockPath) => {
+    writeFileSync(lockPath, `${deadPid()} ${Date.now()} dead\n`);
+    const taken = tryAcquireLock(lockPath);
+    assert.ok(taken);
+    assert.equal(readFileSync(lockPath, 'utf8'), taken);
+    releaseOwnedLock(lockPath, taken);
+
+    writeFileSync(lockPath, `${process.pid} ${Date.now() - LOCK_MS - 1} expired\n`);
+    const expired = tryAcquireLock(lockPath);
+    assert.ok(expired);
+    assert.equal(readFileSync(lockPath, 'utf8'), expired);
+  });
+});
+
+test('a live owner is left alone', () => {
+  withLockDir((lockPath) => {
+    const existing = `${process.pid} ${Date.now()} held\n`;
+    writeFileSync(lockPath, existing);
+    assert.equal(tryAcquireLock(lockPath), null);
+    assert.equal(readFileSync(lockPath, 'utf8'), existing);
+  });
 });
