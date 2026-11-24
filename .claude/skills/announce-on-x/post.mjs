@@ -31,6 +31,7 @@ const LOCK_PATH = join(homedir(), '.sideboard', 'x-announce.lock');
 const DEFAULT_REPO = 'mattlevine/sideboard';
 const EXPECTED_USERNAME = 'sideboard_build';
 export const LOCK_MS = 2 * 60 * 1000;
+const POST_LIMIT = 280;
 const URL_WEIGHT = 23;
 
 export function percentEncode(value) {
@@ -88,6 +89,17 @@ export function oauthHeader({
 /** X counts each URL as 23 characters. */
 export function weightedLength(text) {
   return text.replace(/https?:\/\/\S+/g, 'x'.repeat(URL_WEIGHT)).length;
+}
+
+/** Trim the note. A link in the text is left as written. */
+export function shipNoteText(text) {
+  const note = String(text ?? '').trim();
+  if (!note) throw new Error('post requires --text');
+  const length = weightedLength(note);
+  if (length > POST_LIMIT) {
+    throw new Error(`Post is ${length} characters. Keep it at or under ${POST_LIMIT}.`);
+  }
+  return note;
 }
 
 function arg(name) {
@@ -311,21 +323,16 @@ async function whoami() {
   return { id, username };
 }
 
-function prUrl(repo, pr) {
-  return `https://github.com/${repo}/pull/${pr}`;
-}
-
 export function looksSecret(text) {
   return /gh[pousr]_|github_pat_|AKIA|xox[baprs]-|(?:^|[^A-Za-z0-9])sk-|BEGIN [A-Z ]*PRIVATE KEY/i.test(text);
 }
 
-async function alreadyOnTimeline(userId, url) {
+async function alreadyOnTimeline(userId, note) {
   const timeline = await xFetch(
-    `https://api.x.com/2/users/${userId}/tweets?max_results=100&tweet.fields=text,entities`,
+    `https://api.x.com/2/users/${userId}/tweets?max_results=100&tweet.fields=text`,
   );
   for (const tweet of timeline?.data ?? []) {
-    const expanded = (tweet.entities?.urls ?? []).map((item) => item.expanded_url ?? '').join(' ');
-    if ((tweet.text ?? '').includes(url) || expanded.includes(url)) {
+    if ((tweet.text ?? '').trim() === note) {
       return { tweetId: tweet.id, url: `https://x.com/${EXPECTED_USERNAME}/status/${tweet.id}` };
     }
   }
@@ -356,10 +363,7 @@ async function postWithinLock() {
   if (repo !== DEFAULT_REPO) throw new Error(`Refusing to announce ${repo}. This account is for ${DEFAULT_REPO}.`);
   if (looksSecret(text)) throw new Error('Refusing to post. The text looks like it contains a token.');
 
-  const link = prUrl(repo, pr);
-  const full = text.includes(link) ? text.trim() : `${text.trim()}\n${link}`;
-  const length = weightedLength(full);
-  if (length > 280) throw new Error(`Post is ${length} characters with the link counted as 23. Keep it at or under 280.`);
+  const full = shipNoteText(text);
 
   const ledger = readLedger();
   const prior = ledger.prs?.[pr];
@@ -369,7 +373,7 @@ async function postWithinLock() {
   }
 
   const me = await whoami();
-  const existing = await alreadyOnTimeline(me.id, link);
+  const existing = await alreadyOnTimeline(me.id, full);
   if (existing) {
     remember(pr, { action: 'posted', tweetId: existing.tweetId, url: existing.url });
     console.log(JSON.stringify({ ok: true, already: true, pr: Number(pr), ...existing }));
