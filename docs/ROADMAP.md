@@ -103,7 +103,7 @@ Depends on item 1. A push needs the signed build with the push entitlement.
 Done 2026-11-22 in [COMPARE.md](COMPARE.md), the homepage, and [/docs/compare/](https://www.sideboard.build/docs/compare/). Each claim has a source from this quarter, listed at the bottom of COMPARE.md. Undated product docs are cited as read that day.
 
 - Conductor is joining Meta (announcement and TechCrunch, November 4, 2026). The iOS app drives local workspaces: experimental, same Conductor account (changelog 0.92.0, October 23, 2026, and the remote-control doc). A Cloud shutdown was announced with the acquisition and withdrawn November 13 (changelog 0.94.2). The site no longer describes the iOS app as only part of the paid cloud.
-- Orca has an orchestration CLI. The difference is the shared checkout, the cross-harness board, and no IDE.
+- Orca has an orchestration CLI. Both are agentic development environments. The difference is the shared checkout, the cross-harness board, and `attach` back to the harness session.
 - Superset is the same worktree shape. Its MCP is hosted at `api.superset.sh` and the token is scoped to an organization. The docs now call the product Paradev, formerly Superset.
 - The Codex app and Claude Code Remote Control each drive one harness on a machine you own.
 - Multica is unchanged from the 2026-11-22 read of the public repo and docs (`README`, `VISION`, concepts, agents, squads, inbox, runs, autopilots, issue wakeups, workflows, analytics, providers, daemon, security model).
@@ -240,7 +240,7 @@ Step 1 is a small view. Steps 2 and 3 are the change the post describes, and the
 
 ## Not building
 
-- **An IDE.** No embedded browser, design mode, computer use, or mobile emulator. Orca and Cursor own that, and `attach` plus URL preview cover the need.
+- **Design mode as the workspace.** No design mode, computer use, or mobile emulator. The desktop already has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 - **Rented cloud sandboxes.** Item 5 is the answer to a closed laptop. The 2027 sketch argues the other way. See open decision 4.
 - **A Sideboard agent or model.** Agents stay plugs.
 - **A Windows or Linux desktop app** before the Linux host in item 5 exists.

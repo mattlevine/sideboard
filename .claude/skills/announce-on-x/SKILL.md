@@ -30,7 +30,7 @@ One or two short sentences. What changed, as a fact. Address the reader as "you"
 
 No need to include a link. Leave out the pull request URL and sideboard.build. The account profile already points at the site, and the same link on every post would attach the same preview card. The poster sends the text as written. Keep it at or under 280 characters.
 
-Name the topic that was being worked on. When that topic is the agentic development environment, include it in the note so the post can be found as an ADE. A tag is only for that topic. Leave it off any other note. Product copy still calls Sideboard a local fleet orchestrator.
+Sideboard is an agentic development environment (an agent IDE). When a post names what Sideboard is, say that, so the note can be found as an ADE. Local fleet orchestrator is the shape: the checkout, the board, and the orchestrator on this Mac. Do not write that Sideboard is not an IDE. Do not write that it has no editor, terminal, or browser. The desktop has a file editor, a terminal, and a URL preview, and `attach` returns to the harness session. Name the topic that was being worked on. A tag is only when the note is about that category. Leave the tag off a note that does not name it.
 
 ## Image
 

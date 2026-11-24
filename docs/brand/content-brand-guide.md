@@ -21,6 +21,8 @@
 
 **Positioning (quote exactly):** "For developers and engineering leads who run coding agents on their own Mac, Sideboard is the only local-first, open-source fleet orchestrator that keeps your agents, repos and secrets on your own network, unlike cloud sandboxes that ask you to rent the control room."
 
+**Category:** Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator names the shape inside that category. Do not describe Sideboard as having no IDE, and do not say it has no editor, terminal, or browser. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
+
 **Line:** "Orchestrate your coding agents without leaving your machine."
 
 **Purpose:** Sideboard exists to help developers who work beside AI agents feel in command of their own desk.
@@ -72,12 +74,14 @@
 - **Sideboard:** always capitalised. Never "the Sideboard app".
 - **Board:** capitalised when it names the Sideboard board.
 - **The Rented Control Plane:** always capitalised. Name it once per page.
-- **local fleet orchestrator:** the only category phrase.
+- **agentic development environment** (agent IDE): the category. Sideboard is one. Use this when naming what Sideboard is.
+- **local fleet orchestrator:** the shape inside that category. The checkout is the unit. Compute stays on this Mac. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 
 **Prohibited**
 - Reassurance language: "rest easy", "totally safe", "don't worry".
 - Attacks on the reader's own governance, review gates or corporate rules. Show how Sideboard works inside them.
-- Any other category phrase for Sideboard.
+- A category phrase that puts Sideboard outside an agent IDE or an agentic development environment, or that calls it a cloud sandbox, a CMS, or an embedded editor.
+- A sentence that says Sideboard has no editor, terminal, or browser. The desktop has a file editor, a terminal, and a URL preview.
 - Hype words, exclamation marks and emoji.
 
 ## 5. Claims ledger
@@ -93,6 +97,7 @@
 8. Sideboard is open source (Apache-2.0).
 9. Apple Silicon Macs only. State this wherever platform fit matters.
 10. What only Sideboard does: a local global board, plus an orchestrator other agents can drive over MCP.
+11. Sideboard is an agentic development environment (an agent IDE): a local fleet orchestrator on this Mac. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 
 **Needs proof that does not exist yet. Leave out until it does.**
 - Who uses Sideboard, usage numbers, customer outcomes or testimonials.
@@ -163,7 +168,7 @@ Illustrations, not approved copy. Never reuse their wording as a claim you have 
    - The Rented Control Plane appears at most once per page.
    - Keep every limit (Apple Silicon only, the fit test) beside the claim it limits.
 4. **Claims.** Use only section 5's allowed list. Add no testimonials, "who else uses it", numbers or certifications.
-5. **Language.** Apply sections 3 and 4 on every page. Use one name (Sideboard), one category phrase and one enemy name everywhere.
+5. **Language.** Apply sections 3 and 4 on every page. Use one name (Sideboard), the category (agentic development environment), the shape (local fleet orchestrator), and one enemy name everywhere.
 6. **Answer-ready writing.** Give each key claim a one or two sentence answer that stands alone with its limit attached. A named fact beats an adjective.
 7. **Final check before returning.** No exclamation marks, emoji or reassurance language. No [bracketed] fill-ins. "Sideboard" spelled consistently. Master ABT clauses whole where used. Every claim traces to section 5. Every call to action follows its resolution.
 8. **Return** each page's copy, then a Missing note listing every fact you could not source.

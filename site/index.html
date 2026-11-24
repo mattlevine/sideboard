@@ -9,10 +9,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sideboard — orchestrate a fleet of coding agents on your Mac</title>
-<meta name="description" content="Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.">
+<meta name="description" content="An agentic development environment. Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.">
 <link rel="canonical" href="https://www.sideboard.build/">
 <meta property="og:title" content="Sideboard — orchestrate a fleet of coding agents on your Mac">
-<meta property="og:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
+<meta property="og:description" content="An agentic development environment. Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Sideboard">
 <meta property="og:locale" content="en_US">
@@ -23,7 +23,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta property="og:image:height" content="1676">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Sideboard — orchestrate a fleet of coding agents on your Mac">
-<meta name="twitter:description" content="Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
+<meta name="twitter:description" content="An agentic development environment. Parallel agents on this Mac. A board, an orchestrator, and a phone app, CLI, and MCP so you can reach them. Local-first, Apache-2.0.">
 <meta name="twitter:image" content="https://www.sideboard.build/board.png">
 <meta name="theme-color" content="#09090b">
 <link rel="icon" href="/favicon.png">
@@ -58,7 +58,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
       "url": "https://www.sideboard.build/",
       "downloadUrl": "https://download.sideboard.build/Sideboard-latest-arm64.dmg",
       "image": "https://www.sideboard.build/board.png",
-      "description": "Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.",
+      "description": "An agentic development environment. Run Claude Code, Codex, OpenCode, and Cursor in isolated git worktrees. Kanban, local orchestration, a phone app, CLI, and MCP — on this Mac, not a rented cloud.",
       "license": "https://www.apache.org/licenses/LICENSE-2.0",
       "offers": {
         "@type": "Offer",
@@ -82,7 +82,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           "name": "How is this different from Orca?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, a mobile companion, and Windows and Linux. It also has an orchestration CLI. Sideboard has no IDE. Several chats share one checkout, and one board covers Claude Code, Codex, OpenCode, and Cursor."
+            "text": "Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, a mobile companion, and Windows and Linux. It also has an orchestration CLI. Sideboard is an agentic development environment too: a local fleet orchestrator. The desktop has a file editor, a terminal, and a URL preview, and attach returns to the harness session. Several chats share one checkout, and one board covers Claude Code, Codex, OpenCode, and Cursor."
           }
         },
         {
@@ -160,7 +160,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <section class="hero wrap">
   <span class="eyebrow">Local-first · Apache-2.0 · Bring your own subscriptions</span>
   <h1>Orchestrate a fleet of coding agents on your Mac.</h1>
-  <p class="lede">Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.</p>
+  <p class="lede">An agentic development environment. Isolated git worktrees for Claude Code, Codex, OpenCode, and Cursor. A kanban of the whole fleet. An orchestrator that can drive it. A phone app, CLI, and MCP so you can reach this machine — without a cloud workspace.</p>
   <div class="cta-row">
     <a class="btn btn-primary btn-lg" href="https://download.sideboard.build/Sideboard-latest-arm64.dmg">
       <svg class="btn-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -313,7 +313,7 @@ sideboard land &lt;thread&gt;</pre>
       <span class="kicker">Why it exists</span>
       <h2>Started as a local port. Kept the rest on this machine.</h2>
       <p class="sub">When Conductor moved the interesting part of a worktree board into a paid cloud, Sideboard began as an open port of the local loop. Then came the pieces that still belong on this Mac: an orchestration tier, a kanban of the fleet, a phone app so you can reach it from somewhere else, and CLI / MCP so other systems can drive it — without moving the repo off the network you already sit on.</p>
-      <p class="sub"><a href="https://www.conductor.build/">Conductor</a>, now part of Meta, is the Mac board. Its iOS app can drive local workspaces (experimental, same Conductor account). <a href="https://www.onorca.dev/">Orca</a> is the agent IDE and has an orchestration CLI. <a href="https://github.com/superset-sh/superset">Superset</a> is the same worktree shape, with a hosted MCP that signs in to an org. <a href="https://github.com/multica-ai/multica">Multica</a> is the shared issue tracker: named agents, a daemon on your computer, a server that holds the transcript. The Codex app and Claude Code Remote Control each drive one harness. Sideboard is the local orchestration layer — several chats share a checkout, and the phone reaches every harness on this Mac.</p>
+      <p class="sub"><a href="https://www.conductor.build/">Conductor</a>, now part of Meta, is the Mac board. Its iOS app can drive local workspaces (experimental, same Conductor account). <a href="https://www.onorca.dev/">Orca</a> is an agent IDE with an embedded terminal, browser, and design mode, and it has an orchestration CLI. <a href="https://github.com/superset-sh/superset">Superset</a> is the same worktree shape, with a hosted MCP that signs in to an org. <a href="https://github.com/multica-ai/multica">Multica</a> is the shared issue tracker: named agents, a daemon on your computer, a server that holds the transcript. The Codex app and Claude Code Remote Control each drive one harness. Sideboard is an agentic development environment: a local fleet orchestrator. Several chats share a checkout, and the phone reaches every harness on this Mac. The desktop has a file editor, a terminal, and a URL preview, and <code>attach</code> returns to the harness session.</p>
     </div>
     <table class="compare">
       <thead>
@@ -414,7 +414,7 @@ sideboard land &lt;thread&gt;</pre>
     </details>
     <details>
       <summary>How is this different from Orca?</summary>
-      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, a mobile companion, and Windows and Linux. It also has an orchestration CLI. Sideboard has no IDE. Several chats share one checkout, and one board covers Claude Code, Codex, OpenCode, and Cursor.</p>
+      <p>Orca is an agent development environment — terminals, embedded browser, design mode, many CLI agents, a mobile companion, and Windows and Linux. It also has an orchestration CLI. Sideboard is an agentic development environment too: a local fleet orchestrator. The desktop has a file editor, a terminal, and a URL preview, and <code>attach</code> returns to the harness session. Several chats share one checkout, and one board covers Claude Code, Codex, OpenCode, and Cursor.</p>
     </details>
     <details>
       <summary>How is this different from Multica?</summary>
