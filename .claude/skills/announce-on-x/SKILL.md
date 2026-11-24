@@ -30,6 +30,8 @@ One or two short sentences. What changed, as a fact. Address the reader as "you"
 
 No need to include a link. Leave out the pull request URL and sideboard.build. The account profile already points at the site, and the same link on every post would attach the same preview card. The poster sends the text as written. Keep it at or under 280 characters.
 
+When the change is about Sideboard as an agentic development environment, you may add one hashtag so the note can be found as an ADE. Use #ADE or #AgenticDevelopmentEnvironment. Leave hashtags off any other note. Product copy still calls Sideboard a local fleet orchestrator.
+
 ## Image
 
 Attach an image only when the change is easier to see than to read. Prefer a real screenshot of this product (a file in the PR, or a capture of the running app). Do not invent a fake screen of Sideboard.
