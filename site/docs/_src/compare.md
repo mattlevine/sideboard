@@ -4,7 +4,7 @@ Short positioning for contributors and evaluators. Not a feature-complete matrix
 
 Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Superset, Cursor's Agents window, Claude Code, Emdash). [Multica](https://github.com/multica-ai/multica) is the other shape: an issue tracker where agents are assignees, and a daemon on a computer you connect runs the CLI. Sideboard isolates the checkout and runs many agents on it. The comparison that matters is the **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs). The README section Who it's for is the ICP cut.
 
-Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator is the shape: the checkout is the unit, and the editor stays in the harness (`attach`).
+Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator is the shape: the checkout is the unit, and `attach` returns to the harness session. The desktop also has a file editor, a terminal, and a URL preview.
 
 Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (phone, CLI, MCP) are what stayed on this machine. The phone app is the remote. Slack is not. One phone covers Claude Code, Codex, OpenCode, and Cursor. The Codex app and Claude Code Remote Control each cover one harness.
 
@@ -35,11 +35,11 @@ Orca having that CLI means "Sideboard has an orchestrator and Orca does not" is 
 
 - Several Sideboard chats share one checkout (`fork_chat`). Orca's supervised workers are started on a worktree, including a new child worktree.
 - One Sideboard board covers every harness. Orca's orchestration runs inside the Orca app.
-- Sideboard does not embed an editor, terminal, or browser. `attach` returns to the harness. Orca embeds the editor: terminals, browser, and design mode.
+- The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session. Orca's workspace is the embedded terminal, browser, and design mode.
 
 | | Orca | Sideboard |
 |-|------|-----------|
-| Category | Agent IDE, plus an orchestration CLI | Agent IDE (agentic development environment). Local fleet orchestrator. The editor stays in the harness |
+| Category | Agent IDE, plus an orchestration CLI | Agent IDE (agentic development environment). Local fleet orchestrator. `attach` returns to the harness session |
 | Checkout | A worker can take the current worktree or a new child | Several chats share one checkout |
 | Board | Inside the Orca app | One board across Claude Code, Codex, OpenCode, and Cursor |
 | Other systems | `orca` CLI against a running Orca app; mobile companion | `sideboard` CLI, stdio MCP, phone paired to this Mac |

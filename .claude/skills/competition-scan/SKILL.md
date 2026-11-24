@@ -36,7 +36,7 @@ Search the open web. Prefer a primary source with a date: changelog, release not
 
 ## Judge
 
-Sideboard is an agentic development environment (an agent IDE): a local fleet orchestrator. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. It does not embed an editor, terminal, or browser. `attach` is the way back to the harness. A peer that embeds those tools is still in the same category. Do not treat "agent IDE" as a label that belongs only to Orca.
+Sideboard is an agentic development environment (an agent IDE): a local fleet orchestrator. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session. A peer that centers an embedded terminal, browser, or design mode is still in the same category. Do not treat "agent IDE" as a label that belongs only to Orca. Do not write that those panes are absent.
 
 Recommend at most one change that fits that shape. It may be product or marketing.
 
@@ -57,7 +57,7 @@ Standing decisions, already made. They do not change the category. Recommend tha
 - Gmail, calendar, or a general connector catalog on the orchestrator.
 - Bot groups across computers.
 - Memory the agent rewrites on its own.
-- An editor, terminal, and browser inside Sideboard. `attach` is the way back to the harness.
+- Design mode, computer use, or a mobile emulator. The desktop already has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 
 ## Report
 

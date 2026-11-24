@@ -21,7 +21,7 @@
 
 **Positioning (quote exactly):** "For developers and engineering leads who run coding agents on their own Mac, Sideboard is the only local-first, open-source fleet orchestrator that keeps your agents, repos and secrets on your own network, unlike cloud sandboxes that ask you to rent the control room."
 
-**Category:** Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator names the shape inside that category. Do not describe Sideboard as having no IDE.
+**Category:** Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator names the shape inside that category. Do not describe Sideboard as having no IDE, and do not say it has no editor, terminal, or browser. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 
 **Line:** "Orchestrate your coding agents without leaving your machine."
 
@@ -75,12 +75,13 @@
 - **Board:** capitalised when it names the Sideboard board.
 - **The Rented Control Plane:** always capitalised. Name it once per page.
 - **agentic development environment** (agent IDE): the category. Sideboard is one. Use this when naming what Sideboard is.
-- **local fleet orchestrator:** the shape inside that category. The checkout is the unit. Compute stays on this Mac. The editor stays in the harness (`attach`).
+- **local fleet orchestrator:** the shape inside that category. The checkout is the unit. Compute stays on this Mac. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 
 **Prohibited**
 - Reassurance language: "rest easy", "totally safe", "don't worry".
 - Attacks on the reader's own governance, review gates or corporate rules. Show how Sideboard works inside them.
 - A category phrase that puts Sideboard outside an agent IDE or an agentic development environment, or that calls it a cloud sandbox, a CMS, or an embedded editor.
+- A sentence that says Sideboard has no editor, terminal, or browser. The desktop has those panes.
 - Hype words, exclamation marks and emoji.
 
 ## 5. Claims ledger
@@ -96,7 +97,7 @@
 8. Sideboard is open source (Apache-2.0).
 9. Apple Silicon Macs only. State this wherever platform fit matters.
 10. What only Sideboard does: a local global board, plus an orchestrator other agents can drive over MCP.
-11. Sideboard is an agentic development environment (an agent IDE): a local fleet orchestrator on this Mac. It does not embed an editor, terminal, or browser.
+11. Sideboard is an agentic development environment (an agent IDE): a local fleet orchestrator on this Mac. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
 
 **Needs proof that does not exist yet. Leave out until it does.**
 - Who uses Sideboard, usage numbers, customer outcomes or testimonials.
