@@ -3,8 +3,8 @@ name: announce-on-x
 description: >-
   Post a ship note to @sideboard_build on X when a Sideboard pull request
   merges. Read the PR and the content brand guide, then write the text and
-  an optional image. Use after a merge, or when catching merges that have
-  not been announced.
+  an optional image. Use in the same turn as the merge. Do not schedule a
+  catch-up.
 ---
 
 # Announce a merged PR on X
@@ -15,8 +15,7 @@ The account keys `X_API_KEY`, `X_API_KEY_SECRET`, `X_ACCESS_TOKEN`, and `X_ACCES
 
 ## When
 
-- You just merged a pull request to the default branch. Announce that PR before the turn ends.
-- A schedule or a person asks you to catch merges. Announce pull requests merged after the ledger's `since`, and leave older ones alone. The first run only records `since`. It does not backfill.
+You just merged a pull request to the default branch. Announce that PR before the turn ends. Do not schedule a later job to do it.
 
 ## Read
 
@@ -39,7 +38,7 @@ If you cannot capture it and a still would carry the same sentence, generate one
 
 ## Send
 
-From the repo root. The script checks the token is `@sideboard_build`, refuses a second post for the same PR, and writes `~/.sideboard/x-announced.json`. Exit code 3 means another announce holds the lock. Leave that run alone. A later catch-up records the same PR from the ledger or the timeline.
+From the repo root. The script checks the token is `@sideboard_build`, refuses a second post for the same PR, and writes `~/.sideboard/x-announced.json`. Exit code 3 means another announce holds the lock. Leave that run alone.
 
 ```sh
 node .claude/skills/announce-on-x/post.mjs post --pr <n> --text "<text>"
@@ -53,20 +52,3 @@ node .claude/skills/announce-on-x/post.mjs skip --pr <n> --reason "ci only"
 ```
 
 Do not skip a change to what a developer can do, see, or trust.
-
-## Catch-up
-
-If you merged a PR in this turn, announce that PR before `init`. `init` freezes `since`, and a PR merged a moment earlier would otherwise look like history.
-
-```sh
-node .claude/skills/announce-on-x/post.mjs status
-node .claude/skills/announce-on-x/post.mjs init
-```
-
-`init` sets `since` the first time and does nothing after that. Then:
-
-```sh
-gh pr list -R mattlevine/sideboard --state merged --limit 20 --json number,title,mergedAt,url
-```
-
-For each PR with `mergedAt` after `since` and no ledger row, announce it or skip it. Cap a run at five posts. Leave the rest for the next run. Do not edit the git checkout to do this.

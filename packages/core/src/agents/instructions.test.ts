@@ -216,14 +216,22 @@ describe('formatProcessGuideDirective', () => {
     expect(scratch).toMatch(/Merge-readiness notes go in `\.context\/review\.md`/);
   });
 
-  it('mentions announce-on-x only when the worktree has that skill', () => {
+  it('puts announce-on-x on the merge step only when the worktree has that skill', () => {
     const root = mkdtempSync(join(tmpdir(), 'sb-guide-announce-'));
+    const thread = {
+      worktreePath: root,
+      repoPath: join(root, 'repo'),
+      branchName: 'matt/announce',
+    };
+    expect(formatWorktreeDirective(thread)).not.toMatch(/announce-on-x/);
     expect(formatProcessGuideDirective({ worktreePath: root })).not.toMatch(/announce-on-x/);
     mkdirSync(join(root, '.claude/skills/announce-on-x'), { recursive: true });
     writeFileSync(join(root, '.claude/skills/announce-on-x/SKILL.md'), '# a');
-    const text = formatProcessGuideDirective({ worktreePath: root });
+    const text = formatWorktreeDirective(thread);
     expect(text).toMatch(/\/announce-on-x/);
-    expect(text).toMatch(/@sideboard_build/);
+    expect(text).toMatch(/before the turn ends/);
+    expect(text).toMatch(/Do not schedule a catch-up/);
+    expect(formatProcessGuideDirective({ worktreePath: root })).not.toMatch(/announce-on-x/);
   });
 });
 

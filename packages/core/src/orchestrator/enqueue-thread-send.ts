@@ -190,7 +190,10 @@ export function promptForJoinedSteer(input: {
   }
   const { agentPrompt: expandedLatest } = expandComposerPrompt(
     input.worktreePath,
-    expandCanonicalGitRequest(input.latestPrompt, { forge: input.gitForge }),
+    expandCanonicalGitRequest(input.latestPrompt, {
+      forge: input.gitForge,
+      worktreePath: input.worktreePath,
+    }),
     { attachments: latestAttachments },
   );
   return input.expandedPrompt && input.agentPrompt.endsWith(input.expandedPrompt)

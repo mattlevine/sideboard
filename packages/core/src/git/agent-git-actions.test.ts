@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   agentGitPrompt,
@@ -69,6 +72,7 @@ describe('expandCanonicalGitRequest', () => {
     expect(expandCanonicalGitRequest('Ready for review.')).toMatch(/gh pr ready/);
     expect(expandCanonicalGitRequest('Ready for review.')).not.toMatch(/third-party PR review/);
     expect(expandCanonicalGitRequest('Merge PR.')).not.toMatch(/third-party PR review/);
+    expect(expandCanonicalGitRequest('Merge PR.')).not.toMatch(/announce-on-x/);
     expect(expandCanonicalGitRequest('Address review comments.')).toMatch(/third-party PR review/);
     expect(expandCanonicalGitRequest('Fix CI: lint.')).toMatch(/third-party PR review/);
   });
@@ -108,6 +112,25 @@ describe('expandCanonicalGitRequest', () => {
       /entire trail finding list/,
     );
     expect(expandCanonicalGitRequest('Fix CI: lint.', forge)).toMatch(/entire trail merge --dry-run/);
+  });
+
+  it('tells a default-branch merge to announce when the skill is present', () => {
+    const root = mkdtempSync(join(tmpdir(), 'announce-merge-'));
+    try {
+      mkdirSync(join(root, '.claude/skills/announce-on-x'), { recursive: true });
+      writeFileSync(join(root, '.claude/skills/announce-on-x/SKILL.md'), '# a');
+      const out = expandCanonicalGitRequest('Merge PR.', { worktreePath: root });
+      expect(out).toMatch(/announce-on-x/);
+      expect(out).toMatch(/Do not schedule a catch-up/);
+      expect(expandCanonicalGitRequest('Merge PR into matt/parent.', { worktreePath: root })).not.toMatch(
+        /announce-on-x/,
+      );
+      expect(expandCanonicalGitRequest('Commit and push.', { worktreePath: root })).not.toMatch(
+        /announce-on-x/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('names the base when resolving conflicts', () => {

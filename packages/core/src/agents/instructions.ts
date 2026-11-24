@@ -162,6 +162,7 @@ export function formatWorktreeDirective(
         ? '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge only when this turn is a Merge PR request or the user explicitly asked — via Entire from this worktree (`entire trail merge`).'
         : '- Stay on this workspace branch. Never push to main/master or merge locally into the main checkout. Merge the PR only when this turn is a Merge PR request or the user explicitly asked — via GitHub from this worktree (`gh pr merge` / `gh stack merge`).',
   );
+  if (existsSync(join(worktree, '.claude/skills/announce-on-x/SKILL.md'))) lines.push('- After that merge to the default branch succeeds, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`) before the turn ends. Post once to @sideboard_build, or record a skip. Do not schedule a catch-up.');
   if (thread.prUrl) {
     lines.push(
       `- A PR already exists (${thread.prUrl}). Update it (push + edit title/body if the purpose drifted) instead of opening a duplicate.`,
@@ -435,9 +436,6 @@ export function formatProcessGuideDirective(opts?: { worktreePath?: string | nul
     !!worktree && existsSync(join(worktree, '.claude/skills/skill-improver/SKILL.md'))
       ? '- Skip a guide for a one-off. If a matching skill exists, follow it. A miss that will recur (you made it twice, or a person told you the rule) → follow `.claude/skills/skill-improver/SKILL.md` (`/skill-improver`): one sentence in the skill that owns it, in this change. Do not patch around it.'
       : '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
-    !!worktree && existsSync(join(worktree, '.claude/skills/announce-on-x/SKILL.md'))
-      ? '- After a pull request merges to the default branch, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`). Post once to @sideboard_build, or record a skip.'
-      : null,
   ]
     .filter(Boolean)
     .join('\n');
