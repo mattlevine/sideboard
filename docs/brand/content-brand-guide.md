@@ -81,7 +81,7 @@
 - Reassurance language: "rest easy", "totally safe", "don't worry".
 - Attacks on the reader's own governance, review gates or corporate rules. Show how Sideboard works inside them.
 - A category phrase that puts Sideboard outside an agent IDE or an agentic development environment, or that calls it a cloud sandbox, a CMS, or an embedded editor.
-- A sentence that says Sideboard has no editor, terminal, or browser. The desktop has those panes.
+- A sentence that says Sideboard has no editor, terminal, or browser. The desktop has a file editor, a terminal, and a URL preview.
 - Hype words, exclamation marks and emoji.
 
 ## 5. Claims ledger
