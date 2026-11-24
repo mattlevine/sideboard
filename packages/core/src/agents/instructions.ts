@@ -411,10 +411,7 @@ export function formatPrGateDirective(): string {
   ].join('\n');
 }
 
-/**
- * Recurring-process guides: write Claude Code project skills so native CLIs
- * (`attach`, `claude` in the checkout) see them without Sideboard.
- */
+/** Recurring-process guides as Claude Code skills, so `attach` and `claude` see them without Sideboard. */
 export function formatProcessGuideDirective(opts?: { worktreePath?: string | null }): string {
   const worktree = opts?.worktreePath?.trim();
   const hasGraphSkill =
@@ -438,6 +435,9 @@ export function formatProcessGuideDirective(opts?: { worktreePath?: string | nul
     !!worktree && existsSync(join(worktree, '.claude/skills/skill-improver/SKILL.md'))
       ? '- Skip a guide for a one-off. If a matching skill exists, follow it. A miss that will recur (you made it twice, or a person told you the rule) → follow `.claude/skills/skill-improver/SKILL.md` (`/skill-improver`): one sentence in the skill that owns it, in this change. Do not patch around it.'
       : '- Skip a guide for a one-off. If a matching skill exists, follow it. Same miss twice → edit the skill, do not patch around it.',
+    !!worktree && existsSync(join(worktree, '.claude/skills/announce-on-x/SKILL.md'))
+      ? '- After a pull request merges to the default branch, follow `.claude/skills/announce-on-x/SKILL.md` (`/announce-on-x`). Post once to @sideboard_build, or record a skip.'
+      : null,
   ]
     .filter(Boolean)
     .join('\n');

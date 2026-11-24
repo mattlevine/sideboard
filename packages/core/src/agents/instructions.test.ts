@@ -215,6 +215,16 @@ describe('formatProcessGuideDirective', () => {
     expect(scratch).toMatch(/\/skill-improver/);
     expect(scratch).toMatch(/Merge-readiness notes go in `\.context\/review\.md`/);
   });
+
+  it('mentions announce-on-x only when the worktree has that skill', () => {
+    const root = mkdtempSync(join(tmpdir(), 'sb-guide-announce-'));
+    expect(formatProcessGuideDirective({ worktreePath: root })).not.toMatch(/announce-on-x/);
+    mkdirSync(join(root, '.claude/skills/announce-on-x'), { recursive: true });
+    writeFileSync(join(root, '.claude/skills/announce-on-x/SKILL.md'), '# a');
+    const text = formatProcessGuideDirective({ worktreePath: root });
+    expect(text).toMatch(/\/announce-on-x/);
+    expect(text).toMatch(/@sideboard_build/);
+  });
 });
 
 describe('mentionsPrGoal', () => {
