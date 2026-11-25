@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { announceSkillPresent } from './announce-skill.js';
 import {
   agentGitPrompt,
   expandCanonicalGitRequest,
@@ -119,15 +120,24 @@ describe('expandCanonicalGitRequest', () => {
     try {
       mkdirSync(join(root, '.claude/skills/announce-on-x'), { recursive: true });
       writeFileSync(join(root, '.claude/skills/announce-on-x/SKILL.md'), '# a');
-      const out = expandCanonicalGitRequest('Merge PR.', { worktreePath: root });
+      const out = expandCanonicalGitRequest('Merge PR.', {
+        worktreePath: root,
+        hasAnnounceSkill: announceSkillPresent(root),
+      });
       expect(out).toMatch(/announce-on-x/);
       expect(out).toMatch(/each pull request that merge landed/);
       expect(out).toMatch(/Do not schedule a catch-up/);
       expect(out).not.toMatch(/Post once/);
-      expect(expandCanonicalGitRequest('Merge PR into matt/parent.', { worktreePath: root })).not.toMatch(
+      expect(expandCanonicalGitRequest('Merge PR into matt/parent.', {
+        worktreePath: root,
+        hasAnnounceSkill: announceSkillPresent(root),
+      })).not.toMatch(
         /announce-on-x/,
       );
-      expect(expandCanonicalGitRequest('Commit and push.', { worktreePath: root })).not.toMatch(
+      expect(expandCanonicalGitRequest('Commit and push.', {
+        worktreePath: root,
+        hasAnnounceSkill: announceSkillPresent(root),
+      })).not.toMatch(
         /announce-on-x/,
       );
     } finally {

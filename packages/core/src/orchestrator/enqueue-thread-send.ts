@@ -1,4 +1,5 @@
 import { expandCanonicalGitRequest } from '../git/agent-git-actions.js';
+import { announceSkillPresent } from '../git/announce-skill.js';
 import type { GitForge } from '../git/remote-forge.js';
 import {
   joinSteerPrompt,
@@ -193,6 +194,7 @@ export function promptForJoinedSteer(input: {
     expandCanonicalGitRequest(input.latestPrompt, {
       forge: input.gitForge,
       worktreePath: input.worktreePath,
+      hasAnnounceSkill: announceSkillPresent(input.worktreePath),
     }),
     { attachments: latestAttachments },
   );

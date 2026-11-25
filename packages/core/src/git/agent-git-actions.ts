@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import type { GitForge } from './remote-forge.js';
 
 const ANNOUNCE_AFTER_MERGE =
@@ -188,14 +186,14 @@ function entireGitActionExpansion(action: AgentGitAction, base: string | null): 
   }
 }
 
-function worktreeHasAnnounceSkill(worktreePath: string | null | undefined): boolean {
-  const root = worktreePath?.trim();
-  return !!root && existsSync(join(root, '.claude/skills/announce-on-x/SKILL.md'));
-}
-
 export function expandCanonicalGitRequest(
   prompt: string,
-  opts?: { forge?: GitForge | null; worktreePath?: string | null },
+  opts?: {
+    forge?: GitForge | null;
+    worktreePath?: string | null;
+    /** Caller checks the worktree. This module stays free of node:fs so the renderer can import it. */
+    hasAnnounceSkill?: boolean;
+  },
 ): string {
   const trimmed = prompt.trim();
   let action: AgentGitAction | null = null;
@@ -243,7 +241,7 @@ export function expandCanonicalGitRequest(
   if (
     action === 'merge' &&
     (!base || isMainishPrBase(base)) &&
-    worktreeHasAnnounceSkill(opts?.worktreePath)
+    opts?.hasAnnounceSkill
   ) {
     expansion = `${expansion} ${ANNOUNCE_AFTER_MERGE}`;
   }
