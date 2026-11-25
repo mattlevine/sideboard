@@ -420,15 +420,9 @@ export interface AdvancedAppSettings {
    * Default off. The desktop host must be running (same as automations).
    */
   wakeOrchestratorOnGithubEdges?: boolean;
-  /**
-   * Show provider-reported USD cost on message chips, thread Σ, and sidebar
-   * hover spend. Default off — turn on in Settings → Advanced.
-   */
+  /** USD on chips and thread totals. Default off. */
   showCost?: boolean;
-  /**
-   * Let an agent screenshot, click, and type on this Mac to test a running app.
-   * Default off — turn on in Settings → Advanced.
-   */
+  /** Screenshot, click, and type on this Mac. Default off. */
   computerUse?: boolean;
   /**
    * Chat text size relative to the left nav.
@@ -1064,12 +1058,8 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   if (typeof source.wakeOrchestratorOnGithubEdges === 'boolean') {
     out.wakeOrchestratorOnGithubEdges = source.wakeOrchestratorOnGithubEdges;
   }
-  if (typeof source.showCost === 'boolean') {
-    out.showCost = source.showCost;
-  }
-  if (typeof source.computerUse === 'boolean') {
-    out.computerUse = source.computerUse;
-  }
+  if (typeof source.showCost === 'boolean') out.showCost = source.showCost;
+  if (typeof source.computerUse === 'boolean') out.computerUse = source.computerUse;
   if (isChatTextScale(source.chatTextScale)) {
     out.chatTextScale = source.chatTextScale;
   }
@@ -2301,12 +2291,8 @@ export function updateAdvancedSettings(
   if (typeof patch.wakeOrchestratorOnGithubEdges === 'boolean') {
     advanced.wakeOrchestratorOnGithubEdges = patch.wakeOrchestratorOnGithubEdges;
   }
-  if (typeof patch.showCost === 'boolean') {
-    advanced.showCost = patch.showCost;
-  }
-  if (typeof patch.computerUse === 'boolean') {
-    advanced.computerUse = patch.computerUse;
-  }
+  if (typeof patch.showCost === 'boolean') advanced.showCost = patch.showCost;
+  if (typeof patch.computerUse === 'boolean') advanced.computerUse = patch.computerUse;
   if (isChatTextScale(patch.chatTextScale)) {
     advanced.chatTextScale = patch.chatTextScale;
   }
@@ -2465,16 +2451,12 @@ export function wakeOrchestratorOnGithubEdgesEnabled(
 }
 
 /** Settings → Advanced → Show cost (when available) (default off). */
-export function showCostEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function showCostEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.showCost);
 }
 
 /** Settings → Advanced → Computer use (default off). */
-export function computerUseEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function computerUseEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.computerUse);
 }
 

@@ -23,12 +23,7 @@ import {
   threadMayPresentPlan,
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
-import {
-  COMPUTER_USE_DESCRIPTION,
-  macosComputerUseRunner,
-  performComputerUse,
-} from '../computer-use/computer-use.js';
-import { computerUseEnabled } from '../store/app-settings.js';
+import { registerComputerUseTool } from './computer-use-tool.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
 import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { applyWorkspaceTags, workspaceTagTargetRef } from '../threads/workspace-tags.js';
@@ -751,45 +746,7 @@ export async function startMcpServer(): Promise<void> {
     },
   );
 
-  if (mcpCatalog.has('computer_use')) {
-    server.tool(
-      'computer_use',
-      COMPUTER_USE_DESCRIPTION,
-      {
-        action: z
-          .enum(['screenshot', 'click', 'type', 'key', 'scroll'])
-          .describe('screenshot, click, type, key, or scroll'),
-        x: z
-          .number()
-          .optional()
-          .describe('Screen x in points, not PNG pixels, for click and scroll'),
-        y: z
-          .number()
-          .optional()
-          .describe('Screen y in points, not PNG pixels, for click and scroll'),
-        text: z.string().optional().describe('Text to type'),
-        key: z
-          .string()
-          .optional()
-          .describe('One key: return, tab, escape, arrows, delete, or one character'),
-        modifiers: z
-          .array(z.string())
-          .optional()
-          .describe('command, shift, option, control'),
-        dx: z.number().optional().describe('Horizontal scroll in points. Positive is right'),
-        dy: z.number().optional().describe('Vertical scroll in points. Positive is down'),
-      },
-      async (args) => {
-        const result = await performComputerUse({
-          enabled: computerUseEnabled(),
-          cwd: process.cwd(),
-          input: args,
-          runner: macosComputerUseRunner,
-        });
-        return mcpJson(result);
-      },
-    );
-  }
+  registerComputerUseTool(server, mcpCatalog);
 
   if (worktreeProfile) {
     server.tool(

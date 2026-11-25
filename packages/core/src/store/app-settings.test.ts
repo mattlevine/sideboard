@@ -609,8 +609,7 @@ describe('app settings', () => {
     expect(mod.caffeinateWhileSchedulesEnabled()).toBe(false);
     expect(mod.deleteBranchOnPurgeEnabled()).toBe(false);
     expect(mod.cowboyModeEnabled()).toBe(false); expect(mod.wakeOrchestratorOnGithubEdgesEnabled()).toBe(false);
-    expect(mod.showCostEnabled()).toBe(false);
-    expect(mod.computerUseEnabled()).toBe(false);
+    expect(mod.showCostEnabled()).toBe(false); expect(mod.computerUseEnabled()).toBe(false);
     expect(mod.chatTextScale()).toBe(1.2);
     expect(mod.usageOnLimit()).toBe('keep_going');
     expect(mod.confirmClaudeUsageOverLimitEnabled()).toBe(false);
@@ -630,8 +629,7 @@ describe('app settings', () => {
       caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       cowboyMode: true, wakeOrchestratorOnGithubEdges: true,
-      showCost: true,
-      computerUse: true,
+      showCost: true, computerUse: true,
       chatTextScale: 1.4,
       usageOnLimit: 'confirm',
       autoArchiveOnMerge: true,
@@ -647,8 +645,7 @@ describe('app settings', () => {
       caffeinateWhileSchedules: true,
       deleteBranchOnPurge: true,
       cowboyMode: true, wakeOrchestratorOnGithubEdges: true,
-      showCost: true,
-      computerUse: true,
+      showCost: true, computerUse: true,
       chatTextScale: 1.4,
       usageOnLimit: 'confirm',
       confirmClaudeUsageOverLimit: true,
