@@ -1,31 +1,35 @@
 ---
 name: competition-scan
 description: >-
-  Daily what-to-do-today scan of products in Sideboard's space. Competition
-  informs docs/ROADMAP.md. The one recommendation is the unfinished Now or
-  Next item a dated peer fact makes the right next step, or a marketing or
-  prior-call change. Reinforcing a Now or Next item is a recommendation, not
-  a quiet day. A product row names one undone slice and the repo paths it
-  edits. Do not queue a product row with no slice. When there is one
-  recommendation, queue it and ask before any worktree. Use when the
-  competition-scan automation fires, or when someone
-  asks for a competitive scan. The report stays in the chat. Do not open a
-  pull request from the scan chat.
+  Daily self-improvement loop for Sideboard. Each run starts from the last
+  queue outcome and names one next change to our own product. A dated peer
+  fact is evidence for that change, not the point of the run. The change is
+  one undone slice of an unfinished Now or Next item, or a marketing or
+  prior-call change. A skipped or deferred slice is not asked again until a
+  new fact makes that outcome the wrong product. Reinforcing a still-open
+  Now or Next item is a recommendation. A product row names the slice and
+  the repo paths it edits. Do not queue a product row with no slice. When
+  there is one recommendation, queue it and ask before any worktree. Use
+  when the competition-scan automation fires, or when someone asks for the
+  daily loop. The report stays in the chat. Do not open a pull request from
+  the scan chat.
 ---
 
 # Competition scan
 
-One report per run: what to do today. Competition informs `docs/ROADMAP.md`. The recommendation is one undone slice of the unfinished Now or Next item a dated peer fact makes the right next step, or a marketing or prior-call change. Name the item and the slice. For "Now item 1: Put the phone app in people's hands," a slice might be "EAS TestFlight build + install links on `site/index.html` and Settings → Remote," not "ship iOS and Android forever." At most one recommendation.
+The competition scan automation is a self-improvement loop. Each run starts from the last queue outcome and recommends one next change to Sideboard. A dated peer fact is evidence for that change. It is not a reason to ask again for a slice the person skipped or deferred.
 
-Reinforcing an unfinished Now or Next item is a recommendation when the scan can name that slice and the repo paths it edits. A quiet day is only when no dated peer fact makes any roadmap item, marketing change, or prior-call change the right next step, or when a fact reinforces a Now or Next item but no landable slice and real paths can be named. That second case is a quiet day of defer quality: no product row and no ask. Do not call the day quiet because that item was already first on Now. Do not end the report with "the set is unchanged" when a dated peer fact reinforces work already on the roadmap.
+One report per run. The recommendation is one undone slice of the unfinished Now or Next item that evidence makes the right next step, or a marketing or prior-call change. Name the item and the slice. For "Now item 1: Put the phone app in people's hands," a slice might be "EAS TestFlight build + install links on `site/index.html` and Settings → Remote," not "ship iOS and Android forever." At most one recommendation.
+
+Reinforcing an unfinished Now or Next item is a recommendation when the scan can name that slice and the repo paths it edits, and that slice is not already `skipped` or `deferred`. A quiet day is when no dated peer fact makes any still-open roadmap item, marketing change, or prior-call change the right next step, or when the only such slice was already skipped or deferred and nothing new makes that outcome wrong, or when a fact reinforces a Now or Next item but no landable slice and real paths can be named. Those last cases are quiet: no new product row and no ask. Do not call the day quiet because an open item was already first on Now. Do not end the report with "the set is unchanged" when a dated peer fact reinforces work that is still open.
 
 ## When
 
-The local automation fires this in a new Global chat, or a person asks for a competitive scan. Do the scan in that turn. Do not create another schedule.
+The local automation fires this in a new Global chat, or a person asks for the daily loop. Do the loop in that turn. Do not create another schedule.
 
 ## Read first
 
-1. `~/.sideboard/competition-scan.md`. Prior calls and past reports. A line in the log is the last answer, not a ban. When the log has a line for a call, that line replaces the same dated line in this skill. Create the file if it is missing, with the prior calls below copied to the top. Copy a seed line only when the log has no line for that call.
+1. `~/.sideboard/competition-scan-queue.json`, then `~/.sideboard/competition-scan.md`. The queue is where the loop left off. Any `pending` row is still the open recommendation: refresh it, and do not add another. Any `approved` row with no pull request is still in flight: do not start another slice. A `shipped`, `skipped`, or `deferred` row is closed. Do not recommend that slice again. A skipped or deferred slice stays out until a new dated fact makes that outcome the wrong product. The log holds prior calls and past reports. A line in the log is the last answer, not a ban. When the log has a line for a call, that line replaces the same dated line in this skill. Create the log if it is missing, with the prior calls below copied to the top. Copy a seed line only when the log has no line for that call. Create the queue if it is missing, as `{ "items": [] }`.
 2. The pitch and the compare notes on the default branch the Approve child will edit (`origin/main`, or that project's default branch). `git fetch origin`, then read each file with `git show origin/main:<path>`:
    - `README.md` through "Why it exists"
    - `site/index.html` (the homepage)
@@ -48,13 +52,13 @@ Search the open web. Prefer a primary source with a date: changelog, release not
 
 Sideboard today is an agent IDE whose wedge is the orchestration tier: a file editor, a terminal, and a URL preview on the desktop, a kanban of the fleet, an orchestrator MCP, and remotes (phone, CLI, MCP), without design mode, an embedded browser, or moving compute off this machine. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. `attach` returns to the harness session. A peer that centers an embedded terminal, browser, or design mode is an ADE in the same category. Do not treat "agent IDE" as a label that belongs only to Orca. Do not write that Sideboard is not an IDE, and do not write that the file editor, the terminal, or the URL preview is absent. That description is the current shape. A recommendation may move it.
 
-Recommend at most one change. Competition informs `docs/ROADMAP.md`. Prefer naming an unfinished Now or Next item when a dated peer change reinforces it. That is a recommendation, not a quiet day. Name the item, for example "Now item 1: Put the phone app in people's hands," and name one undone slice of it the child can finish in that worktree. The slice is the change, not the whole item. Do not call the day quiet because the item was already first on Now. The other allowed recommendation is a marketing change, or a change to a prior call, that the same kind of dated fact makes the right next step.
+Recommend at most one change to Sideboard. Peer facts inform `docs/ROADMAP.md`. Prefer naming an unfinished Now or Next item when a dated peer change reinforces a slice that is still open. That is a recommendation, not a quiet day. Name the item, for example "Now item 1: Put the phone app in people's hands," and name one undone slice of it the child can finish in that worktree. The slice is the change, not the whole item. A slice already `skipped` or `deferred` is not the change again until a new dated fact makes that outcome the wrong product. Do not call the day quiet because an open item was already first on Now. The other allowed recommendation is a marketing change, or a change to a prior call, that the same kind of dated fact makes the right next step.
 
 A Decided item under Now or Next can still be that recommendation. Do not reopen the decision. Do not recommend work listed under Not building. Leave Later and Open decisions in place unless the new fact makes that line the wrong product — then the recommendation is a change to that roadmap line, not a new direction.
 
 Leave a prior call in place when nothing new makes it the right change. Change it when the peer, the product, the pitch, or the roadmap has moved, or when the old answer is now the wrong product. Name the old call and why it should move.
 
-A quiet day is only when no dated peer fact makes any roadmap item, or any marketing or prior-call change, the right next step. A dated fact that reinforces an unfinished Now or Next item is still a recommendation when the scan can name one undone slice and the paths it edits. When it cannot, the day is quiet of defer quality: no product row. A marketing or prior-call change may still be the one recommendation.
+A quiet day is when no dated peer fact makes any still-open roadmap item, or any marketing or prior-call change, the right next step. A dated fact that reinforces an unfinished Now or Next item is still a recommendation when the scan can name one undone slice and the paths it edits, and that slice is not already `skipped` or `deferred`. When it cannot, or when the only reinforced slice was skipped or deferred and nothing new makes that outcome wrong, the day is quiet: no new product row. A marketing or prior-call change may still be the one recommendation.
 
 A product recommendation (`kind: product`) names one undone slice of an unfinished Now or Next item the child can finish in that worktree, not the whole multi-step item. Name the parent item, for example "Now item 1: Put the phone app in people's hands." For that item, a slice might be "EAS TestFlight build + install links on `site/index.html` and Settings → Remote," not "ship iOS and Android forever." Name the surface (board, orchestrator, phone, Slack, or skills), the dated peer fact, and the URL when there is one. Naming that slice is the recommendation, including when the parent item was already first on Now. `files` lists the concrete repo paths that slice may edit, for example `apps/mobile`, `site/index.html`, and `apps/desktop/src/renderer/src/components/RemoteSettings.tsx`. Do not restrict `files` to marketing or roadmap docs. Include `docs/ROADMAP.md` only when the roadmap line itself changes. `replacement` states that slice, the dated peer fact, and Done-when when the roadmap states one. If the scan cannot name a slice and real paths, do not queue a product row. Prefer a quiet day of defer quality, or a marketing or prior-call recommendation instead.
 
@@ -66,9 +70,10 @@ Prior calls are the lines in the log. The dated list at the bottom of this skill
 
 Write the report in the chat, in this order:
 
-- **Changed.** Product, what shipped, date, and URL. Leave out anything you cannot date or source.
+- **Last outcome.** Every open queue row, then the newest closed row: status, summary, and whether this run may recommend it again. `pending` and `approved` stay the open loop. `shipped` is done. `skipped` and `deferred` stay out unless a new fact makes that outcome wrong. No rows yet means the loop is starting.
+- **Changed.** Product, what shipped, date, and URL. Leave out anything you cannot date or source. These are evidence. The recommendation is the change to Sideboard.
 - **New name.** A product missing from the compare notes. One sentence on its shape, and whether the notes should name it.
-- **Recommendation.** Zero or one. Prefer one undone slice of an unfinished Now or Next item a dated peer fact reinforces. Name the item and the slice (for example, Now item 1 as "EAS TestFlight build + install links on `site/index.html` and Settings → Remote," not the whole item). Name the repo paths that slice may edit. That slice is the recommendation. Also allowed: marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), a change to a Later or Open roadmap line the fact makes wrong, or a change to a prior call. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. A quiet day is only when no dated peer fact makes any of those the right next step, or when a fact reinforces a Now or Next item but no landable slice and real paths can be named. Write that. Do not write that the set is unchanged because peers reinforce an item already on Now. Do not describe a product recommendation that has no slice.
+- **Recommendation.** Zero or one. Prefer one undone slice of an unfinished Now or Next item a dated peer fact reinforces. Name the item and the slice (for example, Now item 1 as "EAS TestFlight build + install links on `site/index.html` and Settings → Remote," not the whole item). Name the repo paths that slice may edit. That slice is the recommendation. Also allowed: marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), a change to a Later or Open roadmap line the fact makes wrong, or a change to a prior call. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. A quiet day is when no dated peer fact makes any still-open item the right next step, when the only reinforced slice was skipped or deferred and nothing new makes that outcome wrong, or when a fact reinforces a Now or Next item but no landable slice and real paths can be named. Write that. Do not write that the set is unchanged because peers reinforce an item that is still open. Do not describe a product recommendation that has no slice. Do not describe a skipped or deferred slice as today's recommendation.
 - **Compare notes.** Use this only when the recommendation is a product change and a compare sentence is also false or stale. Quote it and write the replacement. Name `docs/COMPARE.md`, `site/docs/_src/compare.md`, and `site/docs/compare/index.html`. When the one recommendation is itself that wording change, it belongs under Recommendation.
 
 Append the same report under today's date in `~/.sideboard/competition-scan.md`. Keep prior calls at the top. A recommendation that would change a prior call describes the old line and the proposed line in that day's report only. Do not rewrite the prior-call line until Approve. On Skip or Defer, leave that line as it was. If this run already wrote a provisional line, restore the previous wording before you stop. The rewritten line, once Approve has written it, replaces the seed in this skill on the next run. Do not edit this skill to move a call. Do not commit the log.
@@ -77,7 +82,7 @@ Do not edit the compare notes, the README, the homepage, the roadmap, or this sk
 
 ## Queue
 
-After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/competition-scan-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A `product` recommendation that names one undone slice and concrete `files` is one recommendation, so it adds a row and still asks. Reinforcing an unfinished Now or Next item is that recommendation when the slice and paths are named. If the scan cannot name a slice with real paths, do not add a product row that would open an empty worktree. Prefer a quiet day of defer quality, or a marketing or prior-call recommendation instead. A quiet day adds no row and does not ask.
+After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/competition-scan-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A `product` recommendation that names one undone slice and concrete `files` is one recommendation, so it adds a row and still asks. Reinforcing an unfinished Now or Next item is that recommendation when the slice and paths are named. If the scan cannot name a slice with real paths, do not add a product row that would open an empty worktree. Prefer a quiet day of defer quality, or a marketing or prior-call recommendation instead. A quiet day adds no row and does not ask. Do not upsert a new row for a slice that matches a `skipped` or `deferred` row unless this run's new fact makes that outcome the wrong product. A `pending` or `approved` row stays the one recommendation.
 
 ```json
 {
