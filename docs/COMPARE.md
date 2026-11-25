@@ -4,7 +4,7 @@ Short positioning for contributors and evaluators. Not a feature-complete matrix
 
 Spawning one agent per git worktree is a crowded 2026 pattern (Conductor, Orca, Superset, Cursor's Agents window, Claude Code, Emdash). [Multica](https://github.com/multica-ai/multica) is the other shape: an issue tracker where agents are assignees, and a daemon on a computer you connect runs the CLI. Sideboard isolates the checkout and runs many agents on it. The comparison that matters is the **orchestration tier**: an agent that can reason about those chats, a board where you can see that, and a phone app, CLI, and MCP so other systems can enter the loop — with compute staying on this Mac (corporate VPN, private git, internal APIs). README [Who it's for](../README.md#who-its-for) is the ICP cut.
 
-Sideboard is an agentic development environment (an agent IDE). Local fleet orchestrator is the shape: the checkout is the unit, and `attach` returns to the harness session. The desktop also has a file editor, a terminal, and a URL preview.
+Sideboard is an agent IDE whose wedge is the orchestration tier: a file editor, terminal, and URL preview on the desktop, a kanban of the fleet, an orchestrator MCP, and remotes (phone, CLI, MCP) so other systems can reach this Mac — without design mode, an embedded browser, or moving compute off this machine. The checkout is the unit, and `attach` returns to the harness session.
 
 Sideboard started as a local port when Conductor moved the rest of that loop into a paid cloud. The kanban, the orchestrator, and remotes (phone, CLI, MCP) are what stayed on this machine. The phone app is the remote. Slack is not. One phone covers Claude Code, Codex, OpenCode, and Cursor. The Codex app and Claude Code Remote Control each cover one harness.
 
@@ -31,7 +31,7 @@ Sideboard keeps the fleet on this machine. The phone app, CLI, and MCP are how y
 
 [Orca](https://www.onorca.dev/) is an **agent development environment**: parallel worktrees, terminals, an embedded browser, design mode, a mobile companion, and Windows and Linux, with many CLI harnesses. It also has an [orchestration CLI](https://orca.dev/docs/cli/orchestration): a Run, tasks, supervised workers, and decision gates. The CLI talks to a running Orca app. The docs mark orchestration experimental (`Settings → Experimental`). A worker can be Claude, Codex, Cursor, OpenCode, or another harness Orca launches, often in its own worktree.
 
-Orca having that CLI means "Sideboard has an orchestrator and Orca does not" is not the split. Both are agentic development environments (agent IDEs). The split is the checkout, the board, and where the editor lives:
+Orca having that CLI means "Sideboard has an orchestrator and Orca does not" is not the split. Sideboard is an agent IDE whose wedge is the orchestration tier. Orca is an ADE with a terminal, an embedded browser, and design mode. The split is the checkout, the board, and where the editor lives:
 
 - Several Sideboard chats share one checkout (`fork_chat`). Orca's supervised workers are started on a worktree, including a new child worktree.
 - One Sideboard board covers every harness. Orca's orchestration runs inside the Orca app.
@@ -39,12 +39,14 @@ Orca having that CLI means "Sideboard has an orchestrator and Orca does not" is 
 
 | | Orca | Sideboard |
 |-|------|-----------|
-| Category | Agent IDE, plus an orchestration CLI | Agent IDE (agentic development environment). Local fleet orchestrator. `attach` returns to the harness session |
+| Category | ADE with a terminal, embedded browser, and design mode | Agent IDE with an orchestration wedge |
 | Checkout | A worker can take the current worktree or a new child | Several chats share one checkout |
 | Board | Inside the Orca app | One board across Claude Code, Codex, OpenCode, and Cursor |
 | Other systems | `orca` CLI against a running Orca app; mobile companion | `sideboard` CLI, stdio MCP, phone paired to this Mac |
 | Desktop OS | macOS, Windows, Linux | macOS (Apple Silicon) |
 | Compute | Local by default; SSH / your VPS | Always this Mac |
+
+Use Orca when you want an ADE with a terminal, an embedded browser, and design mode, and you are happy driving it from that app. Use Sideboard when you want an agent IDE whose wedge is the orchestration tier, without design mode, an embedded browser, or moving compute off this machine.
 
 ## vs Superset
 

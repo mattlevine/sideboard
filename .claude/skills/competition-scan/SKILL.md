@@ -3,9 +3,11 @@ name: competition-scan
 description: >-
   Daily scan of products in Sideboard's space. Report what changed and one
   recommendation: a product change, how the marketing talks about it, or a
-  change to a prior call. Prior calls can move. Use when the competition-scan
-  automation fires, or when someone asks for a competitive scan. The report
-  stays in the chat. Do not open a pull request.
+  change to a prior call. Prior calls can move. When there is one
+  recommendation, queue it and ask before any worktree. Use when the
+  competition-scan automation fires, or when someone asks for a competitive
+  scan. The report stays in the chat. Do not open a pull request from the
+  scan chat.
 ---
 
 # Competition scan
@@ -37,7 +39,7 @@ Search the open web. Prefer a primary source with a date: changelog, release not
 
 ## Judge
 
-Sideboard today is an agentic development environment (an agent IDE): a local fleet orchestrator. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. The desktop has a file editor, a terminal, and a URL preview. `attach` returns to the harness session. A peer that centers an embedded terminal, browser, or design mode is still in the same category. Do not treat "agent IDE" as a label that belongs only to Orca. Do not write that the file editor, the terminal, or the URL preview is absent. That description is the current shape. A recommendation may move it.
+Sideboard today is an agent IDE whose wedge is the orchestration tier: a file editor, a terminal, and a URL preview on the desktop, a kanban of the fleet, an orchestrator MCP, and remotes (phone, CLI, MCP), without design mode, an embedded browser, or moving compute off this machine. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. `attach` returns to the harness session. A peer that centers an embedded terminal, browser, or design mode is an ADE in the same category. Do not treat "agent IDE" as a label that belongs only to Orca. Do not write that Sideboard is not an IDE, and do not write that the file editor, the terminal, or the URL preview is absent. That description is the current shape. A recommendation may move it.
 
 Recommend at most one change. It may be product, marketing, or a change to a prior call. Leave a prior call in place on a day when nothing new makes it the right change. Change it when the peer, the product, or the pitch has moved, or when the old answer is now the wrong product. Name the old call and why it should move.
 
@@ -58,7 +60,53 @@ Write the report in the chat, in this order:
 
 Append the same report under today's date in `~/.sideboard/competition-scan.md`. Keep prior calls at the top. When the recommendation changes a prior call, rewrite that line in the log and keep the old wording under today's report. The rewritten line replaces the seed in this skill on the next run. Do not edit this skill to move a call. Do not commit the log.
 
-Do not edit the compare notes, the README, or the homepage. Do not open a pull request. Do not create a workspace. The person decides what to change.
+Do not edit the compare notes, the README, the homepage, or this skill in the scan turn. Implementation is a separate Approve worktree. Do not open a pull request from the scan chat.
+
+## Queue
+
+After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/competition-scan-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A quiet day (no recommendation, or the set is unchanged) adds no row.
+
+```json
+{
+  "items": [
+    {
+      "id": "2026-11-24-marketing-stop-denying-ide",
+      "date": "2026-11-24",
+      "kind": "marketing",
+      "summary": "Stop denying IDE in the compare notes and homepage.",
+      "files": ["docs/COMPARE.md", "site/index.html"],
+      "quote": "The sentence to replace.",
+      "replacement": "The sentence to ship.",
+      "url": "https://example.com/source",
+      "status": "pending"
+    }
+  ]
+}
+```
+
+`kind` is `product`, `marketing`, or `prior-call`. `files` lists the repo paths the recommendation named (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`), or `[]` when a prior call names none. `quote` is the sentence or the old prior call. `replacement` is the new wording or the new call. `url` is the dated source, or `""` when there is none. `status` is `pending`, `approved`, `skipped`, `deferred`, or `shipped`.
+
+`id` is `YYYY-MM-DD-<kind>-<slug>`. The slug is a few kebab-case words from the summary, and the same recommendation on the same day keeps the same id. Upsert that id. When the row is `pending`, refresh the fields and leave the status. When the row is already `approved`, `skipped`, `deferred`, or `shipped`, leave it. A different recommendation is a new row. Do not commit the queue.
+
+## Ask
+
+When this run appended or refreshed a `pending` row, explain the recommendation in a few sentences in the chat, then call `ask_user` with three options:
+
+- **Approve** — implement in a worktree and open a draft PR
+- **Skip**
+- **Defer**
+
+Then stop. Do not `create_workspace` before the person answers. A quiet day does not call `ask_user`. A row that was already decided does not call `ask_user` again.
+
+This Global chat is the orchestrator. There is no named bot and no second orchestrator. The schedule text lives in the local automation, not in this repo. The next run follows this skill. Do not edit `~/Library/Application Support/sideboard/schedules.json` from a worktree.
+
+When the person answers:
+
+- **Approve.** Set that row to `approved`. When `files` is empty, the call already moved in the log: set the row to `shipped` and stop. When `files` is not empty, `list_projects`, then `create_workspace` on the Sideboard repo from `main` (`sourceType` `branch`, `sourceRef` `main`, `repoPath` from that project, `title` from the summary). `create_workspace` takes no prompt. `send_to_chat` on the new chat with a tight prompt taken from the row: kind, summary, files, quote, replacement, and url. The child implements only that change, opens a draft PR (`gh pr create --draft --assignee @me -R mattlevine/sideboard`), and does not merge. When the draft PR URL is back, set the row to `shipped`.
+- **Skip.** Set the row to `skipped`. Stop.
+- **Defer.** Set the row to `deferred`. Stop.
+
+Never merge that PR unless a person asks. The scan chat does not open the PR.
 
 ## Prior calls
 
