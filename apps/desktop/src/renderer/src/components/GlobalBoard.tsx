@@ -16,6 +16,7 @@ import {
   latestVisibleMessageText,
   groupHomeBoardWorktrees,
   isHomeBoardThread,
+  listNeedsYouChats,
   visiblePage,
   sidebarQuestionThreadId,
   visibleAgentBlock, worktreeAgentBlock, worktreeBoardStatus,
@@ -23,6 +24,7 @@ import {
   reviewLabelForRepo,
   type BoardColumnId,
   type BoardOwnershipFilter,
+  type NeedsYouChat,
   type WorktreeSortMode,
 } from '../lib/home-board';
 import { WorktreeOwnershipFilter } from './WorktreeOwnershipFilter';
@@ -118,6 +120,7 @@ export function GlobalBoard({
   leftSidebarToggle,
 }: Props) {
   const [shownByCol, setShownByCol] = useState<Partial<Record<BoardColumnId, number>>>({});
+  const [needsYouOpen, setNeedsYouOpen] = useState(false);
 
   const allWorktrees = useMemo(
     () =>
@@ -135,6 +138,16 @@ export function GlobalBoard({
       ),
     [allWorktrees, ownership, githubLogin],
   );
+
+  const needsYouRows = useMemo(() => listNeedsYouChats(threads), [threads]);
+
+  const worktreeByThreadId = useMemo(() => {
+    const map = new Map<string, Thread[]>();
+    for (const group of allWorktrees) {
+      for (const thread of group) map.set(thread.id, group);
+    }
+    return map;
+  }, [allWorktrees]);
 
   const byColumn = useMemo(() => {
     const map = {
@@ -198,7 +211,32 @@ export function GlobalBoard({
             : '…'}
         </span>
         <div className="actions">
-          {onOwnershipChange ? (
+          <div
+            className="worktree-ownership board-ownership"
+            role="group"
+            aria-label="Home view"
+          >
+            <div className="worktree-ownership-tabs">
+              <button
+                type="button"
+                className={needsYouOpen ? '' : 'active'}
+                aria-pressed={!needsYouOpen}
+                onClick={() => setNeedsYouOpen(false)}
+              >
+                Board
+              </button>
+              <button
+                type="button"
+                className={needsYouOpen ? 'active' : ''}
+                aria-pressed={needsYouOpen}
+                title="Blocked chats across projects"
+                onClick={() => setNeedsYouOpen(true)}
+              >
+                Needs you{needsYouRows.length > 0 ? ` (${needsYouRows.length})` : ''}
+              </button>
+            </div>
+          </div>
+          {!needsYouOpen && onOwnershipChange ? (
             <WorktreeOwnershipFilter
               value={ownership}
               onChange={onOwnershipChange}
@@ -206,7 +244,7 @@ export function GlobalBoard({
               className="worktree-ownership board-ownership"
             />
           ) : null}
-          {onWorktreeSortChange ? (
+          {!needsYouOpen && onWorktreeSortChange ? (
             <WorktreeSortSelect
               value={worktreeSort}
               onChange={onWorktreeSortChange}
@@ -233,7 +271,17 @@ export function GlobalBoard({
         </div>
       </div>
 
-      {hasBoardContent ? (
+      {needsYouOpen ? (
+        <>
+          {hasBoardContent ? <FleetActivityBar runtime={runtime} compact /> : null}
+          <NeedsYouList
+            rows={needsYouRows}
+            worktreeByThreadId={worktreeByThreadId}
+            workspaces={workspaces}
+            onOpenThread={onOpenThread}
+          />
+        </>
+      ) : hasBoardContent ? (
         <>
           <FleetActivityBar runtime={runtime} compact />
           <div className="board-body board-kanban-wrap">
@@ -311,6 +359,109 @@ export function GlobalBoard({
         </div>
       )}
     </section>
+  );
+}
+
+function needsYouKindLabel(source: NeedsYouChat<Thread>['source']): string {
+  switch (source) {
+    case 'permission':
+      return 'Permission';
+    case 'reported':
+      return 'Blocked';
+    case 'plan':
+      return 'Plan';
+    case 'ask_user':
+      return 'Question';
+  }
+}
+
+function NeedsYouList({
+  rows,
+  worktreeByThreadId,
+  workspaces,
+  onOpenThread,
+}: {
+  rows: NeedsYouChat<Thread>[];
+  worktreeByThreadId: Map<string, Thread[]>;
+  workspaces: Workspace[];
+  onOpenThread: (id: string) => void;
+}) {
+  return (
+    <div className="board-body board-kanban-wrap">
+      <div className="board-kanban">
+        <section className="board-column" aria-label="Needs you">
+          <header className="board-column-header">
+            <h3>Needs you</h3>
+            <span className="thread-meta">{rows.length}</span>
+          </header>
+          <div className="board-column-cards">
+            {rows.length === 0 ? (
+              <div className="board-column-empty">Nothing needs you</div>
+            ) : (
+              rows.map((row) => (
+                <NeedsYouRow
+                  key={row.thread.id}
+                  row={row}
+                  group={worktreeByThreadId.get(row.thread.id) ?? [row.thread]}
+                  workspaces={workspaces}
+                  onOpenThread={onOpenThread}
+                />
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function NeedsYouRow({
+  row,
+  group,
+  workspaces,
+  onOpenThread,
+}: {
+  row: NeedsYouChat<Thread>;
+  group: Thread[];
+  workspaces: Workspace[];
+  onOpenThread: (id: string) => void;
+}) {
+  const title = threadDisplayTitle(row.thread);
+  const checkout = worktreeDisplayLabelForGroup(group);
+  const repo = workspaceName(row.thread.repoPath, workspaces);
+  const open = () => onOpenThread(row.thread.id);
+  return (
+    <div
+      className="board-card board-card-chat is-blocked"
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${title}: ${row.reason}`}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          open();
+        }
+      }}
+    >
+      <div className="board-card-top">
+        <span className="dot blocked" title={row.reason} />
+        <div className="board-open">
+          <div className="thread-title">{title}</div>
+          <div className="thread-meta">
+            {[
+              repo || null,
+              checkout !== title ? checkout : null,
+              needsYouKindLabel(row.source),
+              relativeTime(row.at),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+          <div className="thread-blocked-reason" title={row.reason}>{row.reason}</div>
+        </div>
+      </div>
+    </div>
   );
 }
 
