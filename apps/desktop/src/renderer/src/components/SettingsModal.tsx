@@ -1920,6 +1920,33 @@ export function SettingsModal({
                 <div className="settings-section">
                   <div className="settings-toggle-row">
                     <div>
+                      <div className="settings-section-title">Computer use</div>
+                      <p className="settings-hint">
+                        Let an agent screenshot, click, and type on this Mac to test a running
+                        app, including how the screen looks. Off by default. Sideboard needs
+                        Accessibility permission. This is not design mode.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`settings-switch${advanced.computerUse ? ' on' : ''}`}
+                      role="switch"
+                      aria-checked={Boolean(advanced.computerUse)}
+                      disabled={busy}
+                      onClick={() =>
+                        void saveAdvancedPatch({
+                          computerUse: !advanced.computerUse,
+                        })
+                      }
+                    >
+                      <span className="settings-switch-knob" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <div className="settings-toggle-row">
+                    <div>
                       <div className="settings-section-title">Show cost (when available)</div>
                       <p className="settings-hint">
                         Show provider-reported USD on message chips, the thread Σ total, and

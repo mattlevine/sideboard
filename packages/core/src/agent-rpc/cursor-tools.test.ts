@@ -66,7 +66,12 @@ describe('sideboardCursorRpcTools', () => {
 
   it('registers the Cursor worktree pilot set', () => {
     const tools = sideboardCursorRpcTools({ cwd: '/tmp/wt', rpc });
-    expect(Object.keys(tools).sort()).toEqual(['present_artifact', 'stop_job', 'wait_for_job']);
+    expect(Object.keys(tools).sort()).toEqual([
+      'computer_use',
+      'present_artifact',
+      'stop_job',
+      'wait_for_job',
+    ]);
   });
 
   it('registers wait_for_turn only for orchestration Cursor', () => {
@@ -76,6 +81,7 @@ describe('sideboardCursorRpcTools', () => {
       includeWaitForTurn: true,
     });
     expect(Object.keys(tools).sort()).toEqual([
+      'computer_use',
       'present_artifact',
       'stop_job',
       'wait_for_job',

@@ -29,6 +29,7 @@ describe('agentRpcOwnsPilotTools / injectedSideboardMcpEnv', () => {
     expect(native).not.toContain('present_artifact');
     expect(native).not.toContain('wait_for_job');
     expect(native).not.toContain('stop_job');
+    expect(native).not.toContain('computer_use');
     expect(native).toContain('ask_user');
   });
 

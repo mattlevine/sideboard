@@ -426,6 +426,11 @@ export interface AdvancedAppSettings {
    */
   showCost?: boolean;
   /**
+   * Let an agent screenshot, click, and type on this Mac to test a running app.
+   * Default off — turn on in Settings → Advanced.
+   */
+  computerUse?: boolean;
+  /**
    * Chat text size relative to the left nav.
    * Omitted = {@link CHAT_TEXT_SCALE_DEFAULT} (1.2).
    */
@@ -1061,6 +1066,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.showCost === 'boolean') {
     out.showCost = source.showCost;
+  }
+  if (typeof source.computerUse === 'boolean') {
+    out.computerUse = source.computerUse;
   }
   if (isChatTextScale(source.chatTextScale)) {
     out.chatTextScale = source.chatTextScale;
@@ -2296,6 +2304,9 @@ export function updateAdvancedSettings(
   if (typeof patch.showCost === 'boolean') {
     advanced.showCost = patch.showCost;
   }
+  if (typeof patch.computerUse === 'boolean') {
+    advanced.computerUse = patch.computerUse;
+  }
   if (isChatTextScale(patch.chatTextScale)) {
     advanced.chatTextScale = patch.chatTextScale;
   }
@@ -2458,6 +2469,13 @@ export function showCostEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.showCost);
+}
+
+/** Settings → Advanced → Computer use (default off). */
+export function computerUseEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.computerUse);
 }
 
 /** Settings → Advanced → Chat text size (default 1.2× the left nav). */

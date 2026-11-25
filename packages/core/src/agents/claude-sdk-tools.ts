@@ -65,6 +65,21 @@ export function createClaudePilotSdkServer(
         { id: z.string(), reason: z.string().optional() },
         async (args) => textResult(await exec.stop_job(args as Record<string, unknown>)),
       ),
+      tool(
+        'computer_use',
+        PILOT_TOOL_DESCRIPTIONS.computer_use,
+        {
+          action: z.enum(['screenshot', 'click', 'type', 'key', 'scroll']),
+          x: z.number().optional(),
+          y: z.number().optional(),
+          text: z.string().optional(),
+          key: z.string().optional(),
+          modifiers: z.array(z.string()).optional(),
+          dx: z.number().optional(),
+          dy: z.number().optional(),
+        },
+        async (args) => textResult(await exec.computer_use(args as Record<string, unknown>)),
+      ),
     ],
   });
   return { server, exec };

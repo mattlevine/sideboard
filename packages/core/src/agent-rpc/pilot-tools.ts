@@ -1,3 +1,4 @@
+import { COMPUTER_USE_DESCRIPTION } from '../computer-use/computer-use.js';
 import { AgentRpcClient } from './client.js';
 import type { AgentRpcConnect } from './metadata.js';
 
@@ -5,6 +6,7 @@ export const PILOT_TOOL_NAMES = [
   'present_artifact',
   'wait_for_job',
   'stop_job',
+  'computer_use',
 ] as const;
 
 export type PilotToolName = (typeof PILOT_TOOL_NAMES)[number];
@@ -16,6 +18,7 @@ export const PILOT_TOOL_DESCRIPTIONS: Record<PilotToolName, string> = {
     'Wait until a detached long job (tests, pack, deploy, connector CLI) finishes. This call stays open for up to ~2 minutes. stillRunning true means the runtime hit the max hold; call wait_for_job again immediately. If the job is hanging, producing no useful output, or doing the wrong thing, call stop_job instead. Do not end the turn or tell the user you will let them know later.',
   stop_job:
     'Stop a detached job you started with detached-job.cjs when it is hanging, producing no useful output, buffering forever, or doing the wrong thing (wrong project, infinite watch, huge dump). Do not stop a pack/test/deploy that is clearly making progress.',
+  computer_use: COMPUTER_USE_DESCRIPTION,
 };
 
 export const WAIT_FOR_TURN_DESCRIPTION =
@@ -79,6 +82,23 @@ export const PILOT_TOOL_SCHEMAS: Record<PilotToolName, Record<string, unknown>> 
     },
     required: ['id'],
   },
+  computer_use: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['screenshot', 'click', 'type', 'key', 'scroll'],
+      },
+      x: { type: 'number' },
+      y: { type: 'number' },
+      text: { type: 'string' },
+      key: { type: 'string' },
+      modifiers: { type: 'array', items: { type: 'string' } },
+      dx: { type: 'number' },
+      dy: { type: 'number' },
+    },
+    required: ['action'],
+  },
   stop_job: {
     type: 'object',
     properties: {
@@ -119,6 +139,10 @@ export type PilotRpcExecutors = {
     context?: PilotToolContext,
   ) => Promise<string>;
   stop_job: (
+    args: Record<string, unknown>,
+    context?: PilotToolContext,
+  ) => Promise<string>;
+  computer_use: (
     args: Record<string, unknown>,
     context?: PilotToolContext,
   ) => Promise<string>;
@@ -165,6 +189,7 @@ export function createPilotRpcExecutors(
       }
     },
     stop_job: (args) => callJob('job.stop', args),
+    computer_use: (args) => callJob('computer.act', args),
     wait_for_turn: async (args, context) => {
       const prev = waitToolCallId;
       waitToolCallId =

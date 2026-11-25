@@ -22,6 +22,12 @@ In 1–3 sentences, say **why** — grounded in correctness, risk, test coverage
 
 People running this review are asking “can we ship this?” Treat that as the question you answer first.
 
+## Visual design
+
+When the diff changes a screen a person sees (desktop, phone, or site), judge how it looks as well as whether it works. Hierarchy, alignment, spacing, type size, contrast, and fit with the surrounding surface. A control that works but is cramped, misaligned, low-contrast, or a different density than its neighbors is a finding. Blocking when that makes the screen harder to use. A nit when the mismatch is small and the rest of that screen already looks that way.
+
+Look with `computer_use` when Settings → Advanced has it on: screenshot, then the clicks the change needs, and read the PNG. When it is off, say the visual pass was not seen. Do not treat a browser tab as the Electron window.
+
 ## Confirm before posting
 
 The report stays in this chat until the user posts it. Do not call `github_comment`, `linear_comment`, `abletime_comment`, `github_update_issue`, `linear_update_issue`, `abletime_update_task`, or run `gh pr review` / `gh pr comment`, until they type a next step that asks you to post.

@@ -47,6 +47,7 @@ export const AGENT_RPC_PILOT_MCP_TOOLS = [
   'present_artifact',
   'wait_for_job',
   'stop_job',
+  'computer_use',
 ] as const;
 
 /** Fleet tools Cursor orchestration owns on Agent RPC; omit from that harness MCP. */
@@ -81,6 +82,7 @@ export const WORKTREE_MCP_TOOLS = [
   'run_dev_script',
   'stop_dev_script',
   'get_run_log',
+  'computer_use',
   'get_orchestrator',
   'notify_orchestrator',
   'set_workspace_tags',
