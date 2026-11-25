@@ -268,9 +268,9 @@ export async function performComputerUse(opts: {
 
 export function formatComputerUseHint(enabled: boolean): string {
   if (!enabled) {
-    return 'Computer use is off (Settings → Advanced). You can start the Dev app, and you cannot click or type in the UI until that switch is on. Say what you could not see. A UI change is still judged for visual design from the diff and any screenshot you do have: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface.';
+    return 'Computer use is off (Settings → Advanced). Say the visual pass was not seen.';
   }
-  return 'Computer use is on (Settings → Advanced). `computer_use` drives this Mac so you can test what you built. action is screenshot, click, type, key, or scroll. A screenshot is a PNG of the main display under `.context/cli/` and includes point width, height, and scale — read that image. x and y are screen points, not PNG pixels: divide a pixel by scale. scroll posts a wheel event at that point (positive dx is right, positive dy is down). Judge behavior and visual design: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface. `preview=window` means the Electron window, not a browser tab. Sideboard needs Accessibility and Screen Recording permission. Do not drive an app you did not start for this test.';
+  return 'Computer use is on. Screenshot returns scale; x and y are screen points (divide a PNG pixel by scale). Scroll is a wheel event at that point.';
 }
 
 export const macosComputerUseRunner: ComputerUseRunner = {

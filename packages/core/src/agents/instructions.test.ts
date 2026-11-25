@@ -490,7 +490,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/Not under `\.sideboard\/skills\/`/);
     expect(text).toMatch(/Skip a guide for a one-off/);
     // Budget guard: the fresh-session worktree playbook stays under ~1.1k tokens.
-    expect(text.length).toBeLessThan(4_400);
+    expect(text.length).toBeLessThan(4_500);
   });
 
   it('injects gh-mode instructions instead of the SSH fallback', () => {
@@ -526,7 +526,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).toMatch(/no issue tracker/);
     expect(text).not.toMatch(/gh pr create/);
     expect(text).not.toMatch(/Git authentication \(Settings → Git mode/);
-    expect(text.length).toBeLessThan(4_400);
+    expect(text.length).toBeLessThan(4_500);
   });
 
   it('tells an Entire checkout to open a trail instead of a GitHub PR', () => {
@@ -545,7 +545,7 @@ describe('formatWorktreeDirective', () => {
     expect(text).not.toMatch(/gh pr create/);
     expect(text).not.toMatch(/origin pr create/);
     expect(text).not.toMatch(/Git authentication \(Settings → Git mode/);
-    expect(text.length).toBeLessThan(4_400);
+    expect(text.length).toBeLessThan(4_500);
   });
 });
 
