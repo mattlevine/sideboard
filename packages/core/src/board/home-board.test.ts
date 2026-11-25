@@ -14,6 +14,7 @@ import {
   groupHomeBoardWorktrees,
   DEFAULT_WORKTREE_SORT,
   isHomeBoardThread,
+  listNeedsYouChats,
   compactPreview,
   markdownPreviewSource,
   latestVisibleMessageText,
@@ -1212,5 +1213,119 @@ describe('assembleHomeBoard', () => {
       pr({ number: 4, title: 'Two', repoPath: '/b', url: 'https://github.com/acme/b/pull/4' }),
     ];
     expect(findBoardPr(prs, '#4', '/b')?.title).toBe('Two');
+  });
+});
+
+describe('listNeedsYouChats', () => {
+  it('lists every blocked chat across projects, newest first', () => {
+    const rows = listNeedsYouChats([
+      thread({
+        id: 'old',
+        title: 'API question',
+        repoPath: '/repos/alpha',
+        worktreePath: '/wt/old',
+        agentBlock: {
+          source: 'ask_user',
+          reason: 'Asked the user: Which API?',
+          at: '2026-11-01T00:00:00.000Z',
+        },
+      }),
+      thread({
+        id: 'new',
+        title: 'Allow edit',
+        repoPath: '/repos/beta',
+        worktreePath: '/wt/new',
+        status: 'running',
+        agentBlock: {
+          source: 'permission',
+          reason: 'Allow the edit?',
+          at: '2026-11-02T00:00:00.000Z',
+        },
+      }),
+      thread({
+        id: 'clear',
+        title: 'Working',
+        repoPath: '/repos/alpha',
+      }),
+    ]);
+    expect(rows.map((row) => row.thread.id)).toEqual(['new', 'old']);
+    expect(rows[0]).toMatchObject({
+      reason: 'Allow the edit?',
+      source: 'permission',
+    });
+    expect(rows[1]?.reason).toBe('Asked the user: Which API?');
+  });
+
+  it('keeps each blocked sibling and drops chats that are not waiting', () => {
+    const rows = listNeedsYouChats([
+      thread({
+        id: 'perm',
+        worktreePath: '/wt/same',
+        status: 'running',
+        agentBlock: {
+          source: 'permission',
+          reason: 'Allow the edit?',
+          at: '2026-11-02T00:00:00.000Z',
+        },
+      }),
+      thread({
+        id: 'ask',
+        worktreePath: '/wt/same',
+        agentBlock: {
+          source: 'ask_user',
+          reason: 'Asked the user: Which API?',
+          at: '2026-11-03T00:00:00.000Z',
+          onScreen: true,
+        },
+      }),
+      thread({
+        id: 'inflight',
+        status: 'running',
+        agentBlock: {
+          source: 'ask_user',
+          reason: 'Asked the user: Hidden?',
+          at: '2026-11-04T00:00:00.000Z',
+        },
+      }),
+      thread({
+        id: 'skipped',
+        agentBlock: {
+          source: 'ask_user',
+          reason: 'Asked the user: Which API?',
+          at: '2026-11-04T00:00:00.000Z',
+          questionSignature: 'sig',
+        },
+        dismissedQuestionSignature: 'sig',
+      }),
+      thread({
+        id: 'orch',
+        sourceType: 'orchestration',
+        repoPath: '/repos/alpha',
+        agentBlock: {
+          source: 'reported',
+          reason: 'Need a token',
+          at: '2026-11-05T00:00:00.000Z',
+        },
+      }),
+      thread({
+        id: 'archived',
+        status: 'archived',
+        agentBlock: {
+          source: 'reported',
+          reason: 'Old',
+          at: '2026-11-05T00:00:00.000Z',
+        },
+      }),
+      thread({
+        id: 'errored',
+        status: 'error',
+        agentBlock: {
+          source: 'reported',
+          reason: 'Broke',
+          at: '2026-11-05T00:00:00.000Z',
+        },
+      }),
+    ]);
+    expect(rows.map((row) => row.thread.id)).toEqual(['ask', 'perm']);
   });
 });

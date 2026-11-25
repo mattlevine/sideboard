@@ -7,7 +7,7 @@ import {
   workspaceTagsFromGroup,
   worktreeDisplayLabelForGroup,
 } from '../git/worktree-labels.js';
-import { threadCardBlockFields, worktreeBoardStatus } from './agent-block-view.js';
+import { threadCardBlockFields, visibleAgentBlock, worktreeBoardStatus } from './agent-block-view.js';
 import { issueBlockedByIds } from './issue-blocked-view.js';
 import { isApprovedOpenPr, isMergedPrState, isOpenPrState } from './pr-state.js';
 import {
@@ -280,6 +280,54 @@ export {
   worktreeAgentBlock,
   worktreeBoardStatus,
 } from './agent-block-view.js';
+
+/** One blocked chat on Home. `thread.id` is the chat a row opens. */
+export type NeedsYouChat<T> = {
+  thread: T;
+  reason: string;
+  source: NonNullable<Thread['agentBlock']>['source'];
+  at: string;
+};
+
+/**
+ * Every currently blocked Home chat, across projects. One row per chat —
+ * sibling tabs on the same checkout each stay on the list. Uses the same
+ * visibility rules as the board card (`visibleAgentBlock`): in-flight asks
+ * stay hidden until they are on screen, and dismissed, answered, error, and
+ * archived chats stay off. Newest block first.
+ */
+export function listNeedsYouChats<
+  T extends Pick<
+    Thread,
+    | 'id'
+    | 'status'
+    | 'sourceType'
+    | 'repoPath'
+    | 'agentBlock'
+    | 'dismissedQuestionSignature'
+  > & {
+    messages?: Thread['messages'];
+  },
+>(threads: T[]): NeedsYouChat<T>[] {
+  const rows: NeedsYouChat<T>[] = [];
+  for (const thread of threads) {
+    if (!isHomeBoardThread(thread)) continue;
+    const block = visibleAgentBlock(thread);
+    if (!block) continue;
+    rows.push({
+      thread,
+      reason: block.reason,
+      source: block.source,
+      at: block.at,
+    });
+  }
+  rows.sort((a, b) => {
+    const at = b.at.localeCompare(a.at);
+    if (at !== 0) return at;
+    return a.thread.id.localeCompare(b.thread.id);
+  });
+  return rows;
+}
 
 function normalizeIssueKey(value: string): string {
   return value.trim().toLowerCase().replace(/^#/, '');

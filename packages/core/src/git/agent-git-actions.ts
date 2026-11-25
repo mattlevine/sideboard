@@ -1,5 +1,3 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import type { GitForge } from './remote-forge.js';
 
 const ANNOUNCE_AFTER_MERGE =
@@ -188,9 +186,23 @@ function entireGitActionExpansion(action: AgentGitAction, base: string | null): 
   }
 }
 
+/**
+ * The desktop renderer imports this module. A static `node:fs` import makes
+ * Vite throw while the module is loading, so the Home window stays blank.
+ * Node (orchestrator, tests) still sees the skill file.
+ */
 function worktreeHasAnnounceSkill(worktreePath: string | null | undefined): boolean {
   const root = worktreePath?.trim();
-  return !!root && existsSync(join(root, '.claude/skills/announce-on-x/SKILL.md'));
+  if (!root) return false;
+  const skill = `${root.replace(/[/\\]+$/, '')}/.claude/skills/announce-on-x/SKILL.md`;
+  const fs = (globalThis as {
+    process?: { getBuiltinModule?: (id: string) => { existsSync?: (path: string) => boolean } };
+  }).process?.getBuiltinModule?.('node:fs');
+  try {
+    return fs?.existsSync?.(skill) ?? false;
+  } catch {
+    return false;
+  }
 }
 
 export function expandCanonicalGitRequest(
