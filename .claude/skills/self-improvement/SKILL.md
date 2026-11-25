@@ -1,5 +1,5 @@
 ---
-name: competition-scan
+name: self-improvement
 description: >-
   Daily self-improvement loop for Sideboard, based on docs/ROADMAP.md. The
   competition scan informs that roadmap. Each run starts from the last queue
@@ -10,12 +10,12 @@ description: >-
   stays out until a new fact makes that outcome the wrong product. A product
   row names the slice and the repo paths it edits. Do not queue a product
   row with no slice. When there is one recommendation, queue it and ask
-  before any worktree. Use when the competition-scan automation fires, or
+  before any worktree. Use when the self-improvement automation fires, or
   when someone asks for the daily loop. The report stays in the chat. Do
-  not open a pull request from the scan chat.
+  not open a pull request from this chat.
 ---
 
-# Competition scan
+# Self-improvement
 
 The main thing is the self-improvement loop, based on `docs/ROADMAP.md`. The competition scan informs that roadmap.
 
@@ -31,7 +31,7 @@ The local automation fires this in a new Global chat, or a person asks for the d
 
 ## Read first
 
-1. `~/.sideboard/competition-scan-queue.json`, then `~/.sideboard/competition-scan.md`. The queue is where the loop left off. Any `pending` row is still the open recommendation: refresh it, and do not add another. Any `approved` row with no pull request is still in flight: do not start another slice. A `shipped`, `skipped`, or `deferred` row is closed. Do not recommend that slice again. A skipped or deferred slice stays out until a new dated fact makes that outcome the wrong product. The loop then takes the next open roadmap slice. The log holds prior calls and past reports. A line in the log is the last answer, not a ban. When the log has a line for a call, that line replaces the same dated line in this skill. Create the log if it is missing, with the prior calls below copied to the top. Copy a seed line only when the log has no line for that call. Create the queue if it is missing, as `{ "items": [] }`.
+1. `~/.sideboard/self-improvement-queue.json`, then `~/.sideboard/self-improvement.md`. When either file is missing and the same file exists as `~/.sideboard/competition-scan-queue.json` or `~/.sideboard/competition-scan.md`, rename the old file into place before reading. Do not keep two logs. The queue is where the loop left off. Any `pending` row is still the open recommendation: refresh it, and do not add another. Any `approved` row with no pull request is still in flight: do not start another slice. A `shipped`, `skipped`, or `deferred` row is closed. Do not recommend that slice again. A skipped or deferred slice stays out until a new dated fact makes that outcome the wrong product. The loop then takes the next open roadmap slice. The log holds prior calls and past reports. A line in the log is the last answer, not a ban. When the log has a line for a call, that line replaces the same dated line in this skill. Create the log if it is missing, with the prior calls below copied to the top. Copy a seed line only when the log has no line for that call. Create the queue if it is missing, as `{ "items": [] }`.
 2. The pitch and the compare notes on the default branch the Approve child will edit (`origin/main`, or that project's default branch). `git fetch origin`, then read each file with `git show origin/main:<path>`:
    - `README.md` through "Why it exists"
    - `site/index.html` (the homepage)
@@ -78,13 +78,13 @@ Write the report in the chat, in this order:
 - **Recommendation.** Zero or one. The default is one undone slice of the first unfinished Now item that is still open, then Next. Name the item, the slice (for example, Now item 1 as "EAS TestFlight build + install links on `site/index.html` and Settings → Remote," not the whole item), and the repo paths. A dated peer fact can name a different Now or Next item, or replace the slice with marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), a change to a Later or Open roadmap line the fact makes wrong, or a change to a prior call. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. A quiet day is when no open slice has real paths and no dated fact makes one of those other changes the right next step. Write that. Do not write that the day is quiet because no peer shipped. Do not describe a product recommendation that has no slice. Do not describe a skipped or deferred slice as today's recommendation.
 - **Compare notes.** Use this only when the recommendation is a product change and a compare sentence is also false or stale. Quote it and write the replacement. Name `docs/COMPARE.md`, `site/docs/_src/compare.md`, and `site/docs/compare/index.html`. When the one recommendation is itself that wording change, it belongs under Recommendation.
 
-Append the same report under today's date in `~/.sideboard/competition-scan.md`. Keep prior calls at the top. A recommendation that would change a prior call describes the old line and the proposed line in that day's report only. Do not rewrite the prior-call line until Approve. On Skip or Defer, leave that line as it was. If this run already wrote a provisional line, restore the previous wording before you stop. The rewritten line, once Approve has written it, replaces the seed in this skill on the next run. Do not edit this skill to move a call. Do not commit the log.
+Append the same report under today's date in `~/.sideboard/self-improvement.md`. Keep prior calls at the top. A recommendation that would change a prior call describes the old line and the proposed line in that day's report only. Do not rewrite the prior-call line until Approve. On Skip or Defer, leave that line as it was. If this run already wrote a provisional line, restore the previous wording before you stop. The rewritten line, once Approve has written it, replaces the seed in this skill on the next run. Do not edit this skill to move a call. Do not commit the log.
 
-Do not edit the compare notes, the README, the homepage, the roadmap, or this skill in the scan turn. Implementation is a separate Approve worktree. Do not open a pull request from the scan chat.
+Do not edit the compare notes, the README, the homepage, the roadmap, or this skill in this turn. Implementation is a separate Approve worktree. Do not open a pull request from this chat.
 
 ## Queue
 
-After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/competition-scan-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A `product` recommendation that names one undone slice and concrete `files` is one recommendation, so it adds a row and still asks. Reinforcing an unfinished Now or Next item is that recommendation when the slice and paths are named. If this item has no slice with real paths, take the next open item that does. Do not add a product row that would open an empty worktree. When no open item has a slice, a marketing or prior-call change a dated fact makes right may be the row. Otherwise the day is quiet. A quiet day adds no row and does not ask. Do not upsert a new row for a slice that matches a `skipped` or `deferred` row unless this run's new fact makes that outcome the wrong product. A `pending` or `approved` row stays the one recommendation.
+After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/self-improvement-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A `product` recommendation that names one undone slice and concrete `files` is one recommendation, so it adds a row and still asks. Reinforcing an unfinished Now or Next item is that recommendation when the slice and paths are named. If this item has no slice with real paths, take the next open item that does. Do not add a product row that would open an empty worktree. When no open item has a slice, a marketing or prior-call change a dated fact makes right may be the row. Otherwise the day is quiet. A quiet day adds no row and does not ask. Do not upsert a new row for a slice that matches a `skipped` or `deferred` row unless this run's new fact makes that outcome the wrong product. A `pending` or `approved` row stays the one recommendation.
 
 ```json
 {
@@ -133,15 +133,15 @@ This Global chat is the orchestrator. There is no named bot and no second orches
 
 When the person answers:
 
-- **Approve.** When the recommendation is a prior call, this is the first moment that line may change. Rewrite it in `~/.sideboard/competition-scan.md` to the proposed wording, and keep the old wording under today's report. When the recommendation is a prior call and `files` is empty, set the row to `shipped` and stop. There is no pull request. When `kind` is `product` or `marketing` and `files` is empty, do not `create_workspace`. Set the row to `deferred` and stop. A product row in that state should not have been queued. When `files` is not empty, set the row to `approved`. `list_projects`, then `create_workspace` on the Sideboard repo from `main` (`sourceType` `branch`, `sourceRef` `main`, `repoPath` from that project, `title` from the summary). `create_workspace` takes no prompt. `send_to_chat` on the new chat with a tight prompt from the row: kind, summary, files, quote, replacement, and url. The child implements only what `replacement` names, and only the paths in `files`. For `kind: product`, that is the one slice, not the rest of the Now or Next item. When `site/docs/compare/index.html` is in `files`, edit that HTML by hand so it matches the markdown. Do not run `scripts/render-site-docs.py`. It strips the live chrome. The child opens a draft PR (`gh pr create --draft --assignee @me -R mattlevine/sideboard`) and does not merge. Loop `wait_for_turn` until `stillRunning` is false. Set the row to `shipped` only when a draft PR URL is back. When the child fails or returns no PR URL, set the row back to `pending` so a later run can ask again.
+- **Approve.** When the recommendation is a prior call, this is the first moment that line may change. Rewrite it in `~/.sideboard/self-improvement.md` to the proposed wording, and keep the old wording under today's report. When the recommendation is a prior call and `files` is empty, set the row to `shipped` and stop. There is no pull request. When `kind` is `product` or `marketing` and `files` is empty, do not `create_workspace`. Set the row to `deferred` and stop. A product row in that state should not have been queued. When `files` is not empty, set the row to `approved`. `list_projects`, then `create_workspace` on the Sideboard repo from `main` (`sourceType` `branch`, `sourceRef` `main`, `repoPath` from that project, `title` from the summary). `create_workspace` takes no prompt. `send_to_chat` on the new chat with a tight prompt from the row: kind, summary, files, quote, replacement, and url. The child implements only what `replacement` names, and only the paths in `files`. For `kind: product`, that is the one slice, not the rest of the Now or Next item. When `site/docs/compare/index.html` is in `files`, edit that HTML by hand so it matches the markdown. Do not run `scripts/render-site-docs.py`. It strips the live chrome. The child opens a draft PR (`gh pr create --draft --assignee @me -R mattlevine/sideboard`) and does not merge. Loop `wait_for_turn` until `stillRunning` is false. Set the row to `shipped` only when a draft PR URL is back. When the child fails or returns no PR URL, set the row back to `pending` so a later run can ask again.
 - **Skip.** Set the row to `skipped`. Leave every prior-call line unchanged. If a provisional line was written, restore the previous wording. Stop.
 - **Defer.** Set the row to `deferred`. Leave every prior-call line unchanged. If a provisional line was written, restore the previous wording. Stop.
 
-Never merge that PR unless a person asks. The scan chat does not open the PR. Do not post to X from the scan turn, and do not post before the pull request is merged.
+Never merge that PR unless a person asks. This chat does not open the PR. Do not post to X from this turn, and do not post before the pull request is merged.
 
 ## After merge
 
-Approve, then the child implements and opens a draft PR. A person, or this orchestrator when a person has asked, merges. The scan chat does not merge.
+Approve, then the child implements and opens a draft PR. A person, or this orchestrator when a person has asked, merges. This chat does not merge.
 
 When that merged pull request changed `site/`, deploy the marketing site from the repo root before the post. Follow [`.claude/skills/release/SKILL.md`](../release/SKILL.md): `fly deploy --config apps/relay/fly.toml --dockerfile apps/relay/Dockerfile .`. Details are in [docs/system/deploy.md](../../../docs/system/deploy.md). Skip the deploy when `site/` did not change.
 
@@ -151,7 +151,7 @@ A change to the public homepage or compare story is something a reader can see, 
 
 ## Prior calls
 
-Keep this block at the top of `~/.sideboard/competition-scan.md`, one call per line. Copy a line only when the log has no line for that call. A newer line in the log replaces the same call here.
+Keep this block at the top of `~/.sideboard/self-improvement.md`, one call per line. Copy a line only when the log has no line for that call. A newer line in the log replaces the same call here.
 
 Orca Bots (beta, [v1.4.265](https://orca.dev/changelog/1-4-265), November 19, 2026) are a named folder on one computer: soul, memory, one harness. Slack, Linear, GitHub, Gmail, Calendar, and webhooks start runs. Code goes to a child worktree. Orca Cloud holds the inbound request until the computer takes it.
 
