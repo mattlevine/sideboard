@@ -37,6 +37,7 @@ import {
   resolveSidebarGitPrompt,
   type AgentGitAction,
 } from '../git/agent-git-actions.js';
+import { announceSkillPresent } from '../git/announce-skill.js';
 import {
   normalizePrState,
   shouldAutoArchiveOnPrMerge,
@@ -1448,6 +1449,7 @@ export class Orchestrator {
     const gitPrompt = expandCanonicalGitRequest(promptText, {
       forge: turnOrigin?.forge,
       worktreePath: thread.worktreePath,
+      hasAnnounceSkill: announceSkillPresent(thread.worktreePath),
     });
     const expandedAttachments = openSteerTurnAttachments(this.openSteerPrompt.get(threadId), turnAttachments, autoContinue);
     const { agentPrompt: expandedPrompt } = expandComposerPrompt(
