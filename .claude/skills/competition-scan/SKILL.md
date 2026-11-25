@@ -1,18 +1,21 @@
 ---
 name: competition-scan
 description: >-
-  Daily scan of products in Sideboard's space. Report what changed and one
-  recommendation: a product change, how the marketing talks about it, or a
-  change to a prior call. Prior calls can move. When there is one
-  recommendation, queue it and ask before any worktree. Use when the
-  competition-scan automation fires, or when someone asks for a competitive
-  scan. The report stays in the chat. Do not open a pull request from the
-  scan chat.
+  Daily what-to-do-today scan of products in Sideboard's space. Competition
+  informs docs/ROADMAP.md. The one recommendation is the unfinished Now or
+  Next item a dated peer fact makes the right next step, or a marketing or
+  prior-call change. Reinforcing a Now or Next item is a recommendation, not
+  a quiet day. When there is one recommendation, queue it and ask before any
+  worktree. Use when the competition-scan automation fires, or when someone
+  asks for a competitive scan. The report stays in the chat. Do not open a
+  pull request from the scan chat.
 ---
 
 # Competition scan
 
-One report per run. What changed since the last run among products that orchestrate coding agents, and at most one change Sideboard should make. A quiet day is a short report that says the set is unchanged.
+One report per run: what to do today. Competition informs `docs/ROADMAP.md`. The recommendation is the unfinished Now or Next item a dated peer fact makes the right next step, or a marketing or prior-call change. Name the item, for example "Now item 1: Put the phone app in people's hands." At most one recommendation.
+
+Reinforcing an unfinished Now or Next item is a recommendation. A quiet day is only when no dated peer fact makes any roadmap item, marketing change, or prior-call change the right next step. Do not call the day quiet because that item was already first on Now. Do not end the report with "the set is unchanged" when a dated peer fact reinforces work already on the roadmap.
 
 ## When
 
@@ -43,9 +46,15 @@ Search the open web. Prefer a primary source with a date: changelog, release not
 
 Sideboard today is an agent IDE whose wedge is the orchestration tier: a file editor, a terminal, and a URL preview on the desktop, a kanban of the fleet, an orchestrator MCP, and remotes (phone, CLI, MCP), without design mode, an embedded browser, or moving compute off this machine. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. `attach` returns to the harness session. A peer that centers an embedded terminal, browser, or design mode is an ADE in the same category. Do not treat "agent IDE" as a label that belongs only to Orca. Do not write that Sideboard is not an IDE, and do not write that the file editor, the terminal, or the URL preview is absent. That description is the current shape. A recommendation may move it.
 
-Recommend at most one change. It may be product, marketing, or a change to a prior call. Weigh it against `docs/ROADMAP.md`. Prefer the roadmap item a dated peer change makes the right next step, and name that item. A Decided item under Now or Next can still be that change. Do not reopen the decision, and do not recommend work listed under Not building. Leave Later and Open decisions in place unless the new fact makes that line the wrong product — then the recommendation is a change to that roadmap line, not a new direction. Leave a prior call in place on a day when nothing new makes it the right change. Change it when the peer, the product, the pitch, or the roadmap has moved, or when the old answer is now the wrong product. Name the old call and why it should move. A quiet day is still right when nothing dated moves an item.
+Recommend at most one change. Competition informs `docs/ROADMAP.md`. Prefer naming an unfinished Now or Next item when a dated peer change reinforces it. That is a recommendation, not a quiet day. Name the item, for example "Now item 1: Put the phone app in people's hands." Do not call the day quiet because the item was already first on Now. The other allowed recommendation is a marketing change, or a change to a prior call, that the same kind of dated fact makes the right next step.
 
-A product recommendation names the surface (board, orchestrator, phone, Slack, skills, or a prior call), the roadmap item when there is one, the fact that prompted it, and the URL when there is one. When the change is the roadmap line itself, include `docs/ROADMAP.md` in `files`.
+A Decided item under Now or Next can still be that recommendation. Do not reopen the decision. Do not recommend work listed under Not building. Leave Later and Open decisions in place unless the new fact makes that line the wrong product — then the recommendation is a change to that roadmap line, not a new direction.
+
+Leave a prior call in place when nothing new makes it the right change. Change it when the peer, the product, the pitch, or the roadmap has moved, or when the old answer is now the wrong product. Name the old call and why it should move.
+
+A quiet day is only when no dated peer fact makes any roadmap item, or any marketing or prior-call change, the right next step.
+
+A product recommendation names the unfinished Now or Next item it advances (for example, "Now item 1: Put the phone app in people's hands"), the surface (board, orchestrator, phone, Slack, or skills), the dated peer fact that prompted it, and the URL when there is one. Naming that item is the recommendation, including when it was already first on Now. When the change is the roadmap line itself, include `docs/ROADMAP.md` in `files`.
 
 A marketing recommendation names the file (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, or `site/docs/compare/index.html`), quotes the sentence from the default branch, and writes the replacement. When compare copy changes, name all three compare paths, including the published HTML. When the sentence is a public category claim, also name `docs/brand/content-brand-guide.md` (Category, required terms, and claim 11). It qualifies when that sentence is false, or when it is still true and the positioning is stale — the sentence tells the wrong story about this shape. Include the fact that prompted it and the URL when there is one.
 
@@ -57,7 +66,7 @@ Write the report in the chat, in this order:
 
 - **Changed.** Product, what shipped, date, and URL. Leave out anything you cannot date or source.
 - **New name.** A product missing from the compare notes. One sentence on its shape, and whether the notes should name it.
-- **Recommendation.** Zero or one. A product surface, marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), a roadmap item, or a change to a prior call. Name the roadmap item when the change is one. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. When nothing qualifies, write that the set is unchanged.
+- **Recommendation.** Zero or one. Prefer an unfinished Now or Next item a dated peer fact reinforces, and name it (for example, "Now item 1: Put the phone app in people's hands"). That naming is the recommendation. Also allowed: marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), a change to a Later or Open roadmap line the fact makes wrong, or a change to a prior call. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. A quiet day is only when no dated peer fact makes any of those the right next step. Write that. Do not write that the set is unchanged because peers reinforce an item already on Now.
 - **Compare notes.** Use this only when the recommendation is a product change and a compare sentence is also false or stale. Quote it and write the replacement. Name `docs/COMPARE.md`, `site/docs/_src/compare.md`, and `site/docs/compare/index.html`. When the one recommendation is itself that wording change, it belongs under Recommendation.
 
 Append the same report under today's date in `~/.sideboard/competition-scan.md`. Keep prior calls at the top. A recommendation that would change a prior call describes the old line and the proposed line in that day's report only. Do not rewrite the prior-call line until Approve. On Skip or Defer, leave that line as it was. If this run already wrote a provisional line, restore the previous wording before you stop. The rewritten line, once Approve has written it, replaces the seed in this skill on the next run. Do not edit this skill to move a call. Do not commit the log.
@@ -66,7 +75,7 @@ Do not edit the compare notes, the README, the homepage, the roadmap, or this sk
 
 ## Queue
 
-After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/competition-scan-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A quiet day (no recommendation, or the set is unchanged) adds no row.
+After the chat report and the log append, when the report has exactly one Recommendation, upsert one row in `~/.sideboard/competition-scan-queue.json`. Create the file when it is missing, as `{ "items": [] }`. A recommendation that names an unfinished Now or Next item is one recommendation, so it adds a row. A quiet day adds no row.
 
 ```json
 {
@@ -86,7 +95,7 @@ After the chat report and the log append, when the report has exactly one Recomm
 }
 ```
 
-`kind` is `product`, `marketing`, or `prior-call`. `files` lists the repo paths the recommendation named (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`, `docs/brand/content-brand-guide.md`, `docs/ROADMAP.md`), or `[]` when a prior call names none. When compare copy changes, include `site/docs/compare/index.html` with the two markdown files. `quote` is the sentence or the old prior call, taken from the default branch. `replacement` is the new wording or the new call. `url` is the dated source, or `""` when there is none. `status` is `pending`, `approved`, `skipped`, `deferred`, or `shipped`.
+`kind` is `product`, `marketing`, or `prior-call`. An unfinished Now or Next item is `product`: `summary` names the item, and `quote` is that roadmap line. `files` lists the repo paths the recommendation named (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`, `docs/brand/content-brand-guide.md`, `docs/ROADMAP.md`), or `[]` only when a prior call names none. When compare copy changes, include `site/docs/compare/index.html` with the two markdown files. `quote` is the sentence, the roadmap line, or the old prior call, taken from the default branch. `replacement` is the new wording or the new call. For a Now or Next item the child should do, `replacement` restates the item and the dated peer fact. `url` is the dated source, or `""` when there is none. `status` is `pending`, `approved`, `skipped`, `deferred`, or `shipped`.
 
 `id` is `YYYY-MM-DD-<kind>-<slug>`. The slug is a few kebab-case words from the summary, and the same recommendation on the same day keeps the same id. Upsert that id. When the row is `pending`, refresh the fields and leave the status. When the row is already `approved`, `skipped`, `deferred`, or `shipped`, leave it. A different recommendation is a new row. Do not commit the queue.
 
@@ -98,13 +107,13 @@ When this run appended or refreshed a `pending` row, explain the recommendation 
 - **Skip**
 - **Defer**
 
-Then stop. Do not `create_workspace` before the person answers. A quiet day does not call `ask_user`. A row that was already decided does not call `ask_user` again.
+Then stop. Do not `create_workspace` before the person answers. A recommendation that names an unfinished Now or Next item still calls `ask_user`. A quiet day does not call `ask_user`. A row that was already decided does not call `ask_user` again.
 
 This Global chat is the orchestrator. There is no named bot and no second orchestrator. The schedule text lives in the local automation, not in this repo. The next run follows this skill. Do not edit `~/Library/Application Support/sideboard/schedules.json` from a worktree.
 
 When the person answers:
 
-- **Approve.** When the recommendation is a prior call, this is the first moment that line may change. Rewrite it in `~/.sideboard/competition-scan.md` to the proposed wording, and keep the old wording under today's report. When `files` is empty, set the row to `shipped` and stop. There is no pull request. When `files` is not empty, set the row to `approved`. `list_projects`, then `create_workspace` on the Sideboard repo from `main` (`sourceType` `branch`, `sourceRef` `main`, `repoPath` from that project, `title` from the summary). `create_workspace` takes no prompt. `send_to_chat` on the new chat with a tight prompt from the row: kind, summary, files, quote, replacement, and url. The child implements only that change. When `site/docs/compare/index.html` is in `files`, edit that HTML by hand so it matches the markdown. Do not run `scripts/render-site-docs.py`. It strips the live chrome. The child opens a draft PR (`gh pr create --draft --assignee @me -R mattlevine/sideboard`) and does not merge. Loop `wait_for_turn` until `stillRunning` is false. Set the row to `shipped` only when a draft PR URL is back. When the child fails or returns no PR URL, set the row back to `pending` so a later run can ask again.
+- **Approve.** When the recommendation is a prior call, this is the first moment that line may change. Rewrite it in `~/.sideboard/competition-scan.md` to the proposed wording, and keep the old wording under today's report. When the recommendation is a prior call and `files` is empty, set the row to `shipped` and stop. There is no pull request. When `files` is not empty, or when `kind` is `product` or `marketing`, set the row to `approved`. `list_projects`, then `create_workspace` on the Sideboard repo from `main` (`sourceType` `branch`, `sourceRef` `main`, `repoPath` from that project, `title` from the summary). `create_workspace` takes no prompt. `send_to_chat` on the new chat with a tight prompt from the row: kind, summary, files, quote, replacement, and url. The child implements only that change. When `site/docs/compare/index.html` is in `files`, edit that HTML by hand so it matches the markdown. Do not run `scripts/render-site-docs.py`. It strips the live chrome. The child opens a draft PR (`gh pr create --draft --assignee @me -R mattlevine/sideboard`) and does not merge. Loop `wait_for_turn` until `stillRunning` is false. Set the row to `shipped` only when a draft PR URL is back. When the child fails or returns no PR URL, set the row back to `pending` so a later run can ask again.
 - **Skip.** Set the row to `skipped`. Leave every prior-call line unchanged. If a provisional line was written, restore the previous wording. Stop.
 - **Defer.** Set the row to `deferred`. Leave every prior-call line unchanged. If a provisional line was written, restore the previous wording. Stop.
 
