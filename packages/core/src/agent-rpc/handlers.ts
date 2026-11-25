@@ -9,6 +9,8 @@ import {
   waitForTurnToolResult,
   type WaitForTurnToolResult,
 } from '../mcp/wait-for-turn.js';
+import { macosComputerUseRunner, performComputerUse } from '../computer-use/computer-use.js';
+import { computerUseEnabled } from '../store/app-settings.js';
 import { handlePermissionAsk } from './permission-handler.js';
 import {
   AGENT_RPC_JOB_HOLD_MAX_MS,
@@ -257,10 +259,25 @@ export async function handleTurnWait(
   );
 }
 
+async function handleComputerAct(
+  params: unknown,
+  ctx: AgentRpcCallContext,
+): Promise<unknown> {
+  const rec = asRecord(params);
+  const cwd = str(rec.cwd).trim() || ctx.cwd;
+  return performComputerUse({
+    enabled: computerUseEnabled(),
+    cwd,
+    input: rec,
+    runner: macosComputerUseRunner,
+  });
+}
+
 export function createAgentRpcDispatcher(): Record<string, AgentRpcHandler> {
   return {
     'runtime.ping': handleRuntimePing,
     'ui.presentArtifact': handlePresentArtifact,
+    'computer.act': handleComputerAct,
     'job.wait': handleJobWait,
     'job.stop': handleJobStop,
     'turn.wait': handleTurnWait,

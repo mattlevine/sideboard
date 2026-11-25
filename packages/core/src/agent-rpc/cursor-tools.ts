@@ -51,6 +51,11 @@ export function sideboardCursorRpcTools(
       inputSchema: PILOT_TOOL_SCHEMAS.stop_job,
       execute: exec.stop_job,
     },
+    computer_use: {
+      description: PILOT_TOOL_DESCRIPTIONS.computer_use,
+      inputSchema: PILOT_TOOL_SCHEMAS.computer_use,
+      execute: exec.computer_use,
+    },
   };
   if (opts.includeWaitForTurn) {
     tools.wait_for_turn = {

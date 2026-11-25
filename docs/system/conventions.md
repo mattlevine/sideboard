@@ -26,6 +26,10 @@ In a Sideboard worktree, setup and agent env already point `pnpm install` at `.c
 - Do not put Slack client secrets or `xapp-` tokens in git or the DMG. Relay secrets live on Fly (`SIDEBOARD_SLACK_CLIENT_SECRET`, `SIDEBOARD_SLACK_APP_TOKEN`).
 - Do not commit `Untitled/`, `.env`, vault files, or `apps/desktop/release/`.
 
+## UI
+
+A change to a screen a person sees is judged for visual design as well as behavior: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface. Computer use (Settings → Advanced, off by default) is how an agent looks at and drives the running app. Clicks and scrolls use screen points. The screenshot result includes scale, and scroll is a wheel event at that point. A browser tab is not the Electron window.
+
 ## Docs
 
 - User-facing behavior (CLI, MCP, Slack URLs, install, process skills): update `README.md`, the matching file under `docs/`, and `site/` (marketing + `/docs/`) when the public story changes.

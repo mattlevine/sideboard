@@ -240,7 +240,7 @@ Step 1 is a small view. Steps 2 and 3 are the change the post describes, and the
 
 ## Not building
 
-- **Design mode as the workspace.** No design mode, computer use, or mobile emulator. The desktop already has a file editor, a terminal, and a URL preview. `attach` returns to the harness session.
+- **Design mode as the workspace.** No design mode and no mobile emulator. The desktop already has a file editor, a terminal, and a URL preview. `attach` returns to the harness session. Computer use is Settings → Advanced, off by default, so an agent can test a running app, including how it looks. It is not the workspace.
 - **Rented cloud sandboxes.** Item 5 is the answer to a closed laptop. The 2027 sketch argues the other way. See open decision 4.
 - **A Sideboard agent or model.** Agents stay plugs.
 - **A Windows or Linux desktop app** before the Linux host in item 5 exists.

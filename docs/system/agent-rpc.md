@@ -47,9 +47,12 @@ synchronously before closing sockets so Electron `will-quit` need not await.
 | `job.wait` | `wait_for_job` / `mcp__sideboard_rpc__wait_for_job` | omitted on that harness MCP |
 | `job.stop` | `stop_job` / `mcp__sideboard_rpc__stop_job` | omitted on that harness MCP |
 | `turn.wait` | `wait_for_turn` (Cursor orchestration `customTools`) | omitted on that harness MCP (`shouldRegisterMcpWaitForTurn`) |
+| `computer.act` | `computer_use` (Cursor/OpenCode); `mcp__sideboard_rpc__computer_use` (Claude SDK) | omitted when `SIDEBOARD_AGENT_RPC_NATIVE=1` |
 
-`job.wait` and `job.stop` require an absolute worktree `cwd` in params
-(the desktop's own cwd is `/` when packaged). `job.wait` and `turn.wait`
+`job.wait`, `job.stop`, and `computer.act` require an absolute worktree `cwd` in params
+(the desktop's own cwd is `/` when packaged). A screenshot result includes point
+`width`, `height`, and `scale`. `x` and `y` are screen points (divide a PNG pixel
+by `scale`). Scroll posts a wheel event at that point. `job.wait` and `turn.wait`
 hold until `stillRunning` is false or `AGENT_RPC_JOB_HOLD_MAX_MS` (120s),
 then return `stillRunning: true` and the model calls again. The cap sits
 under the Cursor runner's stream-idle guard (`CURSOR_STREAM_IDLE_MS`, 180s);

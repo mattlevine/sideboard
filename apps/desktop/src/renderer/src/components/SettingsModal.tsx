@@ -35,6 +35,7 @@ import {
 } from '../lib/chat-text-scale';
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
+import { ComputerUseSetting } from './ComputerUseSetting';
 import { ConnectorsSettings } from './ConnectorsSettings';
 import { GitSettings, type GitSettingsPanel } from './GitSettings';
 import { GitSettingsNav } from './GitSettingsNav';
@@ -1916,6 +1917,7 @@ export function SettingsModal({
                     </select>
                   </div>
                 </div>
+                <ComputerUseSetting on={Boolean(advanced.computerUse)} disabled={busy} onToggle={() => void saveAdvancedPatch({ computerUse: !advanced.computerUse })} />
 
                 <div className="settings-section">
                   <div className="settings-toggle-row">

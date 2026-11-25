@@ -23,6 +23,7 @@ import {
   threadMayPresentPlan,
 } from '../plan/plan-present.js';
 import { resolveRunScriptThreadRef } from './run-script-ref.js';
+import { registerComputerUseTool } from './computer-use-tool.js';
 import { workspaceAgentChatSummaries } from '../threads/chat-tabs.js';
 import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
 import { applyWorkspaceTags, workspaceTagTargetRef } from '../threads/workspace-tags.js';
@@ -744,6 +745,8 @@ export async function startMcpServer(): Promise<void> {
       }
     },
   );
+
+  registerComputerUseTool(server, mcpCatalog);
 
   if (worktreeProfile) {
     server.tool(

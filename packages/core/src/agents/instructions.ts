@@ -12,7 +12,8 @@ import {
 import { formatDetachedJobInvoke } from '../skills/detached-job-path.js';
 import { isOrchestratorThread } from '../store/global-workspace.js';
 import { connectedOrchestrator } from '../threads/connected-orchestrator.js';
-import type { GithubGitAuthMode, IssueSource } from '../store/app-settings.js';
+import { computerUseEnabled, type GithubGitAuthMode, type IssueSource } from '../store/app-settings.js';
+import { formatComputerUseHint } from '../computer-use/computer-use.js';
 import type { DevPreview } from '../hook/dev-preview.js';
 import type { ActiveRun, Thread } from '../types/thread.js';
 
@@ -193,6 +194,7 @@ export function formatWorktreeDirective(
   );
   lines.push('');
   lines.push(formatDevAccessHint(opts?.activeRuns));
+  lines.push(formatComputerUseHint(computerUseEnabled()));
   lines.push('');
   lines.push(
     'Automations (sidebar, after Board): `create_schedule` / `list_schedules` (`at` / `every` / `cron` / `time`+`days`). `archiveChat=false` keeps the new chat. `chatId=self` is removed when this chat is archived. Fires only while Sideboard.app is running. Future jobs turn on Caffeinate. `create_follow_up` (ci|at) waits behind this turn.',

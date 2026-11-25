@@ -122,6 +122,22 @@ export const SideboardRpc = async (ctx) => {
           return job("job.stop", args)
         },
       }),
+      computer_use: tool({
+        description: ${JSON.stringify(PILOT_TOOL_DESCRIPTIONS.computer_use)},
+        args: {
+          action: tool.schema.enum(["screenshot", "click", "type", "key", "scroll"]),
+          x: tool.schema.number().optional().describe("Screen x in points, not PNG pixels"),
+          y: tool.schema.number().optional().describe("Screen y in points, not PNG pixels"),
+          text: opt("Text to type"),
+          key: opt("One key: return, tab, escape, arrows, delete, or one character"),
+          modifiers: tool.schema.array(tool.schema.string()).optional().describe("command, shift, option, control"),
+          dx: tool.schema.number().optional().describe("Horizontal scroll in points. Positive is right"),
+          dy: tool.schema.number().optional().describe("Vertical scroll in points. Positive is down"),
+        },
+        async execute(args) {
+          return job("computer.act", args)
+        },
+      }),
     },
   }
 }

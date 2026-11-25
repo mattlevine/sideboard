@@ -29,6 +29,7 @@ describe('agentRpcOwnsPilotTools / injectedSideboardMcpEnv', () => {
     expect(native).not.toContain('present_artifact');
     expect(native).not.toContain('wait_for_job');
     expect(native).not.toContain('stop_job');
+    expect(native).not.toContain('computer_use');
     expect(native).toContain('ask_user');
   });
 
@@ -92,6 +93,7 @@ describe('sideboardMcpProfile', () => {
       'run_dev_script',
       'stop_dev_script',
       'get_run_log',
+      'computer_use',
       'get_orchestrator',
       'notify_orchestrator',
       'set_workspace_tags',
