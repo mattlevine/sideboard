@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   appleScriptString,
   performComputerUse,
+  typeScripts,
   pngPointSize,
   pointGeometry,
   scrollWheelSwift,
@@ -154,6 +155,19 @@ describe('performComputerUse', () => {
       `tell application "System Events" to keystroke ${appleScriptString('say "hi"')}`,
     );
     expect(fake.scripts[0]).toContain('\\"hi\\"');
+  });
+
+  it('types a newline as return between lines', async () => {
+    const fake = runner();
+    await performComputerUse({
+      enabled: true,
+      cwd: '/tmp/wt',
+      input: { action: 'type', text: 'say "hi"\nnext' },
+      runner: fake,
+    });
+    expect(fake.scripts).toEqual(typeScripts('say "hi"\nnext'));
+    expect(fake.scripts[1]).toBe('tell application "System Events" to key code 36');
+    expect(fake.scripts.every((script) => !script.includes('\n'))).toBe(true);
   });
 
   it('rejects an unknown action', async () => {

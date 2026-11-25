@@ -60,6 +60,21 @@ export function appleScriptString(text: string): string {
   return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
+/** One `osascript -e` statement per line. A raw newline is not a legal `-e` script. */
+export function typeScripts(text: string): string[] {
+  const parts = text.split(/\r\n|\n|\r/);
+  const scripts: string[] = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    if (parts[i]) {
+      scripts.push(`tell application "System Events" to keystroke ${appleScriptString(parts[i])}`);
+    }
+    if (i < parts.length - 1) {
+      scripts.push('tell application "System Events" to key code 36');
+    }
+  }
+  return scripts;
+}
+
 export function modifierClause(modifiers: string[]): string {
   const downs = modifiers.map((name) => {
     if (name === 'cmd' || name === 'command') return 'command down';
@@ -213,9 +228,9 @@ export async function performComputerUse(opts: {
       const text = typeof rec.text === 'string' ? rec.text : '';
       if (!text) return { ok: false, error: 'type requires text' };
       if (text.length > 2000) return { ok: false, error: 'type text is longer than 2000 characters' };
-      await opts.runner.runAppleScript(
-        `tell application "System Events" to keystroke ${appleScriptString(text)}`,
-      );
+      for (const script of typeScripts(text)) {
+        await opts.runner.runAppleScript(script);
+      }
       return { ok: true, action, message: `Typed ${text.length} characters.` };
     }
     if (action === 'key') {
