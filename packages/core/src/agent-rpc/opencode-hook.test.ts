@@ -49,7 +49,7 @@ describe('OpenCode Agent RPC plugin', () => {
         [
           'function chain() { const node = { describe() { return node }, optional() { return node } }; return node }',
           'export function tool(def) { return def }',
-          'tool.schema = { string: () => chain(), enum: () => chain() }',
+          'tool.schema = { string: () => chain(), number: () => chain(), enum: () => chain(), array: () => chain() }',
         ].join('\n'),
       );
       const pluginPath = join(dir, 'sideboard-rpc.mjs');

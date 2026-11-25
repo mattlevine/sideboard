@@ -93,6 +93,7 @@ describe('sideboardMcpProfile', () => {
       'run_dev_script',
       'stop_dev_script',
       'get_run_log',
+      'computer_use',
       'get_orchestrator',
       'notify_orchestrator',
       'set_workspace_tags',

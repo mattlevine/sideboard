@@ -28,7 +28,7 @@ In a Sideboard worktree, setup and agent env already point `pnpm install` at `.c
 
 ## UI
 
-A change to a screen a person sees is judged for visual design as well as behavior: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface. Computer use (Settings → Advanced, off by default) is how an agent looks at and drives the running app. A browser tab is not the Electron window.
+A change to a screen a person sees is judged for visual design as well as behavior: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface. Computer use (Settings → Advanced, off by default) is how an agent looks at and drives the running app. Clicks and scrolls use screen points. The screenshot result includes scale, and scroll is a wheel event at that point. A browser tab is not the Electron window.
 
 ## Docs
 

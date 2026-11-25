@@ -759,8 +759,14 @@ export async function startMcpServer(): Promise<void> {
         action: z
           .enum(['screenshot', 'click', 'type', 'key', 'scroll'])
           .describe('screenshot, click, type, key, or scroll'),
-        x: z.number().optional().describe('Screen x for click'),
-        y: z.number().optional().describe('Screen y for click'),
+        x: z
+          .number()
+          .optional()
+          .describe('Screen x in points, not PNG pixels, for click and scroll'),
+        y: z
+          .number()
+          .optional()
+          .describe('Screen y in points, not PNG pixels, for click and scroll'),
         text: z.string().optional().describe('Text to type'),
         key: z
           .string()
@@ -770,8 +776,8 @@ export async function startMcpServer(): Promise<void> {
           .array(z.string())
           .optional()
           .describe('command, shift, option, control'),
-        dx: z.number().optional().describe('Horizontal scroll'),
-        dy: z.number().optional().describe('Vertical scroll. Positive is down'),
+        dx: z.number().optional().describe('Horizontal scroll in points. Positive is right'),
+        dy: z.number().optional().describe('Vertical scroll in points. Positive is down'),
       },
       async (args) => {
         const result = await performComputerUse({

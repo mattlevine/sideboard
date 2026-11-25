@@ -178,7 +178,7 @@ When the slice changes a surface a person can run, the child starts that worktre
 
 `preview=url` means open that URL and exercise the slice: click, type, submit, and the empty or error state the slice touches. A screenshot is not the test. `preview=window` means the Electron window is the app and `url` is renderer/HMR only. Do not treat a browser tab as the desktop app. The desktop app is electron-vite (`pnpm --filter @sideboard-ai/desktop dev`), so a board change is a window. The phone is Expo (`pnpm --filter @sideboard-ai/mobile start`) on its own port. When `list_run_scripts` is empty, say so in the pull request and do not invent a port. A docs-only or copy-only slice starts no Dev app. The pull request says what was exercised and what could not be verified.
 
-Also judge visual design, not only behavior: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface. When Settings → Advanced → Computer use is on, `computer_use` screenshots the running app and the child reads that PNG, then clicks and types through the slice. When it is off, the pull request says the visual pass was not seen. Do not treat a browser tab as the Electron window.
+Also judge visual design, not only behavior: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface. When Settings → Advanced → Computer use is on, `computer_use` screenshots the running app and the child reads that PNG, then clicks and types through the slice. x and y are screen points: divide a PNG pixel by the returned scale. When it is off, the pull request says the visual pass was not seen. Do not treat a browser tab as the Electron window.
 
 ## After merge
 

@@ -1924,7 +1924,7 @@ export function SettingsModal({
                       <p className="settings-hint">
                         Let an agent screenshot, click, and type on this Mac to test a running
                         app, including how the screen looks. Off by default. Sideboard needs
-                        Accessibility permission. This is not design mode.
+                        Accessibility and Screen Recording permission. This is not design mode.
                       </p>
                     </div>
                     <button

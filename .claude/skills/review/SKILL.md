@@ -26,7 +26,7 @@ People running this review are asking “can we ship this?” Treat that as the 
 
 When the diff changes a screen a person sees (desktop, phone, or site), judge how it looks as well as whether it works. Hierarchy, alignment, spacing, type size, contrast, and fit with the surrounding surface. A control that works but is cramped, misaligned, low-contrast, or a different density than its neighbors is a finding. Blocking when that makes the screen harder to use. A nit when the mismatch is small and the rest of that screen already looks that way.
 
-Look with `computer_use` when Settings → Advanced has it on: screenshot, then the clicks the change needs, and read the PNG. When it is off, say the visual pass was not seen. Do not treat a browser tab as the Electron window.
+Look with `computer_use` when Settings → Advanced has it on: screenshot, then the clicks the change needs, and read the PNG. x and y are screen points: the screenshot result must include scale, and scroll must be a wheel event at that point rather than arrow keys. When it is off, say the visual pass was not seen. Do not treat a browser tab as the Electron window.
 
 ## Confirm before posting
 
