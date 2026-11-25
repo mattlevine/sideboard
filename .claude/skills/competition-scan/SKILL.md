@@ -25,6 +25,7 @@ The local automation fires this in a new Global chat, or a person asks for a com
    - `README.md` through "Why it exists"
    - `site/index.html` (the homepage)
    - `docs/COMPARE.md`, `site/docs/_src/compare.md`, and `site/docs/compare/index.html`. The two markdown files carry the same facts and different links. When they disagree with each other or with the published HTML, say so in the report.
+   - `docs/ROADMAP.md`. Read Now, Next, Later, Not building, Decided, and Open decisions.
    Quote that tree. Do not quote a worktree that is not that branch, including the checkout that holds this skill. Leave the main repo checkout unedited. When `site/docs/_src/compare.md` is missing on that branch, say so. Do not invent the file.
 3. `list_schedules`. Find this automation and the previous run's chat id. `get_chat` on that id is a preview. The log file is the record.
 
@@ -42,9 +43,9 @@ Search the open web. Prefer a primary source with a date: changelog, release not
 
 Sideboard today is an agent IDE whose wedge is the orchestration tier: a file editor, a terminal, and a URL preview on the desktop, a kanban of the fleet, an orchestrator MCP, and remotes (phone, CLI, MCP), without design mode, an embedded browser, or moving compute off this machine. The checkout is the unit. One orchestrator on this Mac can see every chat. The phone is the remote. Slack is collaboration. Skills live in the repo. Compute stays on this Mac. `attach` returns to the harness session. A peer that centers an embedded terminal, browser, or design mode is an ADE in the same category. Do not treat "agent IDE" as a label that belongs only to Orca. Do not write that Sideboard is not an IDE, and do not write that the file editor, the terminal, or the URL preview is absent. That description is the current shape. A recommendation may move it.
 
-Recommend at most one change. It may be product, marketing, or a change to a prior call. Leave a prior call in place on a day when nothing new makes it the right change. Change it when the peer, the product, or the pitch has moved, or when the old answer is now the wrong product. Name the old call and why it should move.
+Recommend at most one change. It may be product, marketing, or a change to a prior call. Weigh it against `docs/ROADMAP.md`. Prefer the roadmap item a dated peer change makes the right next step, and name that item. A Decided item under Now or Next can still be that change. Do not reopen the decision, and do not recommend work listed under Not building. Leave Later and Open decisions in place unless the new fact makes that line the wrong product — then the recommendation is a change to that roadmap line, not a new direction. Leave a prior call in place on a day when nothing new makes it the right change. Change it when the peer, the product, the pitch, or the roadmap has moved, or when the old answer is now the wrong product. Name the old call and why it should move. A quiet day is still right when nothing dated moves an item.
 
-A product recommendation names the surface (board, orchestrator, phone, Slack, skills, or a prior call), the fact that prompted it, and the URL when there is one.
+A product recommendation names the surface (board, orchestrator, phone, Slack, skills, or a prior call), the roadmap item when there is one, the fact that prompted it, and the URL when there is one. When the change is the roadmap line itself, include `docs/ROADMAP.md` in `files`.
 
 A marketing recommendation names the file (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, or `site/docs/compare/index.html`), quotes the sentence from the default branch, and writes the replacement. When compare copy changes, name all three compare paths, including the published HTML. When the sentence is a public category claim, also name `docs/brand/content-brand-guide.md` (Category, required terms, and claim 11). It qualifies when that sentence is false, or when it is still true and the positioning is stale — the sentence tells the wrong story about this shape. Include the fact that prompted it and the URL when there is one.
 
@@ -56,12 +57,12 @@ Write the report in the chat, in this order:
 
 - **Changed.** Product, what shipped, date, and URL. Leave out anything you cannot date or source.
 - **New name.** A product missing from the compare notes. One sentence on its shape, and whether the notes should name it.
-- **Recommendation.** Zero or one. A product surface, marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), or a change to a prior call. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. When nothing qualifies, write that the set is unchanged.
+- **Recommendation.** Zero or one. A product surface, marketing copy (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`), a roadmap item, or a change to a prior call. Name the roadmap item when the change is one. For marketing, name the file, quote the sentence, and write the replacement. For a prior call, name the old call and why it should move. A stale true sentence qualifies. When nothing qualifies, write that the set is unchanged.
 - **Compare notes.** Use this only when the recommendation is a product change and a compare sentence is also false or stale. Quote it and write the replacement. Name `docs/COMPARE.md`, `site/docs/_src/compare.md`, and `site/docs/compare/index.html`. When the one recommendation is itself that wording change, it belongs under Recommendation.
 
 Append the same report under today's date in `~/.sideboard/competition-scan.md`. Keep prior calls at the top. A recommendation that would change a prior call describes the old line and the proposed line in that day's report only. Do not rewrite the prior-call line until Approve. On Skip or Defer, leave that line as it was. If this run already wrote a provisional line, restore the previous wording before you stop. The rewritten line, once Approve has written it, replaces the seed in this skill on the next run. Do not edit this skill to move a call. Do not commit the log.
 
-Do not edit the compare notes, the README, the homepage, or this skill in the scan turn. Implementation is a separate Approve worktree. Do not open a pull request from the scan chat.
+Do not edit the compare notes, the README, the homepage, the roadmap, or this skill in the scan turn. Implementation is a separate Approve worktree. Do not open a pull request from the scan chat.
 
 ## Queue
 
@@ -85,7 +86,7 @@ After the chat report and the log append, when the report has exactly one Recomm
 }
 ```
 
-`kind` is `product`, `marketing`, or `prior-call`. `files` lists the repo paths the recommendation named (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`, `docs/brand/content-brand-guide.md`), or `[]` when a prior call names none. When compare copy changes, include `site/docs/compare/index.html` with the two markdown files. `quote` is the sentence or the old prior call, taken from the default branch. `replacement` is the new wording or the new call. `url` is the dated source, or `""` when there is none. `status` is `pending`, `approved`, `skipped`, `deferred`, or `shipped`.
+`kind` is `product`, `marketing`, or `prior-call`. `files` lists the repo paths the recommendation named (`README.md`, `site/index.html`, `docs/COMPARE.md`, `site/docs/_src/compare.md`, `site/docs/compare/index.html`, `docs/brand/content-brand-guide.md`, `docs/ROADMAP.md`), or `[]` when a prior call names none. When compare copy changes, include `site/docs/compare/index.html` with the two markdown files. `quote` is the sentence or the old prior call, taken from the default branch. `replacement` is the new wording or the new call. `url` is the dated source, or `""` when there is none. `status` is `pending`, `approved`, `skipped`, `deferred`, or `shipped`.
 
 `id` is `YYYY-MM-DD-<kind>-<slug>`. The slug is a few kebab-case words from the summary, and the same recommendation on the same day keeps the same id. Upsert that id. When the row is `pending`, refresh the fields and leave the status. When the row is already `approved`, `skipped`, `deferred`, or `shipped`, leave it. A different recommendation is a new row. Do not commit the queue.
 
