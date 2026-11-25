@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.352] - 2026-11-25
+
+### Added
+
+- Settings → Advanced → Computer use, off by default, lets an agent screenshot, click, and type on this Mac to test a running app, including how the screen looks. The screenshot includes scale so clicks are screen points, and scroll is a wheel event at that point. Sideboard needs Accessibility and Screen Recording.
+
 ## [0.1.351] - 2026-11-23
 
 ### Fixed
