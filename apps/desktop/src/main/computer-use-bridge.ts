@@ -79,6 +79,12 @@ async function anotherAppIsPosting(): Promise<boolean> {
   }
 }
 
+export function syncComputerUseFromPatch(patch: { computerUse?: boolean }): void {
+  if (!('computerUse' in patch)) return;
+  const on = patch.computerUse === true;
+  syncComputerUseBridge({ accessibility: on, screen: on });
+}
+
 export function syncComputerUseBridge(opts: { accessibility: boolean; screen: boolean }): void {
   if (process.platform !== 'darwin') return;
   if (!computerUseEnabled()) {

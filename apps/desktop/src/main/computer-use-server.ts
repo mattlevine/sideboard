@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import {
   computerUseBridgePath,
   parseComputerUseInput,
+  readComputerUseBridge,
   type ComputerUseInput,
 } from '@sideboard-ai/core';
 
@@ -123,12 +124,19 @@ async function handle(
   }
 }
 
+/**
+ * Close this server. Dev and the installed app share one bridge file, so
+ * unlink it only when it still names this port.
+ */
 export function closeComputerUseBridge(
   running: RunningComputerUseBridge | null,
   bridgeFile = computerUseBridgePath(),
 ): void {
+  const port = running?.port;
   running?.server.close();
+  if (port == null) return;
   try {
+    if (readComputerUseBridge(bridgeFile)?.port !== port) return;
     unlinkSync(bridgeFile);
   } catch {
     // already gone

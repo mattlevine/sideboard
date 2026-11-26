@@ -231,7 +231,7 @@ import {
 } from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
 import { startDesktopHost, stopDesktopHost } from './desktop-host';
-import { stopComputerUseBridge, syncComputerUseBridge } from './computer-use-bridge';
+import { stopComputerUseBridge, syncComputerUseBridge, syncComputerUseFromPatch } from './computer-use-bridge';
 
 /** Walk up from `startDir` to the nearest `.git` (worktree root or repo checkout). */
 function findWorktreeRoot(startDir: string): string | null {
@@ -1027,10 +1027,7 @@ function registerIpc(): void {
     if ('wakeOrchestratorOnGithubEdges' in patch) {
       armGithubEdgeWatch();
     }
-    if ('computerUse' in patch) {
-      const on = patch.computerUse === true;
-      syncComputerUseBridge({ accessibility: on, screen: on });
-    }
+    syncComputerUseFromPatch(patch);
     return toPublicAppSettings(saved);
   });
   ipcMain.handle('importAgentDoneSound', async () => {

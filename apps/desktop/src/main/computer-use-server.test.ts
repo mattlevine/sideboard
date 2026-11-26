@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -47,5 +47,24 @@ describe('computer use bridge server', () => {
     expect(Buffer.from(await shot.arrayBuffer()).toString()).toBe('not-a-png-but-long-enough!!');
     closeComputerUseBridge(running, file);
     expect(readComputerUseBridge(file)).toBeNull();
+  });
+
+  it('leaves the bridge file when another process owns the port', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cu-server-'));
+    dirs.push(dir);
+    const file = join(dir, 'computer-use-bridge.json');
+    const running = await listenComputerUseBridge(
+      {
+        postEvent() {},
+        async capturePng() {
+          return { png: Buffer.from('not-a-png-but-long-enough!!'), scale: 1 };
+        },
+      },
+      file,
+    );
+    const other = { port: running.port === 65535 ? 1 : running.port + 1, token: 'c'.repeat(32) };
+    writeFileSync(file, JSON.stringify(other), { mode: 0o600 });
+    closeComputerUseBridge(running, file);
+    expect(readComputerUseBridge(file)).toEqual(other);
   });
 });
