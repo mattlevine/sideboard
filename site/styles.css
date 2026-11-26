@@ -614,8 +614,20 @@ h1, h2, h3, h4, p { text-wrap: pretty }
 }
 .phone-band a { color: #fff; font-weight: 700 }
 
-.phone-features { padding-top: 72px }
-.phone-features h2 { max-width: 16ch }
+.phone-features {
+  padding-top: 72px;
+  text-align: center;
+}
+.phone-features h2 {
+  max-width: 16ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+.phone-features .sub {
+  margin-left: auto;
+  margin-right: auto;
+}
+.phone-features .cta-row { margin-top: 22px }
 .phone-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
