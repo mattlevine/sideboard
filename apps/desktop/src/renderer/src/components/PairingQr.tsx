@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { pairingQrDataUrl } from '../lib/pairing-qr';
 
-export function PairingQr({ value }: { value: string }) {
+export function PairingQr({ value, alt = 'Pairing QR code' }: { value: string; alt?: string }) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,5 +20,5 @@ export function PairingQr({ value }: { value: string }) {
   }, [value]);
 
   if (!src) return null;
-  return <img className="pairing-qr" src={src} alt="Pairing QR code" width={220} height={220} />;
+  return <img className="pairing-qr" src={src} alt={alt} width={220} height={220} />;
 }

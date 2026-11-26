@@ -245,16 +245,18 @@ export function RemoteSettings({
       <div className="settings-group">
         <div className="settings-group-title">Phone</div>
         <p className="settings-group-hint">
-          <button
-            type="button"
-            className="settings-link"
-            onClick={() => void window.sideboard.openExternal(TESTFLIGHT_URL)}
-          >
-            Install the iPhone app
-          </button>{' '}
-          from TestFlight. Sign in, then show a code the phone can scan. The phone chats with the
-          orchestrator on this Mac. Agents stay here. The relay only carries message text.
+          Scan this with the iPhone camera to install from TestFlight. Sign in here, then show a
+          code the phone can scan. The phone chats with the orchestrator on this Mac. Agents stay
+          here. The relay only carries message text.
         </p>
+        <PairingQr value={TESTFLIGHT_URL} alt="iPhone TestFlight install code" />
+        <input
+          readOnly
+          value={TESTFLIGHT_URL}
+          aria-label="TestFlight link to open on iPhone"
+          onFocus={(event) => event.currentTarget.select()}
+          style={{ width: '100%', marginTop: 8 }}
+        />
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Phone sign-in</div>
@@ -348,15 +350,7 @@ export function RemoteSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Pair a phone</div>
         <p className="settings-hint">
-          Scan this code with the Sideboard phone app from{' '}
-          <button
-            type="button"
-            className="settings-link"
-            onClick={() => void window.sideboard.openExternal(TESTFLIGHT_URL)}
-          >
-            TestFlight
-          </button>
-          . It pins this Mac and expires in 10 minutes.
+          Scan this code with the Sideboard phone app. It pins this Mac and expires in 10 minutes.
         </p>
         {remote?.pairingCode ? (
           <>
