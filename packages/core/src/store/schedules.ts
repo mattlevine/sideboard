@@ -44,6 +44,11 @@ export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 /** Newest runs kept on the automation itself. */
 export const SCHEDULE_RUN_HISTORY_LIMIT = 10;
 
+export { TICKET_ASSIGN_PLAN_PROMPT } from './ticket-assign-prompt.js';
+
+export const TICKET_ASSIGN_OFF_ERROR =
+  'Settings → Advanced → When a ticket is assigned to me is off.';
+
 /** One fire. `error` is set when that fire failed. A sleeping Mac does not write a row. */
 export interface ScheduleRunRecord {
   at: string;
@@ -306,7 +311,9 @@ function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
   const prompt = input.prompt.trim();
   if (!prompt) throw new Error('Schedule prompt is required');
   const when = normalizeWhen(input.when);
-  const nextRunAt = computeNextRunAt(when, now).toISOString();
+  // Ticket polls check immediately. Later fires wait one interval.
+  const nextRunAt =
+    when.kind === 'ticket-assigned' ? nowIso(now) : computeNextRunAt(when, now).toISOString();
   const ts = nowIso(now);
   const agent = input.agent
     ? coerceOrchestratorAgent(input.agent)
@@ -348,10 +355,11 @@ export function hasEnabledSchedules(): boolean {
 
 /** Enabled job whose next tick is still in the future. */
 export function scheduleNeedsCaffeinate(
-  task: Pick<ScheduledTask, 'enabled' | 'nextRunAt'>,
+  task: Pick<ScheduledTask, 'enabled' | 'nextRunAt'> & { when?: ScheduleWhen },
   now: Date = new Date(),
 ): boolean {
   if (!task.enabled) return false;
+  if (task.when?.kind === 'ticket-assigned') return true;
   const at = new Date(task.nextRunAt);
   if (Number.isNaN(at.getTime())) return false;
   return at.getTime() > now.getTime();
@@ -395,6 +403,8 @@ export function updateSchedule(
   const prompt = patch.prompt !== undefined ? patch.prompt.trim() : prev.prompt;
   if (!prompt) throw new Error('Schedule prompt is required');
   const whenChanged = patch.when !== undefined;
+  const enablingTicketAssign =
+    when.kind === 'ticket-assigned' && patch.enabled === true && !prev.enabled;
   const next: ScheduledTask = {
     ...prev,
     name:
@@ -431,7 +441,11 @@ export function updateSchedule(
         : prev.attachments,
     archiveChat:
       patch.archiveChat !== undefined ? patch.archiveChat !== false : prev.archiveChat,
-    nextRunAt: whenChanged ? computeNextRunAt(when).toISOString() : prev.nextRunAt,
+    nextRunAt: whenChanged
+      ? computeNextRunAt(when).toISOString()
+      : enablingTicketAssign
+        ? nowIso()
+        : prev.nextRunAt,
     lastError: whenChanged ? null : prev.lastError,
     updatedAt: nowIso(),
   };
@@ -458,6 +472,22 @@ export function deleteSchedule(id: string): void {
   );
   if (next.length === rows.length) throw new Error(`Automation not found: ${id}`);
   writeAll(next);
+}
+
+/** Move the next check forward without writing a run row. */
+export function postponeSchedule(id: string, at: Date = new Date()): ScheduledTask {
+  const rows = readAll();
+  const idx = rows.findIndex((row) => row.id === id);
+  if (idx < 0) throw new Error(`Automation not found: ${id}`);
+  const prev = rows[idx];
+  const next: ScheduledTask = {
+    ...prev,
+    nextRunAt: computeNextRunAt(prev.when, at).toISOString(),
+    updatedAt: nowIso(at),
+  };
+  rows[idx] = next;
+  writeAll(rows);
+  return next;
 }
 
 export function recordScheduleRun(

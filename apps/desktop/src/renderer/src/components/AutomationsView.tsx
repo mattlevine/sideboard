@@ -34,8 +34,9 @@ export function AutomationsView({
           >
             ?
             <span id="automations-help-tip" className="automations-help-tip" role="tooltip">
-              Jobs that send a prompt to a chat (Global orchestration or a worktree), or start a new
-              Global chat. Sideboard must be running. Creating or enabling a future job turns on
+              Clock jobs send a prompt to a chat, or start a new Global chat. A ticket assigned
+              to you can open a workspace and plan it (Settings → Advanced). That does not merge.
+              Sideboard must be running. Creating or enabling a future job turns on
               Settings → Advanced → Caffeinate while automations are enabled so the Mac can stay
               awake until due. A sleeping Mac waits until wake, so a quiet stretch is not a failed
               run. Each automation lists its last 10 runs. History still keeps the last 5 archived

@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import type { Thread } from '@sideboard-ai/core';
+import { TICKET_ASSIGN_PLAN_PROMPT } from '@sideboard/ticket-assign-prompt';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import type { ComposerDraftOptions } from './ComposerOptionsToolbar';
 import { AutomationPrompt } from './AutomationPrompt';
@@ -104,14 +105,37 @@ export function AutomationEditor({
         <select
           className="settings-select"
           value={form.kind}
-          onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as FormState['kind'] }))}
+          onChange={(e) => {
+            const kind = e.target.value as FormState['kind'];
+            setForm((f) => ({
+              ...f,
+              kind,
+              ...(kind === 'ticket-assigned'
+                ? {
+                    planMode: true,
+                    threadId: '',
+                    archiveChat: false,
+                    prompt: f.prompt.trim() ? f.prompt : TICKET_ASSIGN_PLAN_PROMPT,
+                  }
+                : {}),
+            }));
+          }}
         >
           <option value="once">Once at a datetime</option>
           <option value="every">Every interval</option>
           <option value="weekly">Days at a time</option>
           <option value="cron">Cron</option>
+          <option value="ticket-assigned">When a ticket is assigned to me</option>
         </select>
       </label>
+      {form.kind === 'ticket-assigned' && (
+        <p className="settings-hint">
+          Each new Linear or GitHub issue assigned to you opens a workspace and starts this
+          prompt as a plan. The first check only records tickets already assigned to you. It
+          does not merge. Sideboard has to be running. Turning this on also enables Settings →
+          Advanced → When a ticket is assigned to me.
+        </p>
+      )}
       {form.kind === 'once' && (
         <label className="settings-field">
           When
@@ -222,6 +246,7 @@ export function AutomationEditor({
           />
         </label>
       )}
+      {form.kind !== 'ticket-assigned' && (
       <label className="settings-field">
         Target
         <select
@@ -239,6 +264,7 @@ export function AutomationEditor({
           ))}
         </select>
       </label>
+      )}
       <label className="settings-check-row">
         <input
           type="checkbox"
@@ -247,7 +273,7 @@ export function AutomationEditor({
         />
         Enabled
       </label>
-      {!form.threadId && (
+      {form.kind !== 'ticket-assigned' && !form.threadId && (
         <label className="settings-check-row">
           <input
             type="checkbox"
@@ -257,7 +283,7 @@ export function AutomationEditor({
           Archive the chat when the run finishes
         </label>
       )}
-      {!form.threadId && (
+      {form.kind !== 'ticket-assigned' && !form.threadId && (
         <p className="settings-hint">
           {form.archiveChat
             ? 'History keeps the last 5 archived chats from this automation, and the automation keeps its last 10 runs. Leave this off when you want the chat to stay in the sidebar, such as a morning start-my-day run you will continue at your desk.'

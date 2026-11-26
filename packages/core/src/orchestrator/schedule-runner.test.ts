@@ -353,4 +353,144 @@ describe('schedule runner', () => {
       planMode: true,
     });
   });
+
+  it('opens a workspace and plans a newly assigned ticket, and does not merge', async () => {
+    const { store, runner } = await load();
+    const { expandCanonicalGitRequest } = await import('../git/agent-git-actions.js');
+    const { updateAdvancedSettings } = await import('../store/app-settings.js');
+    updateAdvancedSettings({ ticketAssignOpensWorkspace: true });
+    const opened: Array<{ planMode: boolean; prompt: string; identifier: string; repoPath: string }> = [];
+    let tickets = [
+      {
+        source: 'linear' as const,
+        identifier: 'ENG-1',
+        title: 'Login',
+        url: 'https://linear.app/eng-1',
+        projects: ['sideboard'],
+      },
+    ];
+    runner.setTicketAssignHooks({
+      list: async () => ({ tickets, failedPrefixes: [] }),
+      workspaces: () => [{ name: 'sideboard', path: '/repo' }],
+      findExisting: () => false,
+      open: async (input) => {
+        opened.push({
+          planMode: input.planMode,
+          prompt: input.prompt,
+          identifier: input.identifier,
+          repoPath: input.repoPath,
+        });
+        return { id: 'ws-1' };
+      },
+    });
+    const schedule = store.createSchedule({
+      name: 'Ticket assigned',
+      prompt: 'Plan this ticket. Write the plan in this workspace. Do not implement it, do not open a pull request, and do not merge.',
+      when: { kind: 'ticket-assigned' },
+      planMode: true,
+      createdBy: 'ui',
+    });
+    const baseline = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(0);
+    expect(baseline.lastError).toBeNull();
+    expect(runner.loadTicketAssignSnapshot().primed).toBe(true);
+    expect(runner.loadTicketAssignSnapshot().keys).toContain('linear:eng-1');
+
+    tickets = [
+      ...tickets,
+      {
+        source: 'linear',
+        identifier: 'ENG-2',
+        title: 'Signup',
+        url: 'https://linear.app/eng-2',
+        projects: [],
+      },
+    ];
+    const fired = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.identifier).toBe('ENG-2');
+    expect(opened[0]?.repoPath).toBe('/repo');
+    expect(opened[0]?.planMode).toBe(true);
+    expect(opened[0]?.prompt).toMatch(/Do not merge/);
+    expect(opened[0]?.prompt).not.toBe('Merge PR.');
+    expect(expandCanonicalGitRequest(opened[0]?.prompt ?? '')).toBe(opened[0]?.prompt);
+    expect(fired.lastThreadId).toBe('ws-1');
+    expect(fired.lastError).toBeNull();
+  });
+
+  it('does not open a workspace when the ticket-assign setting is off', async () => {
+    const { store, runner } = await load();
+    const opened: string[] = [];
+    runner.setTicketAssignHooks({
+      list: async () => ({
+        tickets: [
+          {
+            source: 'github',
+            identifier: '#4',
+            title: 'Bug',
+            url: 'https://github.com/acme/app/issues/4',
+            projects: [],
+            repoPath: '/repo',
+          },
+        ],
+        failedPrefixes: [],
+      }),
+      workspaces: () => [{ name: 'app', path: '/repo' }],
+      findExisting: () => false,
+      open: async (input) => {
+        opened.push(input.identifier);
+        return { id: 'ws' };
+      },
+    });
+    const schedule = store.createSchedule({
+      prompt: 'Plan this ticket.',
+      when: { kind: 'ticket-assigned' },
+      planMode: true,
+      createdBy: 'ui',
+    });
+    const after = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(0);
+    expect(after.lastError).toMatch(/When a ticket is assigned to me is off/);
+  });
+});
+
+describe('ticket assign latch', () => {
+  it('keeps keys from a source that failed to list', async () => {
+    const { planTicketAssignLatch, repoForAssignedTicket, ticketAssignKey } = await import(
+      './schedule-runner.js'
+    );
+    const first = planTicketAssignLatch({
+      prev: [],
+      primed: false,
+      observed: ['linear:eng-1'],
+      failedPrefixes: [],
+    });
+    expect(first.fresh).toEqual([]);
+    const second = planTicketAssignLatch({
+      prev: first.next,
+      primed: true,
+      observed: ['github:/repo:#9'],
+      failedPrefixes: ['linear:'],
+    });
+    expect(second.next).toContain('linear:eng-1');
+    expect(second.fresh).toEqual(['github:/repo:#9']);
+    expect(
+      repoForAssignedTicket(
+        {
+          source: 'linear',
+          identifier: 'ENG-9',
+          title: 'Mail',
+          url: '',
+          projects: ['sideboard'],
+        },
+        [
+          { name: 'other', path: '/other' },
+          { name: 'sideboard', path: '/repo' },
+        ],
+      ),
+    ).toBe('/repo');
+    expect(
+      ticketAssignKey({ source: 'github', identifier: '#9', repoPath: '/repo/' }),
+    ).toBe('github:/repo:#9');
+  });
 });

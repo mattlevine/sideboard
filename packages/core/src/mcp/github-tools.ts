@@ -58,7 +58,7 @@ export const GITHUB_ISSUE_MCP_TOOL_NAMES = [
 export function registerGithubIssueTools(server: McpServer): void {
   server.tool(
     'github_search_issues',
-    'Search or list open GitHub issues in this repo via Account gh. A Cursor origin returns unavailableReason — Origin has no issue tracker. An Entire origin does the same — tickets there are Trails (`entire trail`), not GitHub Issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all, or a login. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”).',
+    'Search or list open GitHub issues in this repo via Account gh. A Cursor origin returns unavailableReason — Origin has no issue tracker. An Entire origin does the same — tickets there are Trails (`entire trail`), not GitHub Issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all, or a login. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”). A ticket newly assigned to you opens a workspace and a plan only when Settings → Advanced → When a ticket is assigned to me is on. This tool only lists.',
     {
       query: z
         .string()

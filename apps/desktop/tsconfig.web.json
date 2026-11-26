@@ -38,6 +38,7 @@
       "@sideboard/history-retention": ["../../packages/core/src/store/history-retention.ts"],
       "@sideboard/phone-artifact": ["../../packages/core/src/remote/phone-artifact.ts"],
       "@sideboard/mcp-ui": ["../../packages/core/src/mcp-ui/client.ts"],
+      "@sideboard/ticket-assign-prompt": ["../../packages/core/src/store/ticket-assign-prompt.ts"],
       "@brightsy/ui-context": ["./node_modules/@brightsy/ui/src/context/UIComponentsContext.tsx"]
     }
   },

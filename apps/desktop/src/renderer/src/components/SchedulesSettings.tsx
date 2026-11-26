@@ -27,6 +27,7 @@ function formatWhen(when: ScheduleWhen): string {
     return Number.isNaN(d.getTime()) ? `once ${when.at}` : `once ${d.toLocaleString()}`;
   }
   if (when.kind === 'every') return `every ${when.every}`;
+  if (when.kind === 'ticket-assigned') return 'when a ticket is assigned to me';
   if (when.kind === 'weekly') {
     const key = [...when.days].sort((a, b) => a - b).join(',');
     const days =
@@ -178,7 +179,7 @@ export function SchedulesSettings({
         ...(name ? { name } : {}),
         prompt,
         when: whenFromForm(form),
-        threadId: form.threadId || null,
+        threadId: form.kind === 'ticket-assigned' ? null : form.threadId || null,
         agent: form.agent,
         model: form.model,
         effort: form.effort,
@@ -186,9 +187,12 @@ export function SchedulesSettings({
         planMode: form.planMode,
         autonomy: form.autonomy,
         attachments: form.attachments,
-        archiveChat: form.archiveChat,
+        archiveChat: form.kind === 'ticket-assigned' ? false : form.archiveChat,
         enabled: form.enabled,
       };
+      if (form.kind === 'ticket-assigned' && form.enabled) {
+        await window.sideboard.updateAdvancedSettings({ ticketAssignOpensWorkspace: true });
+      }
       if (editingId) await window.sideboard.updateSchedule(editingId, payload);
       else await window.sideboard.createSchedule(payload);
       closeForm();
@@ -218,7 +222,21 @@ export function SchedulesSettings({
     setBusy(true);
     setError(null);
     try {
+      const enablingTicket = row.when.kind === 'ticket-assigned' && !row.enabled;
+      const disablingTicket = row.when.kind === 'ticket-assigned' && row.enabled;
+      if (enablingTicket) {
+        await window.sideboard.updateAdvancedSettings({ ticketAssignOpensWorkspace: true });
+      }
       await window.sideboard.updateSchedule(row.id, { enabled: !row.enabled });
+      if (disablingTicket) {
+        const left = await window.sideboard.listSchedules();
+        const still = left.some(
+          (item: ScheduledTask) => item.when.kind === 'ticket-assigned' && item.enabled,
+        );
+        if (!still) {
+          await window.sideboard.updateAdvancedSettings({ ticketAssignOpensWorkspace: false });
+        }
+      }
       await reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -265,7 +283,10 @@ export function SchedulesSettings({
             <span className="chat-empty-cube" />
           </div>
           <h3>No automations yet</h3>
-          <p>Schedule a prompt for a chat, or start a new one on a timer.</p>
+          <p>
+            Schedule a prompt on a timer, or open a workspace when a ticket is assigned to
+            you.
+          </p>
           <div className="chat-empty-action">
             <button type="button" className="primary" disabled={busy} onClick={() => void openCreate()}>
               New automation
@@ -301,8 +322,15 @@ export function SchedulesSettings({
                     {row.enabled ? row.name : `${row.name} (off)`}
                   </span>
                   <span className="settings-history-meta">
-                    {formatWhen(row.when)} · {threadLabel(row.threadId)}
-                    {!row.threadId && row.archiveChat === false ? ' · stays open' : ''} · next{' '}
+                    {row.when.kind === 'ticket-assigned' ? (
+                      <>{formatWhen(row.when)} · opens a workspace</>
+                    ) : (
+                      <>
+                        {formatWhen(row.when)} · {threadLabel(row.threadId)}
+                        {!row.threadId && row.archiveChat === false ? ' · stays open' : ''}
+                      </>
+                    )}
+                    {' · next '}
                     {formatNext(row.nextRunAt)}
                     {row.runs.length === 0 && row.lastError ? ` · ${row.lastError}` : ''}
                   </span>
@@ -334,7 +362,9 @@ export function SchedulesSettings({
                             Open chat
                           </button>
                         ) : (
-                          <span>No chat</span>
+                          <span>
+                            {row.when.kind === 'ticket-assigned' ? 'No workspace' : 'No chat'}
+                          </span>
                         )}
                         {run.error ? <span className="automation-run-error">{run.error}</span> : null}
                       </li>

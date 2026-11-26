@@ -420,6 +420,12 @@ export interface AdvancedAppSettings {
    * Default off. The desktop host must be running (same as automations).
    */
   wakeOrchestratorOnGithubEdges?: boolean;
+  /**
+   * Poll Linear and GitHub for a ticket newly assigned to the viewer, then
+   * open a workspace and start a plan. Default off. The desktop host must be
+   * running. The first check only records current assignments. It cannot merge.
+   */
+  ticketAssignOpensWorkspace?: boolean;
   /** USD on chips and thread totals. Default off. */
   showCost?: boolean;
   /** Screenshot, click, and type on this Mac. Default off. */
@@ -1057,6 +1063,9 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   }
   if (typeof source.wakeOrchestratorOnGithubEdges === 'boolean') {
     out.wakeOrchestratorOnGithubEdges = source.wakeOrchestratorOnGithubEdges;
+  }
+  if (typeof source.ticketAssignOpensWorkspace === 'boolean') {
+    out.ticketAssignOpensWorkspace = source.ticketAssignOpensWorkspace;
   }
   if (typeof source.showCost === 'boolean') out.showCost = source.showCost;
   if (typeof source.computerUse === 'boolean') out.computerUse = source.computerUse;
@@ -2291,6 +2300,9 @@ export function updateAdvancedSettings(
   if (typeof patch.wakeOrchestratorOnGithubEdges === 'boolean') {
     advanced.wakeOrchestratorOnGithubEdges = patch.wakeOrchestratorOnGithubEdges;
   }
+  if (typeof patch.ticketAssignOpensWorkspace === 'boolean') {
+    advanced.ticketAssignOpensWorkspace = patch.ticketAssignOpensWorkspace;
+  }
   if (typeof patch.showCost === 'boolean') advanced.showCost = patch.showCost;
   if (typeof patch.computerUse === 'boolean') advanced.computerUse = patch.computerUse;
   if (isChatTextScale(patch.chatTextScale)) {
@@ -2448,6 +2460,16 @@ export function wakeOrchestratorOnGithubEdgesEnabled(
   settings: AppSettings = loadAppSettings(),
 ): boolean {
   return Boolean(settings.advanced.wakeOrchestratorOnGithubEdges);
+}
+
+/**
+ * Default off. When on, a ticket newly assigned to the viewer opens a
+ * workspace and starts a plan. Agents cannot turn this on.
+ */
+export function ticketAssignOpensWorkspaceEnabled(
+  settings: AppSettings = loadAppSettings(),
+): boolean {
+  return Boolean(settings.advanced.ticketAssignOpensWorkspace);
 }
 
 /** Settings → Advanced → Show cost (when available) (default off). */

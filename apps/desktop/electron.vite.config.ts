@@ -133,6 +133,10 @@ export default defineConfig({
           '../../packages/core/src/remote/phone-artifact.ts',
         ),
         '@sideboard/mcp-ui': resolve(__dirname, '../../packages/core/src/mcp-ui/client.ts'),
+        '@sideboard/ticket-assign-prompt': resolve(
+          __dirname,
+          '../../packages/core/src/store/ticket-assign-prompt.ts',
+        ),
 
       },
     },
