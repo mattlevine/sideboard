@@ -4,6 +4,8 @@ import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
 import { PairingQr } from './PairingQr';
 
 const TESTFLIGHT_URL = 'https://testflight.apple.com/join/6z5pHbqc';
+const ANDROID_INSTALL_URL =
+  'https://expo.dev/accounts/matthewklevine/projects/sideboard/builds/efa4af02-7793-4d9b-b2f8-eb22837f5376';
 
 /** Electron IPC prefixes the main-process message and drops `error.cause`. */
 function errorText(err: unknown): string {
@@ -245,18 +247,33 @@ export function RemoteSettings({
       <div className="settings-group">
         <div className="settings-group-title">Phone</div>
         <p className="settings-group-hint">
-          Scan this with the iPhone camera to install from TestFlight. Sign in here, then show a
-          code the phone can scan. The phone chats with the orchestrator on this Mac. Agents stay
-          here. The relay only carries message text.
+          Scan with the phone camera. iPhone installs from TestFlight. Android downloads the signed
+          app. Sign in here, then show a code the phone can scan. The phone chats with the
+          orchestrator on this Mac. Agents stay here. The relay only carries message text.
         </p>
-        <PairingQr value={TESTFLIGHT_URL} alt="iPhone TestFlight install code" />
-        <input
-          readOnly
-          value={TESTFLIGHT_URL}
-          aria-label="TestFlight link to open on iPhone"
-          onFocus={(event) => event.currentTarget.select()}
-          style={{ width: '100%', marginTop: 8 }}
-        />
+        <div className="phone-install-row">
+          <div className="phone-install">
+            <p className="phone-install-label">iPhone</p>
+            <PairingQr value={TESTFLIGHT_URL} alt="iPhone TestFlight install code" />
+            <input
+              readOnly
+              value={TESTFLIGHT_URL}
+              aria-label="TestFlight link to open on iPhone"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+          </div>
+          <div className="phone-install">
+            <p className="phone-install-label">Android</p>
+            <PairingQr value={ANDROID_INSTALL_URL} alt="Android install code" />
+            <input
+              readOnly
+              value={ANDROID_INSTALL_URL}
+              aria-label="Android install link to open on the phone"
+              onFocus={(event) => event.currentTarget.select()}
+            />
+            <p className="settings-hint">Open the link on the phone and allow the install.</p>
+          </div>
+        </div>
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Phone sign-in</div>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "999057461322",
+    "project_id": "sideboard-mobile-fcm",
+    "storage_bucket": "sideboard-mobile-fcm.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:999057461322:android:0515eca90fee786f6a56b3",
+        "android_client_info": {
+          "package_name": "cloud.sideboard.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkVnNGJUbdc9eE6ybR7HryCJK7JJeu1hc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
