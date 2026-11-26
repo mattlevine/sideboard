@@ -3,6 +3,8 @@ import type { PublicAppSettings, RelayAccountProvider, RemoteAccountMac, RemoteH
 import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
 import { PairingQr } from './PairingQr';
 
+const TESTFLIGHT_URL = 'https://testflight.apple.com/join/6z5pHbqc';
+
 /** Electron IPC prefixes the main-process message and drops `error.cause`. */
 function errorText(err: unknown): string {
   let msg = err instanceof Error ? err.message : String(err);
@@ -243,8 +245,15 @@ export function RemoteSettings({
       <div className="settings-group">
         <div className="settings-group-title">Phone</div>
         <p className="settings-group-hint">
-          The phone chats with the orchestrator on this Mac. Agents stay here. The relay only
-          carries message text. Sign in, then show a code the phone can scan.
+          <button
+            type="button"
+            className="settings-link"
+            onClick={() => void window.sideboard.openExternal(TESTFLIGHT_URL)}
+          >
+            Install the iPhone app
+          </button>{' '}
+          from TestFlight. Sign in, then show a code the phone can scan. The phone chats with the
+          orchestrator on this Mac. Agents stay here. The relay only carries message text.
         </p>
 
       <div className="settings-section settings-section-card">
@@ -339,7 +348,15 @@ export function RemoteSettings({
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Pair a phone</div>
         <p className="settings-hint">
-          Scan this code with the Sideboard phone app. It pins this Mac and expires in 10 minutes.
+          Scan this code with the Sideboard phone app from{' '}
+          <button
+            type="button"
+            className="settings-link"
+            onClick={() => void window.sideboard.openExternal(TESTFLIGHT_URL)}
+          >
+            TestFlight
+          </button>
+          . It pins this Mac and expires in 10 minutes.
         </p>
         {remote?.pairingCode ? (
           <>
