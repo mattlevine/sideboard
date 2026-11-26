@@ -31,7 +31,7 @@ What is still Sideboard's:
 
 | Gap | Who has it | What the repo shows |
 |-----|------------|---------------------|
-| A phone app people can install | Orca (App Store, Android APK), Conductor (iOS), ChatGPT and Claude apps | The site sells the phone app. It has no App Store, TestFlight, or Play link, and the docs start `apps/mobile` from source. `eas.json` has a production profile. |
+| A phone app people can install | Orca (App Store, Android APK), Conductor (iOS), ChatGPT and Claude apps | TestFlight link ships on the site and in Settings → Remote. No App Store or Play listing yet. Source docs remain for contributors. |
 | Push on a relay you host | Orca, Codex, Claude, Multica channels | The Sideboard relay pushes when a chat needs you, a turn finishes, or a chat fails. A custom relay does not. Alerts name the Mac and carry no message text. |
 | Agents keep working with the laptop closed | Orca and Emdash (SSH, your VPS), Codex (Remote SSH), Conductor / Cursor / Claude (their cloud) | Always this Mac. A connected phone keeps it awake with the lid closed on power. |
 | Many harnesses | Orca 27, Emdash 34, Superset "any CLI", Multica 31 | Four coding harnesses plus Brightsy. Each is a hand-written adapter. |
@@ -63,11 +63,12 @@ These close gaps in things Sideboard already claims.
 
 ### 1. Put the phone app in people's hands
 
-The phone is one of three headline claims and the site gives no way to install it.
+Done (shipped 2026-11-26 in v0.1.353 / PR 419). The iOS TestFlight install link is on `site/index.html` and in Settings → Remote. Production build 42 includes `aps-environment`. **Done when** is met: a new user pairs a phone without cloning the repo.
 
-- Ship iOS through TestFlight, then the App Store. Ship Android as a Play listing or a signed APK.
-- Link both from the site's phone section and from Settings → Remote.
-- **Done when** a new user pairs a phone without cloning the repo.
+Residual follow-ups:
+
+- App Store listing.
+- Android as a Play listing or a signed APK.
 
 ### 2. Push notifications on the phone (decided)
 
