@@ -231,6 +231,7 @@ import {
 } from '@sideboard-ai/core';
 import { closeTsServer, setupTsServer } from './tsserver';
 import { startDesktopHost, stopDesktopHost } from './desktop-host';
+import { stopComputerUseBridge, syncComputerUseBridge, syncComputerUseFromPatch } from './computer-use-bridge';
 
 /** Walk up from `startDir` to the nearest `.git` (worktree root or repo checkout). */
 function findWorktreeRoot(startDir: string): string | null {
@@ -971,6 +972,7 @@ function registerIpc(): void {
       },
     });
     applyAppEnvironment(process.env, saved);
+    syncComputerUseBridge({ accessibility: false, screen: false });
     return toPublicAppSettings(saved);
   });
   ipcMain.handle(
@@ -1025,6 +1027,7 @@ function registerIpc(): void {
     if ('wakeOrchestratorOnGithubEdges' in patch) {
       armGithubEdgeWatch();
     }
+    syncComputerUseFromPatch(patch);
     return toPublicAppSettings(saved);
   });
   ipcMain.handle('importAgentDoneSound', async () => {
@@ -1940,6 +1943,7 @@ app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
     app.setName('Sideboard');
   }
+  syncComputerUseBridge({ accessibility: true, screen: false });
   orch.setMaxConcurrent(maxConcurrentAgents());
   // MCP/CLI send_to_chat must not spawn worktree turns in the stdio child —
   // the board adopts persisted queues so live IPC reaches the chat UI.
@@ -2023,6 +2027,7 @@ app.on('will-quit', () => {
     // ignore
   }
   stopDesktopHost();
+  stopComputerUseBridge();
   destroyUrlPreview();
   stopCloudConnectDaemon();
   stopSlackListenDaemon();

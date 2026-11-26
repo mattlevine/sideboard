@@ -10,8 +10,8 @@ export function ComputerUseSetting(props: {
           <div className="settings-section-title">Computer use</div>
           <p className="settings-hint">
             Let an agent screenshot, click, and type on this Mac to test a running app, including
-            how the screen looks. Off by default. Sideboard needs Accessibility and Screen Recording
-            permission. This is not design mode.
+            how the screen looks. Off by default. Turning this on asks macOS to allow Sideboard to
+            control this Mac and record the screen. Allow Sideboard. This is not design mode.
           </p>
         </div>
         <button

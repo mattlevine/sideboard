@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.353] - 2026-11-25
+
+### Added
+
+- Install the iPhone app from TestFlight without cloning the repo. The site links to it, and Settings → Remote shows a code the iPhone camera can scan plus the address to open on the phone.
+
+### Changed
+
+- Computer use posts clicks, typing, scrolling, and screenshots from Sideboard, so macOS asks once to allow Sideboard to control this Mac and record the screen.
+
+### Fixed
+
+- Quitting one Sideboard leaves the computer-use bridge in place when another Sideboard still owns it.
+
 ## [0.1.352] - 2026-11-25
 
 ### Added

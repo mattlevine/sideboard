@@ -116,6 +116,24 @@ describe('performComputerUse', () => {
     expect(fake.shots).toEqual([join(cwd, '.context', 'cli', 'computer-use-42.png')]);
   });
 
+  it('skips osascript when Sideboard posts the click', async () => {
+    const fake = runner();
+    const posted: unknown[] = [];
+    fake.postInput = async (event) => {
+      posted.push(event);
+      return true;
+    };
+    const result = await performComputerUse({
+      enabled: true,
+      cwd: '/tmp/wt',
+      input: { action: 'click', x: 10.2, y: 20.8 },
+      runner: fake,
+    });
+    expect(result.ok).toBe(true);
+    expect(posted).toEqual([{ type: 'click', x: 10, y: 21 }]);
+    expect(fake.scripts).toEqual([]);
+  });
+
   it('clicks with integer screen points', async () => {
     const fake = runner();
     const result = await performComputerUse({

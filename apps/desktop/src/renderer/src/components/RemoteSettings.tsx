@@ -3,6 +3,8 @@ import type { PublicAppSettings, RelayAccountProvider, RemoteAccountMac, RemoteH
 import { CursorMark, EntireMark, GitHubMark } from './GitHostMarks';
 import { PairingQr } from './PairingQr';
 
+const TESTFLIGHT_URL = 'https://testflight.apple.com/join/6z5pHbqc';
+
 /** Electron IPC prefixes the main-process message and drops `error.cause`. */
 function errorText(err: unknown): string {
   let msg = err instanceof Error ? err.message : String(err);
@@ -243,9 +245,18 @@ export function RemoteSettings({
       <div className="settings-group">
         <div className="settings-group-title">Phone</div>
         <p className="settings-group-hint">
-          The phone chats with the orchestrator on this Mac. Agents stay here. The relay only
-          carries message text. Sign in, then show a code the phone can scan.
+          Scan this with the iPhone camera to install from TestFlight. Sign in here, then show a
+          code the phone can scan. The phone chats with the orchestrator on this Mac. Agents stay
+          here. The relay only carries message text.
         </p>
+        <PairingQr value={TESTFLIGHT_URL} alt="iPhone TestFlight install code" />
+        <input
+          readOnly
+          value={TESTFLIGHT_URL}
+          aria-label="TestFlight link to open on iPhone"
+          onFocus={(event) => event.currentTarget.select()}
+          style={{ width: '100%', marginTop: 8 }}
+        />
 
       <div className="settings-section settings-section-card">
         <div className="settings-section-title">Phone sign-in</div>
