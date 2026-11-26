@@ -44,6 +44,7 @@
     "chokidar": "^4.0.3",
     "electron-updater": "^6.3.9",
     "highlight.js": "^11.11.1",
+    "koffi": "^3.3.8",
     "mermaid": "^11.4.0",
     "monaco-editor": "^0.56.0",
     "node-pty": "^1.1.0",

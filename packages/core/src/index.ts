@@ -425,6 +425,8 @@ export {
   parseSlackRelayClientMessage,
   parseSlackRelayServerMessage,
 } from './slack/relay-protocol.js';
+export * from './computer-use/bridge.js';
+export * from './computer-use/computer-use.js';
 export type {
   SlackRelayClientMessage,
   SlackRelayServerMessage,

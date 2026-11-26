@@ -1,8 +1,14 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { promisify } from 'node:util';
+import {
+  cgScrollWheels,
+  fetchComputerUseScreenshot,
+  postComputerUseBridge,
+  type ComputerUseInput,
+} from './bridge.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -10,7 +16,7 @@ export const COMPUTER_USE_OFF =
   'Computer use is off. Turn it on in Settings → Advanced.';
 
 export const COMPUTER_USE_DESCRIPTION =
-  'Drive this Mac to test an app you started. Off unless Settings → Advanced → Computer use is on. action is screenshot, click, type, key, or scroll. screenshot writes a PNG of the main display under the worktree .context/cli/ and returns that path plus point width, height, and scale. Read the image. x and y are screen points from the top-left of that image, not PNG pixels: divide a pixel by scale. click and scroll use those points. scroll posts a wheel event at the point (positive dx is right, positive dy is down). type sends text. key is one key (return, tab, escape, arrows, delete, or one character) with optional modifiers command, shift, option, control. Use it to check behavior and visual design (hierarchy, alignment, spacing, type, contrast, fit with the surrounding surface). preview=window means the Electron window, not a browser tab. Sideboard needs Accessibility and Screen Recording permission. Do not drive an app you did not start for this test.';
+  'Drive this Mac to test an app you started. Off unless Settings → Advanced → Computer use is on. action is screenshot, click, type, key, or scroll. screenshot writes a PNG of the main display under the worktree .context/cli/ and returns that path plus point width, height, and scale. Read the image. x and y are screen points from the top-left of that image, not PNG pixels: divide a pixel by scale. click and scroll use those points. scroll posts a wheel event at the point (positive dx is right, positive dy is down). type sends text. key is one key (return, tab, escape, arrows, delete, or one character) with optional modifiers command, shift, option, control. Use it to check behavior and visual design (hierarchy, alignment, spacing, type, contrast, fit with the surrounding surface). preview=window means the Electron window, not a browser tab. Clicks, typing, scrolling, and screenshots are posted by Sideboard after macOS allows Sideboard to control this Mac and record the screen. Do not drive an app you did not start for this test.';
 
 const KEY_CODES: Record<string, number> = {
   return: 36,
@@ -29,6 +35,11 @@ const KEY_CODES: Record<string, number> = {
 
 const MODIFIERS = new Set(['command', 'cmd', 'shift', 'option', 'alt', 'control', 'ctrl']);
 
+export function macKeyCode(key: string): number | null {
+  const code = KEY_CODES[key];
+  return code === undefined ? null : code;
+}
+
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 export type ScreenshotCapture = {
@@ -42,6 +53,11 @@ export type ComputerUseRunner = {
   screenshot: (file: string) => Promise<ScreenshotCapture>;
   runAppleScript: (script: string) => Promise<void>;
   scroll: (x: number, y: number, dx: number, dy: number) => Promise<void>;
+  /**
+   * True when Sideboard posted the event. False when that bridge is down,
+   * and the osascript / swift path runs instead.
+   */
+  postInput?: (event: ComputerUseInput) => Promise<boolean>;
 };
 
 export type ComputerUseResult =
@@ -140,8 +156,7 @@ export function scrollWheelSwift(x: number, y: number, dx: number, dy: number): 
   for (const n of [x, y, dx, dy]) {
     if (!Number.isInteger(n)) throw new Error('scroll coordinates must be integers');
   }
-  const wheel1 = -dy;
-  const wheel2 = -dx;
+  const { wheel1, wheel2 } = cgScrollWheels(dx, dy);
   return `import CoreGraphics
 let src = CGEventSource(stateID: .hidSystemState)
 let p = CGPoint(x: ${x}, y: ${y})
@@ -183,6 +198,11 @@ function screenshotFile(cwd: string, now: number): string {
   return join(dir, `computer-use-${now}.png`);
 }
 
+async function posted(runner: ComputerUseRunner, event: ComputerUseInput): Promise<boolean> {
+  if (!runner.postInput) return false;
+  return runner.postInput(event);
+}
+
 function screenshotMessage(width: number, height: number, scale: number): string {
   return `Screenshot saved (main display). Read that PNG. x and y are screen points from the top-left of this image, not PNG pixels. Divide a pixel by scale ${scale}. Point size is ${width}×${height}. Judge behavior and visual design: hierarchy, alignment, spacing, type, contrast, and fit with the surrounding surface.`;
 }
@@ -219,17 +239,21 @@ export async function performComputerUse(opts: {
       const px = point(x);
       const py = point(y);
       if (px === null || py === null) return { ok: false, error: 'click point is out of range' };
-      await opts.runner.runAppleScript(
-        `tell application "System Events" to click at {${px}, ${py}}`,
-      );
+      if (!(await posted(opts.runner, { type: 'click', x: px, y: py }))) {
+        await opts.runner.runAppleScript(
+          `tell application "System Events" to click at {${px}, ${py}}`,
+        );
+      }
       return { ok: true, action, message: `Clicked ${px}, ${py}.` };
     }
     if (action === 'type') {
       const text = typeof rec.text === 'string' ? rec.text : '';
       if (!text) return { ok: false, error: 'type requires text' };
       if (text.length > 2000) return { ok: false, error: 'type text is longer than 2000 characters' };
-      for (const script of typeScripts(text)) {
-        await opts.runner.runAppleScript(script);
+      if (!(await posted(opts.runner, { type: 'type', text }))) {
+        for (const script of typeScripts(text)) {
+          await opts.runner.runAppleScript(script);
+        }
       }
       return { ok: true, action, message: `Typed ${text.length} characters.` };
     }
@@ -242,16 +266,19 @@ export async function performComputerUse(opts: {
       if (modifiers.some((name) => !MODIFIERS.has(name.toLowerCase()))) {
         return { ok: false, error: 'key modifiers are command, shift, option, and control' };
       }
-      const using = modifierClause(modifiers.map((name) => name.toLowerCase()));
-      const code = KEY_CODES[key];
+      const mods = modifiers.map((name) => name.toLowerCase());
+      const using = modifierClause(mods);
+      const code = macKeyCode(key);
       const script =
-        code !== undefined
+        code !== null
           ? `tell application "System Events" to key code ${code}${using}`
           : key.length === 1
             ? `tell application "System Events" to keystroke ${appleScriptString(key)}${using}`
             : '';
       if (!script) return { ok: false, error: `unsupported key ${key}` };
-      await opts.runner.runAppleScript(script);
+      if (!(await posted(opts.runner, { type: 'key', key, modifiers: mods }))) {
+        await opts.runner.runAppleScript(script);
+      }
       return { ok: true, action, message: `Pressed ${key}.` };
     }
     if (action === 'scroll') {
@@ -267,7 +294,9 @@ export async function performComputerUse(opts: {
       const sdy = scrollDelta(dy);
       if (sdx === null || sdy === null) return { ok: false, error: 'scroll delta is out of range' };
       if (sdx === 0 && sdy === 0) return { ok: false, error: 'scroll requires dx or dy' };
-      await opts.runner.scroll(px, py, sdx, sdy);
+      if (!(await posted(opts.runner, { type: 'scroll', x: px, y: py, dx: sdx, dy: sdy }))) {
+        await opts.runner.scroll(px, py, sdx, sdy);
+      }
       return {
         ok: true,
         action,
@@ -290,6 +319,12 @@ export function formatComputerUseHint(enabled: boolean): string {
 
 export const macosComputerUseRunner: ComputerUseRunner = {
   async screenshot(file) {
+    const via = await fetchComputerUseScreenshot();
+    if (via) {
+      writeFileSync(file, via.png);
+      const info = pngPointSize(via.png);
+      return { ...info, scale: via.scale > 0 ? via.scale : info.scale };
+    }
     await execFileAsync('screencapture', ['-x', '-m', file]);
     return pngPointSize(readFileSync(file));
   },
@@ -298,5 +333,8 @@ export const macosComputerUseRunner: ComputerUseRunner = {
   },
   async scroll(x, y, dx, dy) {
     await execFileAsync('swift', ['-e', scrollWheelSwift(x, y, dx, dy)]);
+  },
+  postInput(event) {
+    return postComputerUseBridge(event);
   },
 };
