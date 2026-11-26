@@ -72,15 +72,9 @@ Residual follow-ups:
 
 ### 2. Push notifications on the phone (decided)
 
-The reason to carry the remote is to hear about a blocked agent. The Sideboard relay already pushes when a chat needs you, a turn finishes, or a chat fails. A custom relay does not, and the alert carries no message text.
+Done (shipped path in v0.1.345; push-entitled iOS production build 42 on TestFlight via PR 419 / v0.1.353). The hosted relay pushes when a chat needs you, a turn finishes, or a chat fails. The alert names the Mac and carries no message text. Alerts are per Mac on the phone, and can be turned off per Mac. A custom relay still does not push. **Done when** is met: a locked phone shows the alert while the app is closed, and tapping it opens that chat (confirmed by the product owner on 2026-11-26).
 
-What exists:
-
-- The Mac already works out **Needs you** and its reason for every chat, and sends that to the phone list.
-- The Mac knows when a phone joins and leaves.
-- The desktop already notifies on a finished turn and on an error when its window is not focused.
-
-The phone, the Mac, and the relay now have the path below. A phone running an older build still cannot receive a push. The first build that can is a new EAS build of `cloud.sideboard.mobile` with the push entitlement. Expo Go does not count.
+The reason to carry the remote is to hear about a blocked agent.
 
 How it works:
 
@@ -92,12 +86,8 @@ How it works:
 Rules:
 
 - **No message text in a push.** The alert says which Mac and that a chat needs you. It carries a chat id so the tap can open it, and nothing from the conversation. Apple and Google carry every push, and the relay forwards only ciphertext today.
-- A push fires only while the Mac is awake. The connected-phone hold lasts only while the phone is connected, and a locked phone should be assumed to have left. Settings → Advanced → Caffeinate while agents are running is what keeps a turn going. Say so where push is turned on, and test what a locked phone does to the hold.
+- A push fires only while the Mac is awake. The connected-phone hold lasts only while the phone is connected, and a locked phone should be assumed to have left. Settings → Advanced → Caffeinate while agents are running is what keeps a turn going.
 - Notifications can be turned off per Mac on the phone.
-
-Depends on item 1. A push needs the signed build with the push entitlement.
-
-**Done when** a locked phone shows the alert while the app is closed, and tapping it opens that chat.
 
 ### 3. Correct the comparison
 
