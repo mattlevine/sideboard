@@ -1,5 +1,4 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { TICKET_ASSIGN_PLAN_PROMPT } from '@sideboard/ticket-assign-prompt';
 import type {
   AdvancedAppSettings,
   AgentDoneSound,
@@ -742,9 +741,9 @@ export function SettingsModal({
         if (mine.length === 0) {
           await window.sideboard.createSchedule({
             name: 'Ticket assigned',
-            prompt: TICKET_ASSIGN_PLAN_PROMPT,
+            prompt: '',
             when: { kind: 'ticket-assigned' },
-            planMode: true,
+            planMode: false,
             enabled: true,
             archiveChat: false,
           });
@@ -1880,14 +1879,16 @@ export function SettingsModal({
                   <div className="settings-toggle-row">
                     <div>
                       <div className="settings-section-title">
-                        When a ticket is assigned to me, open a workspace and plan it
+                        When a ticket is assigned to me, open a workspace
                       </div>
                       <p className="settings-hint">
                         Polls Linear and GitHub for issues newly assigned to you. The first
                         check after you turn this on, and the first check after Sideboard
                         launches, only records what is already assigned. A new assignment
-                        opens a workspace and starts a plan. It does not merge. Sideboard
-                        must be running. Edit the plan prompt under Automations.
+                        opens a workspace the same way as choosing that issue and leaving the
+                        prompt empty. The first turn is “Resolve this issue.” It does not
+                        merge. Sideboard must be running. Type a prompt under Automations to
+                        send that instead.
                       </p>
                     </div>
                     <button
@@ -1895,7 +1896,7 @@ export function SettingsModal({
                       className={`settings-switch${advanced.ticketAssignOpensWorkspace ? ' on' : ''}`}
                       role="switch"
                       aria-checked={Boolean(advanced.ticketAssignOpensWorkspace)}
-                      aria-label="When a ticket is assigned to me, open a workspace and plan it"
+                      aria-label="When a ticket is assigned to me, open a workspace"
                       disabled={busy}
                       onClick={() => void toggleTicketAssign()}
                     >

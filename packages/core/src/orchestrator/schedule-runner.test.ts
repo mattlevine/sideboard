@@ -385,9 +385,9 @@ describe('schedule runner', () => {
     });
     const schedule = store.createSchedule({
       name: 'Ticket assigned',
-      prompt: 'Plan this ticket. Write the plan in this workspace. Do not implement it, do not open a pull request, and do not merge.',
+      prompt: '',
       when: { kind: 'ticket-assigned' },
-      planMode: true,
+      planMode: false,
       createdBy: 'ui',
     });
     const baseline = await runner.fireSchedule(schedule.id);
@@ -410,10 +410,9 @@ describe('schedule runner', () => {
     expect(opened).toHaveLength(1);
     expect(opened[0]?.identifier).toBe('ENG-2');
     expect(opened[0]?.repoPath).toBe('/repo');
-    expect(opened[0]?.planMode).toBe(true);
-    expect(opened[0]?.prompt).toMatch(/Do not merge/);
-    expect(opened[0]?.prompt).not.toBe('Merge PR.');
-    expect(expandCanonicalGitRequest(opened[0]?.prompt ?? '')).toBe(opened[0]?.prompt);
+    expect(opened[0]?.planMode).toBe(false);
+    expect(opened[0]?.prompt).toBe('');
+    expect(expandCanonicalGitRequest('Resolve this issue.')).toBe('Resolve this issue.');
     expect(fired.lastThreadId).toBe('ws-1');
     expect(fired.lastError).toBeNull();
   });
@@ -451,6 +450,43 @@ describe('schedule runner', () => {
     const after = await runner.fireSchedule(schedule.id);
     expect(opened).toHaveLength(0);
     expect(after.lastError).toMatch(/When a ticket is assigned to me is off/);
+  });
+});
+
+describe('ticket assign open prompt', () => {
+  it('leaves the prompt empty so issue create sends Resolve this issue', async () => {
+    const { ticketAssignOpenPrompt } = await import('./schedule-runner.js');
+    expect(ticketAssignOpenPrompt({ prompt: '', planMode: false })).toEqual({
+      prompt: '',
+      planMode: false,
+    });
+    expect(ticketAssignOpenPrompt({ prompt: '  ', planMode: null })).toEqual({
+      prompt: '',
+      planMode: false,
+    });
+  });
+
+  it('sends a typed prompt and turns plan mode on only when the automation did', async () => {
+    const { ticketAssignOpenPrompt } = await import('./schedule-runner.js');
+    expect(ticketAssignOpenPrompt({ prompt: 'Look at the login bug.', planMode: true })).toEqual({
+      prompt: 'Look at the login bug.',
+      planMode: true,
+    });
+    expect(ticketAssignOpenPrompt({ prompt: 'Look at the login bug.', planMode: false })).toEqual({
+      prompt: 'Look at the login bug.',
+      planMode: false,
+    });
+  });
+
+  it('treats the old plan sentence as no extra prompt', async () => {
+    const { ticketAssignOpenPrompt } = await import('./schedule-runner.js');
+    expect(
+      ticketAssignOpenPrompt({
+        prompt:
+          'Plan this ticket. Write the plan in this workspace. Do not implement it, do not open a pull request, and do not merge.',
+        planMode: true,
+      }),
+    ).toEqual({ prompt: '', planMode: false });
   });
 });
 

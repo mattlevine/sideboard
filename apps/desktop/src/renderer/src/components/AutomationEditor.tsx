@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import type { Thread } from '@sideboard-ai/core';
-import { TICKET_ASSIGN_PLAN_PROMPT } from '@sideboard/ticket-assign-prompt';
 import { threadDisplayLabel } from '@sideboard/worktree-labels';
 import type { ComposerDraftOptions } from './ComposerOptionsToolbar';
 import { AutomationPrompt } from './AutomationPrompt';
@@ -61,7 +60,7 @@ export function AutomationEditor({
   async function save() {
     const dictated = dictation.listening ? await dictation.stop() : undefined;
     const prompt = (dictated ?? form.prompt).trim();
-    if (!prompt) {
+    if (!prompt && form.kind !== 'ticket-assigned') {
       onError('Prompt is required');
       return;
     }
@@ -112,10 +111,8 @@ export function AutomationEditor({
               kind,
               ...(kind === 'ticket-assigned'
                 ? {
-                    planMode: true,
                     threadId: '',
                     archiveChat: false,
-                    prompt: f.prompt.trim() ? f.prompt : TICKET_ASSIGN_PLAN_PROMPT,
                   }
                 : {}),
             }));
@@ -130,10 +127,11 @@ export function AutomationEditor({
       </label>
       {form.kind === 'ticket-assigned' && (
         <p className="settings-hint">
-          Each new Linear or GitHub issue assigned to you opens a workspace and starts this
-          prompt as a plan. The first check only records tickets already assigned to you. It
-          does not merge. Sideboard has to be running. Turning this on also enables Settings →
-          Advanced → When a ticket is assigned to me.
+          Each new Linear or GitHub issue assigned to you opens a workspace the same way as
+          choosing that issue and leaving the prompt empty. The first turn is “Resolve this
+          issue.” Type a prompt to send that instead. The first check only records tickets
+          already assigned to you. It does not merge. Sideboard has to be running. Turning this
+          on also enables Settings → Advanced → When a ticket is assigned to me.
         </p>
       )}
       {form.kind === 'once' && (

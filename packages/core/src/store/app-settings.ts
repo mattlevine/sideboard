@@ -2464,7 +2464,8 @@ export function wakeOrchestratorOnGithubEdgesEnabled(
 
 /**
  * Default off. When on, a ticket newly assigned to the viewer opens a
- * workspace and starts a plan. Agents cannot turn this on.
+ * workspace the same way as choosing that issue with no extra prompt.
+ * Agents cannot turn this on.
  */
 export function ticketAssignOpensWorkspaceEnabled(
   settings: AppSettings = loadAppSettings(),

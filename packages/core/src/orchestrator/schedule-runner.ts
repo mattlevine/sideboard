@@ -24,7 +24,6 @@ import {
   postponeSchedule,
   recordScheduleRun,
   TICKET_ASSIGN_OFF_ERROR,
-  TICKET_ASSIGN_PLAN_PROMPT,
   type ScheduledTask,
 } from '../store/schedules.js';
 import { resolveNewThreadOptions } from '../store/thread-option-defaults.js';
@@ -282,22 +281,26 @@ export function planTicketAssignLatch(opts: {
   return { next, fresh };
 }
 
-export function formatTicketAssignPrompt(
-  prompt: string,
-  ticket: { identifier: string; title: string; url: string },
-): string {
-  const goal = prompt.trim() || TICKET_ASSIGN_PLAN_PROMPT;
-  const title = ticket.title.trim() || ticket.identifier;
-  const lines = [
-    `[Ticket assigned: ${ticket.identifier}]`,
-    goal,
-    '',
-    `${ticket.identifier} — ${title}`,
-  ];
-  const url = ticket.url.trim();
-  if (url) lines.push(url);
-  lines.push('', 'Do not merge. This opened a workspace and started a plan. Merging stays with a person.');
-  return lines.join('\n');
+/** The old switch wrote this plan. An empty prompt uses the issue-create default instead. */
+const LEGACY_TICKET_ASSIGN_PLAN_PROMPT =
+  'Plan this ticket. Write the plan in this workspace. Do not implement it, do not open a pull request, and do not merge.';
+
+/**
+ * Same first turn as creating a workspace from an issue and leaving the prompt
+ * empty: no text here, so createThread sends “Resolve this issue.” A typed
+ * prompt replaces that, the way the create box does. Plan mode stays off
+ * unless this automation turned it on.
+ */
+export function ticketAssignOpenPrompt(schedule: Pick<ScheduledTask, 'prompt' | 'planMode'>): {
+  prompt: string;
+  planMode: boolean;
+} {
+  const typed = schedule.prompt.trim();
+  const legacyPlan = typed === LEGACY_TICKET_ASSIGN_PLAN_PROMPT;
+  return {
+    prompt: !typed || legacyPlan ? '' : typed,
+    planMode: legacyPlan ? false : schedule.planMode === true,
+  };
 }
 
 function ticketAssignHooksOrReal(): TicketAssignHooks {
@@ -402,8 +405,7 @@ async function pollTicketAssignments(
         repoPath: row.repoPath,
         identifier: row.ticket.identifier,
         title: row.ticket.title,
-        prompt: formatTicketAssignPrompt(schedule.prompt, row.ticket),
-        planMode: schedule.planMode !== false,
+        ...ticketAssignOpenPrompt(schedule),
         agent: defaults.agent,
         model: defaults.model,
         effort: defaults.effort,

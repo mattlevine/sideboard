@@ -35,7 +35,8 @@ export function AutomationsView({
             ?
             <span id="automations-help-tip" className="automations-help-tip" role="tooltip">
               Clock jobs send a prompt to a chat, or start a new Global chat. A ticket assigned
-              to you can open a workspace and plan it (Settings → Advanced). That does not merge.
+              to you can open a workspace (Settings → Advanced), the same way as choosing that
+              issue with no extra prompt. That does not merge.
               Sideboard must be running. Creating or enabling a future job turns on
               Settings → Advanced → Caffeinate while automations are enabled so the Mac can stay
               awake until due. A sleeping Mac waits until wake, so a quiet stretch is not a failed

@@ -44,7 +44,6 @@ export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 /** Newest runs kept on the automation itself. */
 export const SCHEDULE_RUN_HISTORY_LIMIT = 10;
 
-export { TICKET_ASSIGN_PLAN_PROMPT } from './ticket-assign-prompt.js';
 
 export const TICKET_ASSIGN_OFF_ERROR =
   'Settings → Advanced → When a ticket is assigned to me is off.';
@@ -297,7 +296,9 @@ function readAll(): ScheduledTask[] {
           return null;
         }
       })
-      .filter((row): row is ScheduledTask => Boolean(row?.id && row.prompt));
+      .filter((row): row is ScheduledTask =>
+        Boolean(row?.id && (row.prompt || row.when?.kind === 'ticket-assigned')),
+      );
   } catch {
     return [];
   }
@@ -307,10 +308,17 @@ function writeAll(rows: ScheduledTask[]): void {
   writePrivateFile(schedulesPath(), `${JSON.stringify(rows, null, 2)}\n`);
 }
 
+function scheduleDisplayName(name: string | undefined, prompt: string, when: ScheduleWhen): string {
+  const named = name?.trim();
+  if (named) return named;
+  if (!prompt.trim() && when.kind === 'ticket-assigned') return 'Ticket assigned';
+  return defaultScheduleName(prompt);
+}
+
 function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
   const prompt = input.prompt.trim();
-  if (!prompt) throw new Error('Schedule prompt is required');
   const when = normalizeWhen(input.when);
+  if (!prompt && when.kind !== 'ticket-assigned') throw new Error('Schedule prompt is required');
   // Ticket polls check immediately. Later fires wait one interval.
   const nextRunAt =
     when.kind === 'ticket-assigned' ? nowIso(now) : computeNextRunAt(when, now).toISOString();
@@ -320,7 +328,7 @@ function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
     : null;
   return {
     id: randomUUID(),
-    name: (input.name?.trim() || defaultScheduleName(prompt)),
+    name: scheduleDisplayName(input.name, prompt, when),
     prompt,
     enabled: input.enabled !== false,
     when,
@@ -401,7 +409,7 @@ export function updateSchedule(
   const prev = rows[idx];
   const when = patch.when ? normalizeWhen(patch.when) : prev.when;
   const prompt = patch.prompt !== undefined ? patch.prompt.trim() : prev.prompt;
-  if (!prompt) throw new Error('Schedule prompt is required');
+  if (!prompt && when.kind !== 'ticket-assigned') throw new Error('Schedule prompt is required');
   const whenChanged = patch.when !== undefined;
   const enablingTicketAssign =
     when.kind === 'ticket-assigned' && patch.enabled === true && !prev.enabled;
@@ -409,7 +417,7 @@ export function updateSchedule(
     ...prev,
     name:
       patch.name !== undefined
-        ? patch.name.trim() || defaultScheduleName(prompt)
+        ? scheduleDisplayName(patch.name, prompt, when)
         : prev.name,
     prompt,
     enabled: patch.enabled ?? prev.enabled,
