@@ -60,7 +60,7 @@ export function AutomationEditor({
   async function save() {
     const dictated = dictation.listening ? await dictation.stop() : undefined;
     const prompt = (dictated ?? form.prompt).trim();
-    if (!prompt) {
+    if (!prompt && form.kind !== 'ticket-assigned') {
       onError('Prompt is required');
       return;
     }
@@ -104,14 +104,36 @@ export function AutomationEditor({
         <select
           className="settings-select"
           value={form.kind}
-          onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as FormState['kind'] }))}
+          onChange={(e) => {
+            const kind = e.target.value as FormState['kind'];
+            setForm((f) => ({
+              ...f,
+              kind,
+              ...(kind === 'ticket-assigned'
+                ? {
+                    threadId: '',
+                    archiveChat: false,
+                  }
+                : {}),
+            }));
+          }}
         >
           <option value="once">Once at a datetime</option>
           <option value="every">Every interval</option>
           <option value="weekly">Days at a time</option>
           <option value="cron">Cron</option>
+          <option value="ticket-assigned">When a ticket is assigned to me</option>
         </select>
       </label>
+      {form.kind === 'ticket-assigned' && (
+        <p className="settings-hint">
+          Each new Linear or GitHub issue assigned to you opens a workspace the same way as
+          choosing that issue and leaving the prompt empty. The first turn is “Resolve this
+          issue.” Type a prompt to send that instead. The first check only records tickets
+          already assigned to you. It does not merge. Sideboard has to be running. Turning this
+          on also enables Settings → Advanced → When a ticket is assigned to me.
+        </p>
+      )}
       {form.kind === 'once' && (
         <label className="settings-field">
           When
@@ -222,6 +244,7 @@ export function AutomationEditor({
           />
         </label>
       )}
+      {form.kind !== 'ticket-assigned' && (
       <label className="settings-field">
         Target
         <select
@@ -239,6 +262,7 @@ export function AutomationEditor({
           ))}
         </select>
       </label>
+      )}
       <label className="settings-check-row">
         <input
           type="checkbox"
@@ -247,7 +271,7 @@ export function AutomationEditor({
         />
         Enabled
       </label>
-      {!form.threadId && (
+      {form.kind !== 'ticket-assigned' && !form.threadId && (
         <label className="settings-check-row">
           <input
             type="checkbox"
@@ -257,7 +281,7 @@ export function AutomationEditor({
           Archive the chat when the run finishes
         </label>
       )}
-      {!form.threadId && (
+      {form.kind !== 'ticket-assigned' && !form.threadId && (
         <p className="settings-hint">
           {form.archiveChat
             ? 'History keeps the last 5 archived chats from this automation, and the automation keeps its last 10 runs. Leave this off when you want the chat to stay in the sidebar, such as a morning start-my-day run you will continue at your desk.'

@@ -84,7 +84,7 @@ export function registerLinearTools(server: McpServer): void {
 
   server.tool(
     'linear_search_issues',
-    'Search or list open Linear issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all (default with query), or a user id/name. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”).',
+    'Search or list open Linear issues. Default 40; pass query and/or limit (max 250) when truncated. assignee: me, unassigned, all (default with query), or a user id/name. Pass updatedSince for new/updated tickets and new comments (e.g. “any updates since yesterday?”). A ticket newly assigned to you opens a workspace only when Settings → Advanced → When a ticket is assigned to me is on. This tool only lists.',
     {
       query: z
         .string()

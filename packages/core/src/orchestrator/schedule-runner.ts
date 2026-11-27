@@ -11,9 +11,23 @@ import {
   recordScheduleRun,
   type ScheduledTask,
 } from '../store/schedules.js';
-import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import { findThreadByRef } from '../store/thread-store.js';
+import { persistPendingFileAttachments } from '../composer/stage-files.js';
 import type { AgentKind, Thread, ThreadOptionsPatch } from '../types/thread.js';
+import { fireTicketAssigned, resetTicketAssignWatch } from './ticket-assign-watch.js';
+
+export {
+  loadTicketAssignSnapshot,
+  markTicketAssignNeedsBaseline,
+} from '../store/ticket-assign-snapshot.js';
+export {
+  planTicketAssignLatch,
+  repoForAssignedTicket,
+  setTicketAssignHooks,
+  ticketAssignKey,
+  ticketAssignOpenPrompt,
+} from './ticket-assign-watch.js';
+
 
 const SET_TIMEOUT_MAX = 2_147_483_647;
 
@@ -58,7 +72,9 @@ export function clearScheduleTimers(): void {
   for (const timer of timers.values()) clearTimeout(timer);
   timers.clear();
   firing.clear();
+  resetTicketAssignWatch();
 }
+
 
 async function defaultDeps(): Promise<ScheduleFireDeps> {
   const { getOrchestrator, startOrchestration } = await import('./orchestrator.js');
@@ -124,6 +140,7 @@ function pickAgent(schedule: ScheduledTask): OrchestratorAgentKind {
   return coerceOrchestratorAgent(resolveOrchestratorDefaults().agent);
 }
 
+
 /**
  * Fire a schedule now (Run now / due timer). `send` still defers drain to the
  * desktop host when it is alive.
@@ -134,6 +151,7 @@ export async function fireSchedule(id: string): Promise<ScheduledTask> {
   if (firing.has(schedule.id)) return schedule;
   firing.add(schedule.id);
   try {
+    if (schedule.when.kind === 'ticket-assigned') return await fireTicketAssigned(schedule);
     const deps = fireHooks ?? (await defaultDeps());
     const prompt = formatScheduledPrompt(schedule.name, schedule.prompt);
     const target = schedule.threadId ? deps.findThread(schedule.threadId) : null;

@@ -353,4 +353,212 @@ describe('schedule runner', () => {
       planMode: true,
     });
   });
+
+  it('opens a workspace and plans a newly assigned ticket, and does not merge', async () => {
+    const { store, runner } = await load();
+    const { expandCanonicalGitRequest } = await import('../git/agent-git-actions.js');
+    const { updateAdvancedSettings } = await import('../store/app-settings.js');
+    updateAdvancedSettings({ ticketAssignOpensWorkspace: true });
+    const opened: Array<{ planMode: boolean; prompt: string; identifier: string; repoPath: string }> = [];
+    let tickets = [
+      {
+        source: 'linear' as const,
+        identifier: 'ENG-1',
+        title: 'Login',
+        url: 'https://linear.app/eng-1',
+        projects: ['sideboard'],
+      },
+    ];
+    runner.setTicketAssignHooks({
+      list: async () => ({ tickets, failedPrefixes: [] }),
+      workspaces: () => [{ name: 'sideboard', path: '/repo' }],
+      findExisting: () => false,
+      open: async (input) => {
+        opened.push({
+          planMode: input.planMode,
+          prompt: input.prompt,
+          identifier: input.identifier,
+          repoPath: input.repoPath,
+        });
+        return { id: 'ws-1' };
+      },
+    });
+    const schedule = store.createSchedule({
+      name: 'Ticket assigned',
+      prompt: '',
+      when: { kind: 'ticket-assigned' },
+      planMode: false,
+      createdBy: 'ui',
+    });
+    const baseline = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(0);
+    expect(baseline.lastError).toBeNull();
+    expect(runner.loadTicketAssignSnapshot().primed).toBe(true);
+    expect(runner.loadTicketAssignSnapshot().keys).toContain('linear:eng-1');
+
+    tickets = [
+      ...tickets,
+      {
+        source: 'linear',
+        identifier: 'ENG-2',
+        title: 'Signup',
+        url: 'https://linear.app/eng-2',
+        projects: [],
+      },
+    ];
+    const fired = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.identifier).toBe('ENG-2');
+    expect(opened[0]?.repoPath).toBe('/repo');
+    expect(opened[0]?.planMode).toBe(false);
+    expect(opened[0]?.prompt).toBe('');
+    expect(expandCanonicalGitRequest('Resolve this issue.')).toBe('Resolve this issue.');
+    expect(fired.lastThreadId).toBe('ws-1');
+    expect(fired.lastError).toBeNull();
+
+    store.updateSchedule(schedule.id, { enabled: false });
+    tickets = [
+      ...tickets,
+      {
+        source: 'linear',
+        identifier: 'ENG-3',
+        title: 'Reset',
+        url: 'https://linear.app/eng-3',
+        projects: [],
+      },
+    ];
+    store.updateSchedule(schedule.id, { enabled: true });
+    const reenabled = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(1);
+    expect(reenabled.lastError).toBeNull();
+    expect(runner.loadTicketAssignSnapshot().keys).toContain('linear:eng-3');
+    tickets = [
+      ...tickets,
+      {
+        source: 'linear',
+        identifier: 'ENG-4',
+        title: 'After',
+        url: 'https://linear.app/eng-4',
+        projects: [],
+      },
+    ];
+    const again = await runner.fireSchedule(schedule.id);
+    expect(opened.map((row) => row.identifier)).toEqual(['ENG-2', 'ENG-4']);
+    expect(again.lastThreadId).toBe('ws-1');
+  });
+
+  it('does not open a workspace when the ticket-assign setting is off', async () => {
+    const { store, runner } = await load();
+    const opened: string[] = [];
+    runner.setTicketAssignHooks({
+      list: async () => ({
+        tickets: [
+          {
+            source: 'github',
+            identifier: '#4',
+            title: 'Bug',
+            url: 'https://github.com/acme/app/issues/4',
+            projects: [],
+            repoPath: '/repo',
+          },
+        ],
+        failedPrefixes: [],
+      }),
+      workspaces: () => [{ name: 'app', path: '/repo' }],
+      findExisting: () => false,
+      open: async (input) => {
+        opened.push(input.identifier);
+        return { id: 'ws' };
+      },
+    });
+    const schedule = store.createSchedule({
+      prompt: 'Plan this ticket.',
+      when: { kind: 'ticket-assigned' },
+      planMode: true,
+      createdBy: 'ui',
+    });
+    const { updateAdvancedSettings } = await import('../store/app-settings.js');
+    updateAdvancedSettings({ ticketAssignOpensWorkspace: false });
+    const after = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(0);
+    expect(after.lastError).toMatch(/When a ticket is assigned to me is off/);
+  });
+});
+
+describe('ticket assign open prompt', () => {
+  it('leaves the prompt empty so issue create sends Resolve this issue', async () => {
+    const { ticketAssignOpenPrompt } = await import('./schedule-runner.js');
+    expect(ticketAssignOpenPrompt({ prompt: '', planMode: false })).toEqual({
+      prompt: '',
+      planMode: false,
+    });
+    expect(ticketAssignOpenPrompt({ prompt: '  ', planMode: null })).toEqual({
+      prompt: '',
+      planMode: false,
+    });
+  });
+
+  it('sends a typed prompt and turns plan mode on only when the automation did', async () => {
+    const { ticketAssignOpenPrompt } = await import('./schedule-runner.js');
+    expect(ticketAssignOpenPrompt({ prompt: 'Look at the login bug.', planMode: true })).toEqual({
+      prompt: 'Look at the login bug.',
+      planMode: true,
+    });
+    expect(ticketAssignOpenPrompt({ prompt: 'Look at the login bug.', planMode: false })).toEqual({
+      prompt: 'Look at the login bug.',
+      planMode: false,
+    });
+  });
+
+  it('treats the old plan sentence as no extra prompt', async () => {
+    const { ticketAssignOpenPrompt } = await import('./schedule-runner.js');
+    expect(
+      ticketAssignOpenPrompt({
+        prompt:
+          'Plan this ticket. Write the plan in this workspace. Do not implement it, do not open a pull request, and do not merge.',
+        planMode: true,
+      }),
+    ).toEqual({ prompt: '', planMode: false });
+  });
+});
+
+describe('ticket assign latch', () => {
+  it('keeps keys from a source that failed to list', async () => {
+    const { planTicketAssignLatch, repoForAssignedTicket, ticketAssignKey } = await import(
+      './schedule-runner.js'
+    );
+    const first = planTicketAssignLatch({
+      prev: [],
+      primed: false,
+      observed: ['linear:eng-1'],
+      failedPrefixes: [],
+    });
+    expect(first.fresh).toEqual([]);
+    const second = planTicketAssignLatch({
+      prev: first.next,
+      primed: true,
+      observed: ['github:/repo:#9'],
+      failedPrefixes: ['linear:'],
+    });
+    expect(second.next).toContain('linear:eng-1');
+    expect(second.fresh).toEqual(['github:/repo:#9']);
+    expect(
+      repoForAssignedTicket(
+        {
+          source: 'linear',
+          identifier: 'ENG-9',
+          title: 'Mail',
+          url: '',
+          projects: ['sideboard'],
+        },
+        [
+          { name: 'other', path: '/other' },
+          { name: 'sideboard', path: '/repo' },
+        ],
+      ),
+    ).toBe('/repo');
+    expect(
+      ticketAssignKey({ source: 'github', identifier: '#9', repoPath: '/repo/' }),
+    ).toBe('github:/repo:#9');
+  });
 });

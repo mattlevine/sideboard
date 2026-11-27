@@ -22,6 +22,8 @@ import {
   caffeinateWhileSchedulesEnabled,
   updateAdvancedSettings,
 } from './app-settings.js';
+import { normalizeAttachments, normalizeRunList } from './schedule-task-normalize.js';
+import { scheduleDisplayName, syncTicketAssignSwitch } from './ticket-assign-schedule.js';
 
 export type {
   ScheduleWhen,
@@ -43,6 +45,10 @@ export type ScheduleCreatedBy = 'mcp' | 'cli' | 'ui';
 
 /** Newest runs kept on the automation itself. */
 export const SCHEDULE_RUN_HISTORY_LIMIT = 10;
+
+
+export const TICKET_ASSIGN_OFF_ERROR =
+  'Settings → Advanced → When a ticket is assigned to me is off.';
 
 /** One fire. `error` is set when that fire failed. A sleeping Mac does not write a row. */
 export interface ScheduleRunRecord {
@@ -159,15 +165,6 @@ function nowIso(d: Date = new Date()): string {
   return d.toISOString();
 }
 
-const ATTACHMENT_KINDS = new Set<ThreadAttachment['kind']>([
-  'transcript',
-  'file',
-  'issue',
-  'workspace',
-  'diff-comment',
-  'code-ref',
-]);
-
 function normalizeOptionalBool(raw: unknown): boolean | null {
   if (raw === true || raw === false) return raw;
   return null;
@@ -175,50 +172,6 @@ function normalizeOptionalBool(raw: unknown): boolean | null {
 
 function normalizeAutonomy(raw: unknown): Autonomy | null {
   return raw === 'default' || raw === 'full' ? raw : null;
-}
-
-function normalizeAttachments(raw: unknown): ThreadAttachment[] {
-  if (!Array.isArray(raw)) return [];
-  const out: ThreadAttachment[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as ThreadAttachment;
-    if (typeof row.id !== 'string' || !row.id.trim()) continue;
-    if (typeof row.name !== 'string' || !row.name) continue;
-    if (typeof row.content !== 'string') continue;
-    if (!ATTACHMENT_KINDS.has(row.kind)) continue;
-    const next: ThreadAttachment = {
-      id: row.id,
-      name: row.name,
-      kind: row.kind,
-      content: row.content,
-    };
-    if (typeof row.path === 'string' && row.path) next.path = row.path;
-    if (typeof row.previewDataUrl === 'string' && row.previewDataUrl) {
-      next.previewDataUrl = row.previewDataUrl;
-    }
-    out.push(next);
-  }
-  return out;
-}
-
-function normalizeRunList(raw: unknown): ScheduleRunRecord[] {
-  if (!Array.isArray(raw)) return [];
-  const out: ScheduleRunRecord[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as { at?: unknown; threadId?: unknown; error?: unknown };
-    if (typeof row.at !== 'string' || !row.at.trim()) continue;
-    const next: ScheduleRunRecord = {
-      at: row.at,
-      threadId:
-        typeof row.threadId === 'string' && row.threadId.trim() ? row.threadId.trim() : null,
-    };
-    if (typeof row.error === 'string' && row.error.trim()) next.error = row.error;
-    out.push(next);
-    if (out.length >= SCHEDULE_RUN_HISTORY_LIMIT) break;
-  }
-  return out;
 }
 
 /**
@@ -231,7 +184,7 @@ function runsFromStored(raw: {
   lastThreadId?: string | null;
   lastError?: string | null;
 }): ScheduleRunRecord[] {
-  if (Array.isArray(raw.runs)) return normalizeRunList(raw.runs);
+  if (Array.isArray(raw.runs)) return normalizeRunList(raw.runs, SCHEDULE_RUN_HISTORY_LIMIT);
   if (typeof raw.lastRunAt === 'string' && raw.lastRunAt.trim()) {
     const one: ScheduleRunRecord = {
       at: raw.lastRunAt,
@@ -292,7 +245,9 @@ function readAll(): ScheduledTask[] {
           return null;
         }
       })
-      .filter((row): row is ScheduledTask => Boolean(row?.id && row.prompt));
+      .filter((row): row is ScheduledTask =>
+        Boolean(row?.id && (row.prompt || row.when?.kind === 'ticket-assigned')),
+      );
   } catch {
     return [];
   }
@@ -304,16 +259,18 @@ function writeAll(rows: ScheduledTask[]): void {
 
 function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
   const prompt = input.prompt.trim();
-  if (!prompt) throw new Error('Schedule prompt is required');
   const when = normalizeWhen(input.when);
-  const nextRunAt = computeNextRunAt(when, now).toISOString();
+  if (!prompt && when.kind !== 'ticket-assigned') throw new Error('Schedule prompt is required');
+  // Ticket polls check immediately. Later fires wait one interval.
+  const nextRunAt =
+    when.kind === 'ticket-assigned' ? nowIso(now) : computeNextRunAt(when, now).toISOString();
   const ts = nowIso(now);
   const agent = input.agent
     ? coerceOrchestratorAgent(input.agent)
     : null;
   return {
     id: randomUUID(),
-    name: (input.name?.trim() || defaultScheduleName(prompt)),
+    name: scheduleDisplayName(input.name, prompt, when, defaultScheduleName),
     prompt,
     enabled: input.enabled !== false,
     when,
@@ -348,10 +305,11 @@ export function hasEnabledSchedules(): boolean {
 
 /** Enabled job whose next tick is still in the future. */
 export function scheduleNeedsCaffeinate(
-  task: Pick<ScheduledTask, 'enabled' | 'nextRunAt'>,
+  task: Pick<ScheduledTask, 'enabled' | 'nextRunAt'> & { when?: ScheduleWhen },
   now: Date = new Date(),
 ): boolean {
   if (!task.enabled) return false;
+  if (task.when?.kind === 'ticket-assigned') return true;
   const at = new Date(task.nextRunAt);
   if (Number.isNaN(at.getTime())) return false;
   return at.getTime() > now.getTime();
@@ -380,6 +338,7 @@ export function createSchedule(input: CreateScheduledTaskInput): ScheduledTask {
   rows.push(task);
   writeAll(rows);
   ensureCaffeinateForFutureSchedule(task);
+  syncTicketAssignSwitch(rows);
   return task;
 }
 
@@ -393,13 +352,15 @@ export function updateSchedule(
   const prev = rows[idx];
   const when = patch.when ? normalizeWhen(patch.when) : prev.when;
   const prompt = patch.prompt !== undefined ? patch.prompt.trim() : prev.prompt;
-  if (!prompt) throw new Error('Schedule prompt is required');
+  if (!prompt && when.kind !== 'ticket-assigned') throw new Error('Schedule prompt is required');
   const whenChanged = patch.when !== undefined;
+  const enablingTicketAssign =
+    when.kind === 'ticket-assigned' && patch.enabled === true && !prev.enabled;
   const next: ScheduledTask = {
     ...prev,
     name:
       patch.name !== undefined
-        ? patch.name.trim() || defaultScheduleName(prompt)
+        ? scheduleDisplayName(patch.name, prompt, when, defaultScheduleName)
         : prev.name,
     prompt,
     enabled: patch.enabled ?? prev.enabled,
@@ -431,13 +392,18 @@ export function updateSchedule(
         : prev.attachments,
     archiveChat:
       patch.archiveChat !== undefined ? patch.archiveChat !== false : prev.archiveChat,
-    nextRunAt: whenChanged ? computeNextRunAt(when).toISOString() : prev.nextRunAt,
+    nextRunAt: whenChanged
+      ? computeNextRunAt(when).toISOString()
+      : enablingTicketAssign
+        ? nowIso()
+        : prev.nextRunAt,
     lastError: whenChanged ? null : prev.lastError,
     updatedAt: nowIso(),
   };
   rows[idx] = next;
   writeAll(rows);
   ensureCaffeinateForFutureSchedule(next);
+  syncTicketAssignSwitch(rows);
   return next;
 }
 
@@ -458,6 +424,23 @@ export function deleteSchedule(id: string): void {
   );
   if (next.length === rows.length) throw new Error(`Automation not found: ${id}`);
   writeAll(next);
+  syncTicketAssignSwitch(next);
+}
+
+/** Move the next check forward without writing a run row. */
+export function postponeSchedule(id: string, at: Date = new Date()): ScheduledTask {
+  const rows = readAll();
+  const idx = rows.findIndex((row) => row.id === id);
+  if (idx < 0) throw new Error(`Automation not found: ${id}`);
+  const prev = rows[idx];
+  const next: ScheduledTask = {
+    ...prev,
+    nextRunAt: computeNextRunAt(prev.when, at).toISOString(),
+    updatedAt: nowIso(at),
+  };
+  rows[idx] = next;
+  writeAll(rows);
+  return next;
 }
 
 export function recordScheduleRun(

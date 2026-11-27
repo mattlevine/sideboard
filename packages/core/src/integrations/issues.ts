@@ -116,7 +116,14 @@ export function issueMatchesAssignee(
  */
 export async function listGitHubIssues(
   repoPath: string,
-  opts?: { limit?: number; assignee?: string; query?: string; updatedSince?: string },
+  opts?: {
+    limit?: number;
+    assignee?: string;
+    query?: string;
+    updatedSince?: string;
+    /** Throw when `gh issue list` fails. The default still returns [] so callers keep an empty inbox. */
+    strict?: boolean;
+  },
 ): Promise<IssueInfo[]> {
   const limit = Math.max(1, Math.min(1000, opts?.limit ?? 200));
   const slug = await resolveGithubRepoSlug(repoPath);
@@ -160,15 +167,22 @@ export async function listGitHubIssues(
   if (exitCode !== 0) {
     ({ stdout, exitCode } = await gh(buildArgs(plainFields), repoPath, { reject: false }));
   }
-  if (exitCode !== 0 || !stdout.trim()) return [];
+  if (exitCode !== 0 || !stdout.trim()) {
+    if (opts?.strict) throw new Error('Could not list GitHub issues');
+    return [];
+  }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch {
+    if (opts?.strict) throw new Error('Could not list GitHub issues');
     return [];
   }
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) {
+    if (opts?.strict) throw new Error('Could not list GitHub issues');
+    return [];
+  }
 
   return parsed.map((raw) => {
     const item = raw as {

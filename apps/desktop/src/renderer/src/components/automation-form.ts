@@ -153,6 +153,7 @@ export function whenFromForm(form: FormState): ScheduleWhen {
     return { kind: 'once', at: at.toISOString() };
   }
   if (form.kind === 'every') return { kind: 'every', every: form.every };
+  if (form.kind === 'ticket-assigned') return { kind: 'ticket-assigned' };
   if (form.kind === 'weekly') {
     const match = form.time.trim().match(/^([01]\d|2[0-3]):([0-5]\d)/);
     if (!match) throw new Error('Use a time like 07:30');

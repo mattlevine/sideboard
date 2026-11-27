@@ -5,11 +5,15 @@ export type WeekdayIndex = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
+/** How often a ticket-assigned automation looks for new assignments. */
+export const TICKET_ASSIGN_POLL_MS = 60_000;
+
 export type ScheduleWhen =
   | { kind: 'once'; at: string }
   | { kind: 'every'; every: string }
   | { kind: 'cron'; expr: string; tz?: string }
-  | { kind: 'weekly'; days: number[]; time: string; tz?: string };
+  | { kind: 'weekly'; days: number[]; time: string; tz?: string }
+  | { kind: 'ticket-assigned' };
 
 const DURATION_RE = /^(\d+)(s|m|h|d)$/i;
 const UNIT_MS: Record<string, number> = {
@@ -149,6 +153,9 @@ export function computeNextRunAt(when: ScheduleWhen, from: Date = new Date()): D
       from,
     );
   }
+  if (when.kind === 'ticket-assigned') {
+    return new Date(from.getTime() + TICKET_ASSIGN_POLL_MS);
+  }
   try {
     const job = new Cron(when.expr, {
       timezone: when.tz?.trim() || undefined,
@@ -173,6 +180,7 @@ export function formatScheduleWhen(when: ScheduleWhen): string {
     const tz = when.tz?.trim();
     return tz ? `${label} (${tz})` : label;
   }
+  if (when.kind === 'ticket-assigned') return 'when a ticket is assigned to me';
   const tz = when.tz?.trim();
   return tz ? `cron ${when.expr} (${tz})` : `cron ${when.expr}`;
 }
@@ -204,5 +212,6 @@ export function normalizeWhen(raw: unknown): ScheduleWhen {
       tz: typeof rec.tz === 'string' && rec.tz.trim() ? rec.tz.trim() : undefined,
     };
   }
-  throw new Error('Schedule `when` must be once, every, weekly, or cron');
+  if (kind === 'ticket-assigned') return { kind: 'ticket-assigned' };
+  throw new Error('Schedule `when` must be once, every, weekly, cron, or ticket-assigned');
 }

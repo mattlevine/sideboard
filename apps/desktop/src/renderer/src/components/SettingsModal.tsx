@@ -36,6 +36,7 @@ import {
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ComputerUseSetting } from './ComputerUseSetting';
+import { TicketAssignSetting } from './TicketAssignSetting';
 import { ConnectorsSettings } from './ConnectorsSettings';
 import { GitSettings, type GitSettingsPanel } from './GitSettings';
 import { GitSettingsNav } from './GitSettingsNav';
@@ -1825,16 +1826,14 @@ export function SettingsModal({
                       role="switch"
                       aria-checked={Boolean(advanced.wakeOrchestratorOnGithubEdges)}
                       disabled={busy}
-                      onClick={() =>
-                        void saveAdvancedPatch({
-                          wakeOrchestratorOnGithubEdges: !advanced.wakeOrchestratorOnGithubEdges,
-                        })
-                      }
+                      onClick={() => void saveAdvancedPatch({ wakeOrchestratorOnGithubEdges: !advanced.wakeOrchestratorOnGithubEdges })}
                     >
                       <span className="settings-switch-knob" />
                     </button>
                   </div>
                 </div>
+
+                <TicketAssignSetting on={Boolean(advanced.ticketAssignOpensWorkspace)} busy={busy} setBusy={setBusy} setError={setError} applySettings={applySettings} />
 
                 <div className="settings-section">
                   <div className="settings-toggle-row">
