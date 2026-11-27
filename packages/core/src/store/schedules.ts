@@ -22,6 +22,8 @@ import {
   caffeinateWhileSchedulesEnabled,
   updateAdvancedSettings,
 } from './app-settings.js';
+import { normalizeAttachments, normalizeRunList } from './schedule-task-normalize.js';
+import { scheduleDisplayName, syncTicketAssignSwitch } from './ticket-assign-schedule.js';
 
 export type {
   ScheduleWhen,
@@ -163,15 +165,6 @@ function nowIso(d: Date = new Date()): string {
   return d.toISOString();
 }
 
-const ATTACHMENT_KINDS = new Set<ThreadAttachment['kind']>([
-  'transcript',
-  'file',
-  'issue',
-  'workspace',
-  'diff-comment',
-  'code-ref',
-]);
-
 function normalizeOptionalBool(raw: unknown): boolean | null {
   if (raw === true || raw === false) return raw;
   return null;
@@ -179,50 +172,6 @@ function normalizeOptionalBool(raw: unknown): boolean | null {
 
 function normalizeAutonomy(raw: unknown): Autonomy | null {
   return raw === 'default' || raw === 'full' ? raw : null;
-}
-
-function normalizeAttachments(raw: unknown): ThreadAttachment[] {
-  if (!Array.isArray(raw)) return [];
-  const out: ThreadAttachment[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as ThreadAttachment;
-    if (typeof row.id !== 'string' || !row.id.trim()) continue;
-    if (typeof row.name !== 'string' || !row.name) continue;
-    if (typeof row.content !== 'string') continue;
-    if (!ATTACHMENT_KINDS.has(row.kind)) continue;
-    const next: ThreadAttachment = {
-      id: row.id,
-      name: row.name,
-      kind: row.kind,
-      content: row.content,
-    };
-    if (typeof row.path === 'string' && row.path) next.path = row.path;
-    if (typeof row.previewDataUrl === 'string' && row.previewDataUrl) {
-      next.previewDataUrl = row.previewDataUrl;
-    }
-    out.push(next);
-  }
-  return out;
-}
-
-function normalizeRunList(raw: unknown): ScheduleRunRecord[] {
-  if (!Array.isArray(raw)) return [];
-  const out: ScheduleRunRecord[] = [];
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as { at?: unknown; threadId?: unknown; error?: unknown };
-    if (typeof row.at !== 'string' || !row.at.trim()) continue;
-    const next: ScheduleRunRecord = {
-      at: row.at,
-      threadId:
-        typeof row.threadId === 'string' && row.threadId.trim() ? row.threadId.trim() : null,
-    };
-    if (typeof row.error === 'string' && row.error.trim()) next.error = row.error;
-    out.push(next);
-    if (out.length >= SCHEDULE_RUN_HISTORY_LIMIT) break;
-  }
-  return out;
 }
 
 /**
@@ -235,7 +184,7 @@ function runsFromStored(raw: {
   lastThreadId?: string | null;
   lastError?: string | null;
 }): ScheduleRunRecord[] {
-  if (Array.isArray(raw.runs)) return normalizeRunList(raw.runs);
+  if (Array.isArray(raw.runs)) return normalizeRunList(raw.runs, SCHEDULE_RUN_HISTORY_LIMIT);
   if (typeof raw.lastRunAt === 'string' && raw.lastRunAt.trim()) {
     const one: ScheduleRunRecord = {
       at: raw.lastRunAt,
@@ -308,13 +257,6 @@ function writeAll(rows: ScheduledTask[]): void {
   writePrivateFile(schedulesPath(), `${JSON.stringify(rows, null, 2)}\n`);
 }
 
-function scheduleDisplayName(name: string | undefined, prompt: string, when: ScheduleWhen): string {
-  const named = name?.trim();
-  if (named) return named;
-  if (!prompt.trim() && when.kind === 'ticket-assigned') return 'Ticket assigned';
-  return defaultScheduleName(prompt);
-}
-
 function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
   const prompt = input.prompt.trim();
   const when = normalizeWhen(input.when);
@@ -328,7 +270,7 @@ function buildTask(input: CreateScheduledTaskInput, now: Date): ScheduledTask {
     : null;
   return {
     id: randomUUID(),
-    name: scheduleDisplayName(input.name, prompt, when),
+    name: scheduleDisplayName(input.name, prompt, when, defaultScheduleName),
     prompt,
     enabled: input.enabled !== false,
     when,
@@ -396,6 +338,7 @@ export function createSchedule(input: CreateScheduledTaskInput): ScheduledTask {
   rows.push(task);
   writeAll(rows);
   ensureCaffeinateForFutureSchedule(task);
+  syncTicketAssignSwitch(rows);
   return task;
 }
 
@@ -417,7 +360,7 @@ export function updateSchedule(
     ...prev,
     name:
       patch.name !== undefined
-        ? scheduleDisplayName(patch.name, prompt, when)
+        ? scheduleDisplayName(patch.name, prompt, when, defaultScheduleName)
         : prev.name,
     prompt,
     enabled: patch.enabled ?? prev.enabled,
@@ -460,6 +403,7 @@ export function updateSchedule(
   rows[idx] = next;
   writeAll(rows);
   ensureCaffeinateForFutureSchedule(next);
+  syncTicketAssignSwitch(rows);
   return next;
 }
 
@@ -480,6 +424,7 @@ export function deleteSchedule(id: string): void {
   );
   if (next.length === rows.length) throw new Error(`Automation not found: ${id}`);
   writeAll(next);
+  syncTicketAssignSwitch(next);
 }
 
 /** Move the next check forward without writing a run row. */

@@ -16,6 +16,7 @@ import { normalizeRemoteRelayUrl, remoteRelayUrl } from '../remote/protocol.js';
 import { mergeSlackClientIds } from '../slack/client-ids.js';
 import { appDataDir } from './paths.js';
 import { chmodOwnerOnly, writePrivateFile } from './private-file.js';
+import { markTicketAssignNeedsBaseline } from './ticket-assign-snapshot.js';
 import { loadSecretVault, saveSecretVault, type SettingsSecretVault } from './secret-vault.js';
 import { sanitizeGitBranchPrefix } from '../git/branch-prefix.js';
 import {
@@ -420,11 +421,7 @@ export interface AdvancedAppSettings {
    * Default off. The desktop host must be running (same as automations).
    */
   wakeOrchestratorOnGithubEdges?: boolean;
-  /**
-   * Poll Linear and GitHub for a ticket newly assigned to the viewer, then
-   * open a workspace and start a plan. Default off. The desktop host must be
-   * running. The first check only records current assignments. It cannot merge.
-   */
+  /** Open a workspace when a ticket is assigned to the viewer. Default off. */
   ticketAssignOpensWorkspace?: boolean;
   /** USD on chips and thread totals. Default off. */
   showCost?: boolean;
@@ -1064,9 +1061,7 @@ function normalizeAdvanced(raw: unknown): AdvancedAppSettings {
   if (typeof source.wakeOrchestratorOnGithubEdges === 'boolean') {
     out.wakeOrchestratorOnGithubEdges = source.wakeOrchestratorOnGithubEdges;
   }
-  if (typeof source.ticketAssignOpensWorkspace === 'boolean') {
-    out.ticketAssignOpensWorkspace = source.ticketAssignOpensWorkspace;
-  }
+  if (typeof source.ticketAssignOpensWorkspace === 'boolean') out.ticketAssignOpensWorkspace = source.ticketAssignOpensWorkspace;
   if (typeof source.showCost === 'boolean') out.showCost = source.showCost;
   if (typeof source.computerUse === 'boolean') out.computerUse = source.computerUse;
   if (isChatTextScale(source.chatTextScale)) {
@@ -2302,6 +2297,7 @@ export function updateAdvancedSettings(
   }
   if (typeof patch.ticketAssignOpensWorkspace === 'boolean') {
     advanced.ticketAssignOpensWorkspace = patch.ticketAssignOpensWorkspace;
+    if (!patch.ticketAssignOpensWorkspace) markTicketAssignNeedsBaseline();
   }
   if (typeof patch.showCost === 'boolean') advanced.showCost = patch.showCost;
   if (typeof patch.computerUse === 'boolean') advanced.computerUse = patch.computerUse;
@@ -2411,27 +2407,19 @@ export function gitBranchPrefixSetting(
   return sanitizeGitBranchPrefix(settings.advanced.branchPrefix);
 }
 
-export function autoRunAfterSetupEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function autoRunAfterSetupEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.autoRunAfterSetup);
 }
 
-export function caffeinateWhileRunningEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function caffeinateWhileRunningEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.caffeinateWhileRunning);
 }
 
-export function caffeinateWhileSlackListenEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function caffeinateWhileSlackListenEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.caffeinateWhileSlackListen);
 }
 
-export function caffeinateWhileSchedulesEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function caffeinateWhileSchedulesEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.caffeinateWhileSchedules);
 }
 
@@ -2442,16 +2430,12 @@ export function caffeinateWhileCloudConnectEnabled(
   return caffeinateWhileSlackListenEnabled(settings);
 }
 
-export function deleteBranchOnPurgeEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function deleteBranchOnPurgeEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.deleteBranchOnPurge);
 }
 
 /** Default off. When on, create may use the project checkout on the default branch. */
-export function cowboyModeEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function cowboyModeEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.cowboyMode);
 }
 
@@ -2462,14 +2446,7 @@ export function wakeOrchestratorOnGithubEdgesEnabled(
   return Boolean(settings.advanced.wakeOrchestratorOnGithubEdges);
 }
 
-/**
- * Default off. When on, a ticket newly assigned to the viewer opens a
- * workspace the same way as choosing that issue with no extra prompt.
- * Agents cannot turn this on.
- */
-export function ticketAssignOpensWorkspaceEnabled(
-  settings: AppSettings = loadAppSettings(),
-): boolean {
+export function ticketAssignOpensWorkspaceEnabled(settings: AppSettings = loadAppSettings()): boolean {
   return Boolean(settings.advanced.ticketAssignOpensWorkspace);
 }
 

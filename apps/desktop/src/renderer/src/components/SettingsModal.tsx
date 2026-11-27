@@ -9,7 +9,6 @@ import type {
   BrightsySession,
   CliAgentKind,
   PublicAppSettings,
-  ScheduledTask,
   ThinkingEffort,
   Thread,
   Workspace,
@@ -37,6 +36,7 @@ import {
 import { emptyPublicIntegrations } from '../lib/optional-services';
 import { orchestratorDefaultsFromSettings } from '../lib/thread-defaults';
 import { ComputerUseSetting } from './ComputerUseSetting';
+import { TicketAssignSetting } from './TicketAssignSetting';
 import { ConnectorsSettings } from './ConnectorsSettings';
 import { GitSettings, type GitSettingsPanel } from './GitSettings';
 import { GitSettingsNav } from './GitSettingsNav';
@@ -721,44 +721,6 @@ export function SettingsModal({
       void reload().catch(() => {
         /* ignore */
       });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function toggleTicketAssign() {
-    const next = !Boolean(settings.advanced.ticketAssignOpensWorkspace);
-    setBusy(true);
-    setError(null);
-    try {
-      const saved = await window.sideboard.updateAdvancedSettings({
-        ticketAssignOpensWorkspace: next,
-      });
-      applySettings(saved);
-      const rows = (await window.sideboard.listSchedules()) as ScheduledTask[];
-      const mine = rows.filter((row) => row.when.kind === 'ticket-assigned');
-      if (next) {
-        if (mine.length === 0) {
-          await window.sideboard.createSchedule({
-            name: 'Ticket assigned',
-            prompt: '',
-            when: { kind: 'ticket-assigned' },
-            planMode: false,
-            enabled: true,
-            archiveChat: false,
-          });
-        } else {
-          for (const row of mine) {
-            if (!row.enabled) await window.sideboard.updateSchedule(row.id, { enabled: true });
-          }
-        }
-      } else {
-        for (const row of mine) {
-          if (row.enabled) await window.sideboard.updateSchedule(row.id, { enabled: false });
-        }
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
@@ -1864,46 +1826,14 @@ export function SettingsModal({
                       role="switch"
                       aria-checked={Boolean(advanced.wakeOrchestratorOnGithubEdges)}
                       disabled={busy}
-                      onClick={() =>
-                        void saveAdvancedPatch({
-                          wakeOrchestratorOnGithubEdges: !advanced.wakeOrchestratorOnGithubEdges,
-                        })
-                      }
+                      onClick={() => void saveAdvancedPatch({ wakeOrchestratorOnGithubEdges: !advanced.wakeOrchestratorOnGithubEdges })}
                     >
                       <span className="settings-switch-knob" />
                     </button>
                   </div>
                 </div>
 
-                <div className="settings-section">
-                  <div className="settings-toggle-row">
-                    <div>
-                      <div className="settings-section-title">
-                        When a ticket is assigned to me, open a workspace
-                      </div>
-                      <p className="settings-hint">
-                        Polls Linear and GitHub for issues newly assigned to you. The first
-                        check after you turn this on, and the first check after Sideboard
-                        launches, only records what is already assigned. A new assignment
-                        opens a workspace the same way as choosing that issue and leaving the
-                        prompt empty. The first turn is “Resolve this issue.” It does not
-                        merge. Sideboard must be running. Type a prompt under Automations to
-                        send that instead.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className={`settings-switch${advanced.ticketAssignOpensWorkspace ? ' on' : ''}`}
-                      role="switch"
-                      aria-checked={Boolean(advanced.ticketAssignOpensWorkspace)}
-                      aria-label="When a ticket is assigned to me, open a workspace"
-                      disabled={busy}
-                      onClick={() => void toggleTicketAssign()}
-                    >
-                      <span className="settings-switch-knob" />
-                    </button>
-                  </div>
-                </div>
+                <TicketAssignSetting on={Boolean(advanced.ticketAssignOpensWorkspace)} busy={busy} setBusy={setBusy} setError={setError} applySettings={applySettings} />
 
                 <div className="settings-section">
                   <div className="settings-toggle-row">

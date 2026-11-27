@@ -415,6 +415,36 @@ describe('schedule runner', () => {
     expect(expandCanonicalGitRequest('Resolve this issue.')).toBe('Resolve this issue.');
     expect(fired.lastThreadId).toBe('ws-1');
     expect(fired.lastError).toBeNull();
+
+    store.updateSchedule(schedule.id, { enabled: false });
+    tickets = [
+      ...tickets,
+      {
+        source: 'linear',
+        identifier: 'ENG-3',
+        title: 'Reset',
+        url: 'https://linear.app/eng-3',
+        projects: [],
+      },
+    ];
+    store.updateSchedule(schedule.id, { enabled: true });
+    const reenabled = await runner.fireSchedule(schedule.id);
+    expect(opened).toHaveLength(1);
+    expect(reenabled.lastError).toBeNull();
+    expect(runner.loadTicketAssignSnapshot().keys).toContain('linear:eng-3');
+    tickets = [
+      ...tickets,
+      {
+        source: 'linear',
+        identifier: 'ENG-4',
+        title: 'After',
+        url: 'https://linear.app/eng-4',
+        projects: [],
+      },
+    ];
+    const again = await runner.fireSchedule(schedule.id);
+    expect(opened.map((row) => row.identifier)).toEqual(['ENG-2', 'ENG-4']);
+    expect(again.lastThreadId).toBe('ws-1');
   });
 
   it('does not open a workspace when the ticket-assign setting is off', async () => {
@@ -447,6 +477,8 @@ describe('schedule runner', () => {
       planMode: true,
       createdBy: 'ui',
     });
+    const { updateAdvancedSettings } = await import('../store/app-settings.js');
+    updateAdvancedSettings({ ticketAssignOpensWorkspace: false });
     const after = await runner.fireSchedule(schedule.id);
     expect(opened).toHaveLength(0);
     expect(after.lastError).toMatch(/When a ticket is assigned to me is off/);

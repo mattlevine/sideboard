@@ -195,6 +195,15 @@ export function SchedulesSettings({
       }
       if (editingId) await window.sideboard.updateSchedule(editingId, payload);
       else await window.sideboard.createSchedule(payload);
+      if (form.kind === 'ticket-assigned' && !form.enabled) {
+        const left = await window.sideboard.listSchedules();
+        const still = left.some(
+          (item: ScheduledTask) => item.when.kind === 'ticket-assigned' && item.enabled,
+        );
+        if (!still) {
+          await window.sideboard.updateAdvancedSettings({ ticketAssignOpensWorkspace: false });
+        }
+      }
       closeForm();
       await reload();
     } catch (err) {
@@ -262,7 +271,17 @@ export function SchedulesSettings({
     setBusy(true);
     setError(null);
     try {
+      const removing = rows.find((row) => row.id === id);
       await window.sideboard.deleteSchedule(id);
+      if (removing?.when.kind === 'ticket-assigned') {
+        const left = await window.sideboard.listSchedules();
+        const still = left.some(
+          (item: ScheduledTask) => item.when.kind === 'ticket-assigned' && item.enabled,
+        );
+        if (!still) {
+          await window.sideboard.updateAdvancedSettings({ ticketAssignOpensWorkspace: false });
+        }
+      }
       if (editingId === id) closeForm();
       await reload();
     } catch (err) {
