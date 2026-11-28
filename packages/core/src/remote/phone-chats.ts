@@ -34,6 +34,7 @@ import {
 } from './phone-panes.js';
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 import { phonePrPill } from './phone-header.js';
+import { phoneReviewPrFields, type PhoneReviewPr } from './phone-review-prs.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
 import { permissionViewFromBlock, type PhonePermissionView } from './phone-permission.js';
 import { clip, listPhoneMessages, parsePhoneMcpUi, phoneVisibleText, type PhoneMcpAppsField, type PhoneMcpUiReply, type PhoneMcpUiRequest } from './phone-transcript.js';
@@ -223,6 +224,8 @@ export type PhoneControlRequest =
       sourceRef?: string;
       title?: string;
       cowboy?: boolean;
+      /** Needs you opens an existing PR checkout instead of making a second one. */
+      reuseExisting?: boolean;
     } & PhoneDraft)
   | { op: 'open'; chatId: string }
   | { op: 'archive'; chatId: string }
@@ -266,6 +269,13 @@ export interface PhoneSidebar {
   projects: PhoneProject[];
   /** Account settings for a new orchestration chat and a new worktree agent. */
   defaults?: PhoneAccountDefaults;
+  /**
+   * Open PRs waiting on this person's review (`list_prs` queue=mine).
+   * Present after the first poll, including when the list is empty.
+   */
+  reviews?: PhoneReviewPr[];
+  reviewsError?: string;
+  reviewsReady?: boolean;
 }
 
 export type PhoneControlReply =
@@ -525,6 +535,7 @@ function parsePhoneCreate(value: object): PhoneControlRequest | 'invalid' {
     if ((sourceType === 'pr' || sourceType === 'ticket') && !sourceRef) return 'invalid';
     const title = textField(value, 'title').slice(0, 200);
     const cowboy = (value as { cowboy?: unknown }).cowboy === true;
+    const reuseExisting = (value as { reuseExisting?: unknown }).reuseExisting === true;
     return {
       op: 'create',
       where: 'project',
@@ -534,6 +545,7 @@ function parsePhoneCreate(value: object): PhoneControlRequest | 'invalid' {
       ...(sourceRef ? { sourceRef } : {}),
       ...(title ? { title } : {}),
       ...(cowboy ? { cowboy: true } : {}),
+      ...(reuseExisting ? { reuseExisting: true } : {}),
     };
   }
   return 'invalid';
@@ -647,7 +659,12 @@ export function listPhoneSidebar(viewerLogin = phoneViewerLogin()): PhoneSidebar
         };
       }),
     }));
-  return { orchestration: listPhoneChats(), projects, defaults: phoneAccountDefaults() };
+  return {
+    orchestration: listPhoneChats(),
+    projects,
+    defaults: phoneAccountDefaults(),
+    ...phoneReviewPrFields(),
+  };
 }
 
 export { listPhoneHistory } from './phone-history.js';

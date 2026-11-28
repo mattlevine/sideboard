@@ -76,7 +76,11 @@ export function phoneBoardKey(sidebar: PhoneSidebar): string {
           .join('\n'),
       ].join('\n')
     : '';
-  return `${orchestration}\n===\n${projects}\n===\n${defaultsKey}`;
+  const reviews = (sidebar.reviews ?? [])
+    .map((pr) => [pr.repoPath, String(pr.number), pr.title, pr.url, pr.chatId ?? ''].join('\t'))
+    .join('\n');
+  const reviewsKey = `${sidebar.reviewsReady ? '1' : '0'}\t${sidebar.reviewsError ?? ''}\n${reviews}`;
+  return `${orchestration}\n===\n${projects}\n===\n${defaultsKey}\n===\n${reviewsKey}`;
 }
 
 export function isPhoneBoardEvent(event: OrchestratorEvent): boolean {
@@ -144,6 +148,12 @@ export function startPhoneBoardSync(opts: {
    */
   refreshViewerLogin?: () => Promise<unknown>;
   viewerLoginIntervalMs?: number;
+  /**
+   * Poll `list_prs` queue=mine and push when those rows change.
+   * Separate from the push watch, which only diffs chats that need you.
+   */
+  refreshReviewPrs?: () => Promise<unknown>;
+  reviewPrsIntervalMs?: number;
 }): () => void {
   const list = opts.list ?? listPhoneSidebar;
   const debounceMs = opts.debounceMs ?? PHONE_BOARD_SYNC_MS;
@@ -195,12 +205,28 @@ export function startPhoneBoardSync(opts: {
     loginTimer = setInterval(afterLogin, opts.viewerLoginIntervalMs ?? 5 * 60_000);
   }
 
+  let reviewTimer: ReturnType<typeof setInterval> | null = null;
+  const refreshReviewPrs = opts.refreshReviewPrs;
+  if (refreshReviewPrs) {
+    const afterReviews = () => {
+      void refreshReviewPrs()
+        .catch(() => undefined)
+        .then(() => {
+          if (!stopped) push();
+        });
+    };
+    afterReviews();
+    reviewTimer = setInterval(afterReviews, opts.reviewPrsIntervalMs ?? 60_000);
+  }
+
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
     timer = null;
     if (loginTimer) clearInterval(loginTimer);
     loginTimer = null;
+    if (reviewTimer) clearInterval(reviewTimer);
+    reviewTimer = null;
     unsubscribe();
     offEvents();
   };

@@ -15,6 +15,7 @@ import {
   PrBadge,
   TagChip,
 } from './phone-chrome';
+import { PhoneReviewPrRow, type PhoneReviewPr } from './phone-prompts';
 import { palette, styles } from './styles';
 
 export type PhoneWorktree = {
@@ -30,6 +31,29 @@ export type PhoneProject = {
   path: string;
   worktrees: PhoneWorktree[];
 };
+
+/** Blocked chats for the Needs you list. Tag filters do not hide them. */
+export function collectNeedsYou(orchestration: PhoneChat[], projects: PhoneProject[]): PhoneChat[] {
+  const rows: PhoneChat[] = [];
+  const seen = new Set<string>();
+  const add = (chat: PhoneChat) => {
+    if (!chat.id || !chat.needsYou || !chat.blockedReason || seen.has(chat.id)) return;
+    seen.add(chat.id);
+    rows.push(chat);
+  };
+  for (const chat of orchestration) add(chat);
+  for (const project of projects) {
+    for (const worktree of project.worktrees) {
+      for (const chat of worktree.chats) add(chat);
+    }
+  }
+  return rows;
+}
+
+function matchesQuery(text: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  return q.length === 0 || text.toLowerCase().includes(q);
+}
 
 export function PhoneAgentsScreen({
   deviceLabel,
@@ -47,6 +71,12 @@ export function PhoneAgentsScreen({
   onClearTags,
   filtering,
   projects,
+  needsYou,
+  reviews,
+  reviewsError,
+  reviewsReady,
+  pendingReview,
+  onOpenReview,
   onOpenCreate,
   onOpenChat,
   onArchiveChat,
@@ -71,6 +101,12 @@ export function PhoneAgentsScreen({
   onClearTags: () => void;
   filtering: boolean;
   projects: PhoneProject[];
+  needsYou: PhoneChat[];
+  reviews: PhoneReviewPr[];
+  reviewsError: string | null;
+  reviewsReady: boolean;
+  pendingReview: string | null;
+  onOpenReview: (pr: PhoneReviewPr) => void;
   onOpenCreate: (mode: CreateMode) => void;
   onOpenChat: (chatId: string) => void;
   onArchiveChat: (chatId: string) => void;
@@ -85,6 +121,24 @@ export function PhoneAgentsScreen({
   create: ComponentProps<typeof CreateChatSheet> | null;
 }) {
   const tagsOn = filterOpen || tagFilters.length > 0;
+  const shownChats = needsYou.filter((chat) =>
+    matchesQuery(`${chat.title} ${chat.blockedReason ?? ''} ${chat.preview ?? ''}`, query),
+  );
+  const shownReviews = reviews.filter((pr) =>
+    matchesQuery(`${pr.repoName} ${pr.title} #${pr.number}`, query),
+  );
+  const queryOn = query.trim().length > 0;
+  const waiting = !reviewsReady && shownReviews.length === 0 && !reviewsError;
+  const quiet =
+    reviewsReady && !reviewsError && shownChats.length === 0 && shownReviews.length === 0
+      ? queryOn
+        ? 'Nothing matched'
+        : 'Nothing needs you'
+      : null;
+  const noReviews =
+    !queryOn && reviewsReady && !reviewsError && reviews.length === 0 && shownChats.length > 0
+      ? 'No pull requests waiting on your review'
+      : null;
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="light" />
@@ -98,9 +152,34 @@ export function PhoneAgentsScreen({
         </Pressable>
       </View>
       <ScrollView style={styles.transcript} contentContainerStyle={styles.listPad} keyboardShouldPersistTaps="handled">
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionLabel}>Needs you</Text>
+        </View>
+        {shownChats.map((chat) => (
+          <ChatRow
+            key={`need:${chat.id}`}
+            chat={chat}
+            onOpen={() => onOpenChat(chat.id)}
+            onArchive={() => onArchiveChat(chat.id)}
+            onAnswer={onAnswer}
+            onDecide={onDecide}
+          />
+        ))}
+        {shownReviews.map((pr) => (
+          <PhoneReviewPrRow
+            key={pr.url}
+            pr={pr}
+            busy={pendingReview === pr.url}
+            onOpen={() => onOpenReview(pr)}
+          />
+        ))}
+        {reviewsError ? <Text style={[styles.meta, styles.error]}>{reviewsError}</Text> : null}
+        {waiting ? <Text style={styles.meta}>Checking GitHub…</Text> : null}
+        {quiet ? <Text style={styles.meta}>{quiet}</Text> : null}
+        {noReviews ? <Text style={styles.meta}>{noReviews}</Text> : null}
         {showOrchestration ? (
           <>
-            <View style={styles.sectionRow}>
+            <View style={[styles.sectionRow, styles.projectsHead]}>
               <Text style={styles.sectionLabel}>Orchestration</Text>
               <AddButton
                 label="New agent"

@@ -5,6 +5,7 @@ import { handleRemoteInbound, type RemoteOutbound } from './listen.js';
 import { startPhoneBoardSync } from './phone-board-sync.js';
 import { startPhonePushWatch } from './phone-push-watch.js';
 import { hostedPushRelay } from './push.js';
+import { refreshPhoneReviewPrs } from './phone-review-prs.js';
 import { refreshPhoneViewerLogin } from './phone-viewer-login.js';
 import { deliverPhoneTurn, emitControl, getPhoneOpenChat, setPhoneOpenChat } from './phone-live.js';
 import { setPhonePermissionPush } from './phone-permission.js';
@@ -158,6 +159,7 @@ export function runRemoteHost(opts: RemoteHostClientOptions): RemoteHostHandle {
         deliverPhoneTurn({ onOutbound: emit }, chatId);
       },
       refreshViewerLogin: () => refreshPhoneViewerLogin(true),
+      refreshReviewPrs: () => refreshPhoneReviewPrs(),
     });
   };
 

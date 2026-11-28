@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { ComposerOptions, FileChip, LinkChip } from './chat-ui';
 import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
 import type { PhoneChat } from './phone-chrome';
-import type { PhonePermission, PhonePermissionDecision } from './phone-prompts';
+import type { PhonePermission, PhonePermissionDecision, PhoneReviewPr } from './phone-prompts';
 import { pushBubble, settleBubbles, type OpenedBubble } from './transcript';
 
 type SendTranscript = {
@@ -34,6 +34,53 @@ export function sendOrResume(
   link.queue(payload);
   if (link.token) link.send({ type: 'resume', sessionToken: link.token });
   link.scheduleResume();
+}
+
+/** Open the checkout for a Needs you PR, or create one from that pull request. */
+export function reviewPrCommand(pr: PhoneReviewPr): object {
+  if (pr.chatId) return { op: 'open', chatId: pr.chatId };
+  return {
+    op: 'create',
+    where: 'project',
+    repoPath: pr.repoPath,
+    sourceType: 'pr',
+    sourceRef: String(pr.number),
+    title: pr.title,
+    reuseExisting: true,
+  };
+}
+
+export function parsePhoneReviews(control: {
+  reviews?: unknown;
+  reviewsError?: unknown;
+  reviewsReady?: unknown;
+}): { reviews: PhoneReviewPr[]; error: string | null; ready: boolean } | null {
+  if (control.reviewsReady !== true && !Array.isArray(control.reviews)) return null;
+  const reviews: PhoneReviewPr[] = [];
+  if (Array.isArray(control.reviews)) {
+    for (const raw of control.reviews) {
+      if (!raw || typeof raw !== 'object') continue;
+      const row = raw as Partial<PhoneReviewPr>;
+      if (typeof row.repoPath !== 'string' || !row.repoPath.trim()) continue;
+      if (typeof row.repoName !== 'string' || !row.repoName.trim()) continue;
+      if (typeof row.number !== 'number' || !Number.isFinite(row.number) || row.number <= 0) continue;
+      if (typeof row.title !== 'string' || !row.title.trim()) continue;
+      if (typeof row.url !== 'string' || !row.url.trim()) continue;
+      reviews.push({
+        repoPath: row.repoPath,
+        repoName: row.repoName,
+        number: row.number,
+        title: row.title,
+        url: row.url,
+        ...(typeof row.chatId === 'string' && row.chatId ? { chatId: row.chatId } : {}),
+      });
+    }
+  }
+  const error =
+    typeof control.reviewsError === 'string' && control.reviewsError.trim()
+      ? control.reviewsError.trim()
+      : null;
+  return { reviews, error, ready: control.reviewsReady === true };
 }
 
 function clearListBlock(chatId: string, patchChat: (chatId: string, patch: Partial<PhoneChat>) => void) {
