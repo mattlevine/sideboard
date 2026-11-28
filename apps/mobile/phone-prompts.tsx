@@ -28,6 +28,17 @@ export type PhoneListAsk = {
 
 export type PhoneListPlan = { text: string };
 
+/** Open PR waiting on this person's review. Same row the Needs you list shows beside a blocked chat. */
+export type PhoneReviewPr = {
+  repoPath: string;
+  repoName: string;
+  number: number;
+  title: string;
+  url: string;
+  /** Set when a workspace for this pull request is already checked out. */
+  chatId?: string;
+};
+
 export type PhoneListAnswer = {
   id: string;
   blockedReason?: string;
@@ -250,6 +261,56 @@ export function PhoneListNeedsYou({
     </View>
   );
 }
+
+/** A review-requested pull request on the Needs you list. A tap opens or creates that workspace. */
+export function PhoneReviewPrRow({
+  pr,
+  busy = false,
+  onOpen,
+}: {
+  pr: PhoneReviewPr;
+  busy?: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.row,
+        pressed && !busy ? review.pressed : null,
+        busy ? review.busy : null,
+      ]}
+      disabled={busy}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${pr.repoName} pull request ${pr.number}, ${pr.title}. Opens the workspace.`}
+      accessibilityState={{ disabled: busy }}
+    >
+      <View style={styles.rowMain}>
+        <View style={styles.titleRow}>
+          <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>
+            {pr.title}
+          </Text>
+          <View style={[styles.prBadge, styles.prBadgeReview, review.badge]}>
+            <Text style={[styles.prBadgeText, styles.prBadgeTextReview]}>{`#${pr.number}`}</Text>
+          </View>
+        </View>
+        <Text style={styles.preview} numberOfLines={1}>
+          {pr.repoName}
+        </Text>
+        <View style={styles.statusRow}>
+          <View style={[styles.dot, styles.dotWarn]} />
+          <Text style={styles.status}>{busy ? 'Opening…' : 'Review requested'}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+const review = StyleSheet.create({
+  pressed: { backgroundColor: palette.hover },
+  busy: { opacity: 0.55 },
+  badge: { flexShrink: 0 },
+});
 
 const bar = StyleSheet.create({
   wrap: {

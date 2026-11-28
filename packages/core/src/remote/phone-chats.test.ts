@@ -163,6 +163,19 @@ describe('phone orchestration chats', () => {
       sourceRef: '42',
       title: 'Fix the board',
     });
+    expect(
+      takePhoneControl(
+        encodePhoneControl({
+          op: 'create',
+          where: 'project',
+          repoPath: '/tmp/sideboard',
+          sourceType: 'pr',
+          sourceRef: '42',
+          title: 'Fix the board',
+          reuseExisting: true,
+        }),
+      ),
+    ).toMatchObject({ sourceType: 'pr', sourceRef: '42', reuseExisting: true });
     expect(takePhoneControl(encodePhoneControl({ op: 'prompt', chatId: 'chat-1', text: '' }))).toBe(
       'invalid',
     );
@@ -443,6 +456,20 @@ describe('phone orchestration chats', () => {
     expect(created.place?.kind).toBe('project');
     const project = listPhoneSidebar().projects.find((row) => row.path === '/tmp/sideboard');
     expect(project?.worktrees[0]?.chats.map((chat) => chat.id)).toEqual([created.chat.id]);
+    await createPhoneProjectWorktree({
+      repoPath: '/tmp/sideboard',
+      sourceType: 'pr',
+      sourceRef: '42',
+      title: 'Fix the board',
+      reuseExisting: true,
+    });
+    expect(createThread).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        sourceType: 'pr',
+        sourceRef: '42',
+        reuseExisting: true,
+      }),
+    );
   });
 
   it('uses the account orchestration and worktree agent defaults', async () => {

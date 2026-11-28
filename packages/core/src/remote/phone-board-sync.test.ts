@@ -246,6 +246,71 @@ describe('phone board sync', () => {
     stop();
   });
 
+  it('changes when a review-requested pull request arrives or the poll fails', () => {
+    const base = board();
+    const ready = board({ reviewsReady: true, reviews: [] });
+    const withPr = board({
+      reviewsReady: true,
+      reviews: [
+        {
+          repoPath: '/tmp/sideboard',
+          repoName: 'sideboard',
+          number: 12,
+          title: 'Fix login',
+          url: 'https://github.com/acme/app/pull/12',
+        },
+      ],
+    });
+    const opened = board({
+      reviewsReady: true,
+      reviews: [{ ...withPr.reviews![0]!, chatId: 'chat-9' }],
+    });
+    const failed = board({
+      reviewsReady: true,
+      reviews: [],
+      reviewsError: "Couldn't load pull requests waiting on your review.",
+    });
+    expect(phoneBoardKey(ready)).not.toBe(phoneBoardKey(base));
+    expect(phoneBoardKey(withPr)).not.toBe(phoneBoardKey(ready));
+    expect(phoneBoardKey(opened)).not.toBe(phoneBoardKey(withPr));
+    expect(phoneBoardKey(failed)).not.toBe(phoneBoardKey(ready));
+    expect(phoneBoardKey(withPr)).toBe(phoneBoardKey(withPr));
+  });
+
+  it('pushes again after review-requested pull requests are polled', async () => {
+    vi.useFakeTimers();
+    let polled = false;
+    const sent: PhoneSidebar[] = [];
+    const empty = board();
+    const withPr = board({
+      reviewsReady: true,
+      reviews: [
+        {
+          repoPath: '/tmp/sideboard',
+          repoName: 'sideboard',
+          number: 3,
+          title: 'Please review',
+          url: 'https://github.com/acme/app/pull/3',
+        },
+      ],
+    });
+    const stop = startPhoneBoardSync({
+      debounceMs: 200,
+      list: () => (polled ? withPr : empty),
+      subscribe: () => () => {},
+      events: () => () => {},
+      refreshReviewPrs: async () => {
+        polled = true;
+      },
+      onSidebar: (next) => sent.push(next),
+    });
+    expect(sent).toEqual([empty]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sent).toEqual([empty, withPr]);
+    stop();
+  });
+
   it('pushes again after the GitHub login arrives', async () => {
     vi.useFakeTimers();
     let loginReady = false;

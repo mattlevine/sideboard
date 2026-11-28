@@ -109,6 +109,8 @@ export interface PhoneProjectCreate extends PhoneDraft {
   sourceRef?: string;
   title?: string;
   cowboy?: boolean;
+  /** True from a Needs you PR row so an existing checkout opens instead of a second worktree. */
+  reuseExisting?: boolean;
 }
 
 /** New worktree in a registered project, from a branch, PR, issue, or the default branch. */
@@ -135,7 +137,7 @@ export async function createPhoneProjectWorktree(
     autonomy: options.autonomy,
     attachments: phoneTurnAttachments(input),
     prompt: input.prompt,
-    reuseExisting: false,
+    reuseExisting: input.reuseExisting === true ? true : false,
   });
   return openedFrom(thread, projectPlace(thread));
 }

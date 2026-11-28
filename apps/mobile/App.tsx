@@ -35,12 +35,12 @@ import { PhoneCodeRefChips } from './phone-file-select';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
 import { MarkdownText, streamVerb, type ArtifactLink } from './markdown';
-import { PhoneAsks, PhonePermissionBar, type PhonePermission } from './phone-prompts';
+import { PhoneAsks, PhonePermissionBar, type PhonePermission, type PhoneReviewPr } from './phone-prompts';
 import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
 import { keepPaneOnOpenedChat, PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
-import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
-import { usePhoneOutbound } from './phone-outbound';
+import { collectNeedsYou, PhoneAgentsScreen, type PhoneProject } from './phone-agents';
+import { parsePhoneReviews, reviewPrCommand, usePhoneOutbound } from './phone-outbound';
 import { createSealedRelayLink, lookupSealMaterial } from './phone-seal';
 import { RELAY_UNREACHABLE, type RelayLink } from './relay-link';
 import { parsePairingBlob, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
@@ -90,7 +90,7 @@ type PhonePlace =
   | { kind: 'orchestration' }
   | { kind: 'project'; repoPath: string; worktree: string };
 type PhoneControl =
-  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[]; defaults?: PhoneAccountDefaults }
+  | { op: 'sidebar'; orchestration: PhoneChat[]; projects: PhoneProject[]; defaults?: PhoneAccountDefaults; reviews?: PhoneReviewPr[]; reviewsError?: string; reviewsReady?: boolean }
   | {
       op: 'history';
       chats: PhoneHistoryChat[];
@@ -171,6 +171,8 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [orchestration, setOrchestration] = useState<PhoneChat[]>([]);
   const [projects, setProjects] = useState<PhoneProject[]>([]);
+  const [reviewInbox, setReviewInbox] = useState<{ reviews: PhoneReviewPr[]; error: string | null; ready: boolean }>({ reviews: [], error: null, ready: false });
+  const [pendingReview, setPendingReview] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sidebarQuery, setSidebarQuery] = useState('');
   const [tagFilters, setTagFilters] = useState<string[]>([]);
@@ -220,6 +222,7 @@ export default function App() {
     () => filterPhoneProjects(projects, sidebarQuery, tagFilters),
     [projects, sidebarQuery, tagFilters],
   );
+  const needsYouChats = useMemo(() => collectNeedsYou(orchestration, projects), [orchestration, projects]);
   const sidebarFiltering = sidebarQuery.trim().length > 0 || tagFilters.length > 0;
 
   useEffect(() => {
@@ -439,6 +442,8 @@ export default function App() {
         : [];
       setOrchestration(nextOrchestration);
       setProjects(nextProjects);
+      const inbox = parsePhoneReviews(control);
+      if (inbox) setReviewInbox(inbox);
       if (control.defaults?.orchestration && control.defaults.worktree) {
         accountDefaultsRef.current = control.defaults;
       }
@@ -500,6 +505,7 @@ export default function App() {
         openDocs.closeAll(); setCodeRefs([]);
       }
       setPendingAdd(null);
+      setPendingReview(null);
       setCreateMode(null);
       if (control.options) {
         setChatOptions((prev) => ({ ...prev, [chat.id]: control.options! }));
@@ -677,6 +683,7 @@ export default function App() {
       historyLoadingRef.current = false;
       setHistoryLoading(false);
       setPendingAdd(null);
+      setPendingReview(null);
       setPendingRestore(null);
       setError(control.message || 'Sideboard failed.');
       if (control.chatId) {
@@ -979,6 +986,16 @@ export default function App() {
     screenRef.current = 'chat';
     setScreen('chat');
     link.send(phoneCommand({ op: 'open', chatId }));
+  }
+
+  function openReview(pr: PhoneReviewPr) {
+    setError(null);
+    if (pr.chatId) {
+      openChat(pr.chatId);
+      return;
+    }
+    setPendingReview(pr.url);
+    link.send(phoneCommand(reviewPrCommand(pr)));
   }
 
   pushHandlers.current.openDesktop = (deviceId) => { const desktop = desktopsRef.current.find((row) => row.deviceId === deviceId); if (desktop) choose(desktop); };
@@ -1353,6 +1370,12 @@ export default function App() {
         onClearTags={() => setTagFilters([])}
         filtering={sidebarFiltering}
         projects={visibleProjects}
+        needsYou={needsYouChats}
+        reviews={reviewInbox.reviews}
+        reviewsError={reviewInbox.error}
+        reviewsReady={reviewInbox.ready}
+        pendingReview={pendingReview}
+        onOpenReview={openReview}
         onOpenCreate={openCreate}
         onOpenChat={openChat}
         onArchiveChat={archiveChat}
