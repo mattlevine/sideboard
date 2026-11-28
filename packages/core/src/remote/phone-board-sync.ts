@@ -9,6 +9,33 @@ import { listPhoneSidebar, type PhoneChatSummary, type PhoneSidebar } from './ph
 /** Match the desktop thread watcher so a new worktree shows up without a refresh. */
 export const PHONE_BOARD_SYNC_MS = 300;
 
+/** Choice payload, so a new option or permission id pushes even when the reason text stays. */
+function pendingKey(row: PhoneChatSummary): string {
+  if (row.ask) {
+    return row.ask.questions
+      .map(
+        (question) =>
+          `${question.header ?? ''}:${question.question}:${question.options
+            .map((option) => `${option.label}\u0001${option.description ?? ''}`)
+            .join(',')}`,
+      )
+      .join('|');
+  }
+  if (row.permission) {
+    return [
+      row.permission.id,
+      row.permission.title,
+      row.permission.detail,
+      row.permission.path ?? '',
+      row.permission.allowSession ? '1' : '0',
+      row.permission.sessionLabel ?? '',
+      row.permission.defaultToNo ? '1' : '0',
+    ].join('\u0001');
+  }
+  if (row.plan) return row.plan.text;
+  return '';
+}
+
 function chatKey(row: PhoneChatSummary): string {
   return [
     row.id,
@@ -19,6 +46,7 @@ function chatKey(row: PhoneChatSummary): string {
     row.preview,
     row.needsYou ? '1' : '0',
     row.blockedReason ?? '',
+    pendingKey(row),
   ].join('\t');
 }
 

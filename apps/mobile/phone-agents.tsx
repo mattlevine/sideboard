@@ -50,6 +50,8 @@ export function PhoneAgentsScreen({
   onOpenCreate,
   onOpenChat,
   onArchiveChat,
+  onAnswer,
+  onDecide,
   onDesktops,
   onHistory,
   create,
@@ -72,6 +74,12 @@ export function PhoneAgentsScreen({
   onOpenCreate: (mode: CreateMode) => void;
   onOpenChat: (chatId: string) => void;
   onArchiveChat: (chatId: string) => void;
+  onAnswer: (chatId: string, text: string, opts?: { planMode: false }) => void;
+  onDecide: (
+    chatId: string,
+    id: string,
+    decision: 'allow' | 'deny' | 'allow_session',
+  ) => void;
   onDesktops: () => void;
   onHistory: () => void;
   create: ComponentProps<typeof CreateChatSheet> | null;
@@ -108,6 +116,8 @@ export function PhoneAgentsScreen({
                 chat={chat}
                 onOpen={() => onOpenChat(chat.id)}
                 onArchive={() => onArchiveChat(chat.id)}
+                onAnswer={onAnswer}
+                onDecide={onDecide}
               />
             ))}
           </>
@@ -252,6 +262,8 @@ export function PhoneAgentsScreen({
                       chat={chat}
                       onOpen={() => onOpenChat(chat.id)}
                       onArchive={() => onArchiveChat(chat.id)}
+                      onAnswer={onAnswer}
+                      onDecide={onDecide}
                     />
                   ))}
                 </View>

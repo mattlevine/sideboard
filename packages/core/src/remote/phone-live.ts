@@ -5,7 +5,7 @@ import { latestPendingPlanQuestions } from '../plan/ask-user.js';
 import { readThread } from '../store/thread-store.js';
 import { readTurnLiveParts } from '../store/turn-live.js';
 import type { RemoteAskQuestion } from './protocol.js';
-import { encodePhoneControl, readPhoneThread, type PhoneControlReply } from './phone-chats.js';
+import { encodePhoneControl, phoneAskQuestions, readPhoneThread, type PhoneControlReply } from './phone-chats.js';
 import { phoneArtifactText } from './phone-artifact.js';
 import { phoneMcpApps } from './phone-mcp-ui.js';
 import {
@@ -168,12 +168,7 @@ export function emitChatTurn(
       op: 'ask',
       chatId,
       text: result.text.trim(),
-      questions: pending.questions.map((q) => ({
-        question: q.question,
-        options: q.options.map((o) =>
-          o.description ? { label: o.label, description: o.description } : { label: o.label },
-        ),
-      })),
+      questions: phoneAskQuestions(pending.questions),
     });
     return;
   }

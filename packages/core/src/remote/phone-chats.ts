@@ -9,6 +9,8 @@ import type {
   ThreadStatus,
 } from '../types/thread.js';
 import { isThinkingEffort, type ThinkingEffort } from '../types/thinking-effort.js';
+import { latestPendingPlanQuestions } from '../plan/ask-user.js';
+import { PLAN_FILE_REL } from '../plan/plan-present.js';
 import type { RemoteAskQuestion } from './protocol.js';
 import { loadAppSettings, resolveProjectReviewLabel } from '../store/app-settings.js';
 import { isGlobalThread, listGlobalThreads } from '../store/global-workspace.js';
@@ -33,13 +35,45 @@ import {
 import { phoneAccountDefaults, type PhoneAccountDefaults } from './phone-defaults.js';
 import { phonePrPill } from './phone-header.js';
 import { phoneViewerLogin } from './phone-viewer-login.js';
-import type { PhonePermissionView } from './phone-permission.js';
+import { permissionViewFromBlock, type PhonePermissionView } from './phone-permission.js';
 import { clip, listPhoneMessages, parsePhoneMcpUi, phoneVisibleText, type PhoneMcpAppsField, type PhoneMcpUiReply, type PhoneMcpUiRequest } from './phone-transcript.js';
 
 /** Phone control rides in prompt text. The leading NUL keeps a person from typing it. */
 export const PHONE_CONTROL_PREFIX = '\u0000sb.phone\n';
 
 const PREVIEW_LIMIT = 90;
+
+/** Same Approve message as the desktop composer with an empty notes field. */
+export function phonePlanApproveText(): string {
+  return `Implement the plan in ${PLAN_FILE_REL}.`;
+}
+
+/** Options the open chat and the Needs you list both send as a prompt. */
+export function phoneAskQuestions(
+  questions: Array<{ question: string; options: Array<{ label: string; description?: string }> }>,
+): RemoteAskQuestion[] {
+  return questions.map((question) => ({
+    question: question.question,
+    options: question.options.map((option) =>
+      option.description
+        ? { label: option.label, description: option.description }
+        : { label: option.label },
+    ),
+  }));
+}
+
+export interface PhoneListAskQuestion extends RemoteAskQuestion {
+  header?: string;
+}
+
+export interface PhoneListAsk {
+  questions: PhoneListAskQuestion[];
+}
+
+export interface PhoneListPlan {
+  /** Prompt text for Approve. The phone also turns plan mode off. */
+  text: string;
+}
 
 export interface PhoneChatSummary {
   id: string;
@@ -54,9 +88,15 @@ export interface PhoneChatSummary {
   prUrl?: string;
   prNumber?: string;
   prStatus?: string;
-  /** Set when this agent is waiting on a person (permission, ask, or a reported block). */
+  /** Set when this agent is waiting on a person (permission, ask, plan, or a reported block). */
   needsYou?: boolean;
   blockedReason?: string;
+  /** ask_user choices. Present only when the row can answer without opening the chat. */
+  ask?: PhoneListAsk;
+  /** Allow / Deny payload. Same view the open chat's permission bar uses. */
+  permission?: PhonePermissionView;
+  /** Plan approval. Approve sends `text` and turns plan mode off. */
+  plan?: PhoneListPlan;
 }
 
 export interface PhoneChatMessage extends PhoneMcpAppsField {
@@ -499,9 +539,42 @@ function parsePhoneCreate(value: object): PhoneControlRequest | 'invalid' {
   return 'invalid';
 }
 
+function listAsk(questions: Array<{ question: string; header?: string; options: Array<{ label: string; description?: string }> }>): PhoneListAsk {
+  return {
+    questions: phoneAskQuestions(questions).map((question, index) => ({
+      ...question,
+      ...(questions[index]?.header?.trim() ? { header: questions[index]!.header!.trim() } : {}),
+    })),
+  };
+}
+
+/** Reason plus the payload a Needs you row can answer without `op: 'open'`. */
+function needsYouFields(thread: Thread): Pick<PhoneChatSummary, 'needsYou' | 'blockedReason' | 'ask' | 'permission' | 'plan'> {
+  const block = visibleAgentBlock(thread);
+  if (!block) return {};
+  const base = { needsYou: true as const, blockedReason: block.reason };
+  if (block.source === 'permission') {
+    const permission = permissionViewFromBlock(block);
+    return permission ? { ...base, permission } : base;
+  }
+  if (block.source === 'plan') {
+    return { ...base, plan: { text: phonePlanApproveText() } };
+  }
+  if (block.source === 'ask_user') {
+    const pending = latestPendingPlanQuestions({
+      messages: thread.messages,
+      agentBlock: thread.agentBlock,
+      dismissedQuestionSignature: thread.dismissedQuestionSignature,
+      status: thread.status,
+    });
+    if (!pending?.questions.length) return base;
+    return { ...base, ask: listAsk(pending.questions) };
+  }
+  return base;
+}
+
 function summarize(thread: Thread): PhoneChatSummary {
   const pr = phonePrPill(thread);
-  const block = visibleAgentBlock(thread);
   return {
     id: thread.id,
     title: thread.title?.trim() || 'Untitled',
@@ -515,7 +588,7 @@ function summarize(thread: Thread): PhoneChatSummary {
     ...(pr?.url ? { prUrl: pr.url } : {}),
     ...(pr?.number ? { prNumber: pr.number } : {}),
     ...(pr?.status ? { prStatus: pr.status } : {}),
-    ...(block ? { needsYou: true as const, blockedReason: block.reason } : {}),
+    ...needsYouFields(thread),
   };
 }
 

@@ -1,7 +1,14 @@
-import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, StyleSheet, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import { AgentKindIcon, agentKindLabel } from './agent-icons';
 import { agentStatus } from './labels';
+import {
+  PhoneListNeedsYou,
+  type PhoneListAsk,
+  type PhoneListPlan,
+  type PhonePermission,
+  type PhonePermissionDecision,
+} from './phone-prompts';
 import { palette, styles } from './styles';
 
 export type PhoneChat = {
@@ -17,6 +24,9 @@ export type PhoneChat = {
   prStatus?: string;
   needsYou?: boolean;
   blockedReason?: string;
+  ask?: PhoneListAsk;
+  permission?: PhonePermission | null;
+  plan?: PhoneListPlan;
 };
 
 export type PhonePrBadgeId = 'new' | 'draft' | 'pending' | 'review' | 'approved' | 'merged';
@@ -172,53 +182,123 @@ export function StreamStatus({ verb }: { verb: string }) {
   );
 }
 
+function canAnswerInline(chat: PhoneChat): boolean {
+  if (chat.permission?.id) return true;
+  if (chat.plan?.text) return true;
+  return Boolean(chat.ask?.questions.some((question) => question.options.length > 0));
+}
+
 export function ChatRow({
   chat,
   onOpen,
   onArchive,
+  onAnswer,
+  onDecide,
 }: {
   chat: PhoneChat;
   onOpen: () => void;
   onArchive: () => void;
+  onAnswer?: (chatId: string, text: string, opts?: { planMode: false }) => void;
+  onDecide?: (chatId: string, id: string, decision: PhonePermissionDecision) => void;
 }) {
   const needsYou = Boolean(chat.needsYou && chat.blockedReason);
+  const [held, setHeld] = useState<PhoneChat | null>(null);
+  const answering = useRef(false);
+  const view = held ?? chat;
+  const inline = canAnswerInline(view) && Boolean(onAnswer && onDecide) && (needsYou || held != null);
+  const askKey = chat.ask?.questions.map((question) => question.question).join('\n') ?? '';
+  useEffect(() => {
+    if (!held) return;
+    if (chat.needsYou && canAnswerInline(chat)) setHeld(null);
+  }, [held, chat.needsYou, chat.blockedReason, chat.permission?.id, chat.plan?.text, askKey]);
+  useEffect(() => {
+    if (!held) {
+      answering.current = false;
+      return;
+    }
+    const timer = setTimeout(() => setHeld(null), 700);
+    return () => clearTimeout(timer);
+  }, [held]);
+  const main = (
+    <Pressable style={styles.rowMain} onPress={onOpen}>
+      <View style={styles.titleRow}>
+        <AgentKindIcon agent={chat.agent || ''} acpHarness={chat.acpHarness} />
+        <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
+      </View>
+      <Text style={[styles.preview, needsYou ? styles.previewNeed : null]} numberOfLines={2}>
+        {needsYou ? chat.blockedReason : chat.preview || 'No messages yet'}
+      </Text>
+      <View style={styles.statusRow}>
+        <View
+          style={[
+            styles.dot,
+            needsYou
+              ? styles.dotWarn
+              : chat.status === 'running' || chat.status === 'queued'
+                ? styles.dotRun
+                : chat.status === 'error' || chat.status === 'broken'
+                  ? styles.dotErr
+                  : styles.dotOff,
+          ]}
+        />
+        <Text style={styles.status}>{needsYou ? 'Needs you' : agentStatus(chat.status)}</Text>
+      </View>
+    </Pressable>
+  );
+  const archive = (
+    <Pressable
+      style={styles.ghost}
+      onPress={onArchive}
+      accessibilityRole="button"
+      accessibilityLabel={`Archive ${chat.title}. It stays in History.`}
+    >
+      <Text style={styles.ghostText}>Archive</Text>
+    </Pressable>
+  );
+  if (!inline || !onAnswer || !onDecide) {
+    return (
+      <View style={styles.row}>
+        {main}
+        {archive}
+      </View>
+    );
+  }
   return (
-    <View style={styles.row}>
-      <Pressable style={styles.rowMain} onPress={onOpen}>
-        <View style={styles.titleRow}>
-          <AgentKindIcon agent={chat.agent || ''} acpHarness={chat.acpHarness} />
-          <Text style={[styles.rowTitle, styles.titleFlex]} numberOfLines={1}>{chat.title}</Text>
-        </View>
-        <Text style={[styles.preview, needsYou ? styles.previewNeed : null]} numberOfLines={2}>
-          {needsYou ? chat.blockedReason : chat.preview || 'No messages yet'}
-        </Text>
-        <View style={styles.statusRow}>
-          <View
-            style={[
-              styles.dot,
-              needsYou
-                ? styles.dotWarn
-                : chat.status === 'running' || chat.status === 'queued'
-                  ? styles.dotRun
-                  : chat.status === 'error' || chat.status === 'broken'
-                    ? styles.dotErr
-                    : styles.dotOff,
-            ]}
-          />
-          <Text style={styles.status}>{needsYou ? 'Needs you' : agentStatus(chat.status)}</Text>
-        </View>
-      </Pressable>
-      <Pressable
-        style={styles.ghost}
-        onPress={onArchive}
-        accessibilityRole="button"
-        accessibilityLabel={`Archive ${chat.title}. It stays in History.`}
-      >
-        <Text style={styles.ghostText}>Archive</Text>
-      </Pressable>
+    <View style={[styles.row, rowStyle.stack]}>
+      <View style={rowStyle.top}>
+        {main}
+        {archive}
+      </View>
+      <PhoneListNeedsYou
+        chat={view}
+        busy={held != null}
+        onAnswer={(chatId, text, opts) => {
+          if (answering.current) return;
+          answering.current = true;
+          setHeld(chat);
+          onAnswer(chatId, text, opts);
+        }}
+        onDecide={(chatId, id, decision) => {
+          if (answering.current) return;
+          answering.current = true;
+          setHeld(chat);
+          onDecide(chatId, id, decision);
+        }}
+      />
     </View>
   );
 }
+
+const rowStyle = StyleSheet.create({
+  stack: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: palette.warn,
+  },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+});
 
 export function HistoryRow({
   chat,

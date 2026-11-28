@@ -20,8 +20,10 @@ import {
   listPhoneHistory,
   listPhoneSidebar,
   openPhoneChat,
+  phonePlanApproveText,
   takePhoneControl,
 } from './phone-chats.js';
+import { GLOBAL_WORKSPACE_ID } from '../store/global-workspace.js';
 
 describe('phone orchestration chats', () => {
   let dataDir: string;
@@ -537,5 +539,117 @@ describe('phone orchestration chats', () => {
     expect(found.total).toBe(1);
     expect(found.chats.map((chat) => chat.title)).toEqual(['needle in the archive']);
     expect(found.next).toBeUndefined();
+  });
+
+  it('puts ask, permission, and plan answers on the list without opening the chat', () => {
+    const thread = createEmptyThread({
+      title: 'needs-you',
+      sourceType: 'branch',
+      sourceRef: 'main',
+      branchName: 'thread/needs-you',
+      worktreePath: join(dataDir, 'wt'),
+      repoPath: GLOBAL_WORKSPACE_ID,
+      agent: 'claude',
+    });
+    writeThread(thread);
+    const row = () => listPhoneSidebar().orchestration.find((chat) => chat.id === thread.id);
+
+    updateThread(thread.id, {
+      agentBlock: {
+        reason: 'Asked the user: Which API?',
+        source: 'ask_user',
+        at: '2026-10-17T00:00:02.000Z',
+        onScreen: true,
+        questions: [
+          {
+            question: 'Which API should this use?',
+            header: 'API',
+            options: [
+              { label: 'REST', description: 'JSON over HTTP' },
+              { label: 'GraphQL' },
+            ],
+          },
+        ],
+      },
+    });
+    expect(row()).toMatchObject({
+      needsYou: true,
+      blockedReason: 'Asked the user: Which API?',
+      ask: {
+        questions: [
+          {
+            question: 'Which API should this use?',
+            header: 'API',
+            options: [
+              { label: 'REST', description: 'JSON over HTTP' },
+              { label: 'GraphQL' },
+            ],
+          },
+        ],
+      },
+    });
+    expect(row()?.permission).toBeUndefined();
+    expect(row()?.plan).toBeUndefined();
+
+    updateThread(thread.id, {
+      messages: [{ role: 'user', text: 'REST', ts: '2026-10-17T00:00:03.000Z' }],
+    });
+    expect(row()?.needsYou).toBeUndefined();
+    expect(row()?.ask).toBeUndefined();
+
+    updateThread(thread.id, {
+      messages: [],
+      agentBlock: {
+        reason: 'Allow Edit on skill.md?',
+        source: 'permission',
+        at: '2026-10-17T00:00:04.000Z',
+        permission: {
+          id: 'p1',
+          title: 'Allow Edit on skill.md?',
+          detail: 'Outside the worktree',
+          path: '/tmp/skill.md',
+          allowSession: true,
+          sessionLabel: 'Allow edits here',
+          defaultToNo: true,
+        },
+      },
+    });
+    expect(row()?.ask).toBeUndefined();
+    expect(row()?.permission).toEqual({
+      id: 'p1',
+      title: 'Allow Edit on skill.md?',
+      detail: 'Outside the worktree',
+      path: '/tmp/skill.md',
+      allowSession: true,
+      sessionLabel: 'Allow edits here',
+      defaultToNo: true,
+    });
+
+    updateThread(thread.id, {
+      agentBlock: {
+        reason: 'Waiting for plan approval: Ship it',
+        source: 'plan',
+        at: '2026-10-17T00:00:05.000Z',
+      },
+    });
+    expect(row()).toMatchObject({
+      needsYou: true,
+      blockedReason: 'Waiting for plan approval: Ship it',
+      plan: { text: phonePlanApproveText() },
+    });
+    expect(phonePlanApproveText()).toBe('Implement the plan in .context/attachments/plan.md.');
+    expect(row()?.permission).toBeUndefined();
+
+    updateThread(thread.id, {
+      agentBlock: {
+        reason: 'CI is red',
+        source: 'reported',
+        at: '2026-10-17T00:00:06.000Z',
+      },
+    });
+    expect(row()).toMatchObject({ needsYou: true, blockedReason: 'CI is red' });
+    expect(row()?.ask).toBeUndefined();
+    expect(row()?.permission).toBeUndefined();
+    expect(row()?.plan).toBeUndefined();
   });
 });

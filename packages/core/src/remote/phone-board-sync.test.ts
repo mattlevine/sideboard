@@ -88,6 +88,50 @@ describe('phone board sync', () => {
     ).not.toBe(phoneBoardKey(board({ orchestration: [asking] })));
   });
 
+  it('changes when the choices change but the reason text does not', () => {
+    const reason = 'Asked the user: Which API?';
+    const rest = chat({
+      needsYou: true,
+      blockedReason: reason,
+      ask: {
+        questions: [{ question: 'Which API?', options: [{ label: 'REST' }, { label: 'GraphQL' }] }],
+      },
+    });
+    const trpc = chat({
+      needsYou: true,
+      blockedReason: reason,
+      ask: {
+        questions: [{ question: 'Which API?', options: [{ label: 'REST' }, { label: 'tRPC' }] }],
+      },
+    });
+    expect(phoneBoardKey(board({ orchestration: [rest] }))).not.toBe(
+      phoneBoardKey(board({ orchestration: [trpc] })),
+    );
+    const allowed = chat({
+      needsYou: true,
+      blockedReason: 'Allow the edit?',
+      permission: {
+        id: 'p1',
+        title: 'Allow the edit?',
+        detail: '',
+        allowSession: true,
+      },
+    });
+    const denied = chat({
+      needsYou: true,
+      blockedReason: 'Allow the edit?',
+      permission: {
+        id: 'p2',
+        title: 'Allow the edit?',
+        detail: '',
+        allowSession: false,
+      },
+    });
+    expect(phoneBoardKey(board({ orchestration: [allowed] }))).not.toBe(
+      phoneBoardKey(board({ orchestration: [denied] })),
+    );
+  });
+
   it('ignores bookkeeping timestamps when the list itself is unchanged', () => {
     const first = board({ orchestration: [chat({ updatedAt: 't0' })] });
     const second = board({ orchestration: [chat({ updatedAt: 't1' })] });

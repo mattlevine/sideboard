@@ -1,5 +1,5 @@
 import { latestPendingPlanQuestions } from '../plan/ask-user.js';
-import { readPhoneThread } from './phone-chats.js';
+import { phoneAskQuestions, readPhoneThread } from './phone-chats.js';
 import { emitControl, type RemoteOutbound } from './phone-live.js';
 
 /** The opened snapshot is message text only. Resend choices without a second bubble. */
@@ -20,13 +20,6 @@ export function republishPendingAsk(
     op: 'ask',
     chatId,
     text: '',
-    questions: pending.questions.map((question) => ({
-      question: question.question,
-      options: question.options.map((option) =>
-        option.description
-          ? { label: option.label, description: option.description }
-          : { label: option.label },
-      ),
-    })),
+    questions: phoneAskQuestions(pending.questions),
   });
 }
