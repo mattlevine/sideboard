@@ -30,7 +30,7 @@ import { loadDesktops, saveDesktops, type SavedDesktop } from './desktops';
 import { useSavedRelayUrl } from './use-saved-relay-url';
 import { pickDocuments, pickPhotos, releaseAudioSession, startMic, stopMic, takePhoto, type PickedFile } from './media';
 import { type FilePathLink } from './file-link';
-import { phoneSendExtras, type PhoneCodeSelection } from './phone-code-ref';
+import { type PhoneCodeSelection } from './phone-code-ref';
 import { PhoneCodeRefChips } from './phone-file-select';
 import { imageCacheKey, publishImage } from './media-cache';
 import { EmptyChat } from './empty-chat';
@@ -40,6 +40,7 @@ import { usePhoneOpenDocs, artifactDocId, fileDocId } from './phone-open-docs';
 import { viewerFromPhoneReply } from './phone-viewer';
 import { keepPaneOnOpenedChat, PhoneWorkspace, usePhonePanes, type PhoneRightHeader } from './phone-tabs';
 import { PhoneAgentsScreen, type PhoneProject } from './phone-agents';
+import { usePhoneOutbound } from './phone-outbound';
 import { createSealedRelayLink, lookupSealMaterial } from './phone-seal';
 import { RELAY_UNREACHABLE, type RelayLink } from './relay-link';
 import { parsePairingBlob, type SealMaterial } from '../../packages/core/src/remote/phone-e2ee';
@@ -1169,98 +1170,31 @@ export default function App() {
     panes.setPane('chat');
   }
 
-  function sendText(text: string) {
-    const body = text.trim();
-    const id = activeChatIdRef.current;
-    const extras = phoneSendExtras(files, links, codeRefs);
-    const stopping = body.toLowerCase() === 'stop';
-    if ((!body && !extras.attached) || !id) return;
-    const bubble = [body, ...extras.names].filter(Boolean).join('\n');
-    if (!stopping) pinTranscriptRef.current = true;
-    setTranscripts((prev) => {
-      const current = prev[id] ?? EMPTY;
-      return {
-        ...prev,
-        [id]: stopping
-          ? {
-              ...current,
-              bubbles: settleBubbles(current.bubbles),
-              questions: null,
-              working: false,
-              activity: '',
-            }
-          : {
-              bubbles: pushBubble(settleBubbles(current.bubbles), 'user', bubble),
-              questions: null,
-              working: true,
-              activity: '',
-            },
-      };
-    });
-    if (!stopping) {
-      setDraft('');
-      setFiles([]);
-      setLinks([]); setCodeRefs([]);
-      patchChat(id, { status: 'running', updatedAt: new Date().toISOString() });
-    }
-    const options = chatOptions[id];
-    const payload = stopping
-      ? phoneCommand({ op: 'stop', chatId: id })
-      : phoneCommand({
-          op: 'prompt',
-          chatId: id,
-          text: body,
-          ...extras.payload,
-          ...(options ?? {}),
-        });
-    deliver(payload);
-  }
-
-  function deliver(payload: object) {
-    if (attachedRef.current) {
-      link.send(payload);
-      return;
-    }
-    pendingSendRef.current = payload;
-    const desktopId = activeIdRef.current;
-    const desktop = desktopId ? desktopsRef.current.find((row) => row.deviceId === desktopId) : undefined;
-    const token = desktop?.sessionToken ?? pendingTokenRef.current;
-    if (token) link.send({ type: 'resume', sessionToken: token });
-    link.scheduleResume();
-  }
-
-  function clearListBlock(chatId: string) {
-    patchChat(chatId, {
-      needsYou: undefined,
-      blockedReason: undefined,
-      ask: undefined,
-      permission: undefined,
-      plan: undefined,
-      status: 'running',
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  function answerFromList(chatId: string, text: string, opts?: { planMode: false }) {
-    const body = text.trim();
-    if (!chatId || !body) return;
-    clearListBlock(chatId);
-    deliver(
-      phoneCommand({
-        op: 'prompt',
-        chatId,
-        text: body,
-        ...(opts?.planMode === false ? { planMode: false } : {}),
-      }),
-    );
-  }
-
-  function decideFromList(chatId: string, id: string, decision: 'allow' | 'deny' | 'allow_session') {
-    if (!chatId || !id) return;
-    clearListBlock(chatId);
-    setPermissionByChat((prev) => ({ ...prev, [chatId]: null }));
-    deliver(phoneCommand({ op: 'permission', chatId, id, decision }));
-  }
+  const { sendText, answerFromList, decideFromList } = usePhoneOutbound({
+    activeChatIdRef,
+    files,
+    links,
+    codeRefs,
+    pinTranscriptRef,
+    setTranscripts,
+    setDraft,
+    setFiles,
+    setLinks,
+    setCodeRefs,
+    patchChat,
+    chatOptions,
+    command: phoneCommand,
+    attachedRef,
+    send: (payload) => link.send(payload),
+    scheduleResume: () => link.scheduleResume(),
+    pendingSendRef,
+    token: () => {
+      const desktopId = activeIdRef.current;
+      const desktop = desktopId ? desktopsRef.current.find((row) => row.deviceId === desktopId) : undefined;
+      return desktop?.sessionToken ?? pendingTokenRef.current ?? undefined;
+    },
+    setPermissionByChat,
+  });
 
   useEffect(() => {
     if (!relay.loaded) return;
