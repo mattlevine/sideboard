@@ -1213,6 +1213,10 @@ export default function App() {
           ...extras.payload,
           ...(options ?? {}),
         });
+    deliver(payload);
+  }
+
+  function deliver(payload: object) {
     if (attachedRef.current) {
       link.send(payload);
       return;
@@ -1223,6 +1227,39 @@ export default function App() {
     const token = desktop?.sessionToken ?? pendingTokenRef.current;
     if (token) link.send({ type: 'resume', sessionToken: token });
     link.scheduleResume();
+  }
+
+  function clearListBlock(chatId: string) {
+    patchChat(chatId, {
+      needsYou: undefined,
+      blockedReason: undefined,
+      ask: undefined,
+      permission: undefined,
+      plan: undefined,
+      status: 'running',
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  function answerFromList(chatId: string, text: string, opts?: { planMode: false }) {
+    const body = text.trim();
+    if (!chatId || !body) return;
+    clearListBlock(chatId);
+    deliver(
+      phoneCommand({
+        op: 'prompt',
+        chatId,
+        text: body,
+        ...(opts?.planMode === false ? { planMode: false } : {}),
+      }),
+    );
+  }
+
+  function decideFromList(chatId: string, id: string, decision: 'allow' | 'deny' | 'allow_session') {
+    if (!chatId || !id) return;
+    clearListBlock(chatId);
+    setPermissionByChat((prev) => ({ ...prev, [chatId]: null }));
+    deliver(phoneCommand({ op: 'permission', chatId, id, decision }));
   }
 
   useEffect(() => {
@@ -1385,6 +1422,8 @@ export default function App() {
         onOpenCreate={openCreate}
         onOpenChat={openChat}
         onArchiveChat={archiveChat}
+        onAnswer={answerFromList}
+        onDecide={decideFromList}
         onDesktops={showDesktops}
         onHistory={showHistory}
         create={

@@ -1,9 +1,12 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MarkdownText } from './markdown';
 import { palette, styles } from './styles';
 
 type AskOption = { label: string; description?: string };
 type AskQuestion = { question: string; options: AskOption[] };
+
+export type PhonePermissionDecision = 'allow' | 'deny' | 'allow_session';
 
 export type PhonePermission = {
   id: string;
@@ -13,6 +16,24 @@ export type PhonePermission = {
   allowSession: boolean;
   sessionLabel?: string;
   defaultToNo?: boolean;
+};
+
+export type PhoneListAsk = {
+  questions: Array<{
+    question: string;
+    header?: string;
+    options: Array<{ label: string; description?: string }>;
+  }>;
+};
+
+export type PhoneListPlan = { text: string };
+
+export type PhoneListAnswer = {
+  id: string;
+  blockedReason?: string;
+  ask?: PhoneListAsk;
+  permission?: PhonePermission | null;
+  plan?: PhoneListPlan;
 };
 
 export function PhoneAsks({
@@ -55,7 +76,7 @@ export function PhonePermissionBar({
   onDecide,
 }: {
   prompt: PhonePermission | null;
-  onDecide: (id: string, decision: 'allow' | 'deny' | 'allow_session') => void;
+  onDecide: (id: string, decision: PhonePermissionDecision) => void;
 }) {
   if (!prompt) return null;
   const deny = (
@@ -86,6 +107,150 @@ export function PhonePermissionBar({
   );
 }
 
+function shownText(reason: string | undefined, value: string | undefined): string {
+  const text = value?.trim() ?? '';
+  if (!text) return '';
+  if (reason?.includes(text)) return '';
+  return text;
+}
+
+/**
+ * Choices on a Needs you row. A tap answers that chat and does not open it.
+ * Ask picks send the option label, the same prompt PhoneAsks sends.
+ * Approve sends the plan text and the caller turns plan mode off.
+ * Allow / Deny uses the same decision PhonePermissionBar sends.
+ */
+export function PhoneListNeedsYou({
+  chat,
+  busy = false,
+  onAnswer,
+  onDecide,
+}: {
+  chat: PhoneListAnswer;
+  busy?: boolean;
+  onAnswer: (chatId: string, text: string, opts?: { planMode: false }) => void;
+  onDecide: (chatId: string, id: string, decision: PhonePermissionDecision) => void;
+}) {
+  const reason = chat.blockedReason;
+  let body: ReactNode = null;
+  if (chat.permission?.id) {
+    const prompt = chat.permission;
+    const denyFirst = prompt.defaultToNo === true;
+    const deny = (
+      <Pressable
+        key="deny"
+        style={list.decision}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Deny"
+        onPress={() => onDecide(chat.id, prompt.id, 'deny')}
+      >
+        <Text style={[styles.optionLabel, denyFirst ? null : list.denyText]}>Deny</Text>
+      </Pressable>
+    );
+    const allow = (
+      <Pressable
+        key="allow"
+        style={[list.decision, denyFirst ? null : list.allow]}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Allow"
+        onPress={() => onDecide(chat.id, prompt.id, 'allow')}
+      >
+        <Text style={styles.optionLabel}>Allow</Text>
+      </Pressable>
+    );
+    const detail = shownText(reason, prompt.detail);
+    const path = shownText(reason, prompt.path);
+    body = (
+      <>
+        {detail ? (
+          <Text style={styles.optionDesc} numberOfLines={3}>
+            {detail}
+          </Text>
+        ) : null}
+        {path ? (
+          <Text style={styles.optionDesc} numberOfLines={1}>
+            {path}
+          </Text>
+        ) : null}
+        <View style={list.decisions}>
+          {denyFirst ? deny : allow}
+          {denyFirst ? allow : deny}
+        </View>
+        {prompt.allowSession ? (
+          <Pressable
+            style={list.choice}
+            disabled={busy}
+            accessibilityRole="button"
+            onPress={() => onDecide(chat.id, prompt.id, 'allow_session')}
+          >
+            <Text style={styles.optionLabel}>{prompt.sessionLabel || 'Allow for this session'}</Text>
+          </Pressable>
+        ) : null}
+      </>
+    );
+  } else if (chat.plan?.text) {
+    body = (
+      <Pressable
+        style={list.allow}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Approve plan"
+        onPress={() => onAnswer(chat.id, chat.plan!.text, { planMode: false })}
+      >
+        <Text style={[styles.optionLabel, list.allowLabel]}>Approve</Text>
+      </Pressable>
+    );
+  } else if (chat.ask?.questions.some((question) => question.options.length > 0)) {
+    body = (
+      <>
+        {chat.ask.questions.map((question) => {
+          const text = shownText(reason, question.question);
+          return (
+            <View key={question.question} style={list.questionBlock}>
+              {question.header ? <Text style={list.header}>{question.header}</Text> : null}
+              {text ? (
+                <Text style={list.question} numberOfLines={4}>
+                  {text}
+                </Text>
+              ) : null}
+              {question.options.map((option) => (
+                <Pressable
+                  key={option.label}
+                  style={({ pressed }) => [list.choice, pressed && !busy ? list.pressed : null]}
+                  disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={option.label}
+                  accessibilityHint={option.description}
+                  onPress={() => onAnswer(chat.id, option.label)}
+                >
+                  <Text style={styles.optionLabel}>{option.label}</Text>
+                  {option.description ? (
+                    <Text style={styles.optionDesc} numberOfLines={2}>
+                      {option.description}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          );
+        })}
+      </>
+    );
+  }
+  if (!body) return null;
+  return (
+    <View
+      style={[list.actions, busy ? list.busy : null]}
+      pointerEvents={busy ? 'none' : 'auto'}
+      accessibilityLabel="Answer without opening the chat"
+    >
+      {body}
+    </View>
+  );
+}
+
 const bar = StyleSheet.create({
   wrap: {
     paddingHorizontal: 16,
@@ -96,4 +261,51 @@ const bar = StyleSheet.create({
     borderTopColor: palette.border,
     backgroundColor: palette.bg,
   },
+});
+
+const list = StyleSheet.create({
+  actions: { gap: 8, marginTop: 2 },
+  busy: { opacity: 0.55 },
+  questionBlock: { gap: 6 },
+  header: {
+    color: palette.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  question: { color: palette.text, fontSize: 15, lineHeight: 21, fontWeight: '500' },
+  choice: {
+    backgroundColor: palette.bg,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 2,
+  },
+  pressed: { backgroundColor: palette.hover },
+  decisions: { flexDirection: 'row', gap: 8 },
+  decision: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.bg,
+    paddingHorizontal: 12,
+  },
+  allow: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.accent,
+    backgroundColor: palette.accentDim,
+    paddingHorizontal: 12,
+  },
+  allowLabel: { fontWeight: '600' },
+  denyText: { color: palette.secondary },
 });
